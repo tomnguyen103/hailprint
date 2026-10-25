@@ -1,0 +1,29 @@
+# data and outputs
+data/
+out/
+*.grib2
+*.grib2.gz
+*.idx
+*.parquet
+*.pmtiles
+*.shp
+*.shx
+*.dbf
+*.gdb/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# node
+node_modules/
+dist/
+
+# env and editors
+.env
+.env.*
+.DS_Store
+.scratch/

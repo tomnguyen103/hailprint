@@ -1,0 +1,560 @@
+<title>Hailprint Plan</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,800;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#fbfbfc; --surface:#ffffff; --surface-2:#f1f3f6; --line:#dfe3e9; --line-strong:#c4cad3;
+  --ink:#0b0d12; --ink-2:#4d5460; --ink-3:#747c89;
+  --accent:#2457a6; --accent-ink:#163a73; --accent-soft:#e6eef9; --accent-soft-2:#c3d6f0;
+  --fill-neutral:#d5d9df; --fill-neutral-2:#e9ecf0;
+  --good:#0f8f3c; --warn:#c98a08; --serious:#dd6f3f; --critical:#c93838; --info:#2a78d6;
+  --shadow:0 1px 2px rgba(0,0,0,.04),0 6px 20px rgba(0,0,0,.05);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#15181d; --surface:#1d2127; --surface-2:#242931; --line:#333a44; --line-strong:#48515d;
+    --ink:#eef1f5; --ink-2:#bcc3cd; --ink-3:#8791a0;
+    --accent:#5b8fdc; --accent-ink:#c3d6f0; --accent-soft:#1b2a44; --accent-soft-2:#26406a;
+    --fill-neutral:#424a56; --fill-neutral-2:#2f353e;
+    --good:#2fb55a; --warn:#e0a21a; --serious:#e3774f; --critical:#e04b4b; --info:#3987e5;
+    --shadow:none; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#15181d; --surface:#1d2127; --surface-2:#242931; --line:#333a44; --line-strong:#48515d;
+  --ink:#eef1f5; --ink-2:#bcc3cd; --ink-3:#8791a0;
+  --accent:#5b8fdc; --accent-ink:#c3d6f0; --accent-soft:#1b2a44; --accent-soft-2:#26406a;
+  --fill-neutral:#424a56; --fill-neutral-2:#2f353e;
+  --good:#2fb55a; --warn:#e0a21a; --serious:#e3774f; --critical:#e04b4b; --info:#3987e5;
+  --shadow:none; color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 "Public Sans",system-ui,-apple-system,Segoe UI,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+a{color:var(--accent-ink);text-decoration:underline;text-decoration-color:var(--line-strong);text-underline-offset:2px}
+a:hover{text-decoration-color:var(--accent)}
+code,.mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;font-size:.92em}
+code{background:var(--surface-2);padding:1px 5px;border-radius:4px;border:1px solid var(--line)}
+pre{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:"IBM Plex Mono",monospace;font-size:13px;line-height:1.5;margin:14px 0}
+pre code{background:none;border:0;padding:0;font-size:inherit}
+h1,h2,h3,h4{margin:0;line-height:1.2;letter-spacing:-.01em}
+h1{font-size:clamp(34px,5vw,54px);font-weight:800}
+h2{font-size:26px;font-weight:800;margin-bottom:6px}
+h3{font-size:17px;font-weight:600;margin-bottom:4px}
+p{margin:0 0 10px}
+ul,ol{margin:0 0 10px;padding-left:22px}
+li{margin:0 0 5px}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px}
+header.hero{padding:56px 0 28px;border-bottom:1px solid var(--line)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
+.lede{font-size:20px;color:var(--ink-2);max-width:860px;margin:14px 0 20px}
+.lede strong{color:var(--ink)}
+.strip{display:flex;flex-wrap:wrap;gap:8px}
+.pill{font-size:13px;padding:5px 11px;border:1px solid var(--line-strong);border-radius:999px;background:var(--surface);color:var(--ink-2)}
+.pill b{color:var(--ink);font-weight:600}
+.layout{display:grid;grid-template-columns:230px 1fr;gap:36px;padding:28px 0 60px}
+nav.toc{position:sticky;top:16px;align-self:start;font-size:13.5px;max-height:calc(100vh - 32px);overflow:auto}
+nav.toc .kicker{margin-bottom:8px}
+nav.toc a{display:block;padding:5px 10px;border-left:2px solid var(--line);color:var(--ink-2);text-decoration:none}
+nav.toc a:hover{color:var(--ink);background:var(--surface-2)}
+nav.toc a.on{border-left-color:var(--accent);color:var(--accent-ink);background:var(--accent-soft)}
+main{min-width:0}
+section{padding:26px 0;border-bottom:1px solid var(--line);scroll-margin-top:16px}
+section:last-of-type{border-bottom:0}
+.kicker{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+.grid{display:grid;gap:14px;margin:14px 0}
+.g2{grid-template-columns:repeat(2,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;box-shadow:var(--shadow)}
+.card.accent{border-color:var(--accent-soft-2);background:var(--accent-soft)}
+.card h3{margin-bottom:8px}
+.card p:last-child,.card ul:last-child{margin-bottom:0}
+.stat .n{font-size:34px;font-weight:800;letter-spacing:-.02em;line-height:1.05}
+.stat .l{font-size:14px;color:var(--ink-2);margin-top:4px}
+.stat .s{font-size:12.5px;color:var(--ink-3);margin-top:6px}
+.tbl{overflow-x:auto;margin:14px 0;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-3);font-weight:600;background:var(--surface-2);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-family:"IBM Plex Mono",monospace;white-space:nowrap}
+tr.total td{font-weight:600;background:var(--surface-2)}
+tr.pick td{background:var(--accent-soft)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:2px 9px;border-radius:999px;border:1px solid var(--line-strong);white-space:nowrap;background:var(--surface)}
+.badge .dot{width:8px;height:8px;border-radius:50%;background:var(--fill-neutral)}
+.lk-high .dot{background:var(--critical)} .lk-med .dot{background:var(--warn)} .lk-low .dot{background:var(--good)}
+.callout{border-left:3px solid var(--accent);background:var(--accent-soft);padding:12px 16px;border-radius:0 10px 10px 0;margin:14px 0}
+.callout.warn{border-left-color:var(--serious);background:color-mix(in oklab,var(--serious) 12%,var(--surface))}
+.callout p:last-child{margin-bottom:0}
+.note{font-size:13.5px;color:var(--ink-3)}
+.quote{font-size:17px;font-style:italic;color:var(--ink-2);border-left:3px solid var(--line-strong);padding:4px 14px;margin:10px 0}
+.quote small{display:block;font-style:normal;font-size:13px;color:var(--ink-3);margin-top:4px}
+.fig{margin:16px 0;padding:16px 18px;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.fig .ft{font-weight:600;font-size:15px;margin-bottom:2px}
+.fig .fs{font-size:13px;color:var(--ink-3);margin-bottom:12px}
+svg{display:block;width:100%;height:auto}
+svg text{font-family:"Public Sans",system-ui,sans-serif}
+svg .lbl{font-size:13px;fill:var(--ink-2)}
+svg .val{font-size:12.5px;fill:var(--ink);font-family:"IBM Plex Mono",monospace}
+svg .grid{stroke:var(--line);stroke-width:1}
+svg .axis{font-size:11.5px;fill:var(--ink-3);font-family:"IBM Plex Mono",monospace}
+svg .bar{rx:4;fill:var(--accent)}
+svg .bar.muted{fill:var(--fill-neutral)}
+svg .bar:hover{opacity:.85}
+.tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);padding:7px 10px;border-radius:7px;font-size:12.5px;line-height:1.4;max-width:280px;opacity:0;transition:opacity .12s;z-index:50}
+.tip.show{opacity:1}
+.arch{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:14px 0}
+.arch .box{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:13.5px}
+.arch .box h4{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:6px}
+.arch .box p{margin:0;color:var(--ink-2)}
+.arch .box:not(:last-child)::after{content:"";position:absolute;right:-9px;top:50%;width:0;height:0;border:6px solid transparent;border-left-color:var(--line-strong);transform:translateY(-50%)}
+.gantt{display:grid;grid-template-columns:150px repeat(12,1fr);gap:4px 0;font-size:13px;align-items:center;margin:12px 0 4px}
+.gantt .h{font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--ink-3);text-align:center;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.gantt .h.first{text-align:left}
+.gantt .r{grid-column:1;color:var(--ink-2);padding:6px 8px 6px 0;white-space:nowrap}
+.gantt .b{height:22px;border-radius:5px;background:var(--accent);display:flex;align-items:center;padding:0 8px;color:var(--bg);font-family:"IBM Plex Mono",monospace;font-size:11.5px;white-space:nowrap;overflow:hidden}
+.gantt .b.alt{background:var(--accent-soft-2);color:var(--ink)}
+.gantt .ms{position:relative;height:22px;overflow:visible}
+.gantt .ms::before{content:"";position:absolute;left:calc(100% - 7px);top:4px;width:12px;height:12px;background:var(--critical);transform:rotate(45deg);border-radius:2px}
+.gantt .ms span{position:absolute;left:calc(100% + 12px);top:3px;font-size:11.5px;color:var(--ink-2);white-space:nowrap}
+.dec{counter-reset:d;list-style:none;padding:0}
+.dec li{counter-increment:d;position:relative;padding:14px 16px 14px 56px;background:var(--surface);border:1px solid var(--line);border-radius:10px;margin-bottom:10px}
+.dec li::before{content:counter(d);position:absolute;left:16px;top:14px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:var(--bg);font-weight:800;display:flex;align-items:center;justify-content:center;font-size:14px}
+.dec li b{display:block;margin-bottom:3px}
+.src{font-size:13.5px;color:var(--ink-2)}
+.src li{margin-bottom:4px}
+.resume{background:var(--surface-2);border:1px dashed var(--line-strong);border-radius:10px;padding:14px 18px;font-size:14.5px}
+.resume li{margin-bottom:8px}
+.steps{counter-reset:s;list-style:none;padding:0}
+.steps li{counter-increment:s;position:relative;padding-left:34px;margin-bottom:8px}
+.steps li::before{content:counter(s);position:absolute;left:0;top:1px;width:22px;height:22px;border-radius:6px;background:var(--accent-soft);color:var(--accent-ink);font-weight:700;font-size:12.5px;display:flex;align-items:center;justify-content:center;border:1px solid var(--accent-soft-2)}
+.demo{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.demo .step{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:14px}
+.demo .step b{display:block;font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--accent-ink);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+@media (max-width:900px){
+  .layout{grid-template-columns:1fr}
+  nav.toc{position:static;max-height:none;display:flex;flex-wrap:wrap;gap:4px}
+  nav.toc .kicker{width:100%}
+  nav.toc a{border-left:0;border:1px solid var(--line);border-radius:999px;padding:4px 10px}
+  .g2,.g3,.g4,.demo{grid-template-columns:1fr}
+  .arch{grid-template-columns:1fr 1fr}
+  .arch .box::after{display:none}
+  .gantt{grid-template-columns:110px repeat(12,1fr)}
+  .gantt .b{padding:0 4px;font-size:10px}
+  .gantt .ms span{display:none}
+}
+</style>
+
+<header class="hero"><div class="wrap">
+  <div class="eyebrow">Portfolio project plan · v4 · 2026-10-24 · replaces Sheetlint</div>
+  <h1>Hailprint</h1>
+  <p class="lede">An open hail-exposure map for Harris County that <strong>grades itself</strong>. Every night it pulls NOAA's radar hail-size product, draws the swath over every parcel, and scores the result against NOAA storm reports. Roofers and insurers pay <strong>$999 to $2,999 a year</strong> for closed versions that publish no accuracy numbers.</p>
+  <div class="strip">
+    <span class="pill"><b>150 h</b> · 12 weeks</span>
+    <span class="pill"><b>Under $70/yr</b> to run</span>
+    <span class="pill"><b>Python</b> pipeline · <b>MapLibre</b> front end</span>
+    <span class="pill"><b>No PHI</b>, no owner data, no employer overlap</span>
+    <span class="pill">Score <b>87.5 / 95</b> on the v4 rubric</span>
+  </div>
+</div></header>
+
+<div class="wrap layout">
+<nav class="toc" id="toc" aria-label="Sections">
+  <div class="kicker">Contents</div>
+  <a href="#pitch">1. Pitch</a>
+  <a href="#standout">2. Why it stands out</a>
+  <a href="#evidence">3. Problem evidence</a>
+  <a href="#users">4. Who it serves</a>
+  <a href="#v1">5. What ships in v1</a>
+  <a href="#scorecard">6. Scorecard design</a>
+  <a href="#arch">7. Architecture</a>
+  <a href="#data">8. Data and licences</a>
+  <a href="#metrics">9. Metrics and acceptance</a>
+  <a href="#risks">10. Risks</a>
+  <a href="#schedule">11. Twelve-week schedule</a>
+  <a href="#launch">12. Launch</a>
+  <a href="#budget">13. Budget</a>
+  <a href="#resume">14. Resume lines</a>
+  <a href="#alternatives">15. Alternatives</a>
+  <a href="#decisions">16. Decisions for Tom</a>
+  <a href="#sources">17. Sources</a>
+</nav>
+
+<main>
+
+<section id="pitch">
+  <div class="kicker">1</div><h2>Pitch</h2>
+  <p>Hailprint pulls NOAA's MRMS hail-size radar product every night, draws the hail swath over every parcel in Harris County, and then grades its own map against NOAA storm reports. Every Texas storm adds a swath, a comparison, and a score, with no manual input. The output is a live map, a per-storm exposure report, and a six-season verification table that no commercial vendor publishes.</p>
+  <div class="demo">
+    <div class="step"><b>Demo · 0:00</b>Pick a storm date. The swath lands on the county in size classes from 0.75 to 2.5+ inch.</div>
+    <div class="step"><b>Demo · 0:40</b>Zoom to a ZIP. Each parcel carries its radar-estimated hail size and a confidence band.</div>
+    <div class="step"><b>Demo · 1:20</b>Open the scorecard. Hits, misses, false alarms against NOAA reports for that storm, and the six-season average.</div>
+  </div>
+  <div class="callout"><p><strong>Why a chat LLM cannot replace it.</strong> The product is a running pipeline (GRIB2 decoding, raster-to-vector, spatial joins over more than a million parcels, nightly scheduling) plus a scorecard that only exists after seasons of operation. Claude can write the code. It cannot be the system, and it cannot have run since 2020.</p></div>
+</section>
+
+<section id="standout">
+  <div class="kicker">2</div><h2>Why it stands out</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Nobody open has done it</h3><p>GitHub holds three zero-star hail-map repos (one pushed 2026-10-24). None joins to parcels and none publishes verification scores. Incumbents (Interactive Hail Maps, HailTrace, HailStrike, CoreLogic, Verisk) all start from the same free NEXRAD feed and sell meteorologist review on top.</p></div>
+    <div class="card"><h3>The money is loud and local</h3><p>State Farm alone paid more than $5.6B in hail claims in 2025, $1.4B of it in Texas. CoreLogic counts 2.13M Houston homes at moderate-or-higher hail risk. Texas has been the hail-damage capital for 11 straight years.</p></div>
+    <div class="card"><h3>Honesty is the moat</h3><p>The published skill ceiling for radar hail estimates is low: Heidke skill score 0.38 at best. Hailprint leads with that number and shows per-storm precision instead of claiming accuracy. Every vendor hides it. A hiring manager reads judgment.</p></div>
+    <div class="card"><h3>Five skills in one repo</h3><p>Data engineering (S3, GRIB2, nightly batch), geospatial computation (contours, joins, tiles), statistics (POD, FAR, CSI, HSS, preliminary vs final truth), product sense with a dollar figure, and a shipped front end.</p></div>
+  </div>
+</section>
+
+<section id="evidence">
+  <div class="kicker">3</div><h2>Problem evidence</h2>
+  <div class="grid g4">
+    <div class="card stat"><div class="n">$5.6B</div><div class="l">State Farm hail claims, 2025</div><div class="s">one insurer; Texas $1.4B of it</div></div>
+    <div class="card stat"><div class="n">235k</div><div class="l">Texas homes hit by damaging hail, 2025</div><div class="s">Cotality 2026 SCS report</div></div>
+    <div class="card stat"><div class="n">2.13M</div><div class="l">Houston homes at moderate+ hail risk</div><div class="s">$728.4B reconstruction value, CoreLogic 2025</div></div>
+    <div class="card stat"><div class="n">$92.5B</div><div class="l">US roofing contractor industry</div><div class="s">about 109,000 firms, IBISWorld</div></div>
+  </div>
+
+  <div class="fig">
+    <div class="ft">What buyers pay today for a hail map</div>
+    <div class="fs">Top tier, annualized list price, USD per year. Hover a bar for the plan detail.</div>
+    <svg viewBox="0 0 760 236" role="img" aria-label="Annual price of hail-map products: HailMate 5988, AnythingWeather 2999, HailStrike 2988, Interactive Hail Maps 1999, GAF WeatherHub 649 unverified, Hailprint 0">
+      <g class="lbl">
+        <text x="0" y="22">HailMate</text>
+        <text x="0" y="58">AnythingWeather</text>
+        <text x="0" y="94">HailStrike</text>
+        <text x="0" y="130">Interactive Hail Maps</text>
+        <text x="0" y="166">GAF WeatherHub</text>
+        <text x="0" y="202">Hailprint</text>
+      </g>
+      <g transform="translate(170,0)">
+        <line class="grid" x1="0" y1="0" x2="0" y2="216"/>
+        <rect class="bar" x="0" y="8" width="560" height="22" data-tip="HailMate top tier: $499 per month, about $5,988 per year. Entry tier $79 per month."/>
+        <rect class="bar" x="0" y="44" width="280" height="22" data-tip="AnythingWeather national plan $2,999 per year. State plan $1,899."/>
+        <rect class="bar" x="0" y="80" width="279" height="22" data-tip="HailStrike $249 per month, about $2,988 per year. Litigation tier $2,500 per year."/>
+        <rect class="bar" x="0" y="116" width="187" height="22" data-tip="Interactive Hail Maps / Hail Recon nationwide $1,999 per year; one state $999; plus $799 per state per year for homeowner contacts."/>
+        <rect class="bar muted" x="0" y="152" width="61" height="22" data-tip="GAF WeatherHub $649 per year top tier. Pricing page returned 403; unverified."/>
+        <rect class="bar muted" x="0" y="188" width="3" height="22" data-tip="Hailprint: open source, static hosting, under $70 per year to run."/>
+        <g class="val">
+          <text x="568" y="24">$5,988</text>
+          <text x="288" y="60">$2,999</text>
+          <text x="287" y="96">$2,988</text>
+          <text x="195" y="132">$1,999</text>
+          <text x="69" y="168">$649 (unverified)</text>
+          <text x="11" y="204">$0, scores published</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <div class="grid g2">
+    <div class="card"><h3>What the map decides</h3><ul>
+      <li>Roofers: where a canvassing crew goes first the morning after a storm, and how many leads to expect.</li>
+      <li>Roofers and adjusters: date-of-loss documentation for the adjuster meeting.</li>
+      <li>Insurers: date-of-loss confirmation and fraud screening at footprints of 0.75 inch and above.</li>
+    </ul></div>
+    <div class="card"><h3>What users say</h3>
+      <div class="quote">"Definitely worth the money instead of driving around wasting time"<small>HailTrace app review, 2024-04-27</small></div>
+      <p class="note">Hail Recon sits at 3.0 stars from 85 App Store reviews; HailTrace at 3.3 from 24. Negatives: lag, crashes, and subscription cost "steep for small teams" (the most common complaint in a roofing-software review roundup).</p>
+    </div>
+  </div>
+
+  <div class="callout warn"><p><strong>The number to lead with.</strong> Ortega 2018 (21,184 SHAVE hail reports plus 2,814 Storm Data reports): MESH at 30 mm is the best severe-hail threshold with HSS 0.38; no product scores above 0.2 for significant-severe hail. Wendt and Jirak 2021: MESH overestimates severe hail to some degree. Kopp 2024 (Swiss): false alarm ratio above 0.6. A map that hides this is marketing. A map that publishes it is engineering.</p></div>
+</section>
+
+<section id="users">
+  <div class="kicker">4</div><h2>Who it serves</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Audience</th><th>What they get</th><th>Dollar anchor</th></tr></thead>
+    <tbody>
+      <tr><td>Roofing contractors, Houston</td><td>Next-morning swath over parcels, counts by ZIP and size class, a per-storm exposure report</td><td>Replaces a $999 to $1,999 per year subscription or a $230 single-storm map</td></tr>
+      <tr><td>Insurance adjusters and SIU</td><td>Date-of-loss check for a parcel: which storm days had radar hail at or above 0.75 inch there, with that storm's score</td><td>HailTrace charges $40 to $1,000 per report</td></tr>
+      <tr><td>Hiring managers</td><td>A repo with a live map, a six-season verification table, and a methodology page</td><td>Pipeline, geospatial, statistics, and front-end work in one artifact</td></tr>
+    </tbody>
+  </table></div>
+  <p><strong>Hiring targets</strong> with a Texas presence, not verified as hiring today: Cotality (formerly CoreLogic, Irving), Verisk, USAA, State Farm (Richardson), Allstate (Irving), Hippo (Austin), Texas Windstorm Insurance Association, ICEYE, ZestyAI, Arturo, Cape Analytics, Nearmap, roofing SaaS (AccuLynx, JobNimbus, Roofr), and Houston energy and logistics firms with weather-driven operations.</p>
+</section>
+
+<section id="v1">
+  <div class="kicker">5</div><h2>What ships in v1</h2>
+  <p><strong>Scope:</strong> Harris County, MRMS MESH (not raw Level II radar), nightly batch, SPC plus NCEI verification, static tiles, scorecard, backtest 2020-10 to 2026-10.</p>
+  <div class="fig">
+    <div class="ft">Module budget, 150 hours</div>
+    <div class="fs">Hours per module. Hover a bar for the deliverable.</div>
+    <svg viewBox="0 0 760 340" role="img" aria-label="Module hours: M1 Ingest 18, M2 Swath builder 16, M3 Parcel join 20, M4 Verification 22, M5 Backtest 16, M6 Tiles and map 24, M7 Scheduler 12, M8 Report and methodology 12, M9 Demo and README 10">
+      <g class="lbl">
+        <text x="0" y="22">M1 Ingest</text>
+        <text x="0" y="58">M2 Swath builder</text>
+        <text x="0" y="94">M3 Parcel join</text>
+        <text x="0" y="130">M4 Verification</text>
+        <text x="0" y="166">M5 Backtest</text>
+        <text x="0" y="202">M6 Tiles and map</text>
+        <text x="0" y="238">M7 Scheduler, ops</text>
+        <text x="0" y="274">M8 Report, methodology</text>
+        <text x="0" y="310">M9 Demo, README</text>
+      </g>
+      <g transform="translate(190,0)">
+        <line class="grid" x1="0" y1="0" x2="0" y2="324"/>
+        <rect class="bar" x="0" y="8" width="405" height="22" data-tip="M1: pull MESH_Max_1440min (48 files a day) and 2-minute MESH on storm days from noaa-mrms-pds, decode GRIB2 with cfgrib and xarray, crop to the county bounding box."/>
+        <rect class="bar" x="0" y="44" width="360" height="22" data-tip="M2: contours at 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5+ inch; polygonize, dissolve, simplify; GeoParquet per storm day."/>
+        <rect class="bar" x="0" y="80" width="450" height="22" data-tip="M3: HCAD parcels reprojected from EPSG 2278, owner fields dropped at load, per-parcel maximum MESH per storm day, counts by size class and ZIP."/>
+        <rect class="bar" x="0" y="116" width="495" height="22" data-tip="M4: SPC daily hail CSV the same day, NCEI Storm Events at 75 to 90 days, neighborhood matching, POD / FAR / CSI / HSS per threshold per storm."/>
+        <rect class="bar" x="0" y="152" width="360" height="22" data-tip="M5: about 2,200 daily-max files (1.8 GB) from 2020-10-14; calibration table of threshold versus POD and FAR; the headline figure."/>
+        <rect class="bar" x="0" y="188" width="540" height="22" data-tip="M6: tippecanoe to PMTiles on R2, MapLibre with storm-date picker, swath and parcel layers, scorecard panel, Protomaps basemap."/>
+        <rect class="bar" x="0" y="224" width="270" height="22" data-tip="M7: nightly job (GitHub Actions on a public repo or a small VPS), publish tiles and scorecard JSON, status page with last-run time."/>
+        <rect class="bar" x="0" y="260" width="270" height="22" data-tip="M8: per-storm exposure report in HTML and PDF, the $230 single-storm-map analog; methodology page with the literature ceiling."/>
+        <rect class="bar" x="0" y="296" width="225" height="22" data-tip="M9: two-minute demo video, README, resume lines."/>
+        <g class="val">
+          <text x="413" y="24">18 h</text>
+          <text x="368" y="60">16 h</text>
+          <text x="458" y="96">20 h</text>
+          <text x="503" y="132">22 h</text>
+          <text x="368" y="168">16 h</text>
+          <text x="548" y="204">24 h</text>
+          <text x="278" y="240">12 h</text>
+          <text x="278" y="276">12 h</text>
+          <text x="233" y="312">10 h</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <p class="note"><strong>Out of v1</strong> (v2 candidates): raw Level II dual-pol processing with Py-ART and pyhail, statewide coverage, push alerts, footprint-level roof areas, insurer API.</p>
+</section>
+
+<section id="scorecard">
+  <div class="kicker">6</div><h2>Scorecard design</h2>
+  <div class="grid g2">
+    <div class="card"><h3>Ground truth, two columns</h3><p>SPC preliminary reports (<code>yesterday_hail.csv</code>, hundredths of an inch, 12Z to 12Z day) the next morning. NCEI Storm Events when the month closes, 75 to 90 days later. The scorecard shows both, so the preliminary-vs-final drift is visible instead of hidden.</p></div>
+    <div class="card"><h3>Matching rule</h3><p>A report counts as a hit when a swath pixel at or above the threshold lies within a neighborhood radius (default 5 km) on the storm day. Swath area with no report nearby counts as a false alarm only where report density is adequate. Sparse areas get an <strong>unverifiable</strong> class, following the neighborhood method in Ortega 2018.</p></div>
+    <div class="card"><h3>Metrics</h3><p>Per storm and per season: probability of detection, false alarm ratio, critical success index, Heidke skill score, at 25.4 mm and 30 mm. Plus swath area in square kilometers and parcel count per size class.</p></div>
+    <div class="card"><h3>Acceptance</h3><p>The six-season table reproduces the literature ceiling: HSS between 0.25 and 0.45 at 30 mm against SPC reports. A result far above the literature means a matching bug, not a breakthrough. The plan treats it that way.</p></div>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>Study</th><th>Data</th><th>Finding</th></tr></thead>
+    <tbody>
+      <tr><td>Witt et al. 1998</td><td>Severe Hail Index, NEXRAD</td><td>MESH is a power law of SHI; underestimates in tilted sheared storms, left-movers, low-density hail</td></tr>
+      <tr><td>Ortega 2018</td><td>21,184 SHAVE + 2,814 Storm Data reports</td><td>MESH 30 mm best for severe hail, HSS 0.38; nothing above 0.2 for significant-severe; Storm Data skill "far lower"</td></tr>
+      <tr><td>Wendt and Jirak 2021</td><td>CONUS, multi-year</td><td>Severe thresholds 29 mm (MESH-Witt), 40 mm (MESH75), 64 mm (MESH95); MESH overestimates severe hail</td></tr>
+      <tr><td>Kopp et al. 2024</td><td>Swiss MESHS vs crowdsourced reports</td><td>FAR above 0.6; best CSI 0.25 at 2 cm</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="arch">
+  <div class="kicker">7</div><h2>Architecture</h2>
+  <div class="arch">
+    <div class="box"><h4>Pull</h4><p>Anonymous S3 from <code>noaa-mrms-pds</code>; SPC CSV; NCEI monthly CSV; HCAD quarterly.</p></div>
+    <div class="box"><h4>Decode, crop</h4><p>cfgrib + xarray; county bounding box; per-day raster.</p></div>
+    <div class="box"><h4>Swaths</h4><p>rasterio.features + shapely; seven size classes; GeoParquet.</p></div>
+    <div class="box"><h4>Parcel join</h4><p>DuckDB spatial or GeoPandas STRtree; owner fields dropped at load.</p></div>
+    <div class="box"><h4>Verify</h4><p>Neighborhood matching; POD / FAR / CSI / HSS; scorecard.json.</p></div>
+    <div class="box"><h4>Tiles, map</h4><p>tippecanoe to PMTiles on R2; MapLibre GL; no tile server.</p></div>
+  </div>
+  <div class="grid g3">
+    <div class="card"><h3>Pipeline: Python</h3><p>GRIB2 tooling (cfgrib, wgrib2, xarray, rasterio) is mature in Python and poor in JavaScript. One package, one scheduler entry point, typed with pydantic for the config.</p></div>
+    <div class="card"><h3>Front end: TypeScript</h3><p>MapLibre GL JS with the pmtiles protocol on a static site. Storm-date picker, two layers, scorecard panel. Panel and report reuse the tokens from your design-system repo.</p></div>
+    <div class="card"><h3>Storage</h3><p>Cropped daily rasters are a few megabytes. The full backtest is under 2 GB of source files and a few hundred megabytes of outputs. Tiles stay under 200 MB.</p></div>
+  </div>
+</section>
+
+<section id="data">
+  <div class="kicker">8</div><h2>Data sources and licences</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Source</th><th>Access</th><th>Terms</th><th>Volume</th></tr></thead>
+    <tbody>
+      <tr><td>MRMS MESH, <code>noaa-mrms-pds</code> (us-east-1)</td><td>anonymous S3, 2-minute cycle</td><td>NOAA Open Data Dissemination; open, attribution requested</td><td>daily max: 48 files a day at 0.8 MB; 2-minute: 720 a day at 58 KB; archive from 2020-10-14</td></tr>
+      <tr><td>MRMS before 2020-10</td><td>Iowa Environmental Mesonet archive</td><td>same product, mirror</td><td>optional backtest extension</td></tr>
+      <tr><td>SPC storm reports</td><td>daily CSV, no key</td><td>public, preliminary</td><td>one small CSV a day</td></tr>
+      <tr><td>NCEI Storm Events</td><td>bulk CSV</td><td>public, final after 75 to 90 days</td><td>one file a month</td></tr>
+      <tr><td>HCAD parcels</td><td>shapefile or FGDB, quarterly, EPSG 2278, 13-digit HCAD_NUM</td><td>disclaimer only; no licence or redistribution text found; <strong>email HCAD GIS in week 1</strong></td><td>hundreds of MB</td></tr>
+      <tr><td>Building footprints (Microsoft, Overture)</td><td>download</td><td>ODbL, share-alike on derived databases</td><td>optional in v1</td></tr>
+      <tr><td>NEXRAD Level II, <code>unidata-nexrad-level2</code></td><td>anonymous S3</td><td>open</td><td>about 1.1 GB a day for KHGX alone; v2 only</td></tr>
+    </tbody>
+  </table></div>
+  <div class="grid g2">
+    <div class="card accent"><h3>Privacy rule</h3><p>HCAD parcel attributes include owner names and mailing addresses. The loader drops them before anything is written for publishing. The public map carries parcel ID, geometry, land-use class, year built, and improvement area only. No homeowner contact data, ever, including as a paid add-on.</p></div>
+    <div class="card accent"><h3>Legal wording rule</h3><p>Outputs say "radar-estimated hail size at this parcel" with a confidence band. The word "damaged" never appears. Texas has a hostile hail-claim litigation history (SB 1060 and SB 1628, 2015 to 2017; a 2017 roofer class action over hail solicitation). The map is an exposure estimate, not a damage finding.</p></div>
+  </div>
+</section>
+
+<section id="metrics">
+  <div class="kicker">9</div><h2>Metrics and acceptance</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Metric</th><th>Target</th><th>How checked</th></tr></thead>
+    <tbody>
+      <tr><td>Nightly run reliability</td><td>95% of nights complete by 06:00 CT</td><td>status page log over 30 days</td></tr>
+      <tr><td>Backtest coverage</td><td>every day 2020-10-14 to 2026-10-31 processed</td><td>file count equals calendar days</td></tr>
+      <tr><td>Verification</td><td>six-season POD, FAR, CSI, HSS at 25.4 and 30 mm published</td><td>scorecard JSON plus methodology page</td></tr>
+      <tr><td>Map performance</td><td>first tile paint under 2 s on a 4G phone; PMTiles under 200 MB</td><td>Lighthouse and tile size report</td></tr>
+      <tr><td>Parcel join scale</td><td>all HCAD parcels joined per storm day in under 5 minutes</td><td>timed run</td></tr>
+      <tr><td>Report generator</td><td>one exposure report per storm, HTML and PDF</td><td>sample report in the repo</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="risks">
+  <div class="kicker">10</div><h2>Risks and mitigations</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Risk</th><th>Likelihood</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Low radar skill (HSS about 0.38) reads as failure</td><td><span class="badge lk-high"><span class="dot"></span>High</span></td><td>Lead with the literature ceiling; the scorecard is the product; label as exposure, not damage</td></tr>
+      <tr><td>Sparse reports inflate false alarms in suburbs</td><td><span class="badge lk-high"><span class="dot"></span>High</span></td><td>"Unverifiable" class; report-density map; neighborhood radius documented</td></tr>
+      <tr><td>HCAD reuse terms unknown</td><td><span class="badge lk-med"><span class="dot"></span>Medium</span></td><td>Email HCAD GIS in week 1; fall back to aggregates by ZIP and census block if redistribution is barred</td></tr>
+      <tr><td>ODbL share-alike on footprints</td><td><span class="badge lk-med"><span class="dot"></span>Medium</span></td><td>Skip footprints in v1; if used, publish derived tiles under ODbL</td></tr>
+      <tr><td>Litigation-sensitive wording</td><td><span class="badge lk-med"><span class="dot"></span>Medium</span></td><td>Wording rule; disclaimer on every page and report</td></tr>
+      <tr><td>Expertise gate (thresholds, melting, underestimation modes)</td><td><span class="badge lk-med"><span class="dot"></span>Medium</span></td><td>Thresholds and caveats cited from Witt 1998, Ortega 2018, Wendt and Jirak 2021; no custom meteorology</td></tr>
+      <tr><td>Someone ships first</td><td><span class="badge lk-med"><span class="dot"></span>Medium</span></td><td>Zero-star repos exist; ship the scorecard by week 6 and the live map by week 8</td></tr>
+      <tr><td>AWS bucket churn (NEXRAD bucket deprecated 2025-09-01)</td><td><span class="badge lk-low"><span class="dot"></span>Low</span></td><td>Bucket names in config; IEM mirror as fallback</td></tr>
+      <tr><td>Employer IP overlap</td><td><span class="badge lk-low"><span class="dot"></span>Low</span></td><td>TRP builds a medical PMS and revenue portal; unrelated; read the IP clause before the first commit</td></tr>
+      <tr><td>Name collision</td><td><span class="badge lk-low"><span class="dot"></span>Low</span></td><td>"Hailprint" clean on web search 2026-10-24; check USPTO and domain in week 1</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="schedule">
+  <div class="kicker">11</div><h2>Twelve-week schedule</h2>
+  <p>About 12.5 hours a week. Each week has an exit check; the diamonds mark the two public milestones.</p>
+  <div class="gantt" role="img" aria-label="Twelve-week Gantt: spike and ingest weeks 1 to 2, swaths week 3, parcel join week 4, verification week 5, backtest week 6 with the scorecard milestone, tiles and map weeks 7 to 8 with the live map milestone, scheduler week 9, report and methodology week 10, hardening week 11, demo and launch week 12">
+    <div class="h first">Week</div>
+    <div class="h">1</div><div class="h">2</div><div class="h">3</div><div class="h">4</div><div class="h">5</div><div class="h">6</div><div class="h">7</div><div class="h">8</div><div class="h">9</div><div class="h">10</div><div class="h">11</div><div class="h">12</div>
+    <div class="r">Spike + M1 ingest</div><div class="b" style="grid-column:2 / span 2"></div>
+    <div class="r">M2 swaths</div><div class="b" style="grid-column:4 / span 1"></div>
+    <div class="r">M3 parcel join</div><div class="b" style="grid-column:5 / span 1"></div>
+    <div class="r">M4 verification</div><div class="b" style="grid-column:6 / span 1"></div>
+    <div class="r">M5 backtest</div><div class="b ms" style="grid-column:7 / span 1"><span>scorecard public</span></div>
+    <div class="r">M6 tiles + map</div><div class="b ms" style="grid-column:8 / span 2"><span>map live</span></div>
+    <div class="r">M7 scheduler</div><div class="b" style="grid-column:10 / span 1"></div>
+    <div class="r">M8 report + method</div><div class="b" style="grid-column:11 / span 1"></div>
+    <div class="r">Harden, M9 demo</div><div class="b alt" style="grid-column:12 / span 2"></div>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>Week</th><th>Work</th><th>Exit check</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Spike: pull one Harris County hail day, decode GRIB2, draw one contour over the county outline; download HCAD parcels; email HCAD on reuse; name and IP checks</td><td>one PNG of a swath over the county</td></tr>
+      <tr><td class="num">2</td><td>M1 ingest; download the daily-max archive 2020-10 to now</td><td>about 2,200 daily files indexed</td></tr>
+      <tr><td class="num">3</td><td>M2 swaths for every day with at least 0.75 inch anywhere in the bbox</td><td>GeoParquet of swaths; storm-day count</td></tr>
+      <tr><td class="num">4</td><td>M3 parcel join with owner fields stripped</td><td>per-parcel table for one storm; counts by ZIP</td></tr>
+      <tr><td class="num">5</td><td>M4 verification against SPC and NCEI</td><td>POD, FAR, CSI for three storms</td></tr>
+      <tr><td class="num">6</td><td>M5 backtest over six seasons</td><td>calibration table published as JSON and a page</td></tr>
+      <tr><td class="num">7</td><td>M6 tiles: tippecanoe, PMTiles, R2</td><td>tiles load in a bare MapLibre page</td></tr>
+      <tr><td class="num">8</td><td>M6 map UI: date picker, layers, scorecard panel, mobile</td><td>hosted map live</td></tr>
+      <tr><td class="num">9</td><td>M7 nightly scheduler and status page</td><td>seven consecutive nightly runs logged</td></tr>
+      <tr><td class="num">10</td><td>M8 exposure report and methodology page</td><td>one report for a named storm</td></tr>
+      <tr><td class="num">11</td><td>Hardening: a11y, performance, README, tests on the matcher</td><td>Lighthouse pass; matcher unit tests green</td></tr>
+      <tr><td class="num">12</td><td>Demo video, resume lines, launch posts</td><td>video under 2 minutes; posts drafted</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="launch">
+  <div class="kicker">12</div><h2>Distribution and launch</h2>
+  <ul>
+    <li>Repo public from week 1 with the methodology page first; the scorecard page at week 6; the map at week 8.</li>
+    <li>Launch posts: Show HN, LinkedIn with the two-minute video, Texas GIS and Houston data groups, roofing and insurance forums with the exposure report for a recent storm. No homeowner outreach, no lead selling.</li>
+    <li>A per-storm post the morning after each Houston hail day: swath, parcel counts, score. The cadence is the content, and every post is a fresh proof the pipeline runs.</li>
+  </ul>
+</section>
+
+<section id="budget">
+  <div class="kicker">13</div><h2>Budget</h2>
+  <div class="tbl"><table>
+    <thead><tr><th>Item</th><th class="num">Cost</th></tr></thead>
+    <tbody>
+      <tr><td>Domain</td><td class="num">about $12/yr</td></tr>
+      <tr><td>Cloudflare R2 (tiles) and Pages</td><td class="num">free tier, 10 GB</td></tr>
+      <tr><td>Nightly job: GitHub Actions on a public repo (free) or a small VPS (Hetzner CX22, about EUR 3.79/month)</td><td class="num">$0 to $50/yr</td></tr>
+      <tr><td>AWS egress from the NOAA public buckets</td><td class="num">$0 (Open Data program)</td></tr>
+      <tr class="total"><td>Total</td><td class="num">under $70/yr</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="resume">
+  <div class="kicker">14</div><h2>Resume lines and interview stories</h2>
+  <div class="resume"><ul>
+    <li>Built an open hail-exposure pipeline that ingests NOAA MRMS radar (GRIB2) nightly, maps hail swaths onto every Harris County parcel, and scores itself against NOAA storm reports.</li>
+    <li>Published a six-season verification table (POD, FAR, CSI, HSS at 25.4 mm and 30 mm) and per-storm scorecards; incumbents at $999 to $2,999 per year publish none.</li>
+    <li>Served county-wide parcel and swath layers as PMTiles on static hosting with a MapLibre front end, no tile server.</li>
+  </ul></div>
+  <p><strong>Interview stories:</strong> why preliminary and final ground truth disagree and how the scorecard shows both; why sparse reports force an "unverifiable" class instead of a false alarm; how the neighborhood radius changes the score; why owner fields are dropped at load; why PMTiles beat a tile server for a solo project; what the HSS ceiling says about selling radar hail maps.</p>
+</section>
+
+<section id="alternatives">
+  <div class="kicker">15</div><h2>Alternatives considered</h2>
+  <div class="fig">
+    <div class="ft">v4 rubric score, maximum 95</div>
+    <div class="fs">Weights: not LLM-substitutable 3, surprise 3, business credibility with dollars 3, self-generating proof 2, technical depth 2, feasibility in 150 h 2, 2-minute demo 1.5, no gate or overlap 1.5, Houston fit 1. Hover a bar for the verdict.</div>
+    <svg viewBox="0 0 760 128" role="img" aria-label="Rubric scores: Hailprint 87.5, ERCOT coincident-peak predictor 73.5, cartonization engine 61, out of 95">
+      <g class="lbl">
+        <text x="0" y="22">Hailprint</text>
+        <text x="0" y="58">ERCOT peak predictor</text>
+        <text x="0" y="94">Cartonization engine</text>
+      </g>
+      <g transform="translate(180,0)">
+        <line class="grid" x1="0" y1="0" x2="0" y2="108"/>
+        <line class="grid" x1="520" y1="0" x2="520" y2="108" stroke-dasharray="3 3"/>
+        <text class="axis" x="520" y="120" text-anchor="middle">95</text>
+        <rect class="bar" x="0" y="8" width="479" height="22" data-tip="Hailprint: not LLM-substitutable 5, surprise 5, business credibility 4, self-generating proof 5, depth 5, feasibility 4, demo 5, no gate 4, Houston fit 4."/>
+        <rect class="bar muted" x="0" y="44" width="402" height="22" data-tip="ERCOT coincident-peak predictor: commodity alert market (TXU, Amperon, Enverus, Grid Status); the official interval is unknowable in real time; PUCT Project 58000 replaces 4CP with 12CP at 30-minute intervals, likely by 2026-12-31."/>
+        <rect class="bar muted" x="0" y="80" width="334" height="22" data-tip="Cartonization engine: Paccurate patent US11216774B2 covers the pitch; six open libraries ship 3D viewers; Shopify adjacency sits on the rejected list."/>
+        <g class="val">
+          <text x="487" y="24">87.5</text>
+          <text x="410" y="60">73.5</text>
+          <text x="342" y="96">61</text>
+        </g>
+      </g>
+    </svg>
+  </div>
+  <div class="tbl"><table>
+    <thead><tr><th>Candidate</th><th class="num">Score</th><th>Why not</th></tr></thead>
+    <tbody>
+      <tr class="pick"><td>Hailprint: hail swath + parcel exposure, self-graded</td><td class="num">87.5</td><td>Picked</td></tr>
+      <tr><td>ERCOT coincident-peak (4CP) predictor</td><td class="num">73.5</td><td>Commodity alert market; official interval unknowable in real time; rule change to 12CP likely before launch</td></tr>
+      <tr><td>Cartonization engine (3D bin packing + DIM pricing)</td><td class="num">61</td><td>Paccurate patent covers the pitch; six open libraries ship viewers; Shopify adjacency</td></tr>
+      <tr><td>Sheetlint (v3)</td><td class="num">rejected</td><td>A chat LLM handles spreadsheets</td></tr>
+      <tr><td>PayerLens TX (v2)</td><td class="num">rejected</td><td>Medical and generic</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="decisions">
+  <div class="kicker">16</div><h2>Decisions for Tom</h2>
+  <ol class="dec">
+    <li><b>Name</b>Hailprint (clean on web search), or another name before the repo goes public. Domain and USPTO check still to run.</li>
+    <li><b>Scheduler</b>GitHub Actions on a public repo (free, but you have disabled Actions on your account before) or a small VPS.</li>
+    <li><b>Footprints in v1</b>Microsoft or Overture footprints under ODbL share-alike, or HCAD improvement attributes only. Recommendation: HCAD only.</li>
+    <li><b>Scope</b>Harris County only, or the nine-county Houston metro (each county has its own appraisal district download). Recommendation: Harris only.</li>
+    <li><b>Languages</b>Python for the pipeline, TypeScript for the map. Recommendation: yes.</li>
+    <li><b>Go</b>Approve the twelve-week plan and start week 1.</li>
+  </ol>
+</section>
+
+<section id="sources">
+  <div class="kicker">17</div><h2>Sources</h2>
+  <ul class="src">
+    <li>State Farm newsroom, "State Farm paid over $5.6 billion in hail claims in 2025".</li>
+    <li>Cotality press release, "Hail now a leading driver of insured losses, on par with major hurricanes" (2026 SCS report).</li>
+    <li>CoreLogic, 2025 Severe Convective Storm Risk Report. IBISWorld, Roofing Contractors in the US. NICB, Texas hail damage capital.</li>
+    <li>Pricing: Hailmate blog (August 2026); useproline.com HailTrace vs Hail Recon; roofingsoftwareguide.com; store.anythingweather.com; justuseapp.com HailTrace reviews; apppricinglab.com Hail Recon.</li>
+    <li>Data: registry.opendata.aws/noaa-mrms-pds and noaa-nexrad; NSSL MRMS operational product tables; NOAA WDTD MESH page; spc.noaa.gov/climo/reports; NCEI Storm Events FAQ and CSV directory; hcad.org GIS downloads and ReadMe v2.2; Microsoft USBuildingFootprints README; docs.overturemaps.org attribution.</li>
+    <li>Literature: Witt et al. 1998, Weather and Forecasting 13:286-303. Ortega 2018, EJSSM 13(1). Murillo and Homeyer 2019, JAMC 58:947-970. Wendt and Jirak 2021, Weather and Forecasting 36:645-655. Kopp et al. 2024, AMT 17:4529.</li>
+    <li>Code: ARM-DOE/pyart, openradar/xradar, joshua-wx/pyhail, diamondstatepdr/hailmap, infocornerstoneautopros-commits/hail-map, jrbell1/hwds_db; docs.protomaps.com/pmtiles/maplibre.</li>
+    <li>Alternatives: Grid Status blog (2024-08-14, 2025-06-19), arXiv 2407.04081, PUCT Projects 58484 and 58000, Vistra 4CP page, ERCOT NP9-83-M; Federal Register 2026-09584, Paccurate pricing and patent US11216774B2, CIRRELT-2007-41.</li>
+  </ul>
+  <p class="note">Vendor prices are list prices read on 2026-10-24; HailTrace subscriptions are quote-only and the GAF page returned 403. Hiring targets are companies with a Texas presence, not verified open roles. The HSS ceiling is the published figure against dense ground truth; skill against Storm Data alone is lower.</p>
+</section>
+
+</main>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+<script>
+(function(){
+  var tip=document.getElementById('tip');
+  function show(e){var t=e.currentTarget.getAttribute('data-tip');if(!t)return;tip.textContent=t;tip.classList.add('show');move(e);}
+  function move(e){var x=e.clientX+12,y=e.clientY+12;var w=tip.offsetWidth,h=tip.offsetHeight;if(x+w>window.innerWidth-8)x=e.clientX-w-12;if(y+h>window.innerHeight-8)y=e.clientY-h-12;tip.style.left=x+'px';tip.style.top=y+'px';}
+  function hide(){tip.classList.remove('show');}
+  document.querySelectorAll('[data-tip]').forEach(function(el){el.addEventListener('mouseenter',show);el.addEventListener('mousemove',move);el.addEventListener('mouseleave',hide);el.setAttribute('tabindex','0');el.addEventListener('focus',function(e){var r=el.getBoundingClientRect();tip.textContent=el.getAttribute('data-tip');tip.classList.add('show');tip.style.left=(r.left)+'px';tip.style.top=(r.bottom+8)+'px';});el.addEventListener('blur',hide);});
+  var links=[].slice.call(document.querySelectorAll('#toc a'));var map={};links.forEach(function(a){map[a.getAttribute('href').slice(1)]=a;});
+  if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(en){if(en.isIntersecting){links.forEach(function(a){a.classList.remove('on');});var a=map[en.target.id];if(a)a.classList.add('on');}});},{rootMargin:'-10% 0px -80% 0px'});document.querySelectorAll('main section').forEach(function(s){io.observe(s);});}
+})();
+</script>
