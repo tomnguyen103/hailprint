@@ -31,7 +31,7 @@ Output wording: "radar-estimated hail size" with a confidence band. The outputs 
 - [x] HCAD GIS reuse-terms email drafted: `docs/drafts/hcad-gis-reuse-email.md`. **Tom: confirm the recipient on hcad.org and send.**
 - [x] USPTO trademark search (tmsearch.uspto.gov, 2026-10-24): the mark "hailprint" returns no results. No live or dead US mark with that wordmark exists.
 - [x] Domain check (RDAP + DNS, 2026-10-24): `hailprint.com`, `.org`, `.io`, `.app`, `.dev` have no registration record. Register before the name is public.
-- [ ] **Tom: read the employer IP assignment clause before the first commit of pipeline code reaches the remote.** The feature branch stays local until you confirm.
+- [ ] **Tom: read the employer IP assignment clause before the first commit of pipeline code reaches the remote.** The kickoff asked for a PR, so the branch is on the private remote; nothing is merged until you confirm.
 
 ## Carried rules
 
