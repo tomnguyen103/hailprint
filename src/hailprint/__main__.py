@@ -6,7 +6,7 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from hailprint import county, mesh, plot, reports, swath
+from hailprint import archive, county, mesh, plot, reports, swath
 
 RAW_DIR = Path("data/raw/mesh")
 DERIVED_DIR = Path("data/derived/swaths")
@@ -29,6 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_cmd.add_argument(
         "storm_dates", nargs="+", type=_storm_date, help="SPC convective day, YYYY-MM-DD"
     )
+    commands.add_parser("index", help="list the MESH archive and store one row per day")
     return parser
 
 
@@ -37,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "ingest":
             ingest(args.storm_dates)
+        elif args.command == "index":
+            index()
     except (RuntimeError, FileNotFoundError) as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -74,6 +77,17 @@ def ingest(storm_dates: list[date]) -> list[Path]:
         print(f"confidence: {swath.CONFIDENCE}")
         pngs.append(png)
     return pngs
+
+
+def index() -> Path:
+    """One bucket listing to the archive index. Prints the day counts."""
+    df = archive.build_index()
+    path = archive.write_index(df, archive.INDEX_PATH)
+    print(f"archive days: {len(df)}")
+    print(f"first storm date: {df['storm_date'].iloc[0]}")
+    print(f"last storm date: {df['storm_date'].iloc[-1]}")
+    print(f"days without 12Z file: {int((~df['has_12z']).sum())}")
+    return path
 
 
 if __name__ == "__main__":
