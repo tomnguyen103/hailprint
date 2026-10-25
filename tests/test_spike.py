@@ -3,6 +3,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
+import pyarrow.parquet as pq
 import pytest
 import xarray as xr
 
@@ -64,12 +65,19 @@ def test_spike_on_the_real_day_matches_spc_reports(capsys, monkeypatch):
     assert "SPC hail reports in Harris County: 10" in out
     assert Path("out/spike-2024-05-28.png").exists()
 
-    swaths = gpd.read_parquet("data/derived/swaths/swaths-2024-05-28.parquet")
-    class_19 = swaths[swaths["threshold_mm"] == 19.05].to_crs("EPSG:2278")
+    path = "data/derived/swaths/swaths-2024-05-28.parquet"
+    swaths = gpd.read_parquet(path)
+    assert list(swaths.columns) == swath.COLUMNS
+    assert swaths.crs.to_epsg() == 4326
+    meta = {k.decode() for k in pq.read_metadata(path).metadata}
+    assert meta >= {"source", "product", "file_count", "max_mesh_mm", "confidence"}
+
+    # EPSG:32615 (UTM 15N) is in metres; EPSG:2278 is in US survey feet
+    class_19 = swaths[swaths["threshold_mm"] == 19.05].to_crs("EPSG:32615")
     assert len(class_19) == 1
     buffered = class_19.geometry.iloc[0].buffer(5000)
 
-    points = reports.harris_reports(date(2024, 5, 28)).to_crs("EPSG:2278")
+    points = reports.harris_reports(date(2024, 5, 28)).to_crs("EPSG:32615")
     assert len(points) == 10
     inside = int(points.geometry.within(buffered).sum())
     assert inside >= 7, f"{inside} of 10 reports inside the 19.05 mm swath"
