@@ -3,11 +3,13 @@ from datetime import date
 import numpy as np
 import pytest
 import xarray as xr
+from botocore.exceptions import ClientError
 
 from hailprint import mesh
-from tests.conftest import RAW_DIR, STORM_DATE, needs_raw_mesh
+from tests.conftest import RAW_12Z, RAW_DIR, STORM_DATE, needs_raw_mesh
 
-PREFIX = "CONUS/MESH_Max_1440min_00.50/20240528/"
+PRODUCT = "CONUS/MESH_Max_1440min_00.50"
+KEY_12Z = f"{PRODUCT}/20240529/MRMS_MESH_Max_1440min_00.50_20240529-120000.grib2.gz"
 
 
 def _grid(values):
@@ -18,75 +20,128 @@ def _grid(values):
     )
 
 
-def test_daily_max_masks_sentinels_before_max(tmp_path, monkeypatch):
-    # cell 0: -3 in every file; cell 1: -1, -1, 30.0; cell 2: 0.0 in every file
-    stack = {
-        "a.grib2.gz": _grid([[-3.0, -1.0, 0.0]]),
-        "b.grib2.gz": _grid([[-3.0, -1.0, 0.0]]),
-        "c.grib2.gz": _grid([[-3.0, 30.0, 0.0]]),
-    }
-    day_dir = tmp_path / "20240528"
-    day_dir.mkdir()
-    for name in stack:
-        (day_dir / name).write_bytes(b"")
-    monkeypatch.setattr(mesh, "decode", lambda path: stack[path.name])
+class FakeS3:
+    def __init__(self, missing=()):
+        self.missing = set(missing)
+        self.downloaded = []
 
-    da, file_count = mesh.daily_max(STORM_DATE, tmp_path)
+    def download_file(self, Bucket, Key, Filename):
+        assert Bucket == "noaa-mrms-pds"
+        self.downloaded.append(Key)
+        if Key in self.missing:
+            raise ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "GetObject")
+        open(Filename, "wb").write(b"new")
 
-    assert file_count == 3
-    assert da.shape == (1, 3)
-    assert list(da.longitude.values) == [-95.0, -94.99, -94.98]
+
+def _key(folder, stamp):
+    return f"{PRODUCT}/{folder}/MRMS_MESH_Max_1440min_00.50_{folder}-{stamp}.grib2.gz"
+
+
+@pytest.mark.parametrize(
+    ("storm_date", "folder"),
+    [(date(2020, 10, 13), "20201014"), (date(2024, 12, 31), "20250101"), (STORM_DATE, "20240529")],
+)
+def test_key_for_names_the_12z_file_of_the_next_folder(storm_date, folder):
+    assert mesh.key_for(storm_date) == _key(folder, "120000")
+
+
+def test_key_for_the_storm_date_is_the_cached_12z_path():
+    assert mesh.local_path(mesh.key_for(STORM_DATE), RAW_DIR) == RAW_12Z
+
+
+def test_download_many_empty_returns_empty_without_a_client(tmp_path, monkeypatch):
+    def no_client():
+        raise AssertionError("client built")
+
+    monkeypatch.setattr(mesh, "_client", no_client)
+    assert mesh.download_many([], tmp_path) == []
+
+
+def test_download_many_lands_files_in_key_order(tmp_path):
+    keys = [_key("20240529", "120000"), _key("20240530", "120000"), _key("20240531", "120000")]
+    client = FakeS3()
+
+    paths = mesh.download_many(keys, tmp_path, client=client)
+
+    assert [p.relative_to(tmp_path).as_posix() for p in paths] == [
+        "20240529/MRMS_MESH_Max_1440min_00.50_20240529-120000.grib2.gz",
+        "20240530/MRMS_MESH_Max_1440min_00.50_20240530-120000.grib2.gz",
+        "20240531/MRMS_MESH_Max_1440min_00.50_20240531-120000.grib2.gz",
+    ]
+    assert all(p.read_bytes() == b"new" for p in paths)
+    assert sorted(client.downloaded) == keys
+
+
+def test_download_many_404_on_one_key_lands_the_others_then_raises(tmp_path):
+    keys = [_key("20240529", "120000"), _key("20240530", "120000"), _key("20240531", "120000")]
+    client = FakeS3(missing=[keys[1]])
+
+    with pytest.raises(RuntimeError, match="missing MESH file") as exc:
+        mesh.download_many(keys, tmp_path, client=client)
+
+    assert keys[1] in str(exc.value)
+    assert keys[0] not in str(exc.value)
+    assert (tmp_path / "20240529" / "MRMS_MESH_Max_1440min_00.50_20240529-120000.grib2.gz").exists()
+    assert (tmp_path / "20240531" / "MRMS_MESH_Max_1440min_00.50_20240531-120000.grib2.gz").exists()
+    assert sorted(client.downloaded) == keys
+
+
+def test_download_many_skips_an_existing_file_by_name(tmp_path):
+    keys = [_key("20240529", "120000"), _key("20240529", "130000")]
+    existing = tmp_path / "20240529" / "MRMS_MESH_Max_1440min_00.50_20240529-120000.grib2.gz"
+    existing.parent.mkdir()
+    existing.write_bytes(b"already here")
+    client = FakeS3()
+
+    paths = mesh.download_many(keys, tmp_path, client=client, workers=1)
+
+    assert client.downloaded == [keys[1]]
+    assert existing.read_bytes() == b"already here"
+    assert paths[0] == existing
+
+
+def test_download_many_transport_error_names_the_key(tmp_path):
+    class Dropping:
+        def download_file(self, Bucket, Key, Filename):
+            raise ConnectionResetError("transport")
+
+    key = _key("20240529", "120000")
+    with pytest.raises(RuntimeError, match="20240529-120000"):
+        mesh.download_many([key], tmp_path, client=Dropping())
+
+
+def test_daily_max_masks_sentinels_and_reads_the_one_12z_file(tmp_path, monkeypatch):
+    local = mesh.local_path(KEY_12Z, tmp_path)
+    local.parent.mkdir(parents=True)
+    local.write_bytes(b"")
+    monkeypatch.setattr(
+        mesh, "decode", lambda path: mesh.mask_sentinels(_grid([[-3.0, 30.0, 0.0]]))
+    )
+
+    da = mesh.daily_max(STORM_DATE, tmp_path)
+
+    assert da.attrs["file_count"] == 1
     assert np.isnan(da.values[0, 0])
     assert da.values[0, 1] == 30.0
     assert da.values[0, 2] == 0.0
 
 
-def test_daily_max_empty_dir_raises(tmp_path):
-    with pytest.raises(FileNotFoundError, match="20240528"):
+def test_daily_max_missing_file_names_the_path(tmp_path):
+    with pytest.raises(FileNotFoundError, match="20240529-120000"):
         mesh.daily_max(STORM_DATE, tmp_path)
 
 
-class FakeS3:
-    def __init__(self, keys):
-        self.keys = keys
-        self.downloaded = []
-
-    def list_objects_v2(self, Bucket, Prefix):
-        assert Bucket == "noaa-mrms-pds"
-        assert Prefix == PREFIX
-        return {"Contents": [{"Key": k} for k in self.keys]} if self.keys else {}
-
-    def download_file(self, Bucket, Key, Filename):
-        self.downloaded.append(Key)
-        open(Filename, "wb").write(b"new")
-
-
-def test_download_skips_existing_file_by_name(tmp_path):
-    keys = [PREFIX + "x-000000.grib2.gz", PREFIX + "x-003000.grib2.gz"]
-    existing = tmp_path / "20240528" / "x-000000.grib2.gz"
-    existing.parent.mkdir()
-    existing.write_bytes(b"already here")
-    client = FakeS3(keys)
-
-    paths = mesh.download(STORM_DATE, tmp_path, client=client)
-
-    assert client.downloaded == [keys[1]]
-    assert existing.read_bytes() == b"already here"
-    assert [p.name for p in paths] == ["x-000000.grib2.gz", "x-003000.grib2.gz"]
-
-
-def test_download_empty_listing_raises(tmp_path):
-    with pytest.raises(RuntimeError, match=PREFIX):
-        mesh.download(STORM_DATE, tmp_path, client=FakeS3([]))
-    assert not (tmp_path / "20240528").exists()
+def test_mask_sentinels():
+    da = mesh.mask_sentinels(_grid([[-3.0, -1.0, 0.0]]))
+    assert np.isnan(da.values[0, 0]) and np.isnan(da.values[0, 1]) and da.values[0, 2] == 0.0
 
 
 @needs_raw_mesh
 def test_daily_max_real_day():
-    da, file_count = mesh.daily_max(date(2024, 5, 28), RAW_DIR)
+    da = mesh.daily_max(date(2024, 5, 28), RAW_DIR)
     lon = da.longitude.values
     lat = da.latitude.values
-    assert file_count == 48
+    assert da.attrs["file_count"] == 1
     assert da.dtype == np.float32
     assert np.allclose(np.diff(lon), 0.01, atol=1e-6)
     assert lon.min() >= -180 and lon.max() <= 180
@@ -94,11 +149,3 @@ def test_daily_max_real_day():
     assert float(da.min()) >= 0
     assert float(da.max()) > 25.4
     assert da.attrs["units"] == "mm"
-
-
-def test_daily_max_ignores_partial_download_files(tmp_path):
-    day_dir = tmp_path / "20240528"
-    day_dir.mkdir()
-    (day_dir / "MRMS_MESH_Max_1440min_00.50_20240528-000000.grib2.gz.a1b2c3d4").write_bytes(b"")
-    with pytest.raises(FileNotFoundError, match="20240528"):
-        mesh.daily_max(date(2024, 5, 28), tmp_path)
