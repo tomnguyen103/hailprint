@@ -1,5 +1,5 @@
 # data and outputs
-data/
+/data/
 out/
 *.grib2
 *.grib2.gz
@@ -27,3 +27,7 @@ dist/
 .env.*
 .DS_Store
 .scratch/
+
+# code intelligence
+.codegraph/
+graphify-out/
