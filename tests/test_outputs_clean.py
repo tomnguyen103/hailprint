@@ -6,9 +6,9 @@ import pyarrow.parquet as pq
 import pytest
 
 from hailprint.parcels import OWNER_FIELDS
+from hailprint.swath import FORBIDDEN_WORD
 
 OUTPUT_DIRS = [Path("out"), Path("data/derived")]
-FORBIDDEN_WORD = "damage"
 
 
 def _files():

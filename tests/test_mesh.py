@@ -94,3 +94,11 @@ def test_daily_max_real_day():
     assert float(da.min()) >= 0
     assert float(da.max()) > 25.4
     assert da.attrs["units"] == "mm"
+
+
+def test_daily_max_ignores_partial_download_files(tmp_path):
+    day_dir = tmp_path / "20240528"
+    day_dir.mkdir()
+    (day_dir / "MRMS_MESH_Max_1440min_00.50_20240528-000000.grib2.gz.a1b2c3d4").write_bytes(b"")
+    with pytest.raises(FileNotFoundError, match="20240528"):
+        mesh.daily_max(date(2024, 5, 28), tmp_path)

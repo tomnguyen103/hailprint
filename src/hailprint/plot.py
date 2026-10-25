@@ -7,6 +7,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
 
@@ -29,8 +30,12 @@ def render(
         Patch(color=color, label=label)
         for color, label in zip(colors, swaths["label"], strict=True)
     ]
+    if reports is not None and len(reports):
+        handles.append(
+            Line2D([], [], color="black", marker="^", linestyle="", label="SPC hail report")
+        )
     ax.legend(handles=handles, loc="lower left", fontsize=8)
-    ax.set_title(title, fontsize=10)
+    ax.set_title(title, fontsize=9)
     ax.set_xlabel("longitude")
     ax.set_ylabel("latitude")
     path = Path(path)

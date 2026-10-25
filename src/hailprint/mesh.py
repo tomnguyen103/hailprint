@@ -98,9 +98,12 @@ def reduce_stack(arrays: list[xr.DataArray]) -> xr.DataArray:
 def daily_max(storm_date: date, raw_dir: Path) -> tuple[xr.DataArray, int]:
     """Decode every file for the date and return (cell-wise max, file_count)."""
     day_dir = Path(raw_dir) / f"{storm_date:%Y%m%d}"
-    paths = sorted(day_dir.glob("*.grib2*"))
+    # exact suffixes: a boto3 partial download leaves <name>.grib2.gz.XXXXXXXX behind
+    paths = sorted(p for p in day_dir.iterdir() if p.name.endswith((".grib2", ".grib2.gz")))
     if not paths:
         raise FileNotFoundError(f"no MESH files under {day_dir}")
+    # shortcut: the 48 files stamped on date D are trailing 24-h maxima, so the window
+    # spans D-1 00:00 to D 23:30 UTC; align to the SPC 12Z-12Z day at M1 ingest
     da = reduce_stack([decode(p) for p in paths])
     da.attrs.update(units="mm", units_source=UNITS_SOURCE, product=PRODUCT, file_count=len(paths))
     return da, len(paths)

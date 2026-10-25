@@ -23,4 +23,3 @@ Could you confirm that this reuse is allowed under your terms? If there is a wri
 
 Thank you,
 Tom Nguyen
-huuthong103@gmail.com

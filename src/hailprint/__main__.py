@@ -49,17 +49,20 @@ def spike(storm_date: date) -> Path:
     try:
         points = reports.harris_reports(storm_date)
         report_count = str(len(points))
-    except Exception:  # noqa: BLE001 - the picture still lands without points
+    except Exception as exc:  # noqa: BLE001 - the picture still lands without points
         points = None
         report_count = "unknown (fetch failed)"
+        print(f"SPC fetch failed: {exc!r}", file=sys.stderr)
     title = (
         f"Hailprint spike {storm_date} — radar-estimated hail size "
-        f"(MESH daily max, {file_count} files)"
+        f"(MESH daily max, {file_count} files)\n{swath.CONFIDENCE}"
     )
     png = plot.render(swaths, county.outline(), points, title, OUT_DIR / f"spike-{storm_date}.png")
-    print(f"max MESH in bbox: {max_mesh_mm} mm")
+    max_text = "none (no valid cell)" if max_mesh_mm is None else f"{max_mesh_mm} mm"
+    print(f"max MESH in bbox: {max_text}")
     print(f"SPC hail reports in Harris County: {report_count}")
     print(png)
+    print(f"confidence: {swath.CONFIDENCE}")
     return png
 
 

@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Hail exposure map for Harris County from MRMS MESH."
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "cfgrib",
     "eccodes",
     "xarray",
     "numpy",
