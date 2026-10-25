@@ -4,7 +4,18 @@ An open hail-exposure map for Harris County, Texas, that grades itself.
 
 Every night the pipeline pulls NOAA's MRMS hail-size product (MESH), draws the hail swath over every Harris County parcel, and scores the result against NOAA storm reports. The output is a live map, a per-storm exposure report, and a public verification table (POD, FAR, CSI, HSS per storm and per season).
 
-Status: plan approved on 2026-10-24. No code yet. Week 1 starts with the spike in `docs/KICKOFF.md`.
+Status: week 2 done on 2026-10-25. Reports: `docs/WEEK-01.md`, `docs/WEEK-02.md`.
+
+## Commands
+
+```bash
+make setup                                  # uv sync
+uv run hailprint ingest 2024-05-28          # swath file and PNG for one or more SPC convective days
+uv run hailprint index                      # one row per MESH archive day from one bucket listing
+uv run hailprint candidates --top 20        # Harris County hail days ranked by SPC report count
+uv run hailprint parcels 2024-05-28         # allow-listed parcel count per size class
+make test                                   # uv run pytest -q
+```
 
 ## Documents
 

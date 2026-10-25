@@ -1,7 +1,8 @@
 """MESH download, GRIB2 decode, and the daily max for one storm date."""
 
 import gzip
-from datetime import date
+from concurrent.futures import ThreadPoolExecutor
+from datetime import date, timedelta
 from pathlib import Path
 
 import boto3
@@ -22,31 +23,43 @@ def prefix(storm_date: date) -> str:
     return f"CONUS/{PRODUCT}/{storm_date:%Y%m%d}/"
 
 
-def _client():
+def key_for(storm_date: date) -> str:
+    """Key of the one file that holds the storm date.
+
+    The 1440-minute product stamped T is the max over [T-24h, T]. The file stamped
+    D+1 12:00 UTC therefore equals the SPC convective day D (12Z to 12Z).
+    """
+    d = storm_date + timedelta(days=1)
+    return f"CONUS/{PRODUCT}/{d:%Y%m%d}/MRMS_{PRODUCT}_{d:%Y%m%d}-120000.grib2.gz"
+
+
+def local_path(key: str, raw_dir: Path) -> Path:
+    """raw_dir / <folder date> / <file name>."""
+    return Path(raw_dir) / key.split("/")[2] / key.rsplit("/", 1)[1]
+
+
+def s3_client():
     return boto3.client("s3", region_name="us-east-1", config=Config(signature_version=UNSIGNED))
 
 
-def download(storm_date: date, raw_dir: Path, client=None) -> list[Path]:
-    """Fetch every file for the date into raw_dir/YYYYMMDD; skip files present by name."""
-    client = client or _client()
-    key_prefix = prefix(storm_date)
-    # shortcut: one list call; 48 keys per day fit under the 1000-key page,
-    # upgrade to a paginator when a product with more files per day is added
-    keys = [
-        o["Key"]
-        for o in client.list_objects_v2(Bucket=BUCKET, Prefix=key_prefix).get("Contents", [])
-    ]
-    if not keys:
-        raise RuntimeError(f"no objects under s3://{BUCKET}/{key_prefix}")
-    day_dir = Path(raw_dir) / f"{storm_date:%Y%m%d}"
-    day_dir.mkdir(parents=True, exist_ok=True)
-    paths = []
-    # shortcut: files download sequentially, upgrade to concurrent downloads at M5 backtest scale
-    for key in sorted(keys):
-        local = day_dir / Path(key).name
-        if not local.exists():
-            client.download_file(BUCKET, key, str(local))
-        paths.append(local)
+def download_many(keys: list[str], raw_dir: Path, client=None, workers: int = 8) -> list[Path]:
+    """Fetch every key into raw_dir in a bounded pool; skip files present by name.
+
+    Every failed key is collected, and one RuntimeError names them all after the pool drains.
+    """
+    paths = [local_path(k, raw_dir) for k in keys]
+    # a dict: a repeated key downloads once
+    todo = {k: p for k, p in zip(keys, paths, strict=True) if not p.exists()}
+    if not todo:
+        return paths
+    client = client or s3_client()
+    for p in todo.values():
+        p.parent.mkdir(parents=True, exist_ok=True)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {k: pool.submit(client.download_file, BUCKET, k, str(p)) for k, p in todo.items()}
+    failed = [k for k, f in futures.items() if f.exception() is not None]
+    if failed:
+        raise RuntimeError(f"missing MESH file(s): {', '.join(failed)}")
     return paths
 
 
@@ -89,21 +102,11 @@ def decode(path: Path) -> xr.DataArray:
     return da
 
 
-def reduce_stack(arrays: list[xr.DataArray]) -> xr.DataArray:
-    """Cell-wise max over the stack; sentinels and NaN never win."""
-    stack = xr.concat([mask_sentinels(a) for a in arrays], dim="file")
-    return stack.max("file", skipna=True).astype(np.float32)
-
-
-def daily_max(storm_date: date, raw_dir: Path) -> tuple[xr.DataArray, int]:
-    """Decode every file for the date and return (cell-wise max, file_count)."""
-    day_dir = Path(raw_dir) / f"{storm_date:%Y%m%d}"
-    # exact suffixes: a boto3 partial download leaves <name>.grib2.gz.XXXXXXXX behind
-    paths = sorted(p for p in day_dir.iterdir() if p.name.endswith((".grib2", ".grib2.gz")))
-    if not paths:
-        raise FileNotFoundError(f"no MESH files under {day_dir}")
-    # shortcut: the 48 files stamped on date D are trailing 24-h maxima, so the window
-    # spans D-1 00:00 to D 23:30 UTC; align to the SPC 12Z-12Z day at M1 ingest
-    da = reduce_stack([decode(p) for p in paths])
-    da.attrs.update(units="mm", units_source=UNITS_SOURCE, product=PRODUCT, file_count=len(paths))
-    return da, len(paths)
+def daily_max(storm_date: date, raw_dir: Path) -> xr.DataArray:
+    """Decode the one 12Z file for the storm date; the exact name skips boto3 partial files."""
+    path = local_path(key_for(storm_date), raw_dir)
+    if not path.exists():
+        raise FileNotFoundError(f"no MESH file at {path}")
+    da = decode(path)
+    da.attrs.update(units="mm", units_source=UNITS_SOURCE, product=PRODUCT, file_count=1)
+    return da

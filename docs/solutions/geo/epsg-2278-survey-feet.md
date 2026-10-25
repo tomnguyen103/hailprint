@@ -18,4 +18,4 @@ The parcel data arrives in EPSG:2278, so the CRS looked natural for every Harris
 
 ## Fix
 
-Reproject to EPSG:32615 (UTM zone 15N, metres) before a metre buffer: `tests/test_spike.py:71`. Keep EPSG:2278 for the parcel join and for area in square feet. Check `crs.axis_info[0].unit_name` before any distance literal.
+Reproject to EPSG:32615 (UTM zone 15N, metres) before a metre buffer: `tests/test_ingest.py`. Keep EPSG:2278 for the parcel join and for area in square feet. Check `crs.axis_info[0].unit_name` before any distance literal.
