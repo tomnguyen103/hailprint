@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from hailprint.mesh import BUCKET, PRODUCT, _client
+from hailprint.mesh import BUCKET, PRODUCT, s3_client
 
 INDEX_PATH = Path("data/derived/index/mesh-archive.parquet")
 COLUMNS = ["storm_date", "file_count", "bytes", "has_12z"]
@@ -22,7 +22,7 @@ def list_objects(client) -> Iterator[tuple[str, int]]:
 
 def build_index(client=None) -> pd.DataFrame:
     """Group the listing by folder date; storm_date is the folder date minus one day."""
-    objects = pd.DataFrame(list(list_objects(client or _client())), columns=["key", "size"])
+    objects = pd.DataFrame(list(list_objects(client or s3_client())), columns=["key", "size"])
     if objects.empty:
         raise RuntimeError(f"no objects under s3://{BUCKET}/{PREFIX}")
     objects["folder"] = objects["key"].str.split("/").str[2]
@@ -34,13 +34,3 @@ def build_index(client=None) -> pd.DataFrame:
         datetime.strptime(f, "%Y%m%d").date() - timedelta(days=1) for f in grouped.index
     ]
     return grouped.sort_values("storm_date").reset_index(drop=True)[COLUMNS]
-
-
-def write_index(df: pd.DataFrame, path: Path) -> Path:
-    """Write to a .tmp sibling, then rename over the old file."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".parquet.tmp")
-    df.to_parquet(tmp, index=False)
-    tmp.replace(path)
-    return path

@@ -1,3 +1,7 @@
+import io
+import urllib.error
+import urllib.request
+from contextlib import contextmanager
 from datetime import date, time
 
 import pandas as pd
@@ -76,6 +80,39 @@ def test_candidates_without_index_exits_1(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "missing.parquet")
     assert main(["candidates"]) == 1
     assert "hailprint index" in capsys.readouterr().err
+
+
+def _fake_urlopen(body):
+    @contextmanager
+    def urlopen(url, timeout=None):
+        yield io.BytesIO(body)
+
+    return urlopen
+
+
+def test_fetch_database_rejects_a_non_zip_body(tmp_path, monkeypatch):
+    path = tmp_path / "spc" / "hail.csv.zip"
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen(b"not a zip"))
+
+    with pytest.raises(RuntimeError, match="not a zip archive"):
+        candidates.fetch_database(path)
+
+    assert not path.exists()
+    assert not path.with_suffix(".tmp").exists()
+
+
+def test_fetch_database_wraps_a_url_error_and_removes_the_tmp_file(tmp_path, monkeypatch):
+    path = tmp_path / "spc" / "hail.csv.zip"
+
+    def urlopen(url, timeout=None):
+        raise urllib.error.URLError("boom")
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+
+    with pytest.raises(RuntimeError, match="WCM download failed"):
+        candidates.fetch_database(path)
+
+    assert not path.with_suffix(".tmp").exists()
 
 
 @needs_wcm

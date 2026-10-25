@@ -65,7 +65,7 @@ def test_ingest_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
 
 
 def test_ingest_missing_12z_file_exits_1_and_writes_nothing(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(cli.mesh, "_client", lambda: FakeS3(missing=[KEY_12Z]))
+    monkeypatch.setattr(cli.mesh, "s3_client", lambda: FakeS3(missing=[KEY_12Z]))
     monkeypatch.setattr(cli, "RAW_DIR", tmp_path / "raw")
     monkeypatch.setattr(cli, "DERIVED_DIR", tmp_path / "derived")
     monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")

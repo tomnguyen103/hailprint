@@ -1,6 +1,8 @@
 """Candidate days: Harris County hail days from the SPC WCM database, ranked by report count."""
 
+import shutil
 import urllib.request
+import zipfile
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
@@ -14,6 +16,8 @@ HARRIS_FIPS = 201
 CANDIDATES_PATH = Path("data/derived/index/candidate-days.csv")
 COLUMNS = ["storm_date", "report_count", "max_size_in", "has_12z"]
 USECOLS = ["date", "time", "st", "mag", "f1", "f2", "f3", "f4"]
+# WCM times are CST (UTC-6); the SPC day starts at 12 UTC; the net shift from local clock is -6 h
+CST_TO_CONVECTIVE = timedelta(hours=6)
 
 
 def fetch_database(path: Path = WCM_PATH) -> Path:
@@ -23,18 +27,22 @@ def fetch_database(path: Path = WCM_PATH) -> Path:
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    urllib.request.urlretrieve(WCM_URL, tmp)
+    try:
+        with urllib.request.urlopen(WCM_URL, timeout=60) as response, tmp.open("wb") as out:
+            shutil.copyfileobj(response, out)
+    except OSError as exc:
+        tmp.unlink(missing_ok=True)
+        raise RuntimeError(f"WCM download failed: {exc}") from exc
+    if not zipfile.is_zipfile(tmp):
+        tmp.unlink()
+        raise RuntimeError(f"WCM download is not a zip archive: {WCM_URL}")
     tmp.replace(path)
     return path
 
 
 def convective_day(day: date, clock: time) -> date:
-    """SPC convective day of a WCM row.
-
-    WCM times are CST (tz=3): UTC = CST + 6 h. The SPC day starts at 12 UTC, so the
-    shift is UTC - 12 h, a net 6 h back from the local clock.
-    """
-    return (datetime.combine(day, clock) - timedelta(hours=6)).date()
+    """SPC convective day of a WCM row; the shift is CST_TO_CONVECTIVE."""
+    return (datetime.combine(day, clock) - CST_TO_CONVECTIVE).date()
 
 
 def harris_days(path: Path) -> pd.DataFrame:
@@ -42,7 +50,7 @@ def harris_days(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path, usecols=USECOLS)
     harris = (df[["f1", "f2", "f3", "f4"]] == HARRIS_FIPS).any(axis=1)
     df = df[(df["st"] == "TX") & harris].copy()
-    stamps = pd.to_datetime(df["date"] + " " + df["time"]) - pd.Timedelta(hours=6)
+    stamps = pd.to_datetime(df["date"] + " " + df["time"]) - pd.Timedelta(CST_TO_CONVECTIVE)
     df["storm_date"] = stamps.dt.date
     grouped = df.groupby("storm_date").agg(report_count=("mag", "size"), max_size_in=("mag", "max"))
     return grouped.reset_index()

@@ -53,7 +53,7 @@ def test_download_many_empty_returns_empty_without_a_client(tmp_path, monkeypatc
     def no_client():
         raise AssertionError("client built")
 
-    monkeypatch.setattr(mesh, "_client", no_client)
+    monkeypatch.setattr(mesh, "s3_client", no_client)
     assert mesh.download_many([], tmp_path) == []
 
 

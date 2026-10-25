@@ -9,7 +9,7 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
-from hailprint import archive, candidates, county, mesh, parcels, plot, reports, swath
+from hailprint import archive, candidates, county, files, mesh, parcels, plot, reports, swath
 
 RAW_DIR = Path("data/raw/mesh")
 DERIVED_DIR = Path("data/derived/swaths")
@@ -97,7 +97,7 @@ def ingest(storm_dates: list[date]) -> list[Path]:
 def index() -> Path:
     """One bucket listing to the archive index. Prints the day counts."""
     df = archive.build_index()
-    path = archive.write_index(df, archive.INDEX_PATH)
+    path = files.write_atomic(df, archive.INDEX_PATH)
     print(f"archive days: {len(df)}")
     print(f"first storm date: {df['storm_date'].iloc[0]}")
     print(f"last storm date: {df['storm_date'].iloc[-1]}")
@@ -111,11 +111,7 @@ def rank_candidates(top: int) -> Path:
         raise FileNotFoundError(f"run hailprint index first: {archive.INDEX_PATH}")
     index_df = pd.read_parquet(archive.INDEX_PATH)
     ranked = candidates.rank(candidates.harris_days(candidates.fetch_database()), index_df)
-    path = candidates.CANDIDATES_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".csv.tmp")
-    ranked.to_csv(tmp, index=False)
-    tmp.replace(path)
+    path = files.write_atomic(ranked, candidates.CANDIDATES_PATH)
     print(ranked.head(top).to_string(index=False))
     return path
 
@@ -126,18 +122,8 @@ def count_parcels(storm_date: date) -> Path:
     if not swath_path.exists():
         raise FileNotFoundError(f"run hailprint ingest first: {swath_path}")
     swaths = gpd.read_parquet(swath_path)
-    # an empty swath frame never opens the 1.5 M-row GDB
-    loaded = (
-        None
-        if swaths.empty
-        else parcels.load_parcels(PARCELS_GDB, mask=swaths.geometry.union_all())
-    )
-    counts = parcels.count_parcels(swaths, loaded)
-    path = PARCELS_DIR / f"parcel-counts-{storm_date}.parquet"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".parquet.tmp")
-    counts.to_parquet(tmp, index=False)
-    tmp.replace(path)
+    counts = parcels.count_parcels(swaths, PARCELS_GDB)
+    path = files.write_atomic(counts, PARCELS_DIR / f"parcel-counts-{storm_date}.parquet")
     for row in counts.itertuples():
         print(f">= {row.threshold_in:.2f} in: {row.parcel_count} parcels")
     return path

@@ -44,10 +44,13 @@ def load_parcels(
     return gdf.rename(columns=ALLOWED).to_crs("EPSG:4326")
 
 
-def count_parcels(swaths: gpd.GeoDataFrame, parcels: gpd.GeoDataFrame) -> pd.DataFrame:
-    """Distinct parcels that intersect each size class; every swath class keeps a row."""
+def count_parcels(
+    swaths: gpd.GeoDataFrame, parcels_path: Path, layer: str = "Parcels"
+) -> pd.DataFrame:
+    """Distinct parcels per size class; an empty swath frame never opens the parcel layer."""
     if swaths.empty:
         return pd.DataFrame(columns=COUNT_COLUMNS)
+    parcels = load_parcels(parcels_path, layer=layer, mask=swaths.geometry.union_all())
     hits = gpd.sjoin(parcels[["hcad_num", "geometry"]], swaths, predicate="intersects")
     per_class = hits.groupby("threshold_mm")["hcad_num"].nunique()
     out = swaths.drop(columns="geometry").copy()

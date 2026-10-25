@@ -3,7 +3,7 @@ from datetime import date
 import pandas as pd
 import pytest
 
-from hailprint import archive
+from hailprint import archive, files
 from hailprint.__main__ import main
 
 PRODUCT = "CONUS/MESH_Max_1440min_00.50"
@@ -84,17 +84,17 @@ def test_write_index_replaces_the_old_file(tmp_path):
         }
     )
 
-    archive.write_index(old, path)
-    archive.write_index(new, path)
+    files.write_atomic(old, path)
+    files.write_atomic(new, path)
 
     assert len(pd.read_parquet(path)) == 2
-    assert not path.with_suffix(".parquet.tmp").exists()
+    assert not path.with_name(path.name + ".tmp").exists()
 
 
 def test_index_command_prints_counts(tmp_path, monkeypatch, capsys):
     objects = [(_key("20240529", s), 1) for s in _stamps(48)]
     objects += [(_key("20240530", "000000"), 1)]
-    monkeypatch.setattr(archive, "_client", lambda: FakeS3(objects))
+    monkeypatch.setattr(archive, "s3_client", lambda: FakeS3(objects))
     monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "mesh-archive.parquet")
 
     assert main(["index"]) == 0

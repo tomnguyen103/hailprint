@@ -38,7 +38,7 @@ def local_path(key: str, raw_dir: Path) -> Path:
     return Path(raw_dir) / key.split("/")[2] / key.rsplit("/", 1)[1]
 
 
-def _client():
+def s3_client():
     return boto3.client("s3", region_name="us-east-1", config=Config(signature_version=UNSIGNED))
 
 
@@ -51,7 +51,7 @@ def download_many(keys: list[str], raw_dir: Path, client=None, workers: int = 8)
     todo = [(k, p) for k, p in zip(keys, paths, strict=True) if not p.exists()]
     if not todo:
         return paths
-    client = client or _client()
+    client = client or s3_client()
     for _, p in todo:
         p.parent.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max_workers=workers) as pool:

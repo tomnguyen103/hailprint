@@ -62,7 +62,7 @@ def _swaths(parcels):
 def test_count_parcels_two_in_class_19_and_zero_in_class_25():
     parcels = load_parcels(FIXTURE)
 
-    counts = count_parcels(_swaths(parcels), parcels)
+    counts = count_parcels(_swaths(parcels), FIXTURE)
 
     assert list(counts.columns) == COUNT_COLUMNS
     assert counts["threshold_mm"].tolist() == [19.05, 25.4]
@@ -74,7 +74,7 @@ def test_count_parcels_two_in_class_19_and_zero_in_class_25():
 def test_count_parcels_empty_swaths_gives_empty_frame():
     empty = gpd.GeoDataFrame(columns=swath.COLUMNS, geometry="geometry", crs="EPSG:4326")
 
-    counts = count_parcels(empty, load_parcels(FIXTURE))
+    counts = count_parcels(empty, Path("missing.gpkg"))
 
     assert len(counts) == 0
     assert list(counts.columns) == COUNT_COLUMNS
