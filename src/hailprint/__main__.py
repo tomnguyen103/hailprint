@@ -126,6 +126,7 @@ def count_parcels(storm_date: date) -> Path:
     path = files.write_atomic(counts, PARCELS_DIR / f"parcel-counts-{storm_date}.parquet")
     for row in counts.itertuples():
         print(f">= {row.threshold_in:.2f} in: {row.parcel_count} parcels")
+    print(f"confidence: {swath.CONFIDENCE}")
     return path
 
 

@@ -99,7 +99,11 @@ def test_parcels_command_counts_the_fixture(tmp_path, monkeypatch, capsys):
     assert capsys.readouterr().out.splitlines() == [
         ">= 0.75 in: 2 parcels",
         ">= 1.00 in: 0 parcels",
+        f"confidence: {swath.CONFIDENCE}",
     ]
-    out = pq.read_table(tmp_path / "parcels" / "parcel-counts-2024-05-28.parquet").to_pandas()
+    table = pq.read_table(tmp_path / "parcels" / "parcel-counts-2024-05-28.parquet")
+    assert table.schema.metadata[b"confidence"] == swath.CONFIDENCE.encode()
+    assert table.schema.metadata[b"source"] == b"noaa-mrms-pds"
+    out = table.to_pandas()
     assert out["parcel_count"].tolist() == [2, 0]
     assert date.fromisoformat(out["storm_date"].iloc[0]) == date(2024, 5, 28)

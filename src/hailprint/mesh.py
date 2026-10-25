@@ -48,14 +48,15 @@ def download_many(keys: list[str], raw_dir: Path, client=None, workers: int = 8)
     Every failed key is collected, and one RuntimeError names them all after the pool drains.
     """
     paths = [local_path(k, raw_dir) for k in keys]
-    todo = [(k, p) for k, p in zip(keys, paths, strict=True) if not p.exists()]
+    # a dict: a repeated key downloads once
+    todo = {k: p for k, p in zip(keys, paths, strict=True) if not p.exists()}
     if not todo:
         return paths
     client = client or s3_client()
-    for _, p in todo:
+    for p in todo.values():
         p.parent.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {k: pool.submit(client.download_file, BUCKET, k, str(p)) for k, p in todo}
+        futures = {k: pool.submit(client.download_file, BUCKET, k, str(p)) for k, p in todo.items()}
     failed = [k for k, f in futures.items() if f.exception() is not None]
     if failed:
         raise RuntimeError(f"missing MESH file(s): {', '.join(failed)}")

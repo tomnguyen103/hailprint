@@ -70,7 +70,7 @@ def test_build_index_empty_listing_raises():
         archive.build_index(client=FakeS3([]))
 
 
-def test_write_index_replaces_the_old_file(tmp_path):
+def test_write_atomic_replaces_the_old_index_file(tmp_path):
     path = tmp_path / "index" / "mesh-archive.parquet"
     old = pd.DataFrame(
         {"storm_date": [date(2020, 10, 13)], "file_count": [1], "bytes": [1], "has_12z": [False]}
