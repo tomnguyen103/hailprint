@@ -6,13 +6,16 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
+import geopandas as gpd
 import pandas as pd
 
-from hailprint import archive, candidates, county, mesh, plot, reports, swath
+from hailprint import archive, candidates, county, mesh, parcels, plot, reports, swath
 
 RAW_DIR = Path("data/raw/mesh")
 DERIVED_DIR = Path("data/derived/swaths")
 OUT_DIR = Path("out")
+PARCELS_GDB = Path("data/raw/hcad/extracted/Parcels.gdb")
+PARCELS_DIR = Path("data/derived/parcels")
 
 
 def _storm_date(text: str) -> date:
@@ -34,6 +37,10 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("index", help="list the MESH archive and store one row per day")
     cand = commands.add_parser("candidates", help="rank Harris County hail days by report count")
     cand.add_argument("--top", type=int, default=20, help="rows to print")
+    parcels_cmd = commands.add_parser(
+        "parcels", help="count parcels per size class for a storm date"
+    )
+    parcels_cmd.add_argument("storm_date", type=_storm_date, help="SPC convective day, YYYY-MM-DD")
     return parser
 
 
@@ -46,6 +53,8 @@ def main(argv: list[str] | None = None) -> int:
             index()
         elif args.command == "candidates":
             rank_candidates(args.top)
+        elif args.command == "parcels":
+            count_parcels(args.storm_date)
     except (RuntimeError, FileNotFoundError) as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -108,6 +117,29 @@ def rank_candidates(top: int) -> Path:
     ranked.to_csv(tmp, index=False)
     tmp.replace(path)
     print(ranked.head(top).to_string(index=False))
+    return path
+
+
+def count_parcels(storm_date: date) -> Path:
+    """Parcels per size class from the swath file and the masked HCAD read."""
+    swath_path = DERIVED_DIR / f"swaths-{storm_date}.parquet"
+    if not swath_path.exists():
+        raise FileNotFoundError(f"run hailprint ingest first: {swath_path}")
+    swaths = gpd.read_parquet(swath_path)
+    # an empty swath frame never opens the 1.5 M-row GDB
+    loaded = (
+        None
+        if swaths.empty
+        else parcels.load_parcels(PARCELS_GDB, mask=swaths.geometry.union_all())
+    )
+    counts = parcels.count_parcels(swaths, loaded)
+    path = PARCELS_DIR / f"parcel-counts-{storm_date}.parquet"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".parquet.tmp")
+    counts.to_parquet(tmp, index=False)
+    tmp.replace(path)
+    for row in counts.itertuples():
+        print(f">= {row.threshold_in:.2f} in: {row.parcel_count} parcels")
     return path
 
 
