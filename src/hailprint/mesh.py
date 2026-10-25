@@ -15,7 +15,7 @@ from hailprint.county import bbox
 
 BUCKET = "noaa-mrms-pds"
 PRODUCT = "MESH_Max_1440min_00.50"
-UNITS_SOURCE = "NSSL MRMS GRIB2 table; cfgrib reports unknown"
+UNITS_SOURCE = "NSSL MRMS GRIB2 table; the GRIB2 file carries no unit string"
 
 
 def prefix(storm_date: date) -> str:

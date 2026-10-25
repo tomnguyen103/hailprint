@@ -7,7 +7,7 @@ import pytest
 import xarray as xr
 
 import hailprint.__main__ as cli
-from hailprint import reports
+from hailprint import reports, swath
 from hailprint.__main__ import main
 from tests.conftest import needs_raw_mesh
 
@@ -43,10 +43,13 @@ def test_spike_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
 
     assert main(["spike", "2024-05-28"]) == 0
 
-    lines = capsys.readouterr().out.splitlines()
+    captured = capsys.readouterr()
+    lines = captured.out.splitlines()
     assert lines[0] == "max MESH in bbox: 30.0 mm"
     assert lines[1] == "SPC hail reports in Harris County: unknown (fetch failed)"
     assert Path(lines[2]) == tmp_path / "out" / "spike-2024-05-28.png"
+    assert lines[3] == f"confidence: {swath.CONFIDENCE}"
+    assert "SPC fetch failed: OSError('network down')" in captured.err
     assert (tmp_path / "out" / "spike-2024-05-28.png").stat().st_size > 0
     assert (tmp_path / "derived" / "swaths-2024-05-28.parquet").exists()
 
