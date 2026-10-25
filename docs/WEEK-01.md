@@ -42,7 +42,7 @@ Output wording: "radar-estimated hail size" with a confidence band. The band is 
 - [x] Domain check (RDAP + DNS, 2026-10-24): `hailprint.com`, `.org`, `.io`, `.app`, `.dev` have no registration record. Register before the name is public.
 - [ ] **Tom: read the employer IP assignment clause before the first commit of pipeline code reaches the remote.** The kickoff asked for a PR, so the branch is on the private remote; nothing is merged until you confirm.
 
-## Week 2 proposal (needs approval)
+## Week 2 proposal (approved 2026-10-25, see WEEK-02.md)
 
 1. M1 ingest: `hailprint ingest <date>` writes the daily-max swaths for one date with the window aligned to the SPC 12Z-12Z day.
 2. Archive index: list `noaa-mrms-pds` for MESH_Max_1440min from 2020-10-01 to today and store one row per day (date, file count, bytes) as a small Parquet index.
