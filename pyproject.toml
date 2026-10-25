@@ -16,6 +16,9 @@ dependencies = [
     "boto3",
 ]
 
+[project.scripts]
+hailprint = "hailprint.__main__:main"
+
 [dependency-groups]
 dev = ["pytest", "ruff"]
 

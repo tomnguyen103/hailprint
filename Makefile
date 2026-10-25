@@ -9,7 +9,7 @@ lint:
 test:
 	uv run pytest -q
 
-spike:
-	uv run python -m hailprint spike $(DATE)
+ingest:
+	uv run hailprint ingest $(DATE)
 
-.PHONY: setup lint test spike
+.PHONY: setup lint test ingest

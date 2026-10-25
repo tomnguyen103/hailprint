@@ -11,17 +11,24 @@ import hailprint.__main__ as cli
 from hailprint import reports, swath
 from hailprint.__main__ import main
 from tests.conftest import needs_raw_mesh
+from tests.test_mesh import KEY_12Z, FakeS3
 
 
 @pytest.mark.parametrize("bad", ["2024-5-28", "20240528", "yesterday", "2024-13-01"])
 def test_malformed_date_exits_2(bad, capsys):
     with pytest.raises(SystemExit) as exc:
-        main(["spike", bad])
+        main(["ingest", bad])
     assert exc.value.code == 2
     assert "usage" in capsys.readouterr().err
 
 
-def test_spike_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
+def test_spike_command_is_gone(capsys):
+    with pytest.raises(SystemExit) as exc:
+        main(["spike", "2024-05-28"])
+    assert exc.value.code == 2
+
+
+def test_ingest_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
     grid = np.full((4, 4), np.nan, dtype=np.float32)
     grid[1, 1] = 30.0
     da = xr.DataArray(
@@ -32,8 +39,8 @@ def test_spike_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
             "longitude": [-95.535, -95.525, -95.515, -95.505],
         },
     )
-    monkeypatch.setattr(cli.mesh, "download", lambda storm_date, raw_dir: [])
-    monkeypatch.setattr(cli.mesh, "daily_max", lambda storm_date, raw_dir: (da, 3))
+    monkeypatch.setattr(cli.mesh, "download_many", lambda keys, raw_dir: [])
+    monkeypatch.setattr(cli.mesh, "daily_max", lambda storm_date, raw_dir: da)
     monkeypatch.setattr(cli, "DERIVED_DIR", tmp_path / "derived")
     monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")
 
@@ -42,35 +49,50 @@ def test_spike_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(reports, "fetch_hail_csv", boom)
 
-    assert main(["spike", "2024-05-28"]) == 0
+    assert main(["ingest", "2024-05-28"]) == 0
 
     captured = capsys.readouterr()
     lines = captured.out.splitlines()
-    assert lines[0] == "max MESH in bbox: 30.0 mm"
-    assert lines[1] == "SPC hail reports in Harris County: unknown (fetch failed)"
-    assert Path(lines[2]) == tmp_path / "out" / "spike-2024-05-28.png"
-    assert lines[3] == f"confidence: {swath.CONFIDENCE}"
+    assert lines[0] == "storm date: 2024-05-28"
+    assert lines[1] == "max MESH in bbox: 30.0 mm"
+    assert lines[2] == "SPC hail reports in Harris County: unknown (fetch failed)"
+    assert Path(lines[3]) == tmp_path / "out" / "ingest-2024-05-28.png"
+    assert lines[4] == f"confidence: {swath.CONFIDENCE}"
     assert "SPC fetch failed: OSError('network down')" in captured.err
-    assert (tmp_path / "out" / "spike-2024-05-28.png").stat().st_size > 0
-    assert (tmp_path / "derived" / "swaths-2024-05-28.parquet").exists()
+    assert (tmp_path / "out" / "ingest-2024-05-28.png").stat().st_size > 0
+    path = tmp_path / "derived" / "swaths-2024-05-28.parquet"
+    assert pq.read_metadata(path).metadata[b"file_count"] == b"1"
+
+
+def test_ingest_missing_12z_file_exits_1_and_writes_nothing(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli.mesh, "_client", lambda: FakeS3(missing=[KEY_12Z]))
+    monkeypatch.setattr(cli, "RAW_DIR", tmp_path / "raw")
+    monkeypatch.setattr(cli, "DERIVED_DIR", tmp_path / "derived")
+    monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")
+
+    assert main(["ingest", "2024-05-28"]) == 1
+
+    assert KEY_12Z in capsys.readouterr().err
+    assert not (tmp_path / "derived").exists()
+    assert not (tmp_path / "out").exists()
 
 
 @needs_raw_mesh
-def test_spike_on_the_real_day_matches_spc_reports(capsys, monkeypatch):
-    # the bucket listing is skipped here: all 48 files are present by name
-    monkeypatch.setattr(cli.mesh, "download", lambda storm_date, raw_dir: [])
-    assert main(["spike", "2024-05-28"]) == 0
+def test_ingest_on_the_real_day_matches_spc_reports(capsys):
+    assert main(["ingest", "2024-05-28"]) == 0
     out = capsys.readouterr().out
     assert "damage" not in out.lower()
     assert "SPC hail reports in Harris County: 10" in out
-    assert Path("out/spike-2024-05-28.png").exists()
+    assert Path("out/ingest-2024-05-28.png").exists()
 
     path = "data/derived/swaths/swaths-2024-05-28.parquet"
     swaths = gpd.read_parquet(path)
     assert list(swaths.columns) == swath.COLUMNS
     assert swaths.crs.to_epsg() == 4326
-    meta = {k.decode() for k in pq.read_metadata(path).metadata}
-    assert meta >= {"source", "product", "file_count", "max_mesh_mm", "confidence"}
+    meta = {k.decode(): v.decode() for k, v in pq.read_metadata(path).metadata.items()}
+    assert meta["file_count"] == "1"
+    # week-1 measured 52.8 mm over a 47-hour superset window
+    assert 38.1 < float(meta["max_mesh_mm"]) <= 52.8
 
     # EPSG:32615 (UTM 15N) is in metres; EPSG:2278 is in US survey feet
     class_19 = swaths[swaths["threshold_mm"] == 19.05].to_crs("EPSG:32615")
