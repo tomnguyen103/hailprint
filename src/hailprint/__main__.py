@@ -6,7 +6,9 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from hailprint import archive, county, mesh, plot, reports, swath
+import pandas as pd
+
+from hailprint import archive, candidates, county, mesh, plot, reports, swath
 
 RAW_DIR = Path("data/raw/mesh")
 DERIVED_DIR = Path("data/derived/swaths")
@@ -30,6 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
         "storm_dates", nargs="+", type=_storm_date, help="SPC convective day, YYYY-MM-DD"
     )
     commands.add_parser("index", help="list the MESH archive and store one row per day")
+    cand = commands.add_parser("candidates", help="rank Harris County hail days by report count")
+    cand.add_argument("--top", type=int, default=20, help="rows to print")
     return parser
 
 
@@ -40,6 +44,8 @@ def main(argv: list[str] | None = None) -> int:
             ingest(args.storm_dates)
         elif args.command == "index":
             index()
+        elif args.command == "candidates":
+            rank_candidates(args.top)
     except (RuntimeError, FileNotFoundError) as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -87,6 +93,21 @@ def index() -> Path:
     print(f"first storm date: {df['storm_date'].iloc[0]}")
     print(f"last storm date: {df['storm_date'].iloc[-1]}")
     print(f"days without 12Z file: {int((~df['has_12z']).sum())}")
+    return path
+
+
+def rank_candidates(top: int) -> Path:
+    """WCM database joined with the archive index. Writes the full CSV and prints the top rows."""
+    if not archive.INDEX_PATH.exists():
+        raise FileNotFoundError(f"run hailprint index first: {archive.INDEX_PATH}")
+    index_df = pd.read_parquet(archive.INDEX_PATH)
+    ranked = candidates.rank(candidates.harris_days(candidates.fetch_database()), index_df)
+    path = candidates.CANDIDATES_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".csv.tmp")
+    ranked.to_csv(tmp, index=False)
+    tmp.replace(path)
+    print(ranked.head(top).to_string(index=False))
     return path
 
 
