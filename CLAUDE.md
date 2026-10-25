@@ -1,0 +1,86 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+Hailprint draws the MRMS MESH hail swath over Harris County parcels and scores it against SPC
+hail reports. Python 3.12 only (`requires-python = ">=3.12,<3.13"`), managed by `uv`.
+Read `GLOSSARY.md` first and use its terms (storm date, daily max, 12Z file, size class, swath,
+archive index, candidate day, parcel count) in code, tests, commits, and chat.
+
+## Commands
+
+```bash
+make setup                                  # uv sync
+make lint                                   # ruff check . && ruff format --check .
+make test                                   # uv run pytest -q
+uv run pytest tests/test_swath.py -q        # one file
+uv run pytest tests/test_swath.py::test_name -q   # one test
+uv run hailprint ingest 2024-05-28          # swath file + PNG for one or more storm dates
+uv run hailprint index                      # archive index from one S3 bucket listing
+uv run hailprint candidates --top 20        # needs `index` first
+uv run hailprint parcels 2024-05-28         # needs `ingest` for that date and the HCAD gdb
+```
+
+Tests that need downloaded data self-skip: `needs_raw_mesh` (the 12Z GRIB2 under
+`data/raw/mesh/`) and `needs_wcm` (the SPC WCM zip under `data/raw/spc/`), both in
+`tests/conftest.py`. `tests/test_parcels.py` uses the committed fixture
+`tests/fixtures/parcels_sample.gpkg`, so parcel logic is testable without HCAD data.
+`tests/test_outputs_clean.py` scans every file in `out/` and `data/derived/` for owner fields and
+the word "damage".
+
+## Architecture
+
+Data flow, one module per step (`src/hailprint/`):
+
+```
+mesh.py       S3 (noaa-mrms-pds, anonymous) -> gz GRIB2 -> eccodes decode -> xarray cropped to Harris bbox
+   |          key_for(storm_date) picks the single D+1 12:00 UTC MESH_Max_1440min file; sentinels -3/-1 masked to NaN
+swath.py      daily max raster -> one dissolved polygon per size class (7 nested thresholds) -> GeoParquet
+reports.py    SPC preliminary hail CSV for the day, filtered to Harris County, TX -> points
+plot.py       swaths + county outline + report points -> PNG (Agg backend)
+archive.py    one bucket listing -> one row per archive day (storm_date, file_count, bytes, has_12z)
+candidates.py SPC WCM hail database -> Harris County days (FIPS 201) -> ranked, joined with the index
+parcels.py    HCAD Parcels.gdb -> allow-listed columns only -> distinct hcad_num per size class
+county.py     committed Harris County GeoJSON (package data) -> outline() and bbox()
+files.py      write_atomic(): .tmp sibling then rename; stamps source/product/confidence metadata
+__main__.py   argparse CLI wiring the four commands and the fixed paths under data/ and out/
+```
+
+Paths are relative to the repo root (`data/raw/...`, `data/derived/...`, `out/`); run commands
+from the root. `data/` and `out/` are gitignored.
+
+Conventions that span modules:
+
+- **Every derived Parquet goes through `files.write_atomic`.** It is the one place that attaches
+  the `source`, `product`, and `confidence` schema metadata. A new command that writes a table
+  uses it; never call `to_parquet` directly. CSV has no metadata slot, so the candidate CSV names
+  its source in README and column names instead.
+- **Storm date = SPC convective day** (12Z D to 12Z D+1). The raster for storm date D lives in the
+  D+1 folder with a `-120000` stamp. A CST report time minus 6 hours gives its storm date
+  (`candidates.convective_day`).
+- **Size classes** are the tuple `swath.SIZE_CLASSES_MM`; `parcels.COUNT_COLUMNS` and the swath
+  file share `threshold_mm`, `threshold_in`, `label`.
+- **CRS**: parcels arrive in EPSG:2278 (US survey feet). Use it for the parcel join and square-feet
+  area. Reproject to EPSG:32615 before any metre distance. See `docs/solutions/geo/`.
+- **`shortcut:` comments** mark known limits and their upgrade condition (ponytail convention).
+  Keep them when editing nearby code.
+
+## Rules that never change
+
+- Outputs say "radar-estimated hail size" with the confidence band `swath.CONFIDENCE`. The word
+  "damage" (`swath.FORBIDDEN_WORD`) never appears in any output, title, column, or metadata.
+- HCAD owner fields (`parcels.OWNER_FIELDS`) are dropped at load via the `parcels.ALLOWED`
+  allow-list and never written. Do not widen the allow-list without a decision in
+  `docs/DECISIONS.md`.
+- Harris County only, HCAD footprints only (v1 scope, `docs/DECISIONS.md`).
+- GitHub Actions stay disabled on this repo. Scheduling is a local or VPS cron job.
+
+## Documents
+
+- `docs/plan-v4.md` approved plan; `docs/DECISIONS.md` adopted answers and standing constraints.
+- `docs/WEEK-NN.md` per-week evidence reports; `docs/KICKOFF.md` the week-1 prompt.
+- `docs/solutions/<category>/` learn-loop entries. Read before debugging; the Parquet metadata,
+  EPSG:2278 feet, and Windows file-write lessons live there.
+- `.scratch/<feature>/` holds specs and tickets for pipeline runs (gitignored).
