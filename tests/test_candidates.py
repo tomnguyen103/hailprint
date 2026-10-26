@@ -395,3 +395,13 @@ def test_all_days_fetches_a_repeated_index_day_once(tmp_path, monkeypatch):
     _all_days(tmp_path, _index(day, day))
 
     assert calls == [day]
+
+
+def test_all_days_skips_a_single_404_day_and_keeps_the_wcm_rows(tmp_path, monkeypatch):
+    day = date(2026, 1, 5)
+    boom = urllib.error.HTTPError("u", 404, "Not Found", EmailMessage(), None)
+    _serve(monkeypatch, {day: boom})
+
+    days = _all_days(tmp_path, _index(day))
+
+    assert "spc-daily" not in set(days["report_source"])

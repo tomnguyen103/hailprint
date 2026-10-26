@@ -128,7 +128,8 @@ def all_days(
     later = sorted({d for d in index["storm_date"] if d > wcm_end})
     with ThreadPoolExecutor(FETCH_THREADS) as pool:
         texts = list(pool.map(lambda d: daily_csv(d, cache_dir, today), later))
-    if later and all(text is None for text in texts):
+    # one 404 day is a normal skip; a run of them means the URL scheme changed
+    if len(later) > 1 and all(text is None for text in texts):
         raise RuntimeError(
             f"SPC daily CSV not found for any of the {len(later)} days after the WCM"
         )

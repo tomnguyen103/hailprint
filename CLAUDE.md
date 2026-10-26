@@ -25,8 +25,8 @@ uv run hailprint parcels 2024-05-28         # needs `ingest` for that date and t
 ```
 
 Tests that need downloaded data self-skip: `needs_raw_mesh` (the 12Z GRIB2 under
-`data/raw/mesh/`) and `needs_wcm` (the SPC WCM zip under `data/raw/spc/`), both in
-`tests/conftest.py`. `tests/test_parcels.py` uses the committed fixture
+`data/raw/mesh/`), `needs_wcm` (the SPC WCM zip under `data/raw/spc/`), and `needs_hcad` (the
+HCAD gdb and the 2024-05-28 swath file), all in `tests/conftest.py`. `tests/test_parcels.py` uses the committed fixture
 `tests/fixtures/parcels_sample.gpkg`, so parcel logic is testable without HCAD data.
 `tests/test_outputs_clean.py` scans every file in `out/` and `data/derived/` for owner fields and
 the word "damage".
@@ -46,7 +46,7 @@ archive.py    one bucket listing -> one row per archive day (storm_date, file_co
 candidates.py SPC WCM hail database -> Harris County days (FIPS 201); all_days adds the days after the WCM end from SPC daily CSVs -> ranked, joined with the index
 parcels.py    HCAD Parcels.gdb -> allow-listed columns only, layer CRS -> one sjoin -> distinct hcad_num per size class
 county.py     committed Harris County GeoJSON (package data) -> outline() and bbox()
-files.py      write_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata
+files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata
 paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR; every data path hangs from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
 __main__.py   argparse CLI wiring the four commands and the fixed paths under data/ and out/
