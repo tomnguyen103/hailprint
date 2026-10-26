@@ -163,13 +163,14 @@ def rank_candidates(top: int) -> Path:
 
 
 def count_parcels(storm_date: date) -> Path:
-    """Parcels per size class from the swath file and the masked HCAD read."""
+    """Parcels per size class and per ZIP from the swath file and the masked HCAD read."""
     swath_path = DERIVED_DIR / f"swaths-{storm_date}.parquet"
     if not swath_path.exists():
         raise FileNotFoundError(f"run hailprint ingest first: {swath_path}")
     swaths = gpd.read_parquet(swath_path)
-    counts = parcels.count_parcels(swaths, PARCELS_GDB)
+    counts, zips = parcels.count_parcels(swaths, PARCELS_GDB)
     path = files.write_atomic(counts, PARCELS_DIR / f"parcel-counts-{storm_date}.parquet")
+    files.write_atomic(zips, PARCELS_DIR / f"zip-counts-{storm_date}.parquet")
     for threshold_in, parcel_count in zip(
         counts["threshold_in"], counts["parcel_count"], strict=True
     ):
