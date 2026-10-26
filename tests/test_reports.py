@@ -141,3 +141,8 @@ def test_parse_rejects_a_row_out_of_range(row):
 def test_parse_turns_a_csv_field_over_the_limit_into_a_value_error():
     with pytest.raises(ValueError, match="malformed row"):
         parse(HEADER + "1200,100," + "x" * 200_000 + ",Harris,TX,30.0,-95.0,x\n")
+
+
+def test_parse_turns_an_oversized_header_line_into_a_value_error():
+    with pytest.raises(ValueError, match="unreadable header"):
+        parse("x" * 200_000 + "\n")

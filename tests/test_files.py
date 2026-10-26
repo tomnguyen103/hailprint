@@ -87,8 +87,8 @@ def test_write_atomic_failure_keeps_the_old_file_and_leaves_no_tmp(tmp_path, mon
 def test_write_text_atomic_writes_utf8_and_keeps_the_old_file_on_failure(tmp_path, monkeypatch):
     path = tmp_path / "a" / "x.csv"
 
-    files.write_text_atomic("one\n", path)
-    assert path.read_text(encoding="utf-8") == "one\n"
+    files.write_text_atomic("one\r\n", path)
+    assert path.read_bytes() == b"one\r\n"
 
     def boom(self, *args, **kwargs):
         raise OSError("disk full")
@@ -98,5 +98,5 @@ def test_write_text_atomic_writes_utf8_and_keeps_the_old_file_on_failure(tmp_pat
         files.write_text_atomic("two\n", path)
 
     monkeypatch.undo()
-    assert path.read_text(encoding="utf-8") == "one\n"
+    assert path.read_bytes() == b"one\r\n"
     assert list(path.parent.glob("*.tmp")) == []

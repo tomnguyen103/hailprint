@@ -177,3 +177,19 @@ def test_count_parcels_rejects_swaths_outside_epsg_4326():
 
     with pytest.raises(ValueError, match="EPSG:4326"):
         count_parcels(swaths, FIXTURE)
+
+
+def test_count_parcels_accepts_lon_lat_order_crs84_and_rejects_no_crs():
+    box = shapely.box(0, 0, 1, 1)
+    row = {
+        "storm_date": [date(2024, 5, 28)],
+        "threshold_mm": [19.05],
+        "threshold_in": [0.75],
+        "label": ["0.75 in"],
+    }
+    crs84 = gpd.GeoDataFrame(row, geometry=[box], crs="OGC:CRS84")
+    bare = gpd.GeoDataFrame(row, geometry=[box])
+
+    assert count_parcels(crs84, FIXTURE)["parcel_count"].tolist() == [0]
+    with pytest.raises(ValueError, match="EPSG:4326"):
+        count_parcels(bare, FIXTURE)

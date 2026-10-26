@@ -61,7 +61,7 @@ def count_parcels(
     """
     if swaths.empty:
         return pd.DataFrame(columns=COUNT_COLUMNS)
-    if swaths.crs is None or swaths.crs.to_epsg() != 4326:
+    if swaths.crs is None or not swaths.crs.equals("EPSG:4326", ignore_axis_order=True):
         raise ValueError(f"swaths must be in EPSG:4326, got {swaths.crs}")
     swaths = cast(gpd.GeoDataFrame, swaths.sort_values("threshold_mm").reset_index(drop=True))
     densified = swaths.set_geometry(swaths.geometry.segmentize(SEGMENT_DEG))

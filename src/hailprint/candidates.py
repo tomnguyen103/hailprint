@@ -105,8 +105,9 @@ def daily_csv(storm_date: date, cache_dir: Path, today: date) -> str | None:
         try:
             files.write_text_atomic(text, cache)
         except OSError as exc:
+            reason = exc.strerror or type(exc).__name__
             raise RuntimeError(
-                f"SPC daily CSV cache write for {storm_date} failed: {exc.strerror}"
+                f"SPC daily CSV cache write for {storm_date} failed: {reason}"
             ) from exc
     return text
 
@@ -119,8 +120,8 @@ def all_days(
     Columns: storm_date, report_count, max_size_in, report_source ("wcm" or "spc-daily").
     """
     # shortcut: the daily fill counts preliminary reports, upgrade when SPC publishes the 2026
-    # WCM file; the WCM end is the day of its last row, so a quiet tail of the file is filled
-    # from the daily CSVs too
+    # WCM file; the WCM end is the day of the last row of any county, and only later days are
+    # filled, so a partial end day keeps its WCM count
     wcm = harris_days(wcm_path)
     today = date.today() if today is None else today
     wcm_end = wcm_last_day(wcm_path)

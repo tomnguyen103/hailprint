@@ -386,3 +386,12 @@ def test_all_days_fetches_again_when_the_cache_file_is_not_utf8(tmp_path, monkey
     _all_days(tmp_path, _index(day))
 
     assert calls == [day]
+
+
+def test_all_days_fetches_a_repeated_index_day_once(tmp_path, monkeypatch):
+    day = date(2026, 1, 5)
+    calls = _serve(monkeypatch, {day: THREE_HARRIS})
+
+    _all_days(tmp_path, _index(day, day))
+
+    assert calls == [day]

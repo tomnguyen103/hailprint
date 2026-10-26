@@ -15,7 +15,7 @@ COLUMNS = ["time", "location", "county", "state", "size_in"]
 REQUIRED = ("Time", "Location", "County", "State", "Size", "Lat", "Lon")
 # shortcut: BUFFER_KM is one constant; upgrade when the scorer needs a per-call radius above 50 km
 BUFFER_KM = 50
-MAX_SIZE_HUNDREDTHS = 1500  # above the 8 in record, so a garbled size never ranks a day
+MAX_SIZE_IN = 15  # above the 8 in record, so a garbled size never ranks a day
 
 
 def fetch_hail_csv(storm_date: date) -> str:
@@ -30,7 +30,11 @@ def parse(text: str) -> gpd.GeoDataFrame:
     range. Every row is checked on purpose: a corrupt body must fail loud, not rank a day.
     """
     reader = csv.DictReader(io.StringIO(text))
-    missing = [name for name in REQUIRED if name not in (reader.fieldnames or [])]
+    try:
+        header = reader.fieldnames or []
+    except csv.Error as exc:
+        raise ValueError(f"SPC hail CSV has an unreadable header: {exc!r:.80}") from exc
+    missing = [name for name in REQUIRED if name not in header]
     if missing:
         raise ValueError(f"SPC hail CSV lacks the columns {missing}")
     try:
@@ -62,7 +66,7 @@ def parse(text: str) -> gpd.GeoDataFrame:
 def _checked(row: dict) -> dict:
     """The row when its size and position are in range; ValueError otherwise."""
     ok = (
-        0 <= row["size_in"] * 100 <= MAX_SIZE_HUNDREDTHS
+        0 <= row["size_in"] <= MAX_SIZE_IN
         and math.isfinite(row["lat"])
         and math.isfinite(row["lon"])
         and -90 <= row["lat"] <= 90
