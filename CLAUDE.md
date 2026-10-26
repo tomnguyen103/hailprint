@@ -13,7 +13,8 @@ archive index, candidate day, parcel count) in code, tests, commits, and chat.
 
 ```bash
 make setup                                  # uv sync
-make lint                                   # ruff check . && ruff format --check .
+make lint                                   # ruff check . && ruff format --check . && pyright
+uv run pyright                              # type check src (basic mode); part of make lint
 make test                                   # uv run pytest -q
 uv run pytest tests/test_swath.py -q        # one file
 uv run pytest tests/test_swath.py::test_name -q   # one test
@@ -44,17 +45,21 @@ archive.py    one bucket listing -> one row per archive day (storm_date, file_co
 candidates.py SPC WCM hail database -> Harris County days (FIPS 201) -> ranked, joined with the index
 parcels.py    HCAD Parcels.gdb -> allow-listed columns only -> distinct hcad_num per size class
 county.py     committed Harris County GeoJSON (package data) -> outline() and bbox()
-files.py      write_atomic(): .tmp sibling then rename; stamps source/product/confidence metadata
+files.py      write_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata
+paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR; every data path hangs from it
+net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
 __main__.py   argparse CLI wiring the four commands and the fixed paths under data/ and out/
 ```
 
-Paths are relative to the repo root (`data/raw/...`, `data/derived/...`, `out/`); run commands
-from the root. `data/` and `out/` are gitignored.
+Data paths hang from `paths.ROOT`, so a command writes under the repo `data/` and `out/` from any
+working directory. `data/` and `out/` are gitignored. No module holds a relative `Path("data...")`.
 
 Conventions that span modules:
 
 - **Every derived Parquet goes through `files.write_atomic`.** It is the one place that attaches
-  the `source`, `product`, and `confidence` schema metadata. A new command that writes a table
+  the `source`, `product`, and `confidence` schema metadata. It takes a GeoDataFrame and an
+  optional `metadata` dict; `swath.write_swaths` uses both. `test_outputs_clean` checks the keys
+  on every Parquet under `data/derived/`. A new command that writes a table
   uses it; never call `to_parquet` directly. CSV has no metadata slot, so the candidate CSV names
   its source in README and column names instead.
 - **Storm date = SPC convective day** (12Z D to 12Z D+1). The raster for storm date D lives in the

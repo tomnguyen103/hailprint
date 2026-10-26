@@ -1,3 +1,4 @@
+import socket
 from datetime import date
 from pathlib import Path
 
@@ -8,10 +9,12 @@ import pytest
 import xarray as xr
 
 import hailprint.__main__ as cli
-from hailprint import reports, swath
+from hailprint import paths, reports, swath
 from hailprint.__main__ import main
 from tests.conftest import needs_raw_mesh
 from tests.test_mesh import KEY_12Z, FakeS3
+
+GOLDEN_SPC_CSV = Path(__file__).parent / "fixtures" / "spc_240528_rpts_hail.csv"
 
 
 @pytest.mark.parametrize("bad", ["2024-5-28", "20240528", "yesterday", "2024-13-01"])
@@ -64,6 +67,40 @@ def test_ingest_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
     assert pq.read_metadata(path).metadata[b"file_count"] == b"1"
 
 
+def _stub_ingest(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli.mesh, "download_many", lambda keys, raw_dir: [])
+    monkeypatch.setattr(cli, "DERIVED_DIR", tmp_path / "derived")
+    monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")
+
+
+def test_ingest_value_error_prints_one_line_and_exits_1(tmp_path, monkeypatch, capsys):
+    _stub_ingest(monkeypatch, tmp_path)
+
+    def bad_layout(storm_date, raw_dir):
+        raise ValueError("MRMS_x.grib2: bitmapPresent is 1, expected 0")
+
+    monkeypatch.setattr(cli.mesh, "daily_max", bad_layout)
+
+    assert main(["ingest", "2024-05-28"]) == 1
+
+    captured = capsys.readouterr()
+    assert captured.err.splitlines() == ["MRMS_x.grib2: bitmapPresent is 1, expected 0"]
+    assert captured.out == ""
+    assert not (tmp_path / "derived").exists()
+
+
+def test_ingest_file_not_found_still_prints_one_line_and_exits_1(tmp_path, monkeypatch, capsys):
+    _stub_ingest(monkeypatch, tmp_path)
+
+    def missing(storm_date, raw_dir):
+        raise FileNotFoundError("no MESH file at somewhere")
+
+    monkeypatch.setattr(cli.mesh, "daily_max", missing)
+
+    assert main(["ingest", "2024-05-28"]) == 1
+    assert capsys.readouterr().err.splitlines() == ["no MESH file at somewhere"]
+
+
 def test_ingest_missing_12z_file_exits_1_and_writes_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli.mesh, "s3_client", lambda: FakeS3(missing=[KEY_12Z]))
     monkeypatch.setattr(cli, "RAW_DIR", tmp_path / "raw")
@@ -78,14 +115,21 @@ def test_ingest_missing_12z_file_exits_1_and_writes_nothing(tmp_path, monkeypatc
 
 
 @needs_raw_mesh
-def test_ingest_on_the_real_day_matches_spc_reports(capsys):
+def test_ingest_on_the_real_day_matches_spc_reports(capsys, monkeypatch):
+    def no_network(*args, **kwargs):
+        raise AssertionError("network used")
+
+    monkeypatch.setattr(socket.socket, "connect", no_network)
+    # golden copy of https://www.spc.noaa.gov/climo/reports/240528_rpts_hail.csv
+    monkeypatch.setattr(reports, "fetch_hail_csv", lambda storm_date: GOLDEN_SPC_CSV.read_text())
+
     assert main(["ingest", "2024-05-28"]) == 0
     out = capsys.readouterr().out
     assert "damage" not in out.lower()
     assert "SPC hail reports in Harris County: 10" in out
-    assert Path("out/ingest-2024-05-28.png").exists()
+    assert (paths.OUT_DIR / "ingest-2024-05-28.png").exists()
 
-    path = "data/derived/swaths/swaths-2024-05-28.parquet"
+    path = paths.DERIVED_DIR / "swaths" / "swaths-2024-05-28.parquet"
     swaths = gpd.read_parquet(path)
     assert list(swaths.columns) == swath.COLUMNS
     assert swaths.crs.to_epsg() == 4326

@@ -9,13 +9,24 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
-from hailprint import archive, candidates, county, files, mesh, parcels, plot, reports, swath
+from hailprint import (
+    archive,
+    candidates,
+    county,
+    files,
+    mesh,
+    parcels,
+    paths,
+    plot,
+    reports,
+    swath,
+)
 
-RAW_DIR = Path("data/raw/mesh")
-DERIVED_DIR = Path("data/derived/swaths")
-OUT_DIR = Path("out")
-PARCELS_GDB = Path("data/raw/hcad/extracted/Parcels.gdb")
-PARCELS_DIR = Path("data/derived/parcels")
+RAW_DIR = paths.RAW_DIR / "mesh"
+DERIVED_DIR = paths.DERIVED_DIR / "swaths"
+OUT_DIR = paths.OUT_DIR
+PARCELS_GDB = paths.RAW_DIR / "hcad" / "extracted" / "Parcels.gdb"
+PARCELS_DIR = paths.DERIVED_DIR / "parcels"
 
 
 def _storm_date(text: str) -> date:
@@ -55,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
             rank_candidates(args.top)
         elif args.command == "parcels":
             count_parcels(args.storm_date)
-    except (RuntimeError, FileNotFoundError) as exc:
+    except (RuntimeError, FileNotFoundError, ValueError) as exc:
         print(exc, file=sys.stderr)
         return 1
     return 0
@@ -101,7 +112,7 @@ def index() -> Path:
     print(f"archive days: {len(df)}")
     print(f"first storm date: {df['storm_date'].iloc[0]}")
     print(f"last storm date: {df['storm_date'].iloc[-1]}")
-    print(f"days without 12Z file: {int((~df['has_12z']).sum())}")
+    print(f"days without 12Z file: {int((~df['has_12z'].to_numpy()).sum())}")
     return path
 
 
@@ -124,8 +135,10 @@ def count_parcels(storm_date: date) -> Path:
     swaths = gpd.read_parquet(swath_path)
     counts = parcels.count_parcels(swaths, PARCELS_GDB)
     path = files.write_atomic(counts, PARCELS_DIR / f"parcel-counts-{storm_date}.parquet")
-    for row in counts.itertuples():
-        print(f">= {row.threshold_in:.2f} in: {row.parcel_count} parcels")
+    for threshold_in, parcel_count in zip(
+        counts["threshold_in"], counts["parcel_count"], strict=True
+    ):
+        print(f">= {threshold_in:.2f} in: {parcel_count} parcels")
     print(f"confidence: {swath.CONFIDENCE}")
     return path
 

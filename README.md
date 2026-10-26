@@ -14,6 +14,7 @@ uv run hailprint ingest 2024-05-28          # swath file and PNG for one or more
 uv run hailprint index                      # one row per MESH archive day from one bucket listing
 uv run hailprint candidates --top 20        # Harris County hail days ranked by SPC report count
 uv run hailprint parcels 2024-05-28         # allow-listed parcel count per size class
+make lint                                   # ruff check, ruff format --check, pyright
 make test                                   # uv run pytest -q
 ```
 

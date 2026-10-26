@@ -88,7 +88,7 @@ def test_write_atomic_replaces_the_old_index_file(tmp_path):
     files.write_atomic(new, path)
 
     assert len(pd.read_parquet(path)) == 2
-    assert not path.with_name(path.name + ".tmp").exists()
+    assert list(path.parent.glob("*.tmp")) == []
 
 
 def test_index_command_prints_counts(tmp_path, monkeypatch, capsys):

@@ -2,13 +2,13 @@
 
 from collections.abc import Iterator
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pandas as pd
 
 from hailprint.mesh import BUCKET, PRODUCT, s3_client
+from hailprint.paths import DERIVED_DIR
 
-INDEX_PATH = Path("data/derived/index/mesh-archive.parquet")
+INDEX_PATH = DERIVED_DIR / "index" / "mesh-archive.parquet"
 COLUMNS = ["storm_date", "file_count", "bytes", "has_12z"]
 PREFIX = f"CONUS/{PRODUCT}/"
 
@@ -33,4 +33,4 @@ def build_index(client=None) -> pd.DataFrame:
     grouped["storm_date"] = [
         datetime.strptime(f, "%Y%m%d").date() - timedelta(days=1) for f in grouped.index
     ]
-    return grouped.sort_values("storm_date").reset_index(drop=True)[COLUMNS]
+    return grouped.sort_values("storm_date").reset_index(drop=True).loc[:, COLUMNS]

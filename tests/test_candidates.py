@@ -1,3 +1,4 @@
+import http.client
 import io
 import urllib.error
 import urllib.request
@@ -7,7 +8,7 @@ from datetime import date, time
 import pandas as pd
 import pytest
 
-from hailprint import archive, candidates
+from hailprint import archive, candidates, net
 from hailprint.__main__ import main
 from tests.conftest import needs_wcm
 
@@ -24,7 +25,7 @@ def test_convective_day_shifts_cst_to_the_spc_day(day, clock, want):
     assert candidates.convective_day(day, clock) == want
 
 
-def _wcm_csv(tmp_path):
+def _wcm_csv(tmp_path, tz=None, drop_tz=False):
     rows = pd.DataFrame(
         {
             "om": [1, 2, 3, 4, 5],
@@ -36,9 +37,14 @@ def _wcm_csv(tmp_path):
             "f2": [0, 201, 0, 0, 0],
             "f3": [0, 0, 0, 0, 0],
             "f4": [0, 0, 201, 0, 0],
+            "tz": [3, 3, 3, 3, 3],
             "edat": ["", "", "", "", ""],
         }
     )
+    if tz is not None:
+        rows["tz"] = tz
+    if drop_tz:
+        rows = rows.drop(columns="tz")
     path = tmp_path / "wcm.csv.zip"
     rows.to_csv(path, index=False, compression={"method": "zip", "archive_name": "wcm.csv"})
     return path
@@ -50,6 +56,30 @@ def test_harris_days_keeps_tx_rows_with_201_in_any_f_column(tmp_path):
     assert df["storm_date"].tolist() == [date(2024, 5, 28)]
     assert df["report_count"].tolist() == [3]
     assert df["max_size_in"].tolist() == [1.75]
+
+
+def test_harris_days_rejects_a_harris_row_with_another_time_zone(tmp_path):
+    path = _wcm_csv(tmp_path, tz=[3, 9, 3, 3, 3])
+
+    with pytest.raises(ValueError, match="9"):
+        candidates.harris_days(path)
+
+
+def test_harris_days_ignores_the_time_zone_of_a_row_outside_harris(tmp_path):
+    path = _wcm_csv(tmp_path, tz=[3, 3, 3, 9, 9])
+
+    assert candidates.harris_days(path)["report_count"].tolist() == [3]
+
+
+def test_harris_days_is_the_same_on_a_second_call(tmp_path):
+    path = _wcm_csv(tmp_path)
+
+    pd.testing.assert_frame_equal(candidates.harris_days(path), candidates.harris_days(path))
+
+
+def test_harris_days_without_a_tz_column_names_the_column(tmp_path):
+    with pytest.raises(ValueError, match="tz"):
+        candidates.harris_days(_wcm_csv(tmp_path, drop_tz=True))
 
 
 def test_rank_sorts_by_count_then_size_and_drops_days_before_the_archive():
@@ -98,7 +128,7 @@ def test_fetch_database_rejects_a_non_zip_body(tmp_path, monkeypatch):
         candidates.fetch_database(path)
 
     assert not path.exists()
-    assert not path.with_suffix(".tmp").exists()
+    assert list(path.parent.glob("*.tmp")) == []
 
 
 def test_fetch_database_wraps_a_url_error_and_removes_the_tmp_file(tmp_path, monkeypatch):
@@ -112,7 +142,22 @@ def test_fetch_database_wraps_a_url_error_and_removes_the_tmp_file(tmp_path, mon
     with pytest.raises(RuntimeError, match="WCM download failed"):
         candidates.fetch_database(path)
 
-    assert not path.with_suffix(".tmp").exists()
+    assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_fetch_database_wraps_a_short_read(tmp_path, monkeypatch):
+    path = tmp_path / "spc" / "hail.csv.zip"
+
+    def urlopen(url, timeout=None):
+        raise http.client.IncompleteRead(b"x")
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(net.time, "sleep", lambda s: None)
+
+    with pytest.raises(RuntimeError, match="WCM download failed"):
+        candidates.fetch_database(path)
+
+    assert list(path.parent.glob("*.tmp")) == []
 
 
 @needs_wcm

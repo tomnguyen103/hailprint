@@ -1,36 +1,39 @@
 """Candidate days: Harris County hail days from the SPC WCM database, ranked by report count."""
 
-import shutil
-import urllib.request
+import http.client
+import os
 import zipfile
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 import pandas as pd
 
+from hailprint import net
+from hailprint.paths import DERIVED_DIR, RAW_DIR
+
 # shortcut: the 1955-2025 file holds no 2026 day, upgrade when SPC publishes the 2026 file
 # or when the backtest needs 2026 days
 WCM_URL = "https://www.spc.noaa.gov/wcm/data/1955-2025_hail.csv.zip"
-WCM_PATH = Path("data/raw/spc/1955-2025_hail.csv.zip")
+WCM_PATH = RAW_DIR / "spc" / "1955-2025_hail.csv.zip"
 HARRIS_FIPS = 201
-CANDIDATES_PATH = Path("data/derived/index/candidate-days.csv")
+CANDIDATES_PATH = DERIVED_DIR / "index" / "candidate-days.csv"
 COLUMNS = ["storm_date", "report_count", "max_size_in", "has_12z"]
-USECOLS = ["date", "time", "st", "mag", "f1", "f2", "f3", "f4"]
+USECOLS = ["date", "time", "tz", "st", "mag", "f1", "f2", "f3", "f4"]
+CST_TZ = 3  # WCM tz code for CST
 # WCM times are CST (UTC-6); the SPC day starts at 12 UTC; the net shift from local clock is -6 h
 CST_TO_CONVECTIVE = timedelta(hours=6)
 
 
 def fetch_database(path: Path = WCM_PATH) -> Path:
-    """Return the cached zip; download it once to a .tmp name and rename."""
+    """Return the cached zip; download it once to a per-process .tmp name and rename."""
     path = Path(path)
     if path.exists():
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
-        with urllib.request.urlopen(WCM_URL, timeout=60) as response, tmp.open("wb") as out:
-            shutil.copyfileobj(response, out)
-    except OSError as exc:
+        tmp.write_bytes(net.get(WCM_URL, timeout=60))
+    except (OSError, http.client.HTTPException) as exc:
         tmp.unlink(missing_ok=True)
         raise RuntimeError(f"WCM download failed: {exc}") from exc
     if not zipfile.is_zipfile(tmp):
@@ -49,7 +52,10 @@ def harris_days(path: Path) -> pd.DataFrame:
     """Harris County, TX rows grouped by convective day: report_count and max_size_in."""
     df = pd.read_csv(path, usecols=USECOLS)
     harris = (df[["f1", "f2", "f3", "f4"]] == HARRIS_FIPS).any(axis=1)
-    df = df[(df["st"] == "TX") & harris].copy()
+    df = df.loc[(df["st"] == "TX") & harris].copy()
+    other = sorted(set(df["tz"]) - {CST_TZ})
+    if other:
+        raise ValueError(f"WCM tz code {other} for Harris rows, expected {CST_TZ} (CST)")
     stamps = pd.to_datetime(df["date"] + " " + df["time"]) - pd.Timedelta(CST_TO_CONVECTIVE)
     df["storm_date"] = stamps.dt.date
     grouped = df.groupby("storm_date").agg(report_count=("mag", "size"), max_size_in=("mag", "max"))
@@ -59,9 +65,9 @@ def harris_days(path: Path) -> pd.DataFrame:
 def rank(days: pd.DataFrame, index: pd.DataFrame) -> pd.DataFrame:
     """Join the archive index; keep archive-era days; sort by count desc, size desc, date asc."""
     merged = days.merge(index[["storm_date", "has_12z"]], on="storm_date", how="left")
-    merged = merged[merged["storm_date"] >= index["storm_date"].min()]
+    merged = merged.loc[merged["storm_date"] >= index["storm_date"].min()]
     merged["has_12z"] = merged["has_12z"].fillna(False).astype(bool)
     merged = merged.sort_values(
         ["report_count", "max_size_in", "storm_date"], ascending=[False, False, True]
     )
-    return merged.reset_index(drop=True)[COLUMNS]
+    return merged.reset_index(drop=True).loc[:, COLUMNS]
