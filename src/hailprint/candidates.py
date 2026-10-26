@@ -114,7 +114,8 @@ def all_days(
     # WCM file
     wcm = harris_days(wcm_path)
     today = date.today() if today is None else today
-    later = sorted(d for d in index["storm_date"] if d > wcm_last_day(wcm_path))
+    wcm_end = wcm_last_day(wcm_path)
+    later = sorted(d for d in index["storm_date"] if d > wcm_end)
     with ThreadPoolExecutor(FETCH_THREADS) as pool:
         texts = list(pool.map(lambda d: daily_csv(d, cache_dir, today), later))
     rows = []
