@@ -430,3 +430,110 @@ def test_reports_doc_gives_the_same_document_for_the_same_csv_twice():
     second = publish.reports_doc(reports.nearby_reports(date(2024, 5, 28), text), _receipt())
 
     assert first == second
+
+
+def _rescore_doc(*reports_):
+    """A pairs document of seven classes and the given (edge_m, size_in, dist) reports.
+
+    Each report has the same distance to every size class.
+    """
+    classes = [
+        {
+            "threshold_mm": mm,
+            "threshold_in": mm / 25.4,
+            "label": swath.label(mm),
+            "swath_km2": 10.0,
+            "unverifiable_km2": [10.0 - km / 4 for km in range(21)],
+        }
+        for mm in swath.SIZE_CLASSES_MM
+    ]
+    rows = [
+        {"id": i, "size_in": size_in, "edge_m": edge_m, "dist_m": [dist] * 7}
+        for i, (edge_m, size_in, dist) in enumerate(reports_)
+    ]
+    return {
+        "receipt": _receipt(),
+        "radius_km_default": 5,
+        "radius_km_max": 20,
+        "edge_margin_m": 1000,
+        "classes": classes,
+        "reports": rows,
+    }
+
+
+def test_rescore_scores_a_report_only_when_its_edge_distance_beats_the_radius_plus_the_margin():
+    doc = _rescore_doc((6000, 1.0, 0.0), (6001, 1.0, 0.0), (5999.5, 1.0, 0.0))
+
+    table = publish.rescore(doc, 5)
+
+    assert table["report_count"].eq(1).all()
+    assert table["hits"].tolist() == [1, 1, 0, 0, 0, 0, 0]
+    assert table["false_alarms"].tolist() == [0, 0, 1, 1, 1, 1, 1]
+
+
+def test_rescore_counts_a_distance_equal_to_the_radius_as_a_forecast_and_a_null_as_none():
+    doc = _rescore_doc((9000, 1.0, 5000.0), (9000, 1.0, 5000.5), (9000, 1.0, None))
+
+    table = publish.rescore(doc, 5)
+
+    assert table["report_count"].eq(3).all()
+    assert table["hits"].tolist() == [1, 1, 0, 0, 0, 0, 0]
+    assert table["misses"].tolist() == [2, 2, 0, 0, 0, 0, 0]
+    assert table["false_alarms"].tolist() == [0, 0, 1, 1, 1, 1, 1]
+
+
+def test_rescore_reads_the_areas_at_the_index_of_the_radius():
+    table = publish.rescore(_rescore_doc((9000, 1.0, 0.0)), 8)
+
+    assert table["swath_km2"].eq(10.0).all()
+    assert table["unverifiable_km2"].eq(8.0).all()
+    assert table["radius_km"].eq(8).all()
+    assert table["storm_date"].eq("2024-05-28").all()
+
+
+@pytest.mark.parametrize("radius_km", [-1, 21, float("nan"), float("inf"), 2.5, 0.1])
+def test_rescore_refuses_a_radius_that_is_not_a_whole_number_from_0_to_20(radius_km):
+    with pytest.raises(ValueError, match="radius_km"):
+        publish.rescore(_rescore_doc((9000, 1.0, 0.0)), radius_km)
+
+
+def test_rescore_accepts_the_whole_float_radius_at_both_ends():
+    doc = _rescore_doc((22000, 1.0, 0.0))
+
+    assert publish.rescore(doc, 0.0)["report_count"].eq(1).all()
+    assert publish.rescore(doc, 20.0)["report_count"].eq(1).all()
+
+
+def test_rescore_refuses_a_document_with_a_missing_size_class():
+    doc = _rescore_doc((9000, 1.0, 0.0))
+    del doc["classes"][2]
+
+    with pytest.raises(ValueError, match="missing size classes"):
+        publish.rescore(doc, 5)
+
+
+def test_rescore_refuses_a_distance_list_of_the_wrong_length():
+    doc = _rescore_doc((9000, 1.0, 0.0))
+    doc["reports"][0]["dist_m"] = [0.0] * 6
+
+    with pytest.raises(ValueError, match="dist_m"):
+        publish.rescore(doc, 5)
+
+
+def test_pairs_doc_refuses_classes_that_do_not_nest():
+    low = shapely.MultiPolygon([shapely.box(-95.5, 29.5, -95.4, 29.6)])
+    high = shapely.MultiPolygon([shapely.box(-95.2, 29.5, -95.1, 29.6)])
+    frame = gpd.GeoDataFrame(
+        {
+            "storm_date": ["2024-05-28"] * 2,
+            "threshold_mm": [19.05, 25.4],
+            "threshold_in": [0.75, 1.0],
+            "label": [swath.label(19.05), swath.label(25.4)],
+        },
+        geometry=[low, high],
+        crs="EPSG:4326",
+    )
+    nearby = reports.nearby_reports(date(2024, 5, 28), _spc_csv((100, "Katy", 29.79, -95.82, "")))
+
+    with pytest.raises(ValueError, match="not inside the next lower class"):
+        publish.pairs_doc(frame, nearby, _receipt())

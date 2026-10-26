@@ -1,6 +1,7 @@
 """Build, validate, and serialise the files that `hailprint publish` writes under site/data/."""
 
 import json
+import math
 from collections.abc import Iterable
 from datetime import UTC, date, datetime
 from functools import cache
@@ -10,6 +11,7 @@ from typing import Any
 
 import geopandas as gpd
 import numpy as np
+import pandas as pd
 import shapely
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
@@ -164,3 +166,83 @@ def reports_doc(frame: gpd.GeoDataFrame, rcpt: Doc) -> Doc:
         for index, (row, point) in enumerate(zip(frame.to_dict("records"), points, strict=True))
     ]
     return {"type": "FeatureCollection", "receipt": rcpt, "features": features}
+
+
+def pairs_doc(swaths: gpd.GeoDataFrame, frame: gpd.GeoDataFrame, rcpt: Doc) -> Doc:
+    """The radius-free scoring input of one storm date.
+
+    Per report: the edge distance and the distance to each size class (null for an absent class).
+    Per class: the swath area and the unverifiable area at every whole kilometre 0 to 20.
+    The `id` of a report is its row position, as in the reports file. Classes that do not nest
+    raise ValueError.
+    """
+    metric = score.metric_swaths(swaths)
+    swath.require_nested(metric, score.NEST_TOLERANCE_M)
+    edge = score.edge_m(frame).to_numpy(dtype=float)
+    dist = score.distances(metric, frame)
+    # shortcut: unverifiable_km2 is stored for whole-km radii only, upgrade when the UI needs a
+    # fractional radius
+    areas = [score.areas_km2(metric, frame, km) for km in range(score.MAX_RADIUS_KM + 1)]
+    classes = [
+        {
+            "threshold_mm": float(mm),
+            "threshold_in": mm / 25.4,
+            "label": swath.label(mm),
+            "swath_km2": areas[0][index][0],
+            "unverifiable_km2": [at_km[index][1] for at_km in areas],
+        }
+        for index, mm in enumerate(swath.SIZE_CLASSES_MM)
+    ]
+    columns = [score.dist_column(mm) for mm in swath.SIZE_CLASSES_MM]
+    rows = zip(frame["size_in"], edge, dist[columns].to_numpy(dtype=float), strict=True)
+    return {
+        "receipt": rcpt,
+        "radius_km_default": score.DEFAULT_RADIUS_KM,
+        "radius_km_max": score.MAX_RADIUS_KM,
+        "edge_margin_m": score.EDGE_M,
+        "classes": classes,
+        "reports": [
+            {
+                "id": index,
+                "size_in": float(size_in),
+                "edge_m": float(edge_m),
+                "dist_m": [None if math.isnan(d) else float(d) for d in dist_m],
+            }
+            for index, (size_in, edge_m, dist_m) in enumerate(rows)
+        ],
+    }
+
+
+def rescore(doc: Doc, radius_km: float) -> pd.DataFrame:
+    """The score table of `score.score_day` for one whole radius, from the pairs document alone.
+
+    A report is scored when its edge distance exceeds the radius plus the edge margin. A size
+    class forecasts for it when its distance is not null and at most the radius.
+    Raises ValueError for a radius that is not a whole number from 0 to `radius_km_max`, and for
+    a document with a missing size class or a distance list of the wrong length.
+    """
+    top = doc["radius_km_max"]
+    if not (math.isfinite(radius_km) and radius_km == int(radius_km) and 0 <= radius_km <= top):
+        raise ValueError(f"radius_km must be a whole number from 0 to {top}: {radius_km}")
+    by_mm = {c["threshold_mm"]: c for c in doc["classes"]}
+    missing = [mm for mm in swath.SIZE_CLASSES_MM if mm not in by_mm]
+    if missing:
+        raise ValueError(f"pairs: missing size classes {missing}")
+    order = [c["threshold_mm"] for c in doc["classes"]]
+    scored = [r for r in doc["reports"] if r["edge_m"] > radius_km * 1000 + doc["edge_margin_m"]]
+    if any(len(r["dist_m"]) != len(order) for r in scored):
+        raise ValueError(f"pairs: a dist_m list does not hold {len(order)} entries")
+    nan = math.nan
+    columns = {"size_in": [r["size_in"] for r in scored]} | {
+        score.dist_column(mm): [nan if r["dist_m"][i] is None else r["dist_m"][i] for r in scored]
+        for i, mm in enumerate(order)
+    }
+    pairs = pd.DataFrame({name: pd.Series(values, dtype=float) for name, values in columns.items()})
+    table = score.contingency(pairs, radius_km)
+    table.insert(0, "storm_date", doc["receipt"]["storm_date"])
+    table["radius_km"] = radius_km
+    table["swath_km2"] = [by_mm[mm]["swath_km2"] for mm in swath.SIZE_CLASSES_MM]
+    table["unverifiable_km2"] = [
+        by_mm[mm]["unverifiable_km2"][int(radius_km)] for mm in swath.SIZE_CLASSES_MM
+    ]
+    return score.with_skill(table, score.SCORE_COLUMNS)
