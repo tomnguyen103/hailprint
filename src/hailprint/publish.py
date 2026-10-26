@@ -7,11 +7,13 @@ from datetime import UTC, date, datetime
 from functools import cache
 from importlib.metadata import version
 from importlib.resources import files
+from pathlib import Path
 from typing import Any
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import pyarrow.parquet as pq
 import shapely
 from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
@@ -26,6 +28,14 @@ RECEIPT_KIND = "receipt"
 RUN_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 MESSAGE_CHARS = 200
 COORD_DECIMALS = 6
+STORMS_DIR = "storms"
+SWATH_FILE = "swath.geojson"
+REPORTS_FILE = "reports.geojson"
+PAIRS_FILE = "pairs.json"
+ZIPS_FILE = "zip-counts.json"
+METADATA_KEYS = ("source", "product", "confidence")
+SPC_PRODUCT = "preliminary hail reports"
+HCAD_PRODUCT = "Parcels.gdb"
 
 
 @cache
@@ -82,15 +92,19 @@ def dumps(doc: Doc, kind: str) -> str:
     return text
 
 
-def receipt(storm_date: date, sources: list[dict[str, str]], run_time: datetime) -> Doc:
-    """The provenance block of one published file; `run_time` needs a time zone."""
+def _utc_text(run_time: datetime) -> str:
     if run_time.tzinfo is None:
         raise ValueError("run_time needs a time zone")
+    return run_time.astimezone(UTC).strftime(RUN_TIME_FORMAT)
+
+
+def receipt(storm_date: date, sources: list[dict[str, str]], run_time: datetime) -> Doc:
+    """The provenance block of one published file; `run_time` needs a time zone."""
     return {
         "storm_date": storm_date.isoformat(),
         "sources": [dict(source) for source in sources],
         "confidence": swath.CONFIDENCE,
-        "run_time": run_time.astimezone(UTC).strftime(RUN_TIME_FORMAT),
+        "run_time": _utc_text(run_time),
         "package_version": version("hailprint"),
     }
 
@@ -246,3 +260,177 @@ def rescore(doc: Doc, radius_km: float) -> pd.DataFrame:
         by_mm[mm]["unverifiable_km2"][int(radius_km)] for mm in swath.SIZE_CLASSES_MM
     ]
     return score.with_skill(table, score.SCORE_COLUMNS)
+
+
+def zip_doc(zips: pd.DataFrame, rcpt: Doc) -> Doc:
+    """Parcel counts per size class and per ZIP. Counts only: no parcel id, no geometry.
+
+    The class count is the sum of its ZIP rows. A ZIP row counts the parcels of its ZIP that
+    the class covers, so the lowest class count is the number of parcels hit.
+    """
+    rows = zips.sort_values(["threshold_mm", "zip"], kind="stable")
+    classes = rows.drop_duplicates("threshold_mm")
+    records: list[dict[str, Any]] = rows.to_dict("records")
+    totals: dict[float, int] = {}
+    for row in records:
+        key = float(row["threshold_mm"])
+        totals[key] = totals.get(key, 0) + int(row["parcel_count"])
+    return {
+        "receipt": rcpt,
+        "classes": [
+            {
+                "threshold_mm": float(row["threshold_mm"]),
+                "threshold_in": float(row["threshold_in"]),
+                "label": str(row["label"]),
+                "parcel_count": totals[float(row["threshold_mm"])],
+            }
+            for row in classes.to_dict("records")
+        ],
+        "zips": [
+            {
+                "zip": str(row["zip"]),
+                "threshold_mm": float(row["threshold_mm"]),
+                "parcel_count": int(row["parcel_count"]),
+            }
+            for row in records
+        ],
+    }
+
+
+def storms_doc(entries: list[Doc], run_time: datetime) -> Doc:
+    """The storms index: the entries newest first, the confidence band, and the run time."""
+    return {
+        "confidence": swath.CONFIDENCE,
+        "run_time": _utc_text(run_time),
+        "package_version": version("hailprint"),
+        "radius_km_default": score.DEFAULT_RADIUS_KM,
+        "storms": sorted(entries, key=lambda entry: entry["storm_date"], reverse=True),
+    }
+
+
+def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
+    """The old entries with the new entries over them by storm date.
+
+    An entry stays only while its swath, reports, and pairs files exist under `data_dir`.
+    """
+    # shortcut: an entry stays until its directory vanishes, upgrade when a prune command is needed
+    merged = {e["storm_date"]: e for e in old} | {e["storm_date"]: e for e in new}
+    required = ("swath", "reports", "pairs")
+    return [
+        e for e in merged.values() if all((data_dir / e["files"][k]).exists() for k in required)
+    ]
+
+
+def swath_source(path: Path) -> tuple[Doc, float | None]:
+    """The MRMS source entry and the largest MESH value, both from the metadata of a swath file.
+
+    A file without the source, product, or confidence key raises ValueError that names the file.
+    """
+    metadata = pq.read_schema(path).metadata or {}
+    values = {key: metadata.get(key.encode(), b"").decode() for key in METADATA_KEYS}
+    missing = [key for key, value in values.items() if not value]
+    if missing:
+        raise ValueError(f"{path.name}: the metadata lacks {', '.join(missing)}")
+    max_mesh = metadata.get(b"max_mesh_mm", b"").decode()
+    entry = {"source": values["source"], "product": values["product"], "file": path.name}
+    return entry, float(max_mesh) if max_mesh else None
+
+
+def spc_source(storm_date: date) -> Doc:
+    """The source entry of the SPC daily CSV of one storm date."""
+    return {
+        "source": score.REPORT_SOURCE,
+        "product": SPC_PRODUCT,
+        "file": f"{storm_date:%y%m%d}.csv",
+    }
+
+
+def hcad_source(zips_name: str) -> Doc:
+    """The source entry of the HCAD parcel counts."""
+    return {"source": "hcad", "product": HCAD_PRODUCT, "file": zips_name}
+
+
+def _nullable(value: Any) -> float | None:
+    return None if pd.isna(value) else float(value)
+
+
+def _table_rows(table: pd.DataFrame) -> list[Doc]:
+    counts = score.COUNT_COLUMNS
+    return [
+        {
+            "threshold_mm": float(row["threshold_mm"]),
+            "threshold_in": float(row["threshold_in"]),
+            "label": str(row["label"]),
+            **{name: int(row[name]) for name in counts},
+            **{name: _nullable(row[name]) for name in score.METRIC_COLUMNS},
+            **{name: float(row[name]) for name in score.AREA_COLUMNS},
+        }
+        for row in table.to_dict("records")
+    ]
+
+
+def build_day(
+    storm_date: date,
+    swaths: gpd.GeoDataFrame,
+    nearby: gpd.GeoDataFrame,
+    *,
+    mrms: Doc,
+    max_mesh_mm: float | None,
+    spc: Doc,
+    zips: pd.DataFrame | None,
+    hcad: Doc | None,
+    facts: Doc | None,
+    run_time: datetime,
+) -> tuple[dict[str, str], Doc]:
+    """The serialised files of one storm date, by file name, and its entry for the storms index.
+
+    Every document passes its schema and `dumps` before this function returns. The pairs file
+    must re-score to the table of `score.score_day` at the default radius, or ValueError names
+    the pairs file. `facts` holds the report_count, max_size_in, and report_source of the
+    candidate file, or None when the date is absent there. `zips` and `hcad` are both None
+    when the date has no parcel counts.
+    """
+    day = score.score_day(swaths, nearby, storm_date, score.DEFAULT_RADIUS_KM)
+
+    def stamp(*sources: Doc) -> Doc:
+        return receipt(storm_date, list(sources), run_time)
+
+    documents = {
+        SWATH_FILE: ("swath", swath_doc(swaths, stamp(mrms))),
+        REPORTS_FILE: ("reports", reports_doc(nearby, stamp(spc))),
+        PAIRS_FILE: ("pairs", pairs_doc(swaths, nearby, stamp(mrms, spc))),
+    }
+    parcel_total = None
+    if zips is not None and hcad is not None:
+        zip_counts = zip_doc(zips, stamp(mrms, hcad))
+        documents[ZIPS_FILE] = ("zip-counts", zip_counts)
+        parcel_total = zip_counts["classes"][0]["parcel_count"] if zip_counts["classes"] else 0
+    texts = {}
+    for name, (kind, doc) in documents.items():
+        validate(doc, kind)
+        texts[name] = dumps(doc, kind)
+    again = rescore(json.loads(texts[PAIRS_FILE]), score.DEFAULT_RADIUS_KM)
+    try:
+        pd.testing.assert_frame_equal(again, day.table, check_exact=False, rtol=0, atol=1e-9)
+    except AssertionError as err:
+        raise ValueError(f"pairs: the re-scorer differs from score_day: {err}") from err
+    facts = facts or {}
+    folder = f"{STORMS_DIR}/{storm_date}"
+    entry = {
+        "storm_date": storm_date.isoformat(),
+        "report_count": facts.get("report_count"),
+        "max_size_in": facts.get("max_size_in"),
+        "report_source": facts.get("report_source"),
+        "max_mesh_mm": max_mesh_mm,
+        "scored_reports": len(day.pairs),
+        "excluded_reports": day.excluded,
+        "table": _table_rows(day.table),
+        "parcel_total": parcel_total,
+        "files": {
+            "swath": f"{folder}/{SWATH_FILE}",
+            "reports": f"{folder}/{REPORTS_FILE}",
+            "pairs": f"{folder}/{PAIRS_FILE}",
+            "zip_counts": f"{folder}/{ZIPS_FILE}" if ZIPS_FILE in texts else None,
+        },
+    }
+    return texts, entry

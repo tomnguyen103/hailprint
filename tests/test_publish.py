@@ -9,11 +9,12 @@ from importlib.resources import files
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
 import pytest
 import shapely
 from jsonschema import Draft202012Validator
 
-from hailprint import publish, reports, swath
+from hailprint import parcels, publish, reports, swath
 from hailprint.parcels import OWNER_FIELDS
 
 RUN_TIME = datetime(2024, 5, 29, 13, 0, 7, 987654, tzinfo=UTC)
@@ -24,7 +25,7 @@ SOURCES = [
         "file": "swaths-2024-05-28.parquet",
     }
 ]
-SCHEMAS = ["receipt", "swath", "reports", "pairs", "zip-counts"]
+SCHEMAS = ["receipt", "swath", "reports", "pairs", "zip-counts", "storms"]
 
 
 def _receipt():
@@ -537,3 +538,146 @@ def test_pairs_doc_refuses_classes_that_do_not_nest():
 
     with pytest.raises(ValueError, match="not inside the next lower class"):
         publish.pairs_doc(frame, nearby, _receipt())
+
+
+def _zip_frame(*rows):
+    return pd.DataFrame(
+        [
+            {
+                "storm_date": "2024-05-28",
+                "zip": zip_code,
+                "threshold_mm": mm,
+                "threshold_in": mm / 25.4,
+                "label": swath.label(mm),
+                "parcel_count": count,
+            }
+            for zip_code, mm, count in rows
+        ],
+        columns=parcels.ZIP_COLUMNS,
+    )
+
+
+def test_zip_doc_sums_the_rows_of_a_class_and_lists_the_zip_rows_by_class_then_zip():
+    frame = _zip_frame(
+        ("77003", 25.4, 2), ("77002", 19.05, 4), ("77003", 19.05, 6), ("77002", 25.4, 3)
+    )
+
+    doc = publish.zip_doc(frame, _receipt())
+
+    publish.validate(doc, "zip-counts")
+    assert [(c["threshold_mm"], c["parcel_count"]) for c in doc["classes"]] == [
+        (19.05, 10),
+        (25.4, 5),
+    ]
+    assert doc["classes"][0]["label"] == swath.label(19.05)
+    assert [(z["threshold_mm"], z["zip"], z["parcel_count"]) for z in doc["zips"]] == [
+        (19.05, "77002", 4),
+        (19.05, "77003", 6),
+        (25.4, "77002", 3),
+        (25.4, "77003", 2),
+    ]
+
+
+def test_zip_doc_keeps_the_unknown_zip_and_gives_an_empty_frame_empty_lists():
+    unknown = publish.zip_doc(_zip_frame((parcels.UNKNOWN_ZIP, 19.05, 1)), _receipt())
+    empty = publish.zip_doc(_zip_frame(), _receipt())
+
+    publish.validate(unknown, "zip-counts")
+    publish.validate(empty, "zip-counts")
+    assert unknown["zips"][0]["zip"] == "unknown"
+    assert (empty["classes"], empty["zips"]) == ([], [])
+
+
+def test_zip_doc_carries_counts_only_even_when_the_frame_has_more_columns():
+    frame = _zip_frame(("77002", 19.05, 4)).assign(hcad_num="0010010010010")
+
+    text = publish.dumps(publish.zip_doc(frame, _receipt()), "zip-counts")
+
+    assert "hcad_num" not in text
+    assert "0010010010010" not in text
+    assert set(json.loads(text)["zips"][0]) == {"zip", "threshold_mm", "parcel_count"}
+
+
+def _table_row(mm=19.05):
+    return {
+        "threshold_mm": mm,
+        "threshold_in": mm / 25.4,
+        "label": swath.label(mm),
+        "hits": 3,
+        "misses": 1,
+        "false_alarms": 2,
+        "correct_negatives": 4,
+        "pod": 0.75,
+        "far": None,
+        "csi": 0.5,
+        "hss": None,
+        "swath_km2": 12.5,
+        "unverifiable_km2": 3.25,
+    }
+
+
+def _entry(storm_date, **changes):
+    entry = {
+        "storm_date": storm_date,
+        "report_count": 10,
+        "max_size_in": 4.0,
+        "report_source": "wcm",
+        "max_mesh_mm": 73.2,
+        "scored_reports": 9,
+        "excluded_reports": 1,
+        "table": [_table_row(mm) for mm in swath.SIZE_CLASSES_MM],
+        "parcel_total": None,
+        "files": {
+            "swath": f"storms/{storm_date}/swath.geojson",
+            "reports": f"storms/{storm_date}/reports.geojson",
+            "pairs": f"storms/{storm_date}/pairs.json",
+            "zip_counts": None,
+        },
+    }
+    return entry | changes
+
+
+def test_storms_doc_sorts_the_entries_newest_first_and_states_the_band_and_the_run_time():
+    entries = [_entry("2023-06-23"), _entry("2024-05-28"), _entry("2024-04-01")]
+
+    doc = publish.storms_doc(entries, RUN_TIME)
+
+    publish.validate(doc, "storms")
+    assert [e["storm_date"] for e in doc["storms"]] == ["2024-05-28", "2024-04-01", "2023-06-23"]
+    assert doc["confidence"] == swath.CONFIDENCE
+    assert doc["run_time"] == "2024-05-29T13:00:07Z"
+    assert doc["package_version"] == version("hailprint")
+    assert doc["radius_km_default"] == 5
+
+
+def test_storms_doc_of_no_entry_validates():
+    doc = publish.storms_doc([], RUN_TIME)
+
+    publish.validate(doc, "storms")
+    assert doc["storms"] == []
+
+
+def test_a_storms_entry_with_null_report_facts_and_a_null_mesh_maximum_validates():
+    entry = _entry(
+        "2024-05-28", report_count=None, max_size_in=None, report_source=None, max_mesh_mm=None
+    )
+
+    publish.validate(publish.storms_doc([entry], RUN_TIME), "storms")
+
+
+def test_the_storms_schema_refuses_a_table_of_six_rows_and_an_extra_key():
+    short = _entry("2024-05-28")
+    short["table"] = short["table"][:6]
+    extra = _entry("2024-05-28", owner="x")
+
+    with pytest.raises(ValueError, match=r"storms: \$\.storms\[0\]\.table"):
+        publish.validate(publish.storms_doc([short], RUN_TIME), "storms")
+    with pytest.raises(ValueError, match=r"storms: \$\.storms\[0\]"):
+        publish.validate(publish.storms_doc([extra], RUN_TIME), "storms")
+
+
+def test_storms_doc_with_the_forbidden_word_stops_the_serialiser():
+    entry = _entry("2024-05-28", report_source="Damage")
+
+    with pytest.raises(ValueError, match="forbidden word"):
+        publish.dumps(publish.storms_doc([entry], RUN_TIME), "storms")

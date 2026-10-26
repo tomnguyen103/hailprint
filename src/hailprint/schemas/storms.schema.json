@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hailprint.invalid/schemas/storms.schema.json",
+  "title": "Storms index",
+  "description": "One entry per published storm date, newest first: the report facts, the score table at the default radius, and the relative path of each file.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["confidence", "run_time", "package_version", "radius_km_default", "storms"],
+  "properties": {
+    "confidence": { "type": "string", "minLength": 1 },
+    "run_time": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$" },
+    "package_version": { "type": "string", "minLength": 1 },
+    "radius_km_default": { "type": "integer", "minimum": 0 },
+    "storms": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "storm_date",
+          "report_count",
+          "max_size_in",
+          "report_source",
+          "max_mesh_mm",
+          "scored_reports",
+          "excluded_reports",
+          "table",
+          "parcel_total",
+          "files"
+        ],
+        "properties": {
+          "storm_date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "report_count": { "type": ["integer", "null"], "minimum": 0 },
+          "max_size_in": { "type": ["number", "null"], "minimum": 0 },
+          "report_source": { "type": ["string", "null"], "minLength": 1 },
+          "max_mesh_mm": { "type": ["number", "null"], "minimum": 0 },
+          "scored_reports": { "type": "integer", "minimum": 0 },
+          "excluded_reports": { "type": "integer", "minimum": 0 },
+          "table": {
+            "type": "array",
+            "minItems": 7,
+            "maxItems": 7,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "threshold_mm",
+                "threshold_in",
+                "label",
+                "hits",
+                "misses",
+                "false_alarms",
+                "correct_negatives",
+                "pod",
+                "far",
+                "csi",
+                "hss",
+                "swath_km2",
+                "unverifiable_km2"
+              ],
+              "properties": {
+                "threshold_mm": { "type": "number", "exclusiveMinimum": 0 },
+                "threshold_in": { "type": "number", "exclusiveMinimum": 0 },
+                "label": { "type": "string", "minLength": 1 },
+                "hits": { "type": "integer", "minimum": 0 },
+                "misses": { "type": "integer", "minimum": 0 },
+                "false_alarms": { "type": "integer", "minimum": 0 },
+                "correct_negatives": { "type": "integer", "minimum": 0 },
+                "pod": { "type": ["number", "null"] },
+                "far": { "type": ["number", "null"] },
+                "csi": { "type": ["number", "null"] },
+                "hss": { "type": ["number", "null"] },
+                "swath_km2": { "type": "number", "minimum": 0 },
+                "unverifiable_km2": { "type": "number", "minimum": 0 }
+              }
+            }
+          },
+          "parcel_total": { "type": ["integer", "null"], "minimum": 0 },
+          "files": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["swath", "reports", "pairs", "zip_counts"],
+            "properties": {
+              "swath": { "type": "string", "minLength": 1 },
+              "reports": { "type": "string", "minLength": 1 },
+              "pairs": { "type": "string", "minLength": 1 },
+              "zip_counts": { "type": ["string", "null"], "minLength": 1 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

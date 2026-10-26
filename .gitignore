@@ -1,6 +1,7 @@
 # data and outputs
 /data/
 out/
+site/data/
 *.grib2
 *.grib2.gz
 *.idx
