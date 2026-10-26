@@ -112,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
             score_days(args.storm_dates, args.radius_km)
         elif args.command == "publish":
             publish_days(args.storm_dates)
-    except (RuntimeError, FileNotFoundError, ValueError) as exc:
+    except (RuntimeError, OSError, ValueError) as exc:
         print(exc, file=sys.stderr)
         return 1
     return 0
@@ -262,19 +262,6 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _facts(path: Path) -> dict[str, dict]:
-    """The report facts of the candidate file by storm date; a blank cell becomes None."""
-    frame = pd.read_csv(path, dtype={"storm_date": str})
-    return {
-        row["storm_date"]: {
-            "report_count": None if pd.isna(row["report_count"]) else int(row["report_count"]),
-            "max_size_in": None if pd.isna(row["max_size_in"]) else float(row["max_size_in"]),
-            "report_source": None if pd.isna(row["report_source"]) else str(row["report_source"]),
-        }
-        for row in frame.to_dict("records")
-    }
-
-
 def publish_days(storm_dates: list[date]) -> list[Path]:
     """Write the site data files per storm date, then the storms index.
 
@@ -285,11 +272,14 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
     selected = _swath_files(storm_dates)
     if not candidates.CANDIDATES_PATH.exists():
         raise FileNotFoundError(f"run hailprint candidates first: {candidates.CANDIDATES_PATH}")
-    facts = _facts(candidates.CANDIDATES_PATH)
+    facts = candidates.read_facts(candidates.CANDIDATES_PATH)
     index_path = SITE_DATA_DIR / "storms.json"
     old: list[dict] = []
     if index_path.exists():
-        previous = json.loads(index_path.read_text(encoding="utf-8"))
+        try:
+            previous = json.loads(index_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ValueError(f"{index_path}: not valid JSON, delete it or fix it") from exc
         publish.validate(previous, "storms")
         old = previous["storms"]
     run_time = _utc_now()
@@ -297,7 +287,7 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
     for storm_date, swath_path in selected:
         try:
             text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, date.today())
-        except OSError as exc:
+        except RuntimeError as exc:
             print(f"{storm_date}: SPC fetch failed, skipped: {exc!r}", file=sys.stderr)
             continue
         if text is None:

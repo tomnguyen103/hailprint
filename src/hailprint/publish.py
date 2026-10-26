@@ -20,7 +20,7 @@ from referencing import Registry, Resource
 from shapely.geometry.polygon import orient
 
 from hailprint import score, swath
-from hailprint.files import FORBIDDEN_WORD
+from hailprint.files import FORBIDDEN_WORD, METADATA
 from hailprint.parcels import OWNER_FIELDS
 
 Doc = dict[str, Any]
@@ -33,7 +33,7 @@ SWATH_FILE = "swath.geojson"
 REPORTS_FILE = "reports.geojson"
 PAIRS_FILE = "pairs.json"
 ZIPS_FILE = "zip-counts.json"
-METADATA_KEYS = ("source", "product", "confidence")
+METADATA_KEYS = tuple(METADATA)
 SPC_PRODUCT = "preliminary hail reports"
 HCAD_PRODUCT = "Parcels.gdb"
 
@@ -438,4 +438,5 @@ def build_day(
             "zip_counts": f"{folder}/{ZIPS_FILE}" if ZIPS_FILE in texts else None,
         },
     }
+    validate(storms_doc([entry], run_time), "storms")
     return texts, entry

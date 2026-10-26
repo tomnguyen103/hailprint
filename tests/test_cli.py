@@ -4,7 +4,6 @@ import json
 import shutil
 from datetime import UTC, date, datetime
 from pathlib import Path
-from urllib.error import URLError
 
 import geopandas as gpd
 import pandas as pd
@@ -293,7 +292,7 @@ def test_a_failed_validation_writes_nothing_for_that_date(env, monkeypatch, caps
     assert [e["storm_date"] for e in env.index()["storms"]] == ["2023-06-23"]
 
 
-@pytest.mark.parametrize("outcome", [None, URLError("no route")], ids=["404", "URLError"])
+@pytest.mark.parametrize("outcome", [None, RuntimeError("no route")], ids=["404", "RuntimeError"])
 def test_a_date_whose_spc_csv_cannot_be_fetched_is_skipped_with_a_stderr_line(env, capsys, outcome):
     env.add_day(EARLIER)
     env.add_day(LATER)
@@ -340,7 +339,7 @@ def test_a_malformed_date_is_rejected_by_the_parser(env):
     assert stop.value.code == 2
 
 
-def test_a_failed_rename_leaves_the_old_file_intact_and_no_tmp_file(env, monkeypatch):
+def test_a_failed_rename_leaves_the_old_file_intact_and_no_tmp_file(env, monkeypatch, capsys):
     env.add_day(LATER)
     cli.main(["publish", "2024-05-28"])
     target = env.storm_dir(LATER) / "swath.geojson"
@@ -355,9 +354,9 @@ def test_a_failed_rename_leaves_the_old_file_intact_and_no_tmp_file(env, monkeyp
     monkeypatch.setattr(Path, "replace", broken)
     monkeypatch.setattr(cli, "_utc_now", lambda: datetime(2025, 1, 1, tzinfo=UTC))
 
-    with pytest.raises(OSError, match="disk full"):
-        cli.main(["publish", "2024-05-28"])
+    assert cli.main(["publish", "2024-05-28"]) == 1
 
+    assert "disk full" in capsys.readouterr().err
     assert target.read_bytes() == old
     assert not [p for p in env.site.rglob("*.tmp")]
 
@@ -370,3 +369,24 @@ def test_an_index_that_breaks_its_schema_stops_the_run_with_the_file_kind(env):
 
     assert cli.main(["publish", "2024-05-28"]) == 1
     assert json.loads(index.read_text(encoding="utf-8")) == {"storms": "none"}
+
+
+def test_a_write_error_stops_the_run_with_exit_1_and_the_reason(env, monkeypatch, capsys):
+    env.add_day(LATER)
+
+    def broken(text, path):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(cli.files, "write_text_atomic", broken)
+
+    assert cli.main(["publish"]) == 1
+    assert "disk full" in capsys.readouterr().err
+
+
+def test_an_index_that_is_not_json_stops_the_run_and_names_the_file(env, capsys):
+    env.add_day(LATER)
+    env.site.mkdir(parents=True)
+    (env.site / "storms.json").write_text("{", encoding="utf-8")
+
+    assert cli.main(["publish"]) == 1
+    assert "storms.json" in capsys.readouterr().err

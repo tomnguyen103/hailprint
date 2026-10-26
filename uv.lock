@@ -210,6 +210,7 @@ dependencies = [
     { name = "pyarrow" },
     { name = "pyogrio" },
     { name = "rasterio" },
+    { name = "referencing" },
     { name = "shapely" },
     { name = "xarray" },
 ]
@@ -232,6 +233,7 @@ requires-dist = [
     { name = "pyarrow" },
     { name = "pyogrio" },
     { name = "rasterio" },
+    { name = "referencing", specifier = ">=0.37.0" },
     { name = "shapely" },
     { name = "xarray" },
 ]

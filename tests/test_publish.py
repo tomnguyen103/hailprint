@@ -14,6 +14,7 @@ import pytest
 import shapely
 from jsonschema import Draft202012Validator
 
+from hailprint import files as files_module
 from hailprint import parcels, publish, reports, swath
 from hailprint.parcels import OWNER_FIELDS
 
@@ -706,3 +707,123 @@ def test_storms_doc_with_the_forbidden_word_stops_the_serialiser():
 
     with pytest.raises(ValueError, match="forbidden word"):
         publish.dumps(publish.storms_doc([entry], RUN_TIME), "storms")
+
+
+def _walk(node):
+    """Every (key, value) pair of a JSON document, at any depth."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            yield key, value
+            yield from _walk(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _walk(value)
+
+
+def test_the_schemas_pin_the_size_class_count_to_the_tuple():
+    folder = files("hailprint") / "schemas"
+    pins = [
+        value
+        for path in folder.iterdir()
+        if path.name.endswith(".schema.json")
+        for key, value in _walk(json.loads(path.read_text(encoding="utf-8")))
+        if key in ("minItems", "maxItems")
+    ]
+
+    # swath:1, pairs:2, zip-counts:1, storms:2 pin the class count; the radius arrays pin 21
+    assert pins.count(len(swath.SIZE_CLASSES_MM)) == 6
+
+
+def test_swath_source_reads_the_source_entry_and_the_mesh_maximum_from_the_metadata(tmp_path):
+    path = files_module.write_atomic(
+        _fixture_swaths(), tmp_path / "swath-2024-05-28.parquet", metadata={"max_mesh_mm": "31.5"}
+    )
+
+    entry, max_mesh_mm = publish.swath_source(path)
+
+    assert entry == {
+        "source": files_module.SOURCE,
+        "product": files_module.PRODUCT,
+        "file": "swath-2024-05-28.parquet",
+    }
+    assert max_mesh_mm == 31.5
+
+
+def test_swath_source_gives_none_without_a_mesh_maximum_and_refuses_bare_metadata(tmp_path):
+    plain = files_module.write_atomic(_fixture_swaths(), tmp_path / "plain.parquet")
+    bare = tmp_path / "bare.parquet"
+    _fixture_swaths().to_parquet(bare)
+
+    assert publish.swath_source(plain)[1] is None
+    with pytest.raises(ValueError, match="bare.parquet: the metadata lacks source, product, conf"):
+        publish.swath_source(bare)
+
+
+def _build_day(zips=None, facts=None):
+    nearby = reports.nearby_reports(
+        date(2024, 5, 28),
+        _spc_csv(("100", "Spring", 30.08, -95.42, ""), ("175", "Katy", 29.79, -95.82, "")),
+    )
+    return publish.build_day(
+        date(2024, 5, 28),
+        _fixture_swaths(),
+        nearby,
+        mrms=SOURCES[0],
+        max_mesh_mm=73.2,
+        spc=publish.spc_source(date(2024, 5, 28)),
+        zips=zips,
+        hcad=None if zips is None else publish.hcad_source("zip-counts-2024-05-28.parquet"),
+        facts=facts,
+        run_time=RUN_TIME,
+    )
+
+
+def test_build_day_without_zips_gives_three_texts_and_an_entry_without_parcel_counts():
+    texts, entry = _build_day()
+
+    assert sorted(texts) == ["pairs.json", "reports.geojson", "swath.geojson"]
+    assert all(json.loads(text) for text in texts.values())
+    assert entry["parcel_total"] is None
+    assert entry["files"]["zip_counts"] is None
+    assert entry["scored_reports"] == 2
+
+
+def test_build_day_with_zips_gives_four_texts_and_the_parcel_total_of_the_frame():
+    zips = _zip_frame(("77001", 19.05, 3), ("77002", 19.05, 4))
+
+    texts, entry = _build_day(zips=zips)
+
+    assert sorted(texts) == ["pairs.json", "reports.geojson", "swath.geojson", "zip-counts.json"]
+    assert all(json.loads(text) for text in texts.values())
+    assert entry["parcel_total"] == int(zips["parcel_count"].sum()) == 7
+    assert entry["files"]["zip_counts"].endswith("zip-counts.json")
+
+
+def test_build_day_refuses_an_entry_that_breaks_the_storms_schema():
+    facts = {"report_count": -1, "max_size_in": 1.0, "report_source": "wcm"}
+
+    with pytest.raises(ValueError, match="storms"):
+        _build_day(facts=facts)
+
+
+def test_merge_entries_keeps_an_old_entry_with_files_drops_one_without_and_replaces_by_date(
+    tmp_path,
+):
+    for storm_date in ("2023-06-23", "2024-05-28"):
+        folder = tmp_path / "storms" / storm_date
+        folder.mkdir(parents=True)
+        for name in ("swath.geojson", "reports.geojson", "pairs.json"):
+            (folder / name).write_text("{}", encoding="utf-8")
+    old = [_entry("2023-06-23"), _entry("2024-04-01"), _entry("2024-05-28", report_count=1)]
+    new = [_entry("2024-05-28", report_count=2)]
+
+    merged = publish.merge_entries(old, new, tmp_path)
+
+    assert {e["storm_date"]: e["report_count"] for e in merged} == {
+        "2023-06-23": 10,
+        "2024-05-28": 2,
+    }
+    assert [e["storm_date"] for e in publish.storms_doc(merged, RUN_TIME)["storms"]] == [
+        "2024-05-28",
+        "2023-06-23",
+    ]
