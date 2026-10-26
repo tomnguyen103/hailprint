@@ -11,7 +11,7 @@ Oracle: a hand count of two days (below) and a raster oracle that reads the raw 
 - Reports come from the SPC preliminary daily CSV, inside the 50 km neighbourhood buffer.
 - The sample holds reports only. A correct negative is therefore a report smaller than the class, not an empty place.
 - The 25 days are the top-ranked candidate days, so every day has reports. `score` with no argument scores every swath file on disk, so ingesting more days changes the pooled numbers. The pooled numbers describe report-rich days, not a random sample of days.
-- The exclusion removes 25 of 124 reports, 12 of them on one day. 18 of the 99 scored reports lie outside Harris County, TX by county and state name (the 50 km neighbourhood).
+- The exclusion removes 25 of 124 reports, 12 of them on one day. 18 of the 99 scored reports lie outside Harris County, TX by county and state name, compared without case (the 50 km neighbourhood). The SPC daily CSV spells the county in upper case on some days (24 of the 81 Harris rows). `reports.harris_reports` compares with case, so it drops those rows. This is a PR B follow-up and does not change any score.
 
 ## Run
 
@@ -30,7 +30,7 @@ uv run hailprint score
 | Scored reports | 99 |
 | Excluded reports (near the crop edge) | 25 |
 | Days with 0 scored reports | 2 (2024-05-13, 2025-06-08) |
-| Test result | 180 passed (lint, format, and pyright clean), 2026-10-26 |
+| Test result | 183 passed (lint, format, and pyright clean), 2026-10-26 |
 
 Largest exclusions: 2024-03-15 (12 of 20 reports), 2023-04-15 (5 of 6).
 
@@ -44,7 +44,7 @@ Largest exclusions: 2024-03-15 (12 of 20 reports), 2023-04-15 (5 of 6).
 | >= 1.50 in | 99 | 16 | 9 | 36 | 38 | 0.64 | 0.69 | 0.26 | 0.11 |
 | >= 1.75 in | 99 | 5 | 9 | 11 | 74 | 0.36 | 0.69 | 0.20 | 0.21 |
 | >= 2.00 in | 99 | 0 | 8 | 4 | 87 | 0.00 | 1.00 | 0.00 | -0.06 |
-| >= 2.50 in | 99 | 0 | 0 | 1 | 98 | n/a | 1.00 | 0.00 | 0.00 |
+| >= 2.50 in | 99 | 0 | 0 | 1 | 98 | nan | 1.00 | 0.00 | 0.00 |
 
 The 0.75 in and 1.00 in rows have 0 false alarms and 0 correct negatives, because no report is smaller than 1.00 in. With no non-event, FAR is 0.00 and CSI equals POD by construction. Read these two rows as POD only: their FAR, CSI, and HSS carry no information. The `score` command prints a note under the table when a row has no non-event (0 false alarms and 0 correct negatives).
 
@@ -89,7 +89,7 @@ Reason found:
 - 61 of the 99 reports are exactly 1.00 in. SPC reports hail in coarse size steps, and 1.00 in is the most common step.
 - All 39 false alarms at 1.25 in are reports of exactly 1.00 in. 20 of them lie within 1 km of the 1.25 in swath. A false alarm here means real severe hail one size step below the class, near the swath.
 - The table scores the size step between two reports, so it cannot reach the skill of a dense ground truth. The band does not apply to this sample.
-- The HSS rises with the class, to 0.21 at 1.75 in, as more reports fall below the class and outside the swath. It stays below 0.25 at every class.
+- The HSS rises from 0.02 at 1.25 in to 0.21 at 1.75 in, as more reports fall below the class and outside the swath. It falls to -0.06 at 2.00 in, where 8 events and 0 hits leave no skill. It stays below 0.25 at every class.
 
 The value 0.02 describes this sample design. It does not bound the true skill: the 5 km radius moves hits and false alarms together, and the data do not show the direction of the bias. A dense null sample (NCEI Storm Events or a hail-pad network) is the upgrade named in the `shortcut:` comment in `score.py`.
 
