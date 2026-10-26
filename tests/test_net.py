@@ -1,3 +1,4 @@
+import http.client
 import io
 import urllib.error
 
@@ -53,6 +54,16 @@ def test_get_stops_after_three_tries_and_raises_the_last_error(monkeypatch):
         net.get(URL)
 
     assert exc.value is errors[-1]
+    assert len(calls) == 3
+    assert sleeps == [0.5, 1.0]
+
+
+def test_get_retries_a_connection_reset_and_a_short_read(monkeypatch):
+    calls, sleeps = _script(
+        monkeypatch, ConnectionResetError("reset"), http.client.IncompleteRead(b"x"), b"data"
+    )
+
+    assert net.get(URL) == b"data"
     assert len(calls) == 3
     assert sleeps == [0.5, 1.0]
 

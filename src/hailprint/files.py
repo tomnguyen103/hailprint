@@ -1,5 +1,6 @@
 """Atomic frame writes: a .tmp sibling, then one rename over the target."""
 
+import os
 from pathlib import Path
 
 import geopandas as gpd
@@ -14,18 +15,25 @@ CONFIDENCE = (
     "against dense ground truth (Ortega 2018)"
 )
 METADATA = {"source": SOURCE, "product": PRODUCT, "confidence": CONFIDENCE}
+FORBIDDEN_WORD = "damage"
 
 
 def write_atomic(frame: pd.DataFrame, path: Path, metadata: dict[str, str] | None = None) -> Path:
-    """Write to a .tmp sibling, then rename over the target.
+    """Write to a per-process .tmp sibling, then rename over the target.
 
     CSV by suffix, else Parquet (GeoParquet for a GeoDataFrame) with the source, product, and
     confidence metadata. The optional metadata adds keys or overrides these defaults.
+    A metadata key or value that holds the forbidden word raises ValueError before any write.
     A failed write removes the .tmp file and leaves the old target intact.
     """
     path = Path(path)
+    merged = {**METADATA, **(metadata or {})}
+    for text in [*merged, *merged.values()]:
+        if FORBIDDEN_WORD in text.lower():
+            raise ValueError(f"forbidden word in metadata: {text!r}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(path.name + ".tmp")
+    # the pid keeps two concurrent runs (cron and a manual run) off one .tmp file
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
         if path.suffix == ".csv":
             frame.to_csv(tmp, index=False)
@@ -35,7 +43,6 @@ def write_atomic(frame: pd.DataFrame, path: Path, metadata: dict[str, str] | Non
                 table = pq.read_table(tmp)
             else:
                 table = pa.Table.from_pandas(frame, preserve_index=False)
-            merged = {**METADATA, **(metadata or {})}
             extra = {k.encode(): v.encode() for k, v in merged.items()}
             pq.write_table(table.replace_schema_metadata({**table.schema.metadata, **extra}), tmp)
         tmp.replace(path)

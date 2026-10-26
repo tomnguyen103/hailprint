@@ -35,6 +35,6 @@ def test_outputs_contain_no_owner_field_or_forbidden_word():
 )
 def test_every_derived_parquet_carries_the_provenance_keys():
     for path in paths.DERIVED_DIR.rglob("*.parquet"):
-        meta = pq.read_schema(path).metadata
+        meta = pq.read_schema(path).metadata or {}
         for key in (b"source", b"product", b"confidence"):
             assert key in meta, (path, key)

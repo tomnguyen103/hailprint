@@ -1,5 +1,6 @@
 """Candidate days: Harris County hail days from the SPC WCM database, ranked by report count."""
 
+import http.client
 import zipfile
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -31,7 +32,7 @@ def fetch_database(path: Path = WCM_PATH) -> Path:
     tmp = path.with_suffix(".tmp")
     try:
         tmp.write_bytes(net.get(WCM_URL, timeout=60))
-    except OSError as exc:
+    except (OSError, http.client.HTTPException) as exc:
         tmp.unlink(missing_ok=True)
         raise RuntimeError(f"WCM download failed: {exc}") from exc
     if not zipfile.is_zipfile(tmp):

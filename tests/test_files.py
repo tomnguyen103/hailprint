@@ -4,7 +4,7 @@ import pyarrow.parquet as pq
 import pytest
 from shapely.geometry import Point
 
-from hailprint import files
+from hailprint import files, mesh
 
 
 def test_write_atomic_writes_csv_and_leaves_no_tmp_sibling(tmp_path):
@@ -13,7 +13,7 @@ def test_write_atomic_writes_csv_and_leaves_no_tmp_sibling(tmp_path):
     files.write_atomic(pd.DataFrame({"n": [1, 2]}), path)
 
     assert pd.read_csv(path)["n"].tolist() == [1, 2]
-    assert not path.with_name(path.name + ".tmp").exists()
+    assert list(path.parent.glob("*.tmp")) == []
 
 
 def test_write_atomic_parquet_carries_source_product_and_confidence(tmp_path):
@@ -38,6 +38,32 @@ def test_write_atomic_writes_a_geodataframe_with_extra_metadata(tmp_path):
     assert meta[b"source"] == b"noaa-mrms-pds"
     assert meta[b"file_count"] == b"1"
     assert b"geo" in meta
+
+
+def test_write_atomic_ignores_a_stale_tmp_file_from_another_run(tmp_path):
+    path = tmp_path / "x.parquet"
+    stale = tmp_path / "x.parquet.tmp"
+    stale.write_bytes(b"another run is writing here")
+
+    files.write_atomic(pd.DataFrame({"n": [1]}), path)
+
+    assert pq.read_table(path)["n"].to_pylist() == [1]
+    assert stale.read_bytes() == b"another run is writing here"
+
+
+def test_write_atomic_rejects_the_forbidden_word_in_caller_metadata(tmp_path):
+    path = tmp_path / "x.parquet"
+
+    with pytest.raises(ValueError):
+        files.write_atomic(pd.DataFrame({"n": [1]}), path, {"confidence": "Hail Damage score"})
+
+    assert not path.exists()
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_provenance_constants_match_the_mesh_module():
+    assert files.PRODUCT == mesh.PRODUCT
+    assert files.SOURCE == mesh.BUCKET
 
 
 def test_write_atomic_failure_keeps_the_old_file_and_leaves_no_tmp(tmp_path, monkeypatch):

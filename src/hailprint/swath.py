@@ -11,11 +11,13 @@ from rasterio.features import shapes
 from rasterio.transform import from_origin
 
 from hailprint import files
-from hailprint.files import CONFIDENCE as CONFIDENCE  # re-export: callers read swath.CONFIDENCE
+from hailprint.files import (  # re-export: callers read swath.CONFIDENCE and swath.FORBIDDEN_WORD
+    CONFIDENCE as CONFIDENCE,
+)
+from hailprint.files import FORBIDDEN_WORD as FORBIDDEN_WORD
 
 SIZE_CLASSES_MM = (19.05, 25.4, 31.75, 38.1, 44.45, 50.8, 63.5)
 COLUMNS = ["storm_date", "threshold_mm", "threshold_in", "label", "geometry"]
-FORBIDDEN_WORD = "damage"
 
 
 def _transform(da: xr.DataArray):
@@ -62,7 +64,8 @@ def write_swaths(
         "file_count": str(file_count),
         "max_mesh_mm": "" if max_mesh_mm is None else str(max_mesh_mm),
     }
-    for text in [*gdf["label"].tolist(), *metadata.values(), *files.METADATA.values()]:
+    # write_atomic scans the metadata; the labels are columns, so they are scanned here
+    for text in gdf["label"].tolist():
         if FORBIDDEN_WORD in text.lower():
             raise ValueError(f"forbidden word in swath text: {text!r}")
     return files.write_atomic(gdf, path, metadata)
