@@ -83,9 +83,10 @@ Conventions that span modules:
   is the neighbourhood buffer. `candidates.all_days` caches each daily CSV older than
   `FRESH_DAYS` at `data/raw/spc/daily/<yymmdd>.csv`. `candidate-days.csv` columns are
   `storm_date, report_count, max_size_in, has_12z, report_source`.
-- **Published files**: every file under `site/data/` goes through `publish.dumps`, which validates against
-  the schema in `src/hailprint/schemas/` and scans the text. The receipt copies `source` and `product`
-  from the input Parquet metadata into `sources`, and carries the one confidence band
+- **Published files**: every file under `site/data/` goes through `publish.validate`, which checks the
+  schema in `src/hailprint/schemas/`, then `publish.dumps`, which scans the text. The receipt copies
+  `source` and `product` from the input Parquet metadata into `sources`, and carries the one
+  confidence band
   `swath.CONFIDENCE`. `pairs.json` is radius-free: the browser and `publish.rescore` apply the
   radius rule (scored when `edge_m > R*1000 + EDGE_M`; forecast when `dist_m <= R*1000`) at read
   time, so `score` and `publish` agree at every whole km.
