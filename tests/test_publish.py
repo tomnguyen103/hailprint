@@ -281,12 +281,37 @@ def test_swath_doc_of_the_fixture_day_has_one_multipolygon_per_class_sorted_by_s
     props = [f["properties"] for f in doc["features"]]
     sizes = sorted(swaths["threshold_mm"])
     assert [p["threshold_mm"] for p in props] == sizes
-    assert [p["threshold_in"] for p in props] == [mm / 25.4 for mm in sizes]
+    assert [p["threshold_in"] for p in props] == [round(mm / 25.4, 2) for mm in sizes]
     assert [p["label"] for p in props] == [swath.label(mm) for mm in sizes]
     assert {f["geometry"]["type"] for f in doc["features"]} == {"MultiPolygon"}
     metric_km2 = swaths.sort_values("threshold_mm").to_crs("EPSG:32615").area / 1e6
     assert [p["area_km2"] for p in props] == pytest.approx(metric_km2.tolist(), rel=1e-3)
     assert doc["receipt"] == _receipt()
+
+
+def test_every_builder_writes_the_size_class_in_inches_without_float_noise():
+    swaths = _fixture_swaths()
+    rcpt = _receipt()
+    frame = gpd.GeoDataFrame(
+        {"size_in": [1.0]}, geometry=gpd.points_from_xy([-95.4], [29.8]), crs="EPSG:4326"
+    )
+
+    inches = {
+        "swath": [
+            f["properties"]["threshold_in"] for f in publish.swath_doc(swaths, rcpt)["features"]
+        ],
+        "pairs": [c["threshold_in"] for c in publish.pairs_doc(swaths, frame, rcpt)["classes"]],
+        "zips": [
+            c["threshold_in"]
+            for c in publish.zip_doc(_zip_frame(("77002", 19.05, 1)), rcpt)["classes"]
+        ],
+    }
+
+    assert 19.05 / 25.4 != 0.75  # the noise this test guards against
+    # the fixture day has no 2.5 in class
+    assert inches["swath"] == [0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+    assert inches["pairs"] == [0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5]
+    assert inches["zips"] == [0.75]
 
 
 def test_swath_doc_exterior_rings_run_counter_clockwise_and_holes_clockwise():

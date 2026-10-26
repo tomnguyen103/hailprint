@@ -92,6 +92,11 @@ def dumps(doc: Doc, kind: str) -> str:
     return text
 
 
+def _inches(threshold_mm: float) -> float:
+    """The size class in inches, exact to the hundredth; `mm / 25.4` alone carries float noise."""
+    return round(threshold_mm / 25.4, 2)
+
+
 def _utc_text(run_time: datetime) -> str:
     if run_time.tzinfo is None:
         raise ValueError("run_time needs a time zone")
@@ -141,7 +146,7 @@ def swath_doc(swaths: gpd.GeoDataFrame, rcpt: Doc) -> Doc:
             "type": "Feature",
             "properties": {
                 "threshold_mm": float(row["threshold_mm"]),
-                "threshold_in": float(row["threshold_in"]),
+                "threshold_in": _inches(float(row["threshold_mm"])),
                 "label": str(row["label"]),
                 "area_km2": float(area_m2) / 1e6,
             },
@@ -200,7 +205,7 @@ def pairs_doc(swaths: gpd.GeoDataFrame, frame: gpd.GeoDataFrame, rcpt: Doc) -> D
     classes = [
         {
             "threshold_mm": float(mm),
-            "threshold_in": mm / 25.4,
+            "threshold_in": _inches(mm),
             "label": swath.label(mm),
             "swath_km2": areas[0][index][0],
             "unverifiable_km2": [at_km[index][1] for at_km in areas],
@@ -280,7 +285,7 @@ def zip_doc(zips: pd.DataFrame, rcpt: Doc) -> Doc:
         "classes": [
             {
                 "threshold_mm": float(row["threshold_mm"]),
-                "threshold_in": float(row["threshold_in"]),
+                "threshold_in": _inches(float(row["threshold_mm"])),
                 "label": str(row["label"]),
                 "parcel_count": totals[float(row["threshold_mm"])],
             }
@@ -359,7 +364,7 @@ def _table_rows(table: pd.DataFrame) -> list[Doc]:
     return [
         {
             "threshold_mm": float(row["threshold_mm"]),
-            "threshold_in": float(row["threshold_in"]),
+            "threshold_in": _inches(float(row["threshold_mm"])),
             "label": str(row["label"]),
             **{name: int(row[name]) for name in counts},
             **{name: _nullable(row[name]) for name in score.METRIC_COLUMNS},

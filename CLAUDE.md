@@ -23,14 +23,15 @@ uv run hailprint index                      # archive index from one S3 bucket l
 uv run hailprint candidates --top 20        # needs `index` first
 uv run hailprint parcels 2024-05-28         # needs `ingest` for that date and the HCAD gdb
 uv run hailprint score --radius-km 5        # needs `ingest`; scores every swath file against SPC daily CSVs
+uv run hailprint publish                    # needs `ingest`; writes site/data/ (ZIP counts only where `parcels` ran)
 ```
 
 Tests that need downloaded data self-skip: `needs_raw_mesh` (the 12Z GRIB2 under
 `data/raw/mesh/`), `needs_wcm` (the SPC WCM zip under `data/raw/spc/`), and `needs_hcad` (the
 HCAD gdb and the 2024-05-28 swath file), all in `tests/conftest.py`. `tests/test_parcels.py` uses the committed fixture
 `tests/fixtures/parcels_sample.gpkg`, so parcel logic is testable without HCAD data.
-`tests/test_outputs_clean.py` scans every file in `out/` and `data/derived/` for owner fields and
-the word "damage".
+`tests/test_outputs_clean.py` scans every file in `out/`, `data/derived/`, and `site/data/` for owner
+fields and the word "damage", and every published file for `NaN` and `Infinity`.
 
 ## Architecture
 
@@ -45,19 +46,22 @@ reports.py    SPC preliminary hail CSV for the day -> points with county and sta
 plot.py       swaths + county outline + report points -> PNG (Agg backend)
 archive.py    one bucket listing -> one row per archive day (storm_date, file_count, bytes, has_12z)
 candidates.py SPC WCM hail database -> Harris County days (FIPS 201); all_days adds the days after the WCM end from SPC daily CSVs -> ranked, joined with the index
-parcels.py    HCAD Parcels.gdb -> allow-listed columns only, layer CRS -> one sjoin -> distinct hcad_num per size class
+parcels.py    HCAD Parcels.gdb -> allow-listed columns only, layer CRS -> one sjoin -> distinct hcad_num per size class and per ZIP
 score.py      swaths + nearby_reports -> per scored report, metre distance to each size class -> contingency table (hits, misses, false alarms, correct negatives) -> POD, FAR, CSI, HSS;
               scoring radius 5 km default, 20 km max; reports within radius + 1 km of the crop edge are excluded (scoring domain); unverifiable area = swath farther than the radius from every report;
-              pool() sums counts and areas across days and recomputes the metrics
+              pool() sums counts and areas across days and recomputes the metrics; edge_m() is the signed metre distance to the crop edge
+publish.py    swaths + nearby_reports + ZIP counts -> validated JSON with a receipt under site/data/storms/<date>/ (swath.geojson, reports.geojson,
+              radius-free pairs.json with edge_m and per-class distances, zip-counts.json) and the storms.json index; rescore(pairs, R) recomputes
+              the contingency table in Python for any whole-km radius; dumps() refuses NaN, the forbidden word, and owner fields
 county.py     committed Harris County GeoJSON (package data) -> outline() and bbox()
 files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata
-paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR; every data path hangs from it
+paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR; every data path hangs from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
-__main__.py   argparse CLI wiring the five commands and the fixed paths under data/ and out/
+__main__.py   argparse CLI wiring the six commands and the fixed paths under data/, out/, and site/data/
 ```
 
 Data paths hang from `paths.ROOT`, so a command writes under the repo `data/` and `out/` from any
-working directory. `data/` and `out/` are gitignored. No module holds a relative `Path("data...")`.
+working directory. `data/`, `out/`, and `site/data/` are gitignored. No module holds a relative `Path("data...")`.
 
 Conventions that span modules:
 
@@ -79,6 +83,11 @@ Conventions that span modules:
   is the neighbourhood buffer. `candidates.all_days` caches each daily CSV older than
   `FRESH_DAYS` at `data/raw/spc/daily/<yymmdd>.csv`. `candidate-days.csv` columns are
   `storm_date, report_count, max_size_in, has_12z, report_source`.
+- **Published files**: every file under `site/data/` goes through `publish.dumps`, which validates against
+  the schema in `src/hailprint/schemas/` and scans the text. The receipt copies `source`, `product`,
+  `confidence` from the input Parquet metadata. `pairs.json` is radius-free: the browser and
+  `publish.rescore` apply the radius rule (scored when `edge_m > R*1000 + EDGE_M`; forecast when
+  `dist_m <= R*1000`) at read time, so `score` and `publish` agree at every whole km.
 - **Scoring**: the sample unit is the scored report. A class is a forecast for a report when the swath
   lies within the scoring radius (distance 0 inside). `score` outputs (`pairs-<date>.parquet`,
   `scores-<date>.parquet` under `data/derived/scores/`) carry `radius_km` and `report_source`

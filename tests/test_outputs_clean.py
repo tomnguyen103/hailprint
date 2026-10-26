@@ -7,7 +7,9 @@ from hailprint import paths
 from hailprint.parcels import OWNER_FIELDS
 from hailprint.swath import FORBIDDEN_WORD
 
-OUTPUT_DIRS = [paths.OUT_DIR, paths.DERIVED_DIR]
+OUTPUT_DIRS = [paths.OUT_DIR, paths.DERIVED_DIR, paths.SITE_DATA_DIR]
+# JSON has no NaN or Infinity literal; a browser JSON.parse rejects both
+NON_JSON_TOKENS = ("NaN", "Infinity")
 
 
 def _files():
@@ -31,6 +33,14 @@ def test_outputs_contain_no_owner_field_or_forbidden_word():
         assert FORBIDDEN_WORD not in lowered, path
         for field in OWNER_FIELDS:
             assert field.lower() not in lowered, (path, field)
+
+
+@pytest.mark.skipif(not paths.SITE_DATA_DIR.exists(), reason="no published files yet")
+def test_published_files_hold_no_non_json_token():
+    for path in paths.SITE_DATA_DIR.rglob("*.*json"):
+        text = path.read_text(encoding="utf-8")
+        for token in NON_JSON_TOKENS:
+            assert token not in text, (path, token)
 
 
 @pytest.mark.skipif(
