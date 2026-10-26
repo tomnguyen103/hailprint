@@ -2,11 +2,12 @@
 
 import csv
 import io
-import urllib.request
 from datetime import date
 
 import geopandas as gpd
 import pandas as pd
+
+from hailprint import net
 
 SPC_URL = "https://www.spc.noaa.gov/climo/reports/{storm_date:%y%m%d}_rpts_hail.csv"
 COLUMNS = ["time", "location", "size_in"]
@@ -14,8 +15,7 @@ COLUMNS = ["time", "location", "size_in"]
 
 def fetch_hail_csv(storm_date: date) -> str:
     """Return the SPC hail CSV text for the date."""
-    with urllib.request.urlopen(SPC_URL.format(storm_date=storm_date), timeout=30) as response:
-        return response.read().decode()
+    return net.get(SPC_URL.format(storm_date=storm_date), timeout=30).decode()
 
 
 def harris_reports(storm_date: date, text: str | None = None) -> gpd.GeoDataFrame:

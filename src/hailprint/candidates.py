@@ -1,13 +1,12 @@
 """Candidate days: Harris County hail days from the SPC WCM database, ranked by report count."""
 
-import shutil
-import urllib.request
 import zipfile
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 import pandas as pd
 
+from hailprint import net
 from hailprint.paths import DERIVED_DIR, RAW_DIR
 
 # shortcut: the 1955-2025 file holds no 2026 day, upgrade when SPC publishes the 2026 file
@@ -31,8 +30,7 @@ def fetch_database(path: Path = WCM_PATH) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     try:
-        with urllib.request.urlopen(WCM_URL, timeout=60) as response, tmp.open("wb") as out:
-            shutil.copyfileobj(response, out)
+        tmp.write_bytes(net.get(WCM_URL, timeout=60))
     except OSError as exc:
         tmp.unlink(missing_ok=True)
         raise RuntimeError(f"WCM download failed: {exc}") from exc

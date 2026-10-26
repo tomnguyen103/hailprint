@@ -206,3 +206,10 @@ def test_daily_max_attrs_hold_the_decode_keys_and_the_file_count(tmp_path, monke
         "product": mesh.PRODUCT,
         "file_count": 1,
     }
+
+
+def test_s3_client_retries_with_the_standard_mode_and_five_attempts():
+    retries = mesh.s3_client().meta.config.retries
+
+    # botocore stores max_attempts=5 (retries) as total_max_attempts=6 (tries)
+    assert retries == {"mode": "standard", "total_max_attempts": 6}

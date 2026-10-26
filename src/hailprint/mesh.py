@@ -39,7 +39,8 @@ def local_path(key: str, raw_dir: Path) -> Path:
 
 
 def s3_client():
-    return boto3.client("s3", region_name="us-east-1", config=Config(signature_version=UNSIGNED))
+    config = Config(signature_version=UNSIGNED, retries={"mode": "standard", "max_attempts": 5})
+    return boto3.client("s3", region_name="us-east-1", config=config)
 
 
 def download_many(keys: list[str], raw_dir: Path, client=None, workers: int = 8) -> list[Path]:
