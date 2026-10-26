@@ -45,7 +45,7 @@ archive.py    one bucket listing -> one row per archive day (storm_date, file_co
 candidates.py SPC WCM hail database -> Harris County days (FIPS 201) -> ranked, joined with the index
 parcels.py    HCAD Parcels.gdb -> allow-listed columns only -> distinct hcad_num per size class
 county.py     committed Harris County GeoJSON (package data) -> outline() and bbox()
-files.py      write_atomic(): .tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata
+files.py      write_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata
 paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR; every data path hangs from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
 __main__.py   argparse CLI wiring the four commands and the fixed paths under data/ and out/
