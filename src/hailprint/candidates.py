@@ -17,7 +17,8 @@ WCM_PATH = RAW_DIR / "spc" / "1955-2025_hail.csv.zip"
 HARRIS_FIPS = 201
 CANDIDATES_PATH = DERIVED_DIR / "index" / "candidate-days.csv"
 COLUMNS = ["storm_date", "report_count", "max_size_in", "has_12z"]
-USECOLS = ["date", "time", "st", "mag", "f1", "f2", "f3", "f4"]
+USECOLS = ["date", "time", "tz", "st", "mag", "f1", "f2", "f3", "f4"]
+CST_TZ = 3  # WCM tz code for CST
 # WCM times are CST (UTC-6); the SPC day starts at 12 UTC; the net shift from local clock is -6 h
 CST_TO_CONVECTIVE = timedelta(hours=6)
 
@@ -52,6 +53,9 @@ def harris_days(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path, usecols=USECOLS)
     harris = (df[["f1", "f2", "f3", "f4"]] == HARRIS_FIPS).any(axis=1)
     df = df[(df["st"] == "TX") & harris].copy()
+    other = sorted(set(df["tz"]) - {CST_TZ})
+    if other:
+        raise ValueError(f"WCM tz code {other} for Harris rows, expected {CST_TZ} (CST)")
     stamps = pd.to_datetime(df["date"] + " " + df["time"]) - pd.Timedelta(CST_TO_CONVECTIVE)
     df["storm_date"] = stamps.dt.date
     grouped = df.groupby("storm_date").agg(report_count=("mag", "size"), max_size_in=("mag", "max"))
