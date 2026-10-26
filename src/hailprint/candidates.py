@@ -1,6 +1,7 @@
 """Candidate days: Harris County hail days from the SPC WCM database, ranked by report count."""
 
 import http.client
+import os
 import zipfile
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
@@ -24,12 +25,12 @@ CST_TO_CONVECTIVE = timedelta(hours=6)
 
 
 def fetch_database(path: Path = WCM_PATH) -> Path:
-    """Return the cached zip; download it once to a .tmp name and rename."""
+    """Return the cached zip; download it once to a per-process .tmp name and rename."""
     path = Path(path)
     if path.exists():
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
         tmp.write_bytes(net.get(WCM_URL, timeout=60))
     except (OSError, http.client.HTTPException) as exc:

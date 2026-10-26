@@ -19,8 +19,11 @@ def test_outputs_contain_no_owner_field_or_forbidden_word():
     for path in _files():
         if path.suffix == ".parquet":
             schema = pq.read_schema(path)
+            meta = schema.metadata or {}
             text = " ".join(
-                schema.names + [v.decode(errors="ignore") for v in schema.metadata.values()]
+                schema.names
+                + [k.decode(errors="ignore") for k in meta]
+                + [v.decode(errors="ignore") for v in meta.values()]
             )
         else:
             text = path.read_bytes().decode(errors="ignore")

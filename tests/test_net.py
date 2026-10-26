@@ -27,11 +27,16 @@ def _script(monkeypatch, *outcomes):
         outcome = queue.pop(0)
         if isinstance(outcome, BaseException):
             raise outcome
-        return _Response(outcome)
+        return outcome if isinstance(outcome, _Response) else _Response(outcome)
 
     monkeypatch.setattr(net.urllib.request, "urlopen", urlopen)
     monkeypatch.setattr(net.time, "sleep", sleeps.append)
     return calls, sleeps
+
+
+class _BrokenBody(_Response):
+    def read(self, *args):
+        raise http.client.IncompleteRead(b"x")
 
 
 def _http(code):
@@ -66,6 +71,15 @@ def test_get_retries_a_connection_reset_and_a_short_read(monkeypatch):
     assert net.get(URL) == b"data"
     assert len(calls) == 3
     assert sleeps == [0.5, 1.0]
+
+
+def test_get_retries_a_body_read_error_and_raises_the_last_one(monkeypatch):
+    calls, _ = _script(monkeypatch, _BrokenBody(), _BrokenBody(), _BrokenBody())
+
+    with pytest.raises(http.client.IncompleteRead):
+        net.get(URL)
+
+    assert len(calls) == 3
 
 
 def test_get_never_retries_a_404(monkeypatch):

@@ -54,8 +54,9 @@ def test_write_atomic_ignores_a_stale_tmp_file_from_another_run(tmp_path):
 def test_write_atomic_rejects_the_forbidden_word_in_caller_metadata(tmp_path):
     path = tmp_path / "x.parquet"
 
-    with pytest.raises(ValueError):
-        files.write_atomic(pd.DataFrame({"n": [1]}), path, {"confidence": "Hail Damage score"})
+    for bad in ({"confidence": "Hail Damage score"}, {"damage_score": "1"}):
+        with pytest.raises(ValueError):
+            files.write_atomic(pd.DataFrame({"n": [1]}), path, bad)
 
     assert not path.exists()
     assert list(tmp_path.glob("*.tmp")) == []

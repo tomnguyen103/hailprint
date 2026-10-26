@@ -1,3 +1,4 @@
+import http.client
 import io
 import urllib.error
 import urllib.request
@@ -7,7 +8,7 @@ from datetime import date, time
 import pandas as pd
 import pytest
 
-from hailprint import archive, candidates
+from hailprint import archive, candidates, net
 from hailprint.__main__ import main
 from tests.conftest import needs_wcm
 
@@ -127,7 +128,7 @@ def test_fetch_database_rejects_a_non_zip_body(tmp_path, monkeypatch):
         candidates.fetch_database(path)
 
     assert not path.exists()
-    assert not path.with_suffix(".tmp").exists()
+    assert list(path.parent.glob("*.tmp")) == []
 
 
 def test_fetch_database_wraps_a_url_error_and_removes_the_tmp_file(tmp_path, monkeypatch):
@@ -141,7 +142,22 @@ def test_fetch_database_wraps_a_url_error_and_removes_the_tmp_file(tmp_path, mon
     with pytest.raises(RuntimeError, match="WCM download failed"):
         candidates.fetch_database(path)
 
-    assert not path.with_suffix(".tmp").exists()
+    assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_fetch_database_wraps_a_short_read(tmp_path, monkeypatch):
+    path = tmp_path / "spc" / "hail.csv.zip"
+
+    def urlopen(url, timeout=None):
+        raise http.client.IncompleteRead(b"x")
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(net.time, "sleep", lambda s: None)
+
+    with pytest.raises(RuntimeError, match="WCM download failed"):
+        candidates.fetch_database(path)
+
+    assert list(path.parent.glob("*.tmp")) == []
 
 
 @needs_wcm
