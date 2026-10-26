@@ -1,14 +1,19 @@
 """Documents, schemas, receipt, and safe serialisation of the published files."""
 
+import csv
+import io
 import json
 from datetime import UTC, date, datetime, timedelta, timezone
 from importlib.metadata import version
 from importlib.resources import files
+from pathlib import Path
 
+import geopandas as gpd
 import pytest
+import shapely
 from jsonschema import Draft202012Validator
 
-from hailprint import publish, swath
+from hailprint import publish, reports, swath
 from hailprint.parcels import OWNER_FIELDS
 
 RUN_TIME = datetime(2024, 5, 29, 13, 0, 7, 987654, tzinfo=UTC)
@@ -228,3 +233,200 @@ def test_every_schema_installs_with_the_package_and_is_a_valid_draft_2020_12_sch
     Draft202012Validator.check_schema(schema)
     assert schema["$id"].endswith(f"/{name}.schema.json")
     assert schema["additionalProperties"] is False
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+SPC_HEADER = ["Time", "Size", "Location", "County", "State", "Lat", "Lon", "Comments"]
+
+
+def _fixture_swaths():
+    return gpd.read_parquet(FIXTURES / "score_swaths_2024-05-28.parquet")
+
+
+def _signed_area(ring):
+    """The shoelace sum of a closed ring: positive when the ring runs counter-clockwise."""
+    return sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(ring, ring[1:], strict=False)) / 2
+
+
+def _spc_csv(*rows):
+    """SPC hail CSV text; each row is (size, location, lat, lon, comments)."""
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(SPC_HEADER)
+    for size, location, lat, lon, comments in rows:
+        writer.writerow(["1500", size, location, "Harris", "TX", lat, lon, comments])
+    return out.getvalue()
+
+
+def _swath_frame(geometry, label=None, crs="EPSG:4326"):
+    return gpd.GeoDataFrame(
+        {
+            "storm_date": ["2024-05-28"],
+            "threshold_mm": [19.05],
+            "threshold_in": [0.75],
+            "label": [label or swath.label(19.05)],
+        },
+        geometry=[geometry],
+        crs=crs,
+    )
+
+
+def test_swath_doc_of_the_fixture_day_has_one_multipolygon_per_class_sorted_by_size():
+    swaths = _fixture_swaths()
+
+    doc = publish.swath_doc(swaths.iloc[::-1], _receipt())
+
+    publish.validate(doc, "swath")
+    props = [f["properties"] for f in doc["features"]]
+    sizes = sorted(swaths["threshold_mm"])
+    assert [p["threshold_mm"] for p in props] == sizes
+    assert [p["threshold_in"] for p in props] == [mm / 25.4 for mm in sizes]
+    assert [p["label"] for p in props] == [swath.label(mm) for mm in sizes]
+    assert {f["geometry"]["type"] for f in doc["features"]} == {"MultiPolygon"}
+    metric_km2 = swaths.sort_values("threshold_mm").to_crs("EPSG:32615").area / 1e6
+    assert [p["area_km2"] for p in props] == pytest.approx(metric_km2.tolist(), rel=1e-3)
+    assert doc["receipt"] == _receipt()
+
+
+def test_swath_doc_exterior_rings_run_counter_clockwise_and_holes_clockwise():
+    doc = publish.swath_doc(_fixture_swaths(), _receipt())
+
+    rings = [
+        (index, ring)
+        for feature in doc["features"]
+        for polygon in feature["geometry"]["coordinates"]
+        for index, ring in enumerate(polygon)
+    ]
+    assert any(index > 0 for index, _ in rings), "the fixture day needs a hole to test"
+    for index, ring in rings:
+        assert (_signed_area(ring) > 0) == (index == 0)
+
+
+def test_swath_doc_turns_a_clockwise_exterior_and_a_counter_clockwise_hole_around():
+    outer = [(-95, 29), (-95, 29.4), (-94.6, 29.4), (-94.6, 29)]  # clockwise
+    hole = [(-94.9, 29.1), (-94.7, 29.1), (-94.7, 29.3), (-94.9, 29.3)]  # counter-clockwise
+    swaths = _swath_frame(shapely.MultiPolygon([shapely.Polygon(outer, [hole])]))
+
+    doc = publish.swath_doc(swaths, _receipt())
+
+    exterior, interior = doc["features"][0]["geometry"]["coordinates"][0]
+    assert _signed_area(exterior) == pytest.approx(0.16)
+    assert _signed_area(interior) == pytest.approx(-0.04)
+
+
+def test_swath_doc_rounds_coordinates_to_six_decimals():
+    polygon = shapely.Polygon(
+        [(-95.1234567891, 29.1), (-95.1234567891, 29.2), (-95.0, 29.2), (-95.0, 29.1)]
+    )
+
+    doc = publish.swath_doc(_swath_frame(shapely.MultiPolygon([polygon])), _receipt())
+
+    coordinates = [c for ring in doc["features"][0]["geometry"]["coordinates"][0] for c in ring]
+    assert all(round(value, 6) == value for pair in coordinates for value in pair)
+    assert [-95.123457, 29.1] in coordinates
+
+
+def test_swath_doc_of_one_class_and_of_an_empty_frame_validate():
+    one = _fixture_swaths().iloc[:1]
+    empty = _fixture_swaths().iloc[:0]
+
+    assert len(publish.swath_doc(one, _receipt())["features"]) == 1
+    doc = publish.swath_doc(empty, _receipt())
+
+    assert doc["features"] == []
+    publish.validate(doc, "swath")
+
+
+def test_swath_doc_is_the_same_for_every_row_order():
+    swaths = _fixture_swaths()
+
+    assert publish.swath_doc(swaths, _receipt()) == publish.swath_doc(swaths.iloc[::-1], _receipt())
+
+
+def test_a_swath_label_with_the_forbidden_word_stops_the_serialiser():
+    box = shapely.MultiPolygon([shapely.box(-95, 29, -94.9, 29.1)])
+    doc = publish.swath_doc(_swath_frame(box, label="hail DAMAGE area"), _receipt())
+
+    with pytest.raises(ValueError, match="^swath: forbidden word"):
+        publish.dumps(doc, "swath")
+
+
+def test_swath_doc_refuses_a_frame_without_a_crs():
+    box = shapely.MultiPolygon([shapely.box(-95, 29, -94.9, 29.1)])
+
+    with pytest.raises(ValueError, match="no CRS"):
+        publish.swath_doc(_swath_frame(box, crs=None), _receipt())
+
+
+def test_reports_doc_of_the_fixture_day_has_one_point_per_neighbourhood_report():
+    text = (FIXTURES / "score_spc_240528.csv").read_text(encoding="utf-8")
+    frame = reports.nearby_reports(date(2024, 5, 28), text)
+
+    doc = publish.reports_doc(frame, _receipt())
+
+    publish.validate(doc, "reports")
+    assert 0 < len(doc["features"]) == len(frame)
+    for index, (feature, row) in enumerate(zip(doc["features"], frame.itertuples(), strict=True)):
+        assert feature["properties"] == {
+            "id": index,
+            "time": row.time,
+            "location": row.location,
+            "county": row.county,
+            "state": row.state,
+            "size_in": row.size_in,
+        }
+        assert feature["geometry"]["coordinates"] == [
+            round(row.geometry.x, 6),
+            round(row.geometry.y, 6),
+        ]
+
+
+def test_reports_doc_keeps_unusual_text_and_the_size_range_through_a_json_round_trip():
+    place = 'Café "Big", 5 N'
+    text = _spc_csv(
+        (0, place, 29.76, -95.37, "(HGX)"),
+        (800, "Katy", 29.79, -95.82, "(HGX)"),
+    )
+    frame = reports.nearby_reports(date(2024, 5, 28), text)
+
+    doc = publish.reports_doc(frame, _receipt())
+
+    sizes = [f["properties"]["size_in"] for f in doc["features"]]
+    assert sizes == [0, 8]
+    assert doc["features"][0]["properties"]["location"] == place
+    assert json.loads(publish.dumps(doc, "reports")) == doc
+
+
+def test_reports_doc_leaves_out_the_comments_column():
+    text = _spc_csv((100, "Katy", 29.79, -95.82, "hail DAMAGE to roofs"))
+    frame = reports.nearby_reports(date(2024, 5, 28), text)
+
+    doc = publish.reports_doc(frame, _receipt())
+
+    assert set(doc["features"][0]["properties"]) == {
+        "id",
+        "time",
+        "location",
+        "county",
+        "state",
+        "size_in",
+    }
+    assert "damage" not in publish.dumps(doc, "reports").lower()
+
+
+def test_reports_doc_of_a_day_with_no_neighbourhood_report_has_no_feature():
+    text = _spc_csv((100, "Far away", 40.0, -100.0, "(OUN)"))
+
+    doc = publish.reports_doc(reports.nearby_reports(date(2024, 5, 28), text), _receipt())
+
+    assert doc["features"] == []
+    publish.validate(doc, "reports")
+
+
+def test_reports_doc_gives_the_same_document_for_the_same_csv_twice():
+    text = (FIXTURES / "score_spc_240528.csv").read_text(encoding="utf-8")
+
+    first = publish.reports_doc(reports.nearby_reports(date(2024, 5, 28), text), _receipt())
+    second = publish.reports_doc(reports.nearby_reports(date(2024, 5, 28), text), _receipt())
+
+    assert first == second
