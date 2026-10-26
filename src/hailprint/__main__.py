@@ -66,7 +66,7 @@ def main(argv: list[str] | None = None) -> int:
             rank_candidates(args.top)
         elif args.command == "parcels":
             count_parcels(args.storm_date)
-    except (RuntimeError, FileNotFoundError) as exc:
+    except (RuntimeError, FileNotFoundError, ValueError) as exc:
         print(exc, file=sys.stderr)
         return 1
     return 0

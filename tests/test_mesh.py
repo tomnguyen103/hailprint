@@ -1,3 +1,4 @@
+import gzip
 from datetime import date
 
 import numpy as np
@@ -149,3 +150,59 @@ def test_daily_max_real_day():
     assert float(da.min()) >= 0
     assert float(da.max()) > 25.4
     assert da.attrs["units"] == "mm"
+
+
+def _fake_eccodes(monkeypatch, bitmap):
+    keys = {
+        "Ni": 4,
+        "Nj": 4,
+        "longitudeOfFirstGridPointInDegrees": 263.5,
+        "latitudeOfFirstGridPointInDegrees": 30.5,
+        "iDirectionIncrementInDegrees": 0.5,
+        "jDirectionIncrementInDegrees": 0.5,
+        "jScansPositively": 0,
+        "bitmapPresent": bitmap,
+    }
+    monkeypatch.setattr(mesh.eccodes, "codes_new_from_message", lambda raw: object())
+    monkeypatch.setattr(mesh.eccodes, "codes_get", lambda handle, key: keys[key])
+    monkeypatch.setattr(
+        mesh.eccodes, "codes_get_values", lambda handle: np.full(16, 30.0, dtype=np.float64)
+    )
+    monkeypatch.setattr(mesh.eccodes, "codes_release", lambda handle: None)
+
+
+def test_decode_rejects_a_bitmap_and_names_the_file_and_the_key(tmp_path, monkeypatch):
+    _fake_eccodes(monkeypatch, bitmap=1)
+    grib = tmp_path / "MRMS_test.grib2"
+    grib.write_bytes(b"x")
+
+    with pytest.raises(ValueError, match="MRMS_test.grib2.*bitmapPresent"):
+        mesh.decode(grib)
+
+
+def test_decode_accepts_a_message_without_a_bitmap(tmp_path, monkeypatch):
+    _fake_eccodes(monkeypatch, bitmap=0)
+    grib = tmp_path / "MRMS_test.grib2"
+    grib.write_bytes(b"x")
+
+    da = mesh.decode(grib)
+
+    assert da.size > 0
+    assert float(da.max()) == 30.0
+    assert da.attrs["units"] == "mm"
+
+
+def test_daily_max_attrs_hold_the_decode_keys_and_the_file_count(tmp_path, monkeypatch):
+    _fake_eccodes(monkeypatch, bitmap=0)
+    local = mesh.local_path(KEY_12Z, tmp_path)
+    local.parent.mkdir(parents=True)
+    local.write_bytes(gzip.compress(b"x"))
+
+    da = mesh.daily_max(STORM_DATE, tmp_path)
+
+    assert da.attrs == {
+        "units": "mm",
+        "units_source": mesh.UNITS_SOURCE,
+        "product": mesh.PRODUCT,
+        "file_count": 1,
+    }

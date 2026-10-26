@@ -64,6 +64,40 @@ def test_ingest_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
     assert pq.read_metadata(path).metadata[b"file_count"] == b"1"
 
 
+def _stub_ingest(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli.mesh, "download_many", lambda keys, raw_dir: [])
+    monkeypatch.setattr(cli, "DERIVED_DIR", tmp_path / "derived")
+    monkeypatch.setattr(cli, "OUT_DIR", tmp_path / "out")
+
+
+def test_ingest_value_error_prints_one_line_and_exits_1(tmp_path, monkeypatch, capsys):
+    _stub_ingest(monkeypatch, tmp_path)
+
+    def bad_layout(storm_date, raw_dir):
+        raise ValueError("MRMS_x.grib2: bitmapPresent is 1, expected 0")
+
+    monkeypatch.setattr(cli.mesh, "daily_max", bad_layout)
+
+    assert main(["ingest", "2024-05-28"]) == 1
+
+    captured = capsys.readouterr()
+    assert captured.err.splitlines() == ["MRMS_x.grib2: bitmapPresent is 1, expected 0"]
+    assert captured.out == ""
+    assert not (tmp_path / "derived").exists()
+
+
+def test_ingest_file_not_found_still_prints_one_line_and_exits_1(tmp_path, monkeypatch, capsys):
+    _stub_ingest(monkeypatch, tmp_path)
+
+    def missing(storm_date, raw_dir):
+        raise FileNotFoundError("no MESH file at somewhere")
+
+    monkeypatch.setattr(cli.mesh, "daily_max", missing)
+
+    assert main(["ingest", "2024-05-28"]) == 1
+    assert capsys.readouterr().err.splitlines() == ["no MESH file at somewhere"]
+
+
 def test_ingest_missing_12z_file_exits_1_and_writes_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli.mesh, "s3_client", lambda: FakeS3(missing=[KEY_12Z]))
     monkeypatch.setattr(cli, "RAW_DIR", tmp_path / "raw")

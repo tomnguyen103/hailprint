@@ -84,6 +84,9 @@ def decode(path: Path) -> xr.DataArray:
         dlat = eccodes.codes_get(handle, "jDirectionIncrementInDegrees")
         if eccodes.codes_get(handle, "jScansPositively"):
             raise ValueError(f"{path.name}: expected latitude descending")
+        # a bitmap hides cells; values would hold fill numbers instead of sizes
+        if eccodes.codes_get(handle, "bitmapPresent"):
+            raise ValueError(f"{path.name}: bitmapPresent is 1, expected 0")
         values = eccodes.codes_get_values(handle).reshape(nj, ni)
     finally:
         eccodes.codes_release(handle)
@@ -108,5 +111,5 @@ def daily_max(storm_date: date, raw_dir: Path) -> xr.DataArray:
     if not path.exists():
         raise FileNotFoundError(f"no MESH file at {path}")
     da = decode(path)
-    da.attrs.update(units="mm", units_source=UNITS_SOURCE, product=PRODUCT, file_count=1)
+    da.attrs["file_count"] = 1
     return da
