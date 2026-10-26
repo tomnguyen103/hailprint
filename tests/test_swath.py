@@ -86,3 +86,47 @@ def test_forbidden_label_raises_before_write(tmp_path):
     with pytest.raises(ValueError):
         write_swaths(gdf, path, file_count=1, max_mesh_mm=1.0)
     assert not path.exists()
+
+
+def test_write_swaths_failure_keeps_the_old_file_and_leaves_no_tmp(tmp_path, monkeypatch):
+    gdf = build_swaths(_four_by_four(), STORM_DATE)
+    path = tmp_path / "swaths.parquet"
+    write_swaths(gdf, path, file_count=1, max_mesh_mm=63.5)
+    before = path.read_bytes()
+
+    real = pq.write_table
+    calls = []
+
+    def fail_on_the_metadata_write(table, where, *args, **kwargs):
+        calls.append(where)
+        if len(calls) == 2:
+            raise OSError("disk full")
+        return real(table, where, *args, **kwargs)
+
+    monkeypatch.setattr(pq, "write_table", fail_on_the_metadata_write)
+    with pytest.raises(OSError):
+        write_swaths(gdf, path, file_count=2, max_mesh_mm=1.0)
+
+    assert len(calls) == 2
+
+    assert path.read_bytes() == before
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_write_swaths_leaves_no_tmp_after_success_or_a_forbidden_label(tmp_path):
+    gdf = build_swaths(_four_by_four(), STORM_DATE)
+    path = tmp_path / "swaths.parquet"
+    write_swaths(gdf, path, file_count=1, max_mesh_mm=63.5)
+    gdf.loc[0, "label"] = "Damage class"
+    with pytest.raises(ValueError):
+        write_swaths(gdf, path, file_count=1, max_mesh_mm=63.5)
+
+    assert list(tmp_path.glob("*.tmp")) == []
+
+
+def test_write_swaths_metadata_holds_the_five_keys(tmp_path):
+    path = write_swaths(build_swaths(_four_by_four(), STORM_DATE), tmp_path / "s.parquet", 4, 63.5)
+
+    meta = pq.read_schema(path).metadata
+    for key in (b"source", b"product", b"confidence", b"file_count", b"max_mesh_mm"):
+        assert key in meta

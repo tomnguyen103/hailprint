@@ -28,3 +28,13 @@ def test_outputs_contain_no_owner_field_or_forbidden_word():
         assert FORBIDDEN_WORD not in lowered, path
         for field in OWNER_FIELDS:
             assert field.lower() not in lowered, (path, field)
+
+
+@pytest.mark.skipif(
+    not list(paths.DERIVED_DIR.rglob("*.parquet")), reason="no derived Parquet written yet"
+)
+def test_every_derived_parquet_carries_the_provenance_keys():
+    for path in paths.DERIVED_DIR.rglob("*.parquet"):
+        meta = pq.read_schema(path).metadata
+        for key in (b"source", b"product", b"confidence"):
+            assert key in meta, (path, key)
