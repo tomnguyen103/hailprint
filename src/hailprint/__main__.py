@@ -183,10 +183,12 @@ def _swath_files(storm_dates: list[date]) -> list[tuple[date, Path]]:
     if storm_dates:
         found = [(d, DERIVED_DIR / f"swaths-{d}.parquet") for d in sorted(set(storm_dates))]
     else:
-        found = [
-            (_storm_date(p.stem.removeprefix("swaths-")), p)
-            for p in sorted(DERIVED_DIR.glob("swaths-????-??-??.parquet"))
-        ]
+        found = []
+        for path in sorted(DERIVED_DIR.glob("swaths-????-??-??.parquet")):
+            try:
+                found.append((_storm_date(path.stem.removeprefix("swaths-")), path))
+            except argparse.ArgumentTypeError as exc:
+                raise ValueError(f"not a swath file name: {path.name}") from exc
     for _, path in found:
         if not path.exists():
             raise FileNotFoundError(f"run hailprint ingest first: {path}")
@@ -197,7 +199,7 @@ def _swath_files(storm_dates: list[date]) -> list[tuple[date, Path]]:
 
 def score_days(storm_dates: list[date], radius_km: float) -> list[Path]:
     """Pairs and score files per storm date, then the pooled table. A 404 day is skipped."""
-    meta = {"radius_km": f"{radius_km:g}", "report_source": score.REPORT_SOURCE}
+    meta = {"radius_km": f"{radius_km:.15g}", "report_source": score.REPORT_SOURCE}
     tables, written = [], []
     for storm_date, swath_path in _swath_files(storm_dates):
         text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, date.today())
@@ -218,12 +220,25 @@ def score_days(storm_dates: list[date], radius_km: float) -> list[Path]:
     if not tables:
         raise RuntimeError("no storm date was scored")
     pooled = score.pool(tables)
-    shown = ["label", "report_count", *score.COUNT_COLUMNS, *score.METRIC_COLUMNS]
+    shown = [
+        "label",
+        "report_count",
+        *score.COUNT_COLUMNS,
+        *score.AREA_COLUMNS,
+        *score.METRIC_COLUMNS,
+    ]
     print(f"pooled over {len(tables)} storm dates, radius {radius_km:g} km")
-    table = pooled[shown].astype({c: object for c in score.METRIC_COLUMNS})
+    table = pooled[shown].astype({c: object for c in score.AREA_COLUMNS + score.METRIC_COLUMNS})
+    for column in score.AREA_COLUMNS:
+        table[column] = [f"{v:.0f}" for v in pooled[column]]
     for column in score.METRIC_COLUMNS:
         table[column] = [f"{v:.2f}" for v in pooled[column]]
     print(table.to_string(index=False))
+    if bool((pooled["correct_negatives"] == 0).to_numpy().any()):
+        print(
+            "note: a row with 0 correct negatives has no report below its class, "
+            "so its FAR and HSS hold by construction"
+        )
     print(f"confidence: {swath.CONFIDENCE}")
     return written
 

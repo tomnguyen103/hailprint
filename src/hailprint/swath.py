@@ -25,6 +25,18 @@ def label(threshold_mm: float) -> str:
     return f"radar-estimated hail size >= {threshold_mm / 25.4:.2f} in"
 
 
+def require_nested(swaths: gpd.GeoDataFrame, tolerance: float) -> None:
+    """Raise ValueError when a class reaches outside the next lower class (rows sorted by size).
+
+    The tolerance is in the units of the frame CRS.
+    """
+    geoms = swaths.geometry.tolist()
+    sizes = swaths["threshold_mm"].tolist()
+    for lower, higher, size in zip(geoms, geoms[1:], sizes[1:], strict=False):
+        if not higher.difference(lower.buffer(tolerance)).is_empty:
+            raise ValueError(f"size class {size} mm is not inside the next lower class")
+
+
 def _transform(da: xr.DataArray):
     lon, lat = da.longitude.values, da.latitude.values
     dx, dy = float(lon[1] - lon[0]), float(lat[0] - lat[1])

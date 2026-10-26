@@ -13,7 +13,7 @@ from hailprint import county, swath
 
 # shortcut: the scorer reads the preliminary SPC daily CSV, not the WCM final record, upgrade
 # when PR scope adds the final-record scorecard
-REPORT_SOURCE = "spc-daily-csv"
+REPORT_SOURCE = "spc-daily"
 DEFAULT_RADIUS_KM = 5
 MAX_RADIUS_KM = 20
 METRIC_CRS = "EPSG:32615"
@@ -106,7 +106,7 @@ def pool(tables: list[pd.DataFrame]) -> pd.DataFrame:
         raise ValueError(f"cannot pool tables with mixed radius_km {radii}")
     sums = ["report_count", *COUNT_COLUMNS, *AREA_COLUMNS]
     pooled = cast(pd.DataFrame, stacked.groupby(CLASS_COLUMNS, as_index=False)[sums].sum())
-    pooled.insert(3, "radius_km", radii[0])
+    pooled.insert(len(CLASS_COLUMNS), "radius_km", radii[0])
     return with_skill(pooled.sort_values("threshold_mm"), POOL_COLUMNS)
 
 
@@ -124,16 +124,6 @@ def metric_swaths(swaths: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         swaths = swaths.set_geometry(swaths.geometry.segmentize(SEGMENT_DEG))
     metric = swaths.loc[:, ["threshold_mm", "geometry"]].to_crs(METRIC_CRS)
     return cast(gpd.GeoDataFrame, metric.sort_values("threshold_mm").reset_index(drop=True))
-
-
-def _require_nested(swaths: gpd.GeoDataFrame) -> None:
-    """Raise ValueError when a class reaches outside the next lower class (rows sorted by size)."""
-    geoms = swaths.geometry.tolist()
-    for lower, higher, size in zip(
-        geoms, geoms[1:], swaths["threshold_mm"].tolist()[1:], strict=False
-    ):
-        if not higher.difference(lower.buffer(NEST_TOLERANCE_M)).is_empty:
-            raise ValueError(f"size class {size} mm is not inside the next lower class")
 
 
 def distances(swaths: gpd.GeoDataFrame, reports: gpd.GeoDataFrame) -> pd.DataFrame:
@@ -187,7 +177,7 @@ def score_day(
     if not (math.isfinite(radius_km) and 0 <= radius_km <= MAX_RADIUS_KM):
         raise ValueError(f"radius_km must be finite and between 0 and {MAX_RADIUS_KM}: {radius_km}")
     metric = metric_swaths(swaths)
-    _require_nested(metric)
+    swath.require_nested(metric, NEST_TOLERANCE_M)
     keep = in_domain(reports, radius_km).to_numpy(dtype=bool)
     scored = reports.loc[keep, [*PAIR_COLUMNS, "geometry"]].reset_index(drop=True)
     dist = distances(metric, scored)

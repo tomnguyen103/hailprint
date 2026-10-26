@@ -2,7 +2,7 @@
 
 Goal: score the radar-estimated hail swaths against the SPC hail reports with a neighbourhood contingency table per size class.
 
-Oracle: a hand count of two days (below), a golden JSON per day, and a raster oracle that reads the raw MESH grid and shares no code with the polygon distance.
+Oracle: a hand count of two days (below) and a raster oracle that reads the raw MESH grid and shares no code with the polygon distance. The raster oracle checks the distances on 2 of 25 days. The golden JSON per day pins the counts of the code's own run, so it guards against drift and does not prove the counts. Synthetic tests with hand-built geometry cover the domain edge and the areas.
 
 ## Method
 
@@ -10,6 +10,8 @@ Oracle: a hand count of two days (below), a golden JSON per day, and a raster or
 - R is 5 km. A report is scored when its radius disc lies inside the Harris bbox, shrunk by one cell.
 - Reports come from the SPC preliminary daily CSV, inside the 50 km neighbourhood buffer.
 - The sample holds reports only. A correct negative is therefore a report smaller than the class, not an empty place.
+- The 25 days are the top-ranked candidate days, so every day has reports. The pooled numbers describe report-rich days, not a random sample of days.
+- The exclusion removes 25 of 124 reports, 12 of them on one day. 18 of the 99 scored reports lie outside Harris County, TX by county and state name (the 50 km neighbourhood).
 
 ## Run
 
@@ -44,7 +46,20 @@ Largest exclusions: 2024-03-15 (12 of 20 reports), 2023-04-15 (5 of 6).
 | >= 2.00 in | 99 | 0 | 8 | 4 | 87 | 0.00 | 1.00 | 0.00 | -0.06 |
 | >= 2.50 in | 99 | 0 | 0 | 1 | 98 | n/a | 1.00 | 0.00 | 0.00 |
 
-The 0.75 in and 1.00 in rows have 0 correct negatives, because no report is smaller than 1.00 in. Their HSS carries no information.
+The 0.75 in and 1.00 in rows have 0 correct negatives, because no report is smaller than 1.00 in. With no non-event, FAR is 0.00 and CSI equals POD by construction. Read these two rows as POD only: their FAR, CSI, and HSS carry no information. The `score` command prints a note under the table when a row has 0 correct negatives.
+
+The 2.50 in row rests on one report with no event: its FAR 1.00 and CSI 0.00 come from that single false alarm. The 2.00 in row holds 8 events. Treat any cell with a handful of reports as a count, not a rate.
+
+### Unverifiable area
+
+`unverifiable_km2` is the part of the swath farther than 5 km from every report. The pooled table prints it next to `swath_km2`.
+
+| Class | swath_km2 | unverifiable_km2 |
+|---|---|---|
+| >= 0.75 in | 6675 | 4492 |
+| >= 1.25 in | 1215 | 611 |
+
+More than half of the 0.75 in swath area and about half of the 1.25 in swath area has no report within 5 km. POD and FAR say nothing about that area.
 
 ## Hand check
 
@@ -76,10 +91,16 @@ Reason found:
 - The table scores the size step between two reports, so it cannot reach the skill of a dense ground truth. The band does not apply to this sample.
 - The HSS rises with the class, to 0.21 at 1.75 in, as more reports fall below the class and outside the swath. It stays below 0.25 at every class.
 
-The number stands as a lower bound on skill for this sample design. A dense null sample (NCEI Storm Events or a hail-pad network) is the upgrade named in the `shortcut:` comment in `score.py`.
+The value 0.02 describes this sample design. It does not bound the true skill: the 5 km radius moves hits and false alarms together, and the data do not show the direction of the bias. A dense null sample (NCEI Storm Events or a hail-pad network) is the upgrade named in the `shortcut:` comment in `score.py`.
 
 ## Decisions
 
 - Pooling sums counts, then recomputes the metrics. A mean of daily HSS would weight a 1-report day like a 13-report day.
 - The command writes no pooled file. The pooled table prints to the terminal only.
-- `score` reads the SPC daily CSV, not the WCM final record. The `report_source` metadata reads `spc-daily-csv`.
+- `score` reads the SPC daily CSV, not the WCM final record. The `report_source` metadata reads `spc-daily`, the same name `candidate-days.csv` uses.
+
+## Handover to PR D
+
+- `pairs-<date>.parquet` holds distances, so the pair set depends on the scoring radius R: the domain edge shrinks with R. A browser radius slider (A1) can only move R down from the radius of the run, and the publish step must say which R it used.
+- `pairs` carries no `storm_date` column. The publish step takes the date from the file name.
+- A missing distance (absent class) is stored as NaN. JSON has no NaN, so the publish step writes null.

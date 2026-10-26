@@ -491,7 +491,7 @@ def test_score_command_writes_pairs_and_scores_with_metadata(score_env, capsys):
         assert meta[b"product"] == b"MESH_Max_1440min_00.50"
         assert meta[b"confidence"] == swath.CONFIDENCE.encode()
         assert meta[b"radius_km"] == b"5"
-        assert meta[b"report_source"] == b"spc-daily-csv"
+        assert meta[b"report_source"] == b"spc-daily"
     table = pd.read_parquet(tmp_path / "scores" / "scores-2024-05-28.parquet")
     assert list(table.columns) == SCORE_COLUMNS
     assert _counts(table).loc[19.05].tolist() == [4, 1, 0, 1]
@@ -591,3 +591,40 @@ def test_score_command_outputs_hold_no_owner_field_or_forbidden_word(score_env):
         text = " ".join(schema.names + [v.decode() for v in (schema.metadata or {}).values()])
         for word in (swath.FORBIDDEN_WORD, *map(str.lower, OWNER_FIELDS)):
             assert word not in text.lower(), (path, word)
+
+
+def test_score_command_writes_the_radius_metadata_at_full_precision(score_env):
+    tmp_path, serve = score_env
+    _write_swath_file(tmp_path / "swaths", DAY_A)
+    serve({DAY_A: _spc_csv()})
+
+    assert main(["score", "2024-05-28", "--radius-km", "5.1234567"]) == 0
+
+    meta = pq.read_schema(tmp_path / "scores" / "scores-2024-05-28.parquet").metadata
+    assert meta[b"radius_km"] == b"5.1234567"
+
+
+def test_score_command_names_a_stray_swath_file_and_exits_1(score_env, capsys):
+    tmp_path, serve = score_env
+    _write_swath_file(tmp_path / "swaths", DAY_A)
+    (tmp_path / "swaths" / "swaths-2024-13-45.parquet").write_bytes(b"")
+    serve({DAY_A: _spc_csv()})
+
+    assert main(["score"]) == 1
+    assert "swaths-2024-13-45.parquet" in capsys.readouterr().err
+
+
+def test_score_command_prints_the_areas_and_notes_a_row_without_correct_negatives(
+    score_env, capsys
+):
+    tmp_path, serve = score_env
+    _write_swath_file(tmp_path / "swaths", DAY_A)
+    serve({DAY_A: _spc_csv()})
+
+    assert main(["score", "2024-05-28"]) == 0
+
+    out = capsys.readouterr().out
+    table = pd.read_parquet(tmp_path / "scores" / "scores-2024-05-28.parquet")
+    header = next(line for line in out.splitlines() if "label" in line)
+    assert "swath_km2" in header and "unverifiable_km2" in header
+    assert ("0 correct negatives" in out) == bool((table["correct_negatives"] == 0).any())
