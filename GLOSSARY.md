@@ -11,7 +11,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Convective day | The SPC day D: 12:00 UTC on D to 12:00 UTC on D+1. A CST report time minus 6 hours gives its date. |
 | 12Z file | The MESH file stamped `-120000` in the folder D+1. The only file `ingest` reads for storm date D. |
 | Archive index | One row per MESH archive day: `storm_date`, `file_count`, `bytes`, `has_12z`. Built by `hailprint index` from one bucket listing. |
-| Candidate day | One storm date in the archive era with at least one Harris County row in the WCM database, ranked by report count then max size. |
+| Candidate day | One storm date in the archive era with at least one Harris County, TX hail report in the WCM database or the daily-CSV fill, ranked by report count then max size. |
 | Parcel count | The number of distinct `hcad_num` values whose parcel intersects one size class. One row per class per storm date. |
 | WCM database | The SPC Warning Coordination Meteorologist hail file `1955-2025_hail.csv.zip`: the quality-controlled record of hail reports with county FIPS in `f1..f4`. |
 | Sentinel | A negative MRMS cell value that is not a size: `-3` means no radar coverage, `-1` means no data. Masked before any arithmetic. |
@@ -26,4 +26,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Parcel | One HCAD parcel polygon in EPSG:2278 keyed by the 13-digit `hcad_num`. |
 | Owner fields | HCAD columns that identify or reach a person: `CurrOwner`, `mail_addr_1`, `mail_addr_2`, `mail_city`, `mail_state`, `mail_zip`, `LocAddr`, `LocNum`, `LocName`. Dropped at load, never written. |
 | Parcel allow-list | The HCAD columns that survive load: `HCAD_NUM_1`, `LOWPARCELID`, `zip`, `city`, `yr_impr`, `StatedArea`, `Stacked`, geometry. |
+| Neighbourhood buffer | The 50 km distance (`reports.BUFFER_KM`) around the county outline. `nearby_reports` keeps the SPC reports inside it. Measured in EPSG:32615 metres. |
+| WCM end | The last convective day in the WCM database. Storm dates after it have no WCM row. |
+| Daily-CSV fill | The Harris County, TX report count for a storm date after the WCM end, taken from the SPC preliminary daily CSV. `report_source` reads `spc-daily`; a WCM row reads `wcm`. |
 | Spike | The week-1 run, replaced by `ingest` in week 2. Its evidence stays in `docs/WEEK-01.md`. |

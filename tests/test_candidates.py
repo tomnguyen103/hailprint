@@ -277,3 +277,29 @@ def test_all_days_names_the_date_of_a_network_error_and_leaves_no_tmp_file(tmp_p
         _all_days(tmp_path, _index(day))
 
     assert list((tmp_path / "daily").glob("*")) == []
+
+
+def test_candidates_command_writes_the_report_source_column(tmp_path, monkeypatch, capsys):
+    index = _index(date(2024, 5, 28), date(2026, 1, 5))
+    index_path = tmp_path / "mesh-archive.parquet"
+    index.to_parquet(index_path)
+    out_path = tmp_path / "candidate-days.csv"
+    days = pd.DataFrame(
+        {
+            "storm_date": [date(2024, 5, 28), date(2026, 1, 5)],
+            "report_count": [9, 3],
+            "max_size_in": [1.75, 1.5],
+            "report_source": ["wcm", "spc-daily"],
+        }
+    )
+    monkeypatch.setattr(archive, "INDEX_PATH", index_path)
+    monkeypatch.setattr(candidates, "CANDIDATES_PATH", out_path)
+    monkeypatch.setattr(candidates, "fetch_database", lambda: tmp_path / "wcm.zip")
+    monkeypatch.setattr(candidates, "all_days", lambda wcm_path, index_df: days)
+
+    assert main(["candidates"]) == 0
+
+    written = pd.read_csv(out_path)
+    assert list(written.columns) == candidates.COLUMNS
+    assert written["report_source"].tolist() == ["wcm", "spc-daily"]
+    assert "spc-daily" in capsys.readouterr().out
