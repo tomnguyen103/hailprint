@@ -147,3 +147,11 @@ def test_ingest_on_the_real_day_matches_spc_reports(capsys, monkeypatch):
     assert len(points) == 10
     inside = int(points.geometry.within(buffered).sum())
     assert inside >= 7, f"{inside} of 10 reports inside the 19.05 mm swath"
+
+
+def test_harris_reports_over_the_golden_csv_keeps_the_ten_harris_rows():
+    harris = reports.harris_reports(date(2024, 5, 28), text=GOLDEN_SPC_CSV.read_text())
+
+    assert len(harris) == 10
+    assert set(harris["county"]) == {"Harris"}
+    assert set(harris["state"]) == {"TX"}

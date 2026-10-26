@@ -12,7 +12,7 @@ Status: week 2 done on 2026-10-25. Reports: `docs/WEEK-01.md`, `docs/WEEK-02.md`
 make setup                                  # uv sync
 uv run hailprint ingest 2024-05-28          # swath file and PNG for one or more SPC convective days
 uv run hailprint index                      # one row per MESH archive day from one bucket listing
-uv run hailprint candidates --top 20        # Harris County hail days ranked by SPC report count
+uv run hailprint candidates --top 20        # first run fetches about 300 daily CSVs (about 10 min), later runs read the cache; Harris County hail days ranked by SPC report count (WCM, plus preliminary daily CSVs after the WCM end; a `spc-daily` row can still change)
 uv run hailprint parcels 2024-05-28         # allow-listed parcel count per size class
 make lint                                   # ruff check, ruff format --check, pyright
 make test                                   # uv run pytest -q

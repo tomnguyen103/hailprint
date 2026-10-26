@@ -2,22 +2,28 @@
 
 import http.client
 import os
+import sys
+import urllib.error
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 import pandas as pd
 
-from hailprint import net
+from hailprint import files, net, reports
 from hailprint.paths import DERIVED_DIR, RAW_DIR
 
-# shortcut: the 1955-2025 file holds no 2026 day, upgrade when SPC publishes the 2026 file
-# or when the backtest needs 2026 days
+# shortcut: the 1955-2025 file holds no 2026 day, so all_days fills later days from the SPC daily
+# CSVs, upgrade when SPC publishes the 2026 file
 WCM_URL = "https://www.spc.noaa.gov/wcm/data/1955-2025_hail.csv.zip"
 WCM_PATH = RAW_DIR / "spc" / "1955-2025_hail.csv.zip"
 HARRIS_FIPS = 201
 CANDIDATES_PATH = DERIVED_DIR / "index" / "candidate-days.csv"
-COLUMNS = ["storm_date", "report_count", "max_size_in", "has_12z"]
+DAILY_DIR = RAW_DIR / "spc" / "daily"
+COLUMNS = ["storm_date", "report_count", "max_size_in", "has_12z", "report_source"]
+FRESH_DAYS = 3  # SPC may still change a day this young, so it never lands in the cache
+FETCH_THREADS = 8
 USECOLS = ["date", "time", "tz", "st", "mag", "f1", "f2", "f3", "f4"]
 CST_TZ = 3  # WCM tz code for CST
 # WCM times are CST (UTC-6); the SPC day starts at 12 UTC; the net shift from local clock is -6 h
@@ -59,7 +65,81 @@ def harris_days(path: Path) -> pd.DataFrame:
     stamps = pd.to_datetime(df["date"] + " " + df["time"]) - pd.Timedelta(CST_TO_CONVECTIVE)
     df["storm_date"] = stamps.dt.date
     grouped = df.groupby("storm_date").agg(report_count=("mag", "size"), max_size_in=("mag", "max"))
-    return grouped.reset_index()
+    return grouped.reset_index().assign(report_source="wcm")
+
+
+def wcm_last_day(path: Path) -> date:
+    """Last convective day of any row in the WCM database."""
+    df = pd.read_csv(path, usecols=["date", "time"])
+    return (
+        (pd.to_datetime(df["date"] + " " + df["time"]) - pd.Timedelta(CST_TO_CONVECTIVE))
+        .max()
+        .date()
+    )
+
+
+def daily_csv(storm_date: date, cache_dir: Path, today: date) -> str | None:
+    """SPC daily hail CSV text; None for an HTTP 404. A day older than FRESH_DAYS is cached.
+
+    Only text that parses is cached. A cache file that no longer parses is fetched again.
+    """
+    cache = cache_dir / f"{storm_date:%y%m%d}.csv"
+    if cache.exists():
+        try:
+            cached = cache.read_text(encoding="utf-8")
+            reports.parse(cached)
+            return cached
+        except (OSError, ValueError):
+            print(f"SPC daily CSV cache {cache.name} is invalid, fetched again", file=sys.stderr)
+    try:
+        text = reports.fetch_hail_csv(storm_date)
+        reports.parse(text)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 404:
+            raise RuntimeError(f"SPC daily CSV for {storm_date} failed: {exc}") from exc
+        print(f"SPC daily CSV for {storm_date} not found (HTTP 404), skipped", file=sys.stderr)
+        return None
+    except (OSError, http.client.HTTPException, ValueError) as exc:
+        raise RuntimeError(f"SPC daily CSV for {storm_date} failed: {exc}") from exc
+    if (today - storm_date).days > FRESH_DAYS:
+        try:
+            files.write_text_atomic(text, cache)
+        except OSError as exc:
+            reason = exc.strerror or type(exc).__name__
+            raise RuntimeError(
+                f"SPC daily CSV cache write for {storm_date} failed: {reason}"
+            ) from exc
+    return text
+
+
+def all_days(
+    wcm_path: Path, index: pd.DataFrame, cache_dir: Path = DAILY_DIR, today: date | None = None
+) -> pd.DataFrame:
+    """WCM Harris days plus the Harris, TX days of the index after the WCM end from SPC daily CSVs.
+
+    Columns: storm_date, report_count, max_size_in, report_source ("wcm" or "spc-daily").
+    """
+    # shortcut: the daily fill counts preliminary reports, upgrade when SPC publishes the 2026
+    # WCM file; the WCM end is the day of the last row of any county, and only later days are
+    # filled, so a partial end day keeps its WCM count
+    wcm = harris_days(wcm_path)
+    today = date.today() if today is None else today
+    wcm_end = wcm_last_day(wcm_path)
+    later = sorted({d for d in index["storm_date"] if d > wcm_end})
+    with ThreadPoolExecutor(FETCH_THREADS) as pool:
+        texts = list(pool.map(lambda d: daily_csv(d, cache_dir, today), later))
+    # one 404 day is a normal skip; a run of them means the URL scheme changed
+    if len(later) > 1 and all(text is None for text in texts):
+        raise RuntimeError(
+            f"SPC daily CSV not found for any of the {len(later)} days after the WCM"
+        )
+    rows = []
+    for day, text in zip(later, texts, strict=True):
+        harris = reports.harris_reports(day, text=text) if text is not None else None
+        if harris is not None and len(harris):
+            rows.append((day, len(harris), harris["size_in"].max(), "spc-daily"))
+    filled = pd.DataFrame(rows, columns=list(wcm.columns))
+    return wcm if filled.empty else pd.concat([wcm, filled], ignore_index=True)
 
 
 def rank(days: pd.DataFrame, index: pd.DataFrame) -> pd.DataFrame:

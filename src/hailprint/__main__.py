@@ -117,11 +117,14 @@ def index() -> Path:
 
 
 def rank_candidates(top: int) -> Path:
-    """WCM database joined with the archive index. Writes the full CSV and prints the top rows."""
+    """Rank WCM days and the daily-CSV fill against the archive index.
+
+    Writes the full CSV and prints the top rows.
+    """
     if not archive.INDEX_PATH.exists():
         raise FileNotFoundError(f"run hailprint index first: {archive.INDEX_PATH}")
     index_df = pd.read_parquet(archive.INDEX_PATH)
-    ranked = candidates.rank(candidates.harris_days(candidates.fetch_database()), index_df)
+    ranked = candidates.rank(candidates.all_days(candidates.fetch_database(), index_df), index_df)
     path = files.write_atomic(ranked, candidates.CANDIDATES_PATH)
     print(ranked.head(top).to_string(index=False))
     return path
