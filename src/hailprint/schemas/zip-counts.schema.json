@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hailprint.invalid/schemas/zip-counts.schema.json",
+  "title": "ZIP counts",
+  "description": "Distinct parcel counts per hail size class and per ZIP. Counts only: no parcel id, no geometry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt", "classes", "zips"],
+  "properties": {
+    "receipt": { "$ref": "receipt.schema.json" },
+    "classes": {
+      "type": "array",
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["threshold_mm", "threshold_in", "label", "parcel_count"],
+        "properties": {
+          "threshold_mm": { "type": "number", "exclusiveMinimum": 0 },
+          "threshold_in": { "type": "number", "exclusiveMinimum": 0 },
+          "label": { "type": "string", "minLength": 1 },
+          "parcel_count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "zips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["zip", "threshold_mm", "parcel_count"],
+        "properties": {
+          "zip": { "type": "string", "pattern": "^(\\d{5}|unknown)$" },
+          "threshold_mm": { "type": "number", "exclusiveMinimum": 0 },
+          "parcel_count": { "type": "integer", "minimum": 1 }
+        }
+      }
+    }
+  }
+}

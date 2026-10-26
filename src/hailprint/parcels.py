@@ -1,7 +1,7 @@
 """HCAD parcel loader and the per-class parcel count. Owner fields never load."""
 
 from pathlib import Path
-from typing import cast
+from typing import NamedTuple, cast
 
 import geopandas as gpd
 import pandas as pd
@@ -35,6 +35,13 @@ NEST_TOLERANCE_FT = 1.0
 # a straight edge in degrees bends in EPSG:2278; vertices every 0.002 degree keep the bend
 SEGMENT_DEG = 0.002
 COUNT_COLUMNS = ["storm_date", "threshold_mm", "threshold_in", "label", "parcel_count"]
+ZIP_COLUMNS = ["storm_date", "zip", "threshold_mm", "threshold_in", "label", "parcel_count"]
+UNKNOWN_ZIP = "unknown"
+
+
+class ParcelCounts(NamedTuple):
+    classes: pd.DataFrame
+    zips: pd.DataFrame
 
 
 def load_parcels(
@@ -53,16 +60,24 @@ def load_parcels(
     return cast(gpd.GeoDataFrame, gdf.rename(columns=ALLOWED))
 
 
+def zip5(values: pd.Series) -> pd.Series:
+    """The first five digits of each HCAD zip value; any other value becomes `unknown`."""
+    digits = values.astype("string").str.strip().str.extract(r"^(\d{5})", expand=False)
+    return digits.fillna(UNKNOWN_ZIP).astype(object)
+
+
 def count_parcels(
     swaths: gpd.GeoDataFrame, parcels_path: Path, layer: str = "Parcels"
-) -> pd.DataFrame:
-    """Distinct parcels per size class; an empty swath frame never opens the parcel layer.
+) -> ParcelCounts:
+    """Distinct parcels per size class and per ZIP; an empty swath frame never opens the layer.
 
     The swaths are reprojected once to the layer CRS. One join gives the highest class per
-    parcel; a parcel counts in every class at or below that class.
+    parcel; a parcel counts in every class at or below that class, and in its own ZIP.
     """
+    # shortcut: the ZIP is the HCAD field and not a geocode, upgrade when HCAD replies and
+    # parcel geometry may publish
     if swaths.empty:
-        return pd.DataFrame(columns=COUNT_COLUMNS)
+        return ParcelCounts(pd.DataFrame(columns=COUNT_COLUMNS), pd.DataFrame(columns=ZIP_COLUMNS))
     if swaths.crs is None or not swaths.crs.equals("EPSG:4326", ignore_axis_order=True):
         raise ValueError(f"swaths must be in EPSG:4326, got {swaths.crs}")
     swaths = cast(gpd.GeoDataFrame, swaths.sort_values("threshold_mm").reset_index(drop=True))
@@ -77,12 +92,23 @@ def count_parcels(
     # not, upgrade if the guard ever fires
     swath.require_nested(swaths_native, NEST_TOLERANCE_FT)
     hits = gpd.sjoin(
-        parcels.loc[:, ["hcad_num", "geometry"]],
+        parcels.loc[:, ["hcad_num", "zip", "geometry"]],
         # one row per polygon part: the spatial index then skips parts far from a parcel
         swaths_native.loc[:, ["threshold_mm", "geometry"]].explode(index_parts=False),
         predicate="intersects",
     )
-    top = cast(pd.Series, hits.groupby("hcad_num")["threshold_mm"].max())
+    by_parcel = cast(
+        pd.DataFrame,
+        hits.groupby("hcad_num").agg(top=("threshold_mm", "max"), zip=("zip", "first")),
+    )
+    by_parcel["zip"] = zip5(cast(pd.Series, by_parcel["zip"]))
     out = swaths.drop(columns="geometry").copy()
-    out["parcel_count"] = [int((top >= t).sum()) for t in out["threshold_mm"]]
-    return out.loc[:, COUNT_COLUMNS]
+    out["parcel_count"] = [int((by_parcel["top"] >= t).sum()) for t in out["threshold_mm"]]
+    rows = []
+    for cls in out.to_dict("records"):
+        inside = by_parcel.loc[by_parcel["top"] >= cls["threshold_mm"]]
+        for zip_code, n in inside.groupby("zip").size().items():
+            rows.append({**cls, "zip": zip_code, "parcel_count": int(n)})
+    zips = pd.DataFrame(rows, columns=ZIP_COLUMNS)
+    zips = zips.sort_values(["zip", "threshold_mm"]).reset_index(drop=True)
+    return ParcelCounts(out.loc[:, COUNT_COLUMNS], zips)

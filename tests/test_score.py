@@ -15,9 +15,12 @@ from hailprint.__main__ import main
 from hailprint.parcels import OWNER_FIELDS
 from hailprint.score import (
     COUNT_COLUMNS,
+    EDGE_M,
     SCORE_COLUMNS,
+    areas_km2,
     contingency,
     dist_column,
+    edge_m,
     in_domain,
     pool,
     score_day,
@@ -345,6 +348,39 @@ def test_in_domain_shrinks_with_the_radius():
     assert in_domain(report, 0).tolist() == [True]
     assert in_domain(report, 5).tolist() == [True]
     assert in_domain(report, 20).tolist() == [False]
+
+
+def test_edge_m_is_positive_inside_the_crop_and_negative_outside():
+    min_lon, min_lat, max_lon, max_lat = county.bbox()
+    mid_lat = (min_lat + max_lat) / 2
+    # 0.02 degree of longitude at Harris is about 1.95 km
+    inside = _lonlat_report(min_lon + 0.02, mid_lat)
+    outside = _lonlat_report(min_lon - 0.02, mid_lat)
+
+    assert 1800 < edge_m(inside).iloc[0] < 2100
+    assert -2100 < edge_m(outside).iloc[0] < -1800
+
+
+@pytest.mark.parametrize("radius", [0, 5, 20])
+def test_in_domain_is_edge_m_beyond_the_radius_plus_one_cell(radius):
+    min_lon, min_lat, max_lon, max_lat = county.bbox()
+    mid_lat = (min_lat + max_lat) / 2
+    lons = [min_lon - 0.02, min_lon + 0.02, min_lon + 0.08, min_lon + 0.12, min_lon + 0.25]
+    reports = pd.concat([_lonlat_report(lon, mid_lat) for lon in lons], ignore_index=True)
+
+    expected = edge_m(reports) > radius * 1000 + EDGE_M
+
+    assert in_domain(reports, radius).tolist() == expected.tolist()
+    assert expected.any()
+
+
+def test_areas_km2_is_public_and_gives_one_pair_per_size_class():
+    areas = areas_km2(_swaths(), _paper_reports().iloc[:0], 5)
+
+    assert len(areas) == 7
+    assert areas[0][0] == pytest.approx(_box_a().area / 1e6)
+    assert areas[0][1] == areas[0][0]  # no report: the whole swath is unverifiable
+    assert areas[2] == (0.0, 0.0)
 
 
 def test_score_day_radius_zero_scores_inside_as_hit_and_outside_as_miss():

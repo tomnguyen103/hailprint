@@ -112,6 +112,19 @@ def daily_csv(storm_date: date, cache_dir: Path, today: date) -> str | None:
     return text
 
 
+def read_facts(path: Path) -> dict[str, dict]:
+    """The report facts of the candidate file by storm date. A blank cell becomes None."""
+    frame = pd.read_csv(path, dtype={"storm_date": str})
+    return {
+        row["storm_date"]: {
+            "report_count": None if pd.isna(row["report_count"]) else int(row["report_count"]),
+            "max_size_in": None if pd.isna(row["max_size_in"]) else float(row["max_size_in"]),
+            "report_source": None if pd.isna(row["report_source"]) else str(row["report_source"]),
+        }
+        for row in frame.to_dict("records")
+    }
+
+
 def all_days(
     wcm_path: Path, index: pd.DataFrame, cache_dir: Path = DAILY_DIR, today: date | None = None
 ) -> pd.DataFrame:

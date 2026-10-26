@@ -1,10 +1,11 @@
-"""Command line entry: ``hailprint ingest|index|candidates|parcels|score``."""
+"""Command line entry: ``hailprint ingest|index|candidates|parcels|score|publish``."""
 
 import argparse
+import json
 import math
 import re
 import sys
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import geopandas as gpd
@@ -19,6 +20,7 @@ from hailprint import (
     parcels,
     paths,
     plot,
+    publish,
     reports,
     score,
     swath,
@@ -30,6 +32,7 @@ OUT_DIR = paths.OUT_DIR
 PARCELS_GDB = paths.RAW_DIR / "hcad" / "extracted" / "Parcels.gdb"
 PARCELS_DIR = paths.DERIVED_DIR / "parcels"
 SCORES_DIR = paths.DERIVED_DIR / "scores"
+SITE_DATA_DIR = paths.SITE_DATA_DIR
 
 
 def _storm_date(text: str) -> date:
@@ -82,6 +85,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=score.DEFAULT_RADIUS_KM,
         help=f"scoring radius in km, 0 to {score.MAX_RADIUS_KM}, default {score.DEFAULT_RADIUS_KM}",
     )
+    publish_cmd = commands.add_parser(
+        "publish", help="write the site data files and the storms index for storm dates"
+    )
+    publish_cmd.add_argument(
+        "storm_dates",
+        nargs="*",
+        type=_storm_date,
+        help="SPC convective day, YYYY-MM-DD; none publishes every swath file",
+    )
     return parser
 
 
@@ -98,7 +110,9 @@ def main(argv: list[str] | None = None) -> int:
             count_parcels(args.storm_date)
         elif args.command == "score":
             score_days(args.storm_dates, args.radius_km)
-    except (RuntimeError, FileNotFoundError, ValueError) as exc:
+        elif args.command == "publish":
+            publish_days(args.storm_dates)
+    except (RuntimeError, OSError, ValueError) as exc:
         print(exc, file=sys.stderr)
         return 1
     return 0
@@ -163,13 +177,14 @@ def rank_candidates(top: int) -> Path:
 
 
 def count_parcels(storm_date: date) -> Path:
-    """Parcels per size class from the swath file and the masked HCAD read."""
+    """Parcels per size class and per ZIP from the swath file and the masked HCAD read."""
     swath_path = DERIVED_DIR / f"swaths-{storm_date}.parquet"
     if not swath_path.exists():
         raise FileNotFoundError(f"run hailprint ingest first: {swath_path}")
     swaths = gpd.read_parquet(swath_path)
-    counts = parcels.count_parcels(swaths, PARCELS_GDB)
+    counts, zips = parcels.count_parcels(swaths, PARCELS_GDB)
     path = files.write_atomic(counts, PARCELS_DIR / f"parcel-counts-{storm_date}.parquet")
+    files.write_atomic(zips, PARCELS_DIR / f"zip-counts-{storm_date}.parquet")
     for threshold_in, parcel_count in zip(
         counts["threshold_in"], counts["parcel_count"], strict=True
     ):
@@ -240,6 +255,82 @@ def score_days(storm_dates: list[date], radius_km: float) -> list[Path]:
             "so its FAR, CSI, and HSS hold by construction"
         )
     print(f"confidence: {swath.CONFIDENCE}")
+    return written
+
+
+def _utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def publish_days(storm_dates: list[date]) -> list[Path]:
+    """Write the site data files per storm date, then the storms index.
+
+    A date without an SPC daily CSV is skipped. A date that fails a check writes no file and is
+    named in the final error. The index is written last and holds the dates of this run over the
+    entries of the earlier runs.
+    """
+    selected = _swath_files(storm_dates)
+    if not candidates.CANDIDATES_PATH.exists():
+        raise FileNotFoundError(f"run hailprint candidates first: {candidates.CANDIDATES_PATH}")
+    facts = candidates.read_facts(candidates.CANDIDATES_PATH)
+    index_path = SITE_DATA_DIR / "storms.json"
+    old: list[dict] = []
+    if index_path.exists():
+        try:
+            previous = json.loads(index_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ValueError(f"{index_path}: not valid JSON, delete it or fix it") from exc
+        publish.validate(previous, "storms")
+        old = previous["storms"]
+    run_time = _utc_now()
+    entries, written, failed = [], [], []
+    for storm_date, swath_path in selected:
+        try:
+            text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, date.today())
+        except RuntimeError as exc:
+            print(f"{storm_date}: SPC fetch failed, skipped: {exc!r}", file=sys.stderr)
+            continue
+        if text is None:
+            print(f"{storm_date}: no SPC daily CSV, skipped", file=sys.stderr)
+            continue
+        zips_path = PARCELS_DIR / f"zip-counts-{storm_date}.parquet"
+        has_zips = zips_path.exists()
+        try:
+            mrms, max_mesh_mm = publish.swath_source(swath_path)
+            texts, entry = publish.build_day(
+                storm_date,
+                gpd.read_parquet(swath_path),
+                reports.nearby_reports(storm_date, text),
+                mrms=mrms,
+                max_mesh_mm=max_mesh_mm,
+                spc=publish.spc_source(storm_date),
+                zips=pd.read_parquet(zips_path) if has_zips else None,
+                hcad=publish.hcad_source(zips_path.name) if has_zips else None,
+                facts=facts.get(storm_date.isoformat()),
+                run_time=run_time,
+            )
+        except ValueError as exc:
+            print(f"{storm_date}: {exc}", file=sys.stderr)
+            failed.append(storm_date.isoformat())
+            continue
+        folder = SITE_DATA_DIR / publish.STORMS_DIR / storm_date.isoformat()
+        for name, body in texts.items():
+            written.append(files.write_text_atomic(body, folder / name))
+        if publish.ZIPS_FILE not in texts:
+            (folder / publish.ZIPS_FILE).unlink(missing_ok=True)
+        entries.append(entry)
+        print(f"{storm_date}: published {len(texts)} files")
+    if not entries:
+        raise RuntimeError(
+            "no storm date was published" + (f"; failed: {', '.join(failed)}" if failed else "")
+        )
+    doc = publish.storms_doc(publish.merge_entries(old, entries, SITE_DATA_DIR), run_time)
+    publish.validate(doc, "storms")
+    written.append(files.write_text_atomic(publish.dumps(doc, "storms"), index_path))
+    print(f"storms index: {len(doc['storms'])} entries")
+    print(f"confidence: {swath.CONFIDENCE}")
+    if failed:
+        raise ValueError(f"publish failed for: {', '.join(failed)}")
     return written
 
 

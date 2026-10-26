@@ -405,3 +405,22 @@ def test_all_days_skips_a_single_404_day_and_keeps_the_wcm_rows(tmp_path, monkey
     days = _all_days(tmp_path, _index(day))
 
     assert "spc-daily" not in set(days["report_source"])
+
+
+def test_read_facts_types_the_filled_cells_and_gives_none_for_a_blank_one(tmp_path):
+    path = tmp_path / "candidate-days.csv"
+    path.write_text(
+        "storm_date,report_count,max_size_in,has_12z,report_source\n"
+        "2024-05-28,10,,True,wcm\n"
+        "2023-06-23,13,2.75,True,spc-daily\n",
+        encoding="utf-8",
+    )
+
+    facts = candidates.read_facts(path)
+
+    assert facts == {
+        "2024-05-28": {"report_count": 10, "max_size_in": None, "report_source": "wcm"},
+        "2023-06-23": {"report_count": 13, "max_size_in": 2.75, "report_source": "spc-daily"},
+    }
+    assert type(facts["2023-06-23"]["report_count"]) is int
+    assert type(facts["2023-06-23"]["max_size_in"]) is float

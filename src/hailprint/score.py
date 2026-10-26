@@ -138,15 +138,21 @@ def distances(swaths: gpd.GeoDataFrame, reports: gpd.GeoDataFrame) -> pd.DataFra
     )
 
 
-def in_domain(reports: gpd.GeoDataFrame, radius_km: float) -> pd.Series:
-    """True for a report whose radius disc lies inside the swath crop, shrunk by one cell."""
+def edge_m(reports: gpd.GeoDataFrame) -> pd.Series:
+    """Signed metres from each report to the swath crop edge: positive inside, negative outside."""
     crop = shapely.segmentize(shapely.box(*county.bbox()), SEGMENT_DEG)
     crop_m = gpd.GeoSeries([crop], crs="EPSG:4326").to_crs(METRIC_CRS).iloc[0]
-    inner = crop_m.buffer(-(radius_km * 1000 + EDGE_M))
-    return reports.geometry.to_crs(METRIC_CRS).within(inner)
+    points = reports.geometry.to_crs(METRIC_CRS)
+    metres = points.distance(crop_m.exterior)
+    return metres.where(points.within(crop_m), -metres)
 
 
-def _areas_km2(
+def in_domain(reports: gpd.GeoDataFrame, radius_km: float) -> pd.Series:
+    """True for a report whose radius disc lies inside the swath crop, shrunk by one cell."""
+    return edge_m(reports) > radius_km * 1000 + EDGE_M
+
+
+def areas_km2(
     swaths: gpd.GeoDataFrame, reports: gpd.GeoDataFrame, radius_km: float
 ) -> list[tuple[float, float]]:
     """Per size class: swath area, and the part of it farther than the radius from every report."""
@@ -189,7 +195,7 @@ def score_day(
     table = contingency(pairs, radius_km)
     table.insert(0, "storm_date", storm_date.isoformat())
     table["radius_km"] = radius_km
-    areas = _areas_km2(metric, reports, radius_km)
+    areas = areas_km2(metric, reports, radius_km)
     table["swath_km2"] = [swath_km2 for swath_km2, _ in areas]
     table["unverifiable_km2"] = [unverifiable_km2 for _, unverifiable_km2 in areas]
     return ScoredDay(pairs, with_skill(table, SCORE_COLUMNS), int((~keep).sum()))

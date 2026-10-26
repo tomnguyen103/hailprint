@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hailprint.invalid/schemas/pairs.schema.json",
+  "title": "Pairs",
+  "description": "Radius-free scoring input: per report the edge distance and the distance to each size class; per class the swath and unverifiable area for each whole kilometre 0 to 20.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt", "radius_km_default", "radius_km_max", "edge_margin_m", "classes", "reports"],
+  "properties": {
+    "receipt": { "$ref": "receipt.schema.json" },
+    "radius_km_default": { "type": "integer", "minimum": 0 },
+    "radius_km_max": { "type": "integer", "minimum": 0 },
+    "edge_margin_m": { "type": "number", "minimum": 0 },
+    "classes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["threshold_mm", "threshold_in", "label", "swath_km2", "unverifiable_km2"],
+        "properties": {
+          "threshold_mm": { "type": "number", "exclusiveMinimum": 0 },
+          "threshold_in": { "type": "number", "exclusiveMinimum": 0 },
+          "label": { "type": "string", "minLength": 1 },
+          "swath_km2": { "type": "number", "minimum": 0 },
+          "unverifiable_km2": {
+            "type": "array",
+            "minItems": 21,
+            "maxItems": 21,
+            "items": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "reports": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "size_in", "edge_m", "dist_m"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 0 },
+          "size_in": { "type": "number", "minimum": 0 },
+          "edge_m": { "type": "number" },
+          "dist_m": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 7,
+            "items": { "type": ["number", "null"], "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

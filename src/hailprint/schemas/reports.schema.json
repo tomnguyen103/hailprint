@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hailprint.invalid/schemas/reports.schema.json",
+  "title": "Reports",
+  "description": "SPC hail reports of the neighbourhood as Point features, with a receipt.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "receipt", "features"],
+  "properties": {
+    "type": { "const": "FeatureCollection" },
+    "receipt": { "$ref": "receipt.schema.json" },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "properties", "geometry"],
+        "properties": {
+          "type": { "const": "Feature" },
+          "properties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "time", "location", "county", "state", "size_in"],
+            "properties": {
+              "id": { "type": "integer", "minimum": 0 },
+              "time": { "type": "string" },
+              "location": { "type": "string" },
+              "county": { "type": "string" },
+              "state": { "type": "string" },
+              "size_in": { "type": "number", "minimum": 0 }
+            }
+          },
+          "geometry": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["type", "coordinates"],
+            "properties": {
+              "type": { "const": "Point" },
+              "coordinates": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": { "type": "number" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
