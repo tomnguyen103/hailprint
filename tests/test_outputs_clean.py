@@ -1,14 +1,13 @@
 """Every written output stays free of owner fields and the forbidden word."""
 
-from pathlib import Path
-
 import pyarrow.parquet as pq
 import pytest
 
+from hailprint import paths
 from hailprint.parcels import OWNER_FIELDS
 from hailprint.swath import FORBIDDEN_WORD
 
-OUTPUT_DIRS = [Path("out"), Path("data/derived")]
+OUTPUT_DIRS = [paths.OUT_DIR, paths.DERIVED_DIR]
 
 
 def _files():

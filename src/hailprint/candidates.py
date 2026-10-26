@@ -8,12 +8,14 @@ from pathlib import Path
 
 import pandas as pd
 
+from hailprint.paths import DERIVED_DIR, RAW_DIR
+
 # shortcut: the 1955-2025 file holds no 2026 day, upgrade when SPC publishes the 2026 file
 # or when the backtest needs 2026 days
 WCM_URL = "https://www.spc.noaa.gov/wcm/data/1955-2025_hail.csv.zip"
-WCM_PATH = Path("data/raw/spc/1955-2025_hail.csv.zip")
+WCM_PATH = RAW_DIR / "spc" / "1955-2025_hail.csv.zip"
 HARRIS_FIPS = 201
-CANDIDATES_PATH = Path("data/derived/index/candidate-days.csv")
+CANDIDATES_PATH = DERIVED_DIR / "index" / "candidate-days.csv"
 COLUMNS = ["storm_date", "report_count", "max_size_in", "has_12z"]
 USECOLS = ["date", "time", "st", "mag", "f1", "f2", "f3", "f4"]
 # WCM times are CST (UTC-6); the SPC day starts at 12 UTC; the net shift from local clock is -6 h

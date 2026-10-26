@@ -2,13 +2,13 @@
 
 from collections.abc import Iterator
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import pandas as pd
 
 from hailprint.mesh import BUCKET, PRODUCT, s3_client
+from hailprint.paths import DERIVED_DIR
 
-INDEX_PATH = Path("data/derived/index/mesh-archive.parquet")
+INDEX_PATH = DERIVED_DIR / "index" / "mesh-archive.parquet"
 COLUMNS = ["storm_date", "file_count", "bytes", "has_12z"]
 PREFIX = f"CONUS/{PRODUCT}/"
 

@@ -9,13 +9,24 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
-from hailprint import archive, candidates, county, files, mesh, parcels, plot, reports, swath
+from hailprint import (
+    archive,
+    candidates,
+    county,
+    files,
+    mesh,
+    parcels,
+    paths,
+    plot,
+    reports,
+    swath,
+)
 
-RAW_DIR = Path("data/raw/mesh")
-DERIVED_DIR = Path("data/derived/swaths")
-OUT_DIR = Path("out")
-PARCELS_GDB = Path("data/raw/hcad/extracted/Parcels.gdb")
-PARCELS_DIR = Path("data/derived/parcels")
+RAW_DIR = paths.RAW_DIR / "mesh"
+DERIVED_DIR = paths.DERIVED_DIR / "swaths"
+OUT_DIR = paths.OUT_DIR
+PARCELS_GDB = paths.RAW_DIR / "hcad" / "extracted" / "Parcels.gdb"
+PARCELS_DIR = paths.DERIVED_DIR / "parcels"
 
 
 def _storm_date(text: str) -> date:
