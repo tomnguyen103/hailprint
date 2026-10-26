@@ -50,7 +50,7 @@ def harris_days(path: Path) -> pd.DataFrame:
     """Harris County, TX rows grouped by convective day: report_count and max_size_in."""
     df = pd.read_csv(path, usecols=USECOLS)
     harris = (df[["f1", "f2", "f3", "f4"]] == HARRIS_FIPS).any(axis=1)
-    df = df[(df["st"] == "TX") & harris].copy()
+    df = df.loc[(df["st"] == "TX") & harris].copy()
     other = sorted(set(df["tz"]) - {CST_TZ})
     if other:
         raise ValueError(f"WCM tz code {other} for Harris rows, expected {CST_TZ} (CST)")
@@ -63,9 +63,9 @@ def harris_days(path: Path) -> pd.DataFrame:
 def rank(days: pd.DataFrame, index: pd.DataFrame) -> pd.DataFrame:
     """Join the archive index; keep archive-era days; sort by count desc, size desc, date asc."""
     merged = days.merge(index[["storm_date", "has_12z"]], on="storm_date", how="left")
-    merged = merged[merged["storm_date"] >= index["storm_date"].min()]
+    merged = merged.loc[merged["storm_date"] >= index["storm_date"].min()]
     merged["has_12z"] = merged["has_12z"].fillna(False).astype(bool)
     merged = merged.sort_values(
         ["report_count", "max_size_in", "storm_date"], ascending=[False, False, True]
     )
-    return merged.reset_index(drop=True)[COLUMNS]
+    return merged.reset_index(drop=True).loc[:, COLUMNS]

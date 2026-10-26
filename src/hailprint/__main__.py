@@ -112,7 +112,7 @@ def index() -> Path:
     print(f"archive days: {len(df)}")
     print(f"first storm date: {df['storm_date'].iloc[0]}")
     print(f"last storm date: {df['storm_date'].iloc[-1]}")
-    print(f"days without 12Z file: {int((~df['has_12z']).sum())}")
+    print(f"days without 12Z file: {int((~df['has_12z'].to_numpy()).sum())}")
     return path
 
 
@@ -135,8 +135,10 @@ def count_parcels(storm_date: date) -> Path:
     swaths = gpd.read_parquet(swath_path)
     counts = parcels.count_parcels(swaths, PARCELS_GDB)
     path = files.write_atomic(counts, PARCELS_DIR / f"parcel-counts-{storm_date}.parquet")
-    for row in counts.itertuples():
-        print(f">= {row.threshold_in:.2f} in: {row.parcel_count} parcels")
+    for threshold_in, parcel_count in zip(
+        counts["threshold_in"], counts["parcel_count"], strict=True
+    ):
+        print(f">= {threshold_in:.2f} in: {parcel_count} parcels")
     print(f"confidence: {swath.CONFIDENCE}")
     return path
 

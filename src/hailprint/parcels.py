@@ -1,6 +1,7 @@
 """HCAD parcel loader and the per-class parcel count. Owner fields never load."""
 
 from pathlib import Path
+from typing import cast
 
 import geopandas as gpd
 import pandas as pd
@@ -51,8 +52,9 @@ def count_parcels(
     if swaths.empty:
         return pd.DataFrame(columns=COUNT_COLUMNS)
     parcels = load_parcels(parcels_path, layer=layer, mask=swaths.geometry.union_all())
-    hits = gpd.sjoin(parcels[["hcad_num", "geometry"]], swaths, predicate="intersects")
-    per_class = hits.groupby("threshold_mm")["hcad_num"].nunique()
+    hits = gpd.sjoin(parcels.loc[:, ["hcad_num", "geometry"]], swaths, predicate="intersects")
+    # the pandas stubs type a one-column groupby nunique as Series | DataFrame
+    per_class = cast(pd.Series, hits.groupby("threshold_mm")["hcad_num"].nunique())
     out = swaths.drop(columns="geometry").copy()
-    out["parcel_count"] = out["threshold_mm"].map(per_class).fillna(0).astype(int)
-    return out.sort_values("threshold_mm").reset_index(drop=True)[COUNT_COLUMNS]
+    out["parcel_count"] = per_class.reindex(out["threshold_mm"]).fillna(0).astype(int).to_numpy()
+    return out.sort_values("threshold_mm").reset_index(drop=True).loc[:, COUNT_COLUMNS]

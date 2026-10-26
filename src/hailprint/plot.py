@@ -41,7 +41,7 @@ def render(
     outline.boundary.plot(ax=ax, color="black", linewidth=1)
     if reports is not None and len(reports):
         reports.plot(ax=ax, color="black", marker="^", markersize=reports["size_in"] * 60)
-    handles = [
+    handles: list[Patch | Line2D] = [
         Patch(facecolor=color, edgecolor=EDGE_COLOR, linewidth=0.4, label=label)
         for color, label in zip(colors, swaths["label"], strict=True)
     ]

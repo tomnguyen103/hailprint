@@ -20,7 +20,11 @@ dependencies = [
 hailprint = "hailprint.__main__:main"
 
 [dependency-groups]
-dev = ["pytest", "ruff"]
+dev = [
+    "pyright>=1.1.414",
+    "pytest",
+    "ruff",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -37,3 +41,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.pyright]
+include = ["src"]
+typeCheckingMode = "basic"

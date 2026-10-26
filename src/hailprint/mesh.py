@@ -4,6 +4,7 @@ import gzip
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
+from typing import cast
 
 import boto3
 import eccodes
@@ -78,11 +79,13 @@ def decode(path: Path) -> xr.DataArray:
     with opener(path, "rb") as fh:
         handle = eccodes.codes_new_from_message(fh.read())
     try:
-        ni, nj = eccodes.codes_get(handle, "Ni"), eccodes.codes_get(handle, "Nj")
-        lon0 = eccodes.codes_get(handle, "longitudeOfFirstGridPointInDegrees")
-        lat0 = eccodes.codes_get(handle, "latitudeOfFirstGridPointInDegrees")
-        dlon = eccodes.codes_get(handle, "iDirectionIncrementInDegrees")
-        dlat = eccodes.codes_get(handle, "jDirectionIncrementInDegrees")
+        # eccodes has no precise return types; these keys hold numbers in a MESH GRIB2 file
+        ni = cast(int, eccodes.codes_get(handle, "Ni"))
+        nj = cast(int, eccodes.codes_get(handle, "Nj"))
+        lon0 = cast(float, eccodes.codes_get(handle, "longitudeOfFirstGridPointInDegrees"))
+        lat0 = cast(float, eccodes.codes_get(handle, "latitudeOfFirstGridPointInDegrees"))
+        dlon = cast(float, eccodes.codes_get(handle, "iDirectionIncrementInDegrees"))
+        dlat = cast(float, eccodes.codes_get(handle, "jDirectionIncrementInDegrees"))
         if eccodes.codes_get(handle, "jScansPositively"):
             raise ValueError(f"{path.name}: expected latitude descending")
         # a bitmap hides cells; values would hold fill numbers instead of sizes

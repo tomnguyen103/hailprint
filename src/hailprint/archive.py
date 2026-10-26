@@ -33,4 +33,4 @@ def build_index(client=None) -> pd.DataFrame:
     grouped["storm_date"] = [
         datetime.strptime(f, "%Y%m%d").date() - timedelta(days=1) for f in grouped.index
     ]
-    return grouped.sort_values("storm_date").reset_index(drop=True)[COLUMNS]
+    return grouped.sort_values("storm_date").reset_index(drop=True).loc[:, COLUMNS]
