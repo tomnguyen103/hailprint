@@ -121,3 +121,23 @@ def test_parse_rejects_an_html_body_and_a_short_row():
         parse("<html>Service Unavailable</html>")
     with pytest.raises(ValueError, match="malformed row"):
         parse(HEADER + "1200,100,Odd\n")
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        "1200,100,Odd,Harris,TX,nan,-95.0,x",
+        "1200,100,Odd,Harris,TX,95.0,-95.0,x",
+        "1200,100,Odd,Harris,TX,30.0,-195.0,x",
+        "1200,-5,Odd,Harris,TX,30.0,-95.0,x",
+        "1200,99999,Odd,Harris,TX,30.0,-95.0,x",
+    ],
+)
+def test_parse_rejects_a_row_out_of_range(row):
+    with pytest.raises(ValueError, match="malformed row"):
+        parse(HEADER + row + "\n")
+
+
+def test_parse_turns_a_csv_field_over_the_limit_into_a_value_error():
+    with pytest.raises(ValueError, match="malformed row"):
+        parse(HEADER + "1200,100," + "x" * 200_000 + ",Harris,TX,30.0,-95.0,x\n")

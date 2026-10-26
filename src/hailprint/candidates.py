@@ -85,11 +85,11 @@ def daily_csv(storm_date: date, cache_dir: Path, today: date) -> str | None:
     """
     cache = cache_dir / f"{storm_date:%y%m%d}.csv"
     if cache.exists():
-        cached = cache.read_text(encoding="utf-8")
         try:
+            cached = cache.read_text(encoding="utf-8")
             reports.parse(cached)
             return cached
-        except ValueError:
+        except (OSError, ValueError):
             print(f"SPC daily CSV cache {cache.name} is invalid, fetched again", file=sys.stderr)
     try:
         text = reports.fetch_hail_csv(storm_date)
@@ -105,7 +105,9 @@ def daily_csv(storm_date: date, cache_dir: Path, today: date) -> str | None:
         try:
             files.write_text_atomic(text, cache)
         except OSError as exc:
-            raise RuntimeError(f"SPC daily CSV cache write for {storm_date} failed: {exc}") from exc
+            raise RuntimeError(
+                f"SPC daily CSV cache write for {storm_date} failed: {exc.strerror}"
+            ) from exc
     return text
 
 
@@ -117,11 +119,12 @@ def all_days(
     Columns: storm_date, report_count, max_size_in, report_source ("wcm" or "spc-daily").
     """
     # shortcut: the daily fill counts preliminary reports, upgrade when SPC publishes the 2026
-    # WCM file
+    # WCM file; the WCM end is the day of its last row, so a quiet tail of the file is filled
+    # from the daily CSVs too
     wcm = harris_days(wcm_path)
     today = date.today() if today is None else today
     wcm_end = wcm_last_day(wcm_path)
-    later = sorted(d for d in index["storm_date"] if d > wcm_end)
+    later = sorted({d for d in index["storm_date"] if d > wcm_end})
     with ThreadPoolExecutor(FETCH_THREADS) as pool:
         texts = list(pool.map(lambda d: daily_csv(d, cache_dir, today), later))
     if later and all(text is None for text in texts):

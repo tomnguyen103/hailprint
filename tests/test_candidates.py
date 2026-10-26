@@ -3,7 +3,7 @@ import io
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
-from datetime import date, time
+from datetime import date, time, timedelta
 from email.message import Message as EmailMessage
 
 import pandas as pd
@@ -350,3 +350,39 @@ def test_all_days_names_the_date_when_the_cache_write_fails(tmp_path, monkeypatc
 
     with pytest.raises(RuntimeError, match="2026-01-05"):
         _all_days(tmp_path, _index(day))
+
+
+@pytest.mark.parametrize(("age", "cached"), [(3, False), (4, True)])
+def test_all_days_caches_a_day_only_after_it_is_older_than_fresh_days(
+    tmp_path, monkeypatch, age, cached
+):
+    today = date(2026, 10, 26)
+    day = today - timedelta(days=age)
+    _serve(monkeypatch, {day: THREE_HARRIS})
+
+    _all_days(tmp_path, _index(day), today=today)
+
+    assert (tmp_path / "daily" / f"{day:%y%m%d}.csv").exists() is cached
+
+
+def test_all_days_names_the_date_on_a_server_error(tmp_path, monkeypatch):
+    day = date(2026, 1, 5)
+    boom = urllib.error.HTTPError("u", 500, "Server Error", EmailMessage(), None)
+    _serve(monkeypatch, {day: boom})
+
+    with pytest.raises(RuntimeError, match="2026-01-05"):
+        _all_days(tmp_path, _index(day))
+
+    assert list((tmp_path / "daily").glob("*")) == []
+
+
+def test_all_days_fetches_again_when_the_cache_file_is_not_utf8(tmp_path, monkeypatch):
+    day = date(2026, 1, 5)
+    cache = tmp_path / "daily"
+    cache.mkdir()
+    (cache / "260105.csv").write_bytes(b"\xff\xfe\x00bad")
+    calls = _serve(monkeypatch, {day: THREE_HARRIS})
+
+    _all_days(tmp_path, _index(day))
+
+    assert calls == [day]

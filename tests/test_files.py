@@ -93,7 +93,7 @@ def test_write_text_atomic_writes_utf8_and_keeps_the_old_file_on_failure(tmp_pat
     def boom(self, *args, **kwargs):
         raise OSError("disk full")
 
-    monkeypatch.setattr(type(path), "write_text", boom)
+    monkeypatch.setattr(type(path), "write_bytes", boom)
     with pytest.raises(OSError):
         files.write_text_atomic("two\n", path)
 

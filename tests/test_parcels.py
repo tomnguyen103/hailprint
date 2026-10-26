@@ -166,3 +166,14 @@ def test_count_parcels_on_the_real_day_keeps_the_pre_change_counts_inside_the_ti
     # counts measured with the pre-change per-class join on 2026-10-26
     assert counts["parcel_count"].tolist() == [361418, 217634, 120194, 59209, 23515, 1208]
     assert elapsed < 32, f"{elapsed:.1f} s"
+
+
+def test_count_parcels_rejects_swaths_outside_epsg_4326():
+    swaths = gpd.GeoDataFrame(
+        {"threshold_mm": [19.05]},
+        geometry=[shapely.box(0, 0, 1, 1)],
+        crs="EPSG:2278",
+    )
+
+    with pytest.raises(ValueError, match="EPSG:4326"):
+        count_parcels(swaths, FIXTURE)

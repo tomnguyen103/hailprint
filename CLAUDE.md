@@ -85,7 +85,8 @@ Conventions that span modules:
 - HCAD owner fields (`parcels.OWNER_FIELDS`) are dropped at load via the `parcels.ALLOWED`
   allow-list and never written. Do not widen the allow-list without a decision in
   `docs/DECISIONS.md`.
-- Harris County only, HCAD footprints only (v1 scope, `docs/DECISIONS.md`).
+- Harris County only, HCAD footprints only (v1 scope, `docs/DECISIONS.md`). The scorer reads
+  SPC reports within the 50 km buffer, so it sees reports from outside the county.
 - GitHub Actions stay disabled on this repo. Scheduling is a local or VPS cron job.
 
 ## Documents

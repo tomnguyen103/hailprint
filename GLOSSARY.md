@@ -26,9 +26,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Parcel | One HCAD parcel polygon in EPSG:2278 keyed by the 13-digit `hcad_num`. |
 | Owner fields | HCAD columns that identify or reach a person: `CurrOwner`, `mail_addr_1`, `mail_addr_2`, `mail_city`, `mail_state`, `mail_zip`, `LocAddr`, `LocNum`, `LocName`. Dropped at load, never written. |
 | Parcel allow-list | The HCAD columns that survive load: `HCAD_NUM_1`, `LOWPARCELID`, `zip`, `city`, `yr_impr`, `StatedArea`, `Stacked`, geometry. |
-| Neighbourhood buffer | The 50 km distance (`reports.BUFFER_KM`) around the county outline. `nearby_reports` keeps the SPC reports inside it, by distance only. `harris_reports` keeps the
-reports named Harris, TX, by name only. Measured in EPSG:32615 metres. |
+| Neighbourhood buffer | The 50 km distance (`reports.BUFFER_KM`) around the county outline. `nearby_reports` keeps the SPC reports inside it, by distance only. `harris_reports` keeps the reports named Harris, TX, by name only. Measured in EPSG:32615 metres. |
 | WCM end | The last convective day in the WCM database. Storm dates after it have no WCM row. |
-| Daily-CSV fill | The Harris County, TX report count for a storm date after the WCM end, taken from the SPC preliminary daily CSV. `report_source` reads `spc-daily`; a WCM row reads `wcm`. SPC may still change a day under
-four days old, so such a count is preliminary. |
+| Daily-CSV fill | The Harris County, TX report count for a storm date after the WCM end, taken from the SPC preliminary daily CSV. `report_source` reads `spc-daily`; a WCM row reads `wcm`. SPC may still change a day under four days old, so such a count is preliminary. |
 | Spike | The week-1 run, replaced by `ingest` in week 2. Its evidence stays in `docs/WEEK-01.md`. |

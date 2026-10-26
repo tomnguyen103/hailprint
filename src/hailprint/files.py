@@ -38,7 +38,7 @@ def write_text_atomic(text: str, path: Path) -> Path:
     """Write UTF-8 text through a .tmp sibling; a failed write leaves the old target intact."""
     path = Path(path)
     with _atomic(path) as tmp:
-        tmp.write_text(text, encoding="utf-8")
+        tmp.write_bytes(text.encode("utf-8"))
     return path
 
 
