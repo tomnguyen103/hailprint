@@ -614,9 +614,7 @@ def test_score_command_names_a_stray_swath_file_and_exits_1(score_env, capsys):
     assert "swaths-2024-13-45.parquet" in capsys.readouterr().err
 
 
-def test_score_command_prints_the_areas_and_notes_a_row_without_correct_negatives(
-    score_env, capsys
-):
+def test_score_command_prints_the_areas_and_notes_a_row_without_a_non_event(score_env, capsys):
     tmp_path, serve = score_env
     _write_swath_file(tmp_path / "swaths", DAY_A)
     serve({DAY_A: _spc_csv()})
@@ -627,4 +625,5 @@ def test_score_command_prints_the_areas_and_notes_a_row_without_correct_negative
     table = pd.read_parquet(tmp_path / "scores" / "scores-2024-05-28.parquet")
     header = next(line for line in out.splitlines() if "label" in line)
     assert "swath_km2" in header and "unverifiable_km2" in header
-    assert ("0 correct negatives" in out) == bool((table["correct_negatives"] == 0).any())
+    no_non_event = (table["false_alarms"] + table["correct_negatives"]) == 0
+    assert ("no non-event" in out) == bool(no_non_event.any())

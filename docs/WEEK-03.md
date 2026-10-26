@@ -10,7 +10,7 @@ Oracle: a hand count of two days (below) and a raster oracle that reads the raw 
 - R is 5 km. A report is scored when its radius disc lies inside the Harris bbox, shrunk by one cell.
 - Reports come from the SPC preliminary daily CSV, inside the 50 km neighbourhood buffer.
 - The sample holds reports only. A correct negative is therefore a report smaller than the class, not an empty place.
-- The 25 days are the top-ranked candidate days, so every day has reports. The pooled numbers describe report-rich days, not a random sample of days.
+- The 25 days are the top-ranked candidate days, so every day has reports. `score` with no argument scores every swath file on disk, so ingesting more days changes the pooled numbers. The pooled numbers describe report-rich days, not a random sample of days.
 - The exclusion removes 25 of 124 reports, 12 of them on one day. 18 of the 99 scored reports lie outside Harris County, TX by county and state name (the 50 km neighbourhood).
 
 ## Run
@@ -46,7 +46,7 @@ Largest exclusions: 2024-03-15 (12 of 20 reports), 2023-04-15 (5 of 6).
 | >= 2.00 in | 99 | 0 | 8 | 4 | 87 | 0.00 | 1.00 | 0.00 | -0.06 |
 | >= 2.50 in | 99 | 0 | 0 | 1 | 98 | n/a | 1.00 | 0.00 | 0.00 |
 
-The 0.75 in and 1.00 in rows have 0 correct negatives, because no report is smaller than 1.00 in. With no non-event, FAR is 0.00 and CSI equals POD by construction. Read these two rows as POD only: their FAR, CSI, and HSS carry no information. The `score` command prints a note under the table when a row has 0 correct negatives.
+The 0.75 in and 1.00 in rows have 0 false alarms and 0 correct negatives, because no report is smaller than 1.00 in. With no non-event, FAR is 0.00 and CSI equals POD by construction. Read these two rows as POD only: their FAR, CSI, and HSS carry no information. The `score` command prints a note under the table when a row has no non-event (0 false alarms and 0 correct negatives).
 
 The 2.50 in row rests on one report with no event: its FAR 1.00 and CSI 0.00 come from that single false alarm. The 2.00 in row holds 8 events. Treat any cell with a handful of reports as a count, not a rate.
 

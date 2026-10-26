@@ -227,17 +227,17 @@ def score_days(storm_dates: list[date], radius_km: float) -> list[Path]:
         *score.AREA_COLUMNS,
         *score.METRIC_COLUMNS,
     ]
-    print(f"pooled over {len(tables)} storm dates, radius {radius_km:g} km")
+    print(f"pooled over {len(tables)} storm dates, radius {radius_km:.15g} km")
     table = pooled[shown].astype({c: object for c in score.AREA_COLUMNS + score.METRIC_COLUMNS})
     for column in score.AREA_COLUMNS:
         table[column] = [f"{v:.0f}" for v in pooled[column]]
     for column in score.METRIC_COLUMNS:
         table[column] = [f"{v:.2f}" for v in pooled[column]]
     print(table.to_string(index=False))
-    if bool((pooled["correct_negatives"] == 0).to_numpy().any()):
+    if bool(((pooled["false_alarms"] + pooled["correct_negatives"]) == 0).to_numpy().any()):
         print(
-            "note: a row with 0 correct negatives has no report below its class, "
-            "so its FAR and HSS hold by construction"
+            "note: a row with no report below its class has no non-event, "
+            "so its FAR, CSI, and HSS hold by construction"
         )
     print(f"confidence: {swath.CONFIDENCE}")
     return written
