@@ -1,12 +1,18 @@
 import math
+import urllib.error
 from datetime import date
+from email.message import Message as EmailMessage
 
 import geopandas as gpd
 import pandas as pd
+import pyarrow.parquet as pq
 import pytest
 import shapely
 
-from hailprint import county, swath
+import hailprint.__main__ as cli
+from hailprint import candidates, county, reports, swath
+from hailprint.__main__ import main
+from hailprint.parcels import OWNER_FIELDS
 from hailprint.score import (
     COUNT_COLUMNS,
     SCORE_COLUMNS,
@@ -408,3 +414,180 @@ def test_score_day_counts_sum_to_the_scored_reports_and_events_fall_as_the_class
     events = (table["hits"] + table["misses"]).tolist()
     assert events == sorted(events, reverse=True)
     assert (table["unverifiable_km2"] <= table["swath_km2"]).all()
+
+
+# --- the score command ---
+
+DAY_A, DAY_B = date(2024, 5, 28), date(2024, 5, 29)
+
+
+def _write_swath_file(directory, day):
+    metric = _swaths()
+    inches = [mm / 25.4 for mm in metric["threshold_mm"]]
+    frame = gpd.GeoDataFrame(
+        {
+            "storm_date": [day.isoformat()] * 2,
+            "threshold_mm": metric["threshold_mm"],
+            "threshold_in": inches,
+            "label": [swath.label(mm) for mm in metric["threshold_mm"]],
+        },
+        geometry=metric.geometry,
+        crs=METRIC,
+    ).to_crs("EPSG:4326")
+    return swath.write_swaths(frame, directory / f"swaths-{day}.parquet", 1, 30.0)
+
+
+def _spc_csv(edge_report=False):
+    """SPC CSV text of the six paper reports, plus one report 2 km inside the crop edge."""
+    lines = ["Time,Size,Location,County,State,Lat,Lon,Comments"]
+    points = _paper_reports().to_crs("EPSG:4326")
+    for row in points.itertuples():
+        size, lat, lon = round(row.size_in * 100), row.geometry.y, row.geometry.x
+        lines.append(f"1200,{size},{row.location},Harris,TX,{lat:.5f},{lon:.5f},test")
+    if edge_report:
+        min_lon, min_lat, _, max_lat = county.bbox()
+        lines.append(
+            f"1300,100,Edge,Waller,TX,{(min_lat + max_lat) / 2:.5f},{min_lon + 0.02:.5f},t"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def _not_found():
+    return urllib.error.HTTPError("u", 404, "Not Found", EmailMessage(), None)
+
+
+@pytest.fixture
+def score_env(tmp_path, monkeypatch):
+    """Point the command at tmp dirs; serve(bodies) patches the SPC fetch by storm date."""
+    monkeypatch.setattr(cli, "DERIVED_DIR", tmp_path / "swaths")
+    monkeypatch.setattr(cli, "SCORES_DIR", tmp_path / "scores")
+    monkeypatch.setattr(candidates, "DAILY_DIR", tmp_path / "daily")
+
+    def serve(bodies):
+        def fetch(storm_date):
+            body = bodies[storm_date]
+            if isinstance(body, Exception):
+                raise body
+            return body
+
+        monkeypatch.setattr(reports, "fetch_hail_csv", fetch)
+
+    return tmp_path, serve
+
+
+def test_score_command_writes_pairs_and_scores_with_metadata(score_env, capsys):
+    tmp_path, serve = score_env
+    _write_swath_file(tmp_path / "swaths", DAY_A)
+    serve({DAY_A: _spc_csv()})
+
+    assert main(["score", "2024-05-28"]) == 0
+
+    out = capsys.readouterr().out
+    assert f"confidence: {swath.CONFIDENCE}" in out
+    assert "radar-estimated hail size >= 1.25 in" in out
+    for name in ("pairs", "scores"):
+        meta = pq.read_schema(tmp_path / "scores" / f"{name}-2024-05-28.parquet").metadata
+        assert meta[b"source"] == b"noaa-mrms-pds"
+        assert meta[b"product"] == b"MESH_Max_1440min_00.50"
+        assert meta[b"confidence"] == swath.CONFIDENCE.encode()
+        assert meta[b"radius_km"] == b"5"
+        assert meta[b"report_source"] == b"spc-daily-csv"
+    table = pd.read_parquet(tmp_path / "scores" / "scores-2024-05-28.parquet")
+    assert list(table.columns) == SCORE_COLUMNS
+    assert _counts(table).loc[19.05].tolist() == [4, 1, 0, 1]
+    assert len(gpd.read_parquet(tmp_path / "scores" / "pairs-2024-05-28.parquet")) == 6
+
+
+def test_score_command_without_a_date_scores_every_swath_file_and_pools_them(score_env, capsys):
+    tmp_path, serve = score_env
+    for day in (DAY_A, DAY_B):
+        _write_swath_file(tmp_path / "swaths", day)
+    serve({DAY_A: _spc_csv(), DAY_B: _spc_csv(edge_report=True)})
+
+    assert main(["score"]) == 0
+
+    lines = capsys.readouterr().out.splitlines()
+    assert "2024-05-28: 6 scored reports, 0 excluded" in lines
+    assert "2024-05-29: 6 scored reports, 1 excluded" in lines
+    pooled = next(line for line in lines if "radar-estimated hail size >= 0.75 in" in line)
+    assert pooled.split()[-4:-2] == ["0.80", "0.00"]  # pooled POD 8/10, FAR 0 at 0.75 in
+
+
+def test_score_command_without_a_swath_file_exits_1_naming_ingest(score_env, capsys):
+    _, serve = score_env
+    serve({})
+
+    assert main(["score", "2024-05-28"]) == 1
+    assert "hailprint ingest" in capsys.readouterr().err
+    assert main(["score"]) == 1
+    assert "hailprint ingest" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("argv", [["--radius-km", "25"], ["--radius-km", "nan"], ["2024-5-28"]])
+def test_score_command_rejects_bad_arguments(argv):
+    with pytest.raises(SystemExit) as exc:
+        main(["score", *argv])
+
+    assert exc.value.code == 2
+
+
+def test_score_command_second_run_leaves_equal_files_and_no_tmp_file(score_env):
+    tmp_path, serve = score_env
+    _write_swath_file(tmp_path / "swaths", DAY_A)
+    serve({DAY_A: _spc_csv()})
+    names = ["pairs-2024-05-28.parquet", "scores-2024-05-28.parquet"]
+
+    assert main(["score", "2024-05-28"]) == 0
+    first = [(tmp_path / "scores" / n).read_bytes() for n in names]
+    assert main(["score", "2024-05-28"]) == 0
+    second = [(tmp_path / "scores" / n).read_bytes() for n in names]
+
+    assert first == second
+    assert sorted(p.name for p in (tmp_path / "scores").iterdir()) == names
+
+
+def test_score_command_skips_a_404_day_and_scores_the_other(score_env, capsys):
+    tmp_path, serve = score_env
+    for day in (DAY_A, DAY_B):
+        _write_swath_file(tmp_path / "swaths", day)
+    serve({DAY_A: _not_found(), DAY_B: _spc_csv()})
+
+    assert main(["score"]) == 0
+
+    captured = capsys.readouterr()
+    assert [line for line in captured.err.splitlines() if "404" in line] == [
+        "SPC daily CSV for 2024-05-28 not found (HTTP 404), skipped"
+    ]
+    assert not (tmp_path / "scores" / "scores-2024-05-28.parquet").exists()
+    assert (tmp_path / "scores" / "scores-2024-05-29.parquet").exists()
+
+
+def test_score_command_exits_1_when_every_day_is_a_404(score_env, capsys):
+    tmp_path, serve = score_env
+    _write_swath_file(tmp_path / "swaths", DAY_A)
+    serve({DAY_A: _not_found()})
+
+    assert main(["score"]) == 1
+    assert "no storm date was scored" in capsys.readouterr().err
+
+
+def test_score_command_exits_1_on_a_network_error(score_env, capsys):
+    tmp_path, serve = score_env
+    _write_swath_file(tmp_path / "swaths", DAY_A)
+    serve({DAY_A: urllib.error.URLError("connection reset")})
+
+    assert main(["score", "2024-05-28"]) == 1
+    assert "SPC daily CSV for 2024-05-28 failed" in capsys.readouterr().err
+
+
+def test_score_command_outputs_hold_no_owner_field_or_forbidden_word(score_env):
+    tmp_path, serve = score_env
+    _write_swath_file(tmp_path / "swaths", DAY_A)
+    serve({DAY_A: _spc_csv()})
+    assert main(["score", "2024-05-28"]) == 0
+
+    for path in (tmp_path / "scores").iterdir():
+        schema = pq.read_schema(path)
+        text = " ".join(schema.names + [v.decode() for v in (schema.metadata or {}).values()])
+        for word in (swath.FORBIDDEN_WORD, *map(str.lower, OWNER_FIELDS)):
+            assert word not in text.lower(), (path, word)

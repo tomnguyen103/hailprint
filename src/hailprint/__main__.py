@@ -1,6 +1,7 @@
-"""Command line entry: ``hailprint ingest|index|candidates|parcels``."""
+"""Command line entry: ``hailprint ingest|index|candidates|parcels|score``."""
 
 import argparse
+import math
 import re
 import sys
 from datetime import date, datetime
@@ -19,6 +20,7 @@ from hailprint import (
     paths,
     plot,
     reports,
+    score,
     swath,
 )
 
@@ -27,6 +29,7 @@ DERIVED_DIR = paths.DERIVED_DIR / "swaths"
 OUT_DIR = paths.OUT_DIR
 PARCELS_GDB = paths.RAW_DIR / "hcad" / "extracted" / "Parcels.gdb"
 PARCELS_DIR = paths.DERIVED_DIR / "parcels"
+SCORES_DIR = paths.DERIVED_DIR / "scores"
 
 
 def _storm_date(text: str) -> date:
@@ -36,6 +39,18 @@ def _storm_date(text: str) -> date:
         return datetime.strptime(text, "%Y-%m-%d").date()
     except ValueError as exc:
         raise argparse.ArgumentTypeError(f"not a YYYY-MM-DD date: {text!r}") from exc
+
+
+def _radius_km(text: str) -> float:
+    try:
+        value = float(text)
+    except ValueError:
+        value = math.nan
+    if not (math.isfinite(value) and 0 <= value <= score.MAX_RADIUS_KM):
+        raise argparse.ArgumentTypeError(
+            f"not a radius from 0 to {score.MAX_RADIUS_KM} km: {text!r}"
+        )
+    return value
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -52,6 +67,21 @@ def build_parser() -> argparse.ArgumentParser:
         "parcels", help="count parcels per size class for a storm date"
     )
     parcels_cmd.add_argument("storm_date", type=_storm_date, help="SPC convective day, YYYY-MM-DD")
+    score_cmd = commands.add_parser(
+        "score", help="score the swaths against SPC hail reports for storm dates"
+    )
+    score_cmd.add_argument(
+        "storm_dates",
+        nargs="*",
+        type=_storm_date,
+        help="SPC convective day, YYYY-MM-DD; none scores every swath file",
+    )
+    score_cmd.add_argument(
+        "--radius-km",
+        type=_radius_km,
+        default=score.DEFAULT_RADIUS_KM,
+        help=f"scoring radius in km, 0 to {score.MAX_RADIUS_KM}, default {score.DEFAULT_RADIUS_KM}",
+    )
     return parser
 
 
@@ -66,6 +96,8 @@ def main(argv: list[str] | None = None) -> int:
             rank_candidates(args.top)
         elif args.command == "parcels":
             count_parcels(args.storm_date)
+        elif args.command == "score":
+            score_days(args.storm_dates, args.radius_km)
     except (RuntimeError, FileNotFoundError, ValueError) as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -144,6 +176,56 @@ def count_parcels(storm_date: date) -> Path:
         print(f">= {threshold_in:.2f} in: {parcel_count} parcels")
     print(f"confidence: {swath.CONFIDENCE}")
     return path
+
+
+def _swath_files(storm_dates: list[date]) -> list[tuple[date, Path]]:
+    """The swath file per storm date. An empty list selects every swath file, oldest first."""
+    if storm_dates:
+        found = [(d, DERIVED_DIR / f"swaths-{d}.parquet") for d in sorted(set(storm_dates))]
+    else:
+        found = [
+            (_storm_date(p.stem.removeprefix("swaths-")), p)
+            for p in sorted(DERIVED_DIR.glob("swaths-????-??-??.parquet"))
+        ]
+    for _, path in found:
+        if not path.exists():
+            raise FileNotFoundError(f"run hailprint ingest first: {path}")
+    if not found:
+        raise FileNotFoundError(f"run hailprint ingest first: no swath file in {DERIVED_DIR}")
+    return found
+
+
+def score_days(storm_dates: list[date], radius_km: float) -> list[Path]:
+    """Pairs and score files per storm date, then the pooled table. A 404 day is skipped."""
+    meta = {"radius_km": f"{radius_km:g}", "report_source": score.REPORT_SOURCE}
+    tables, written = [], []
+    for storm_date, swath_path in _swath_files(storm_dates):
+        text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, date.today())
+        if text is None:
+            continue
+        day = score.score_day(
+            gpd.read_parquet(swath_path),
+            reports.nearby_reports(storm_date, text),
+            storm_date,
+            radius_km,
+        )
+        for name, frame in (("pairs", day.pairs), ("scores", day.table)):
+            written.append(
+                files.write_atomic(frame, SCORES_DIR / f"{name}-{storm_date}.parquet", meta)
+            )
+        tables.append(day.table)
+        print(f"{storm_date}: {len(day.pairs)} scored reports, {day.excluded} excluded")
+    if not tables:
+        raise RuntimeError("no storm date was scored")
+    pooled = score.pool(tables)
+    shown = ["label", "report_count", *score.COUNT_COLUMNS, *score.METRIC_COLUMNS]
+    print(f"pooled over {len(tables)} storm dates, radius {radius_km:g} km")
+    table = pooled[shown].astype({c: object for c in score.METRIC_COLUMNS})
+    for column in score.METRIC_COLUMNS:
+        table[column] = [f"{v:.2f}" for v in pooled[column]]
+    print(table.to_string(index=False))
+    print(f"confidence: {swath.CONFIDENCE}")
+    return written
 
 
 if __name__ == "__main__":

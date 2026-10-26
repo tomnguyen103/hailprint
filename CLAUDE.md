@@ -22,6 +22,7 @@ uv run hailprint ingest 2024-05-28          # swath file + PNG for one or more s
 uv run hailprint index                      # archive index from one S3 bucket listing
 uv run hailprint candidates --top 20        # needs `index` first
 uv run hailprint parcels 2024-05-28         # needs `ingest` for that date and the HCAD gdb
+uv run hailprint score --radius-km 5        # needs `ingest`; scores every swath file against SPC daily CSVs
 ```
 
 Tests that need downloaded data self-skip: `needs_raw_mesh` (the 12Z GRIB2 under
@@ -45,11 +46,14 @@ plot.py       swaths + county outline + report points -> PNG (Agg backend)
 archive.py    one bucket listing -> one row per archive day (storm_date, file_count, bytes, has_12z)
 candidates.py SPC WCM hail database -> Harris County days (FIPS 201); all_days adds the days after the WCM end from SPC daily CSVs -> ranked, joined with the index
 parcels.py    HCAD Parcels.gdb -> allow-listed columns only, layer CRS -> one sjoin -> distinct hcad_num per size class
+score.py      swaths + nearby_reports -> per scored report, metre distance to each size class -> contingency table (hits, misses, false alarms, correct negatives) -> POD, FAR, CSI, HSS;
+              scoring radius 5 km default, 20 km max; reports within radius + 1 km of the crop edge are excluded (scoring domain); unverifiable area = swath farther than the radius from every report;
+              pool() sums counts and areas across days and recomputes the metrics
 county.py     committed Harris County GeoJSON (package data) -> outline() and bbox()
 files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata
 paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR; every data path hangs from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
-__main__.py   argparse CLI wiring the four commands and the fixed paths under data/ and out/
+__main__.py   argparse CLI wiring the five commands and the fixed paths under data/ and out/
 ```
 
 Data paths hang from `paths.ROOT`, so a command writes under the repo `data/` and `out/` from any
@@ -75,6 +79,10 @@ Conventions that span modules:
   is the neighbourhood buffer. `candidates.all_days` caches each daily CSV older than
   `FRESH_DAYS` at `data/raw/spc/daily/<yymmdd>.csv`. `candidate-days.csv` columns are
   `storm_date, report_count, max_size_in, has_12z, report_source`.
+- **Scoring**: the sample unit is the scored report. A class is a forecast for a report when the swath
+  lies within the scoring radius (distance 0 inside). `score` outputs (`pairs-<date>.parquet`,
+  `scores-<date>.parquet` under `data/derived/scores/`) carry `radius_km` and `report_source`
+  metadata. The pooled table sums counts across days and refuses mixed radii.
 - **`shortcut:` comments** mark known limits and their upgrade condition (ponytail convention).
   Keep them when editing nearby code.
 
