@@ -1,3 +1,4 @@
+import time
 from datetime import date
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import hailprint.__main__ as cli
 from hailprint import swath
 from hailprint.__main__ import main
 from hailprint.parcels import ALLOWED, COUNT_COLUMNS, OWNER_FIELDS, count_parcels, load_parcels
+from tests.conftest import HCAD_GDB, SWATHS_0528, needs_hcad
 
 FIXTURE = Path(__file__).parent / "fixtures" / "parcels_sample.gpkg"
 ALLOW_LIST = {"hcad_num", "low_parcel_id", "zip", "city", "yr_impr", "stated_area", "stacked"}
@@ -151,3 +153,16 @@ def test_parcels_command_counts_the_fixture(tmp_path, monkeypatch, capsys):
     out = table.to_pandas()
     assert out["parcel_count"].tolist() == [2, 0]
     assert date.fromisoformat(out["storm_date"].iloc[0]) == date(2024, 5, 28)
+
+
+@needs_hcad
+def test_count_parcels_on_the_real_day_keeps_the_pre_change_counts_inside_the_time_budget():
+    swaths = gpd.read_parquet(SWATHS_0528)
+
+    started = time.perf_counter()
+    counts = count_parcels(swaths, HCAD_GDB)
+    elapsed = time.perf_counter() - started
+
+    # counts measured with the pre-change per-class join on 2026-10-26
+    assert counts["parcel_count"].tolist() == [361418, 217634, 120194, 59209, 23515, 1208]
+    assert elapsed < 32, f"{elapsed:.1f} s"

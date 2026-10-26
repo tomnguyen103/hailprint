@@ -6,7 +6,7 @@ import pytest
 import shapely
 
 from hailprint import county
-from hailprint.reports import BUFFER_KM, harris_reports, nearby_reports
+from hailprint.reports import BUFFER_KM, harris_reports, nearby_reports, parse
 
 HEADER = "Time,Size,Location,County,State,Lat,Lon,Comments\n"
 CSV = (
@@ -102,3 +102,22 @@ def test_nearby_reports_gives_equal_frames_on_two_runs():
 def test_nearby_reports_rejects_a_row_with_a_bad_size():
     with pytest.raises(ValueError):
         nearby_reports(date(2024, 5, 28), text=HEADER + "1200,big,x,Harris,TX,29.9,-95.4,x\n")
+
+
+def test_harris_reports_keeps_a_harris_row_far_from_the_county_by_name():
+    far = HEADER + "1200,100,Odd,Harris,TX,45.0,-100.0,x\n"
+
+    assert len(harris_reports(date(2024, 5, 28), text=far)) == 1
+    assert len(nearby_reports(date(2024, 5, 28), text=far)) == 0
+
+
+def test_parse_rejects_a_header_without_the_size_column():
+    with pytest.raises(ValueError, match="Size"):
+        parse("Time,Location,County,State,Lat,Lon\n")
+
+
+def test_parse_rejects_an_html_body_and_a_short_row():
+    with pytest.raises(ValueError, match="lacks the columns"):
+        parse("<html>Service Unavailable</html>")
+    with pytest.raises(ValueError, match="malformed row"):
+        parse(HEADER + "1200,100,Odd\n")

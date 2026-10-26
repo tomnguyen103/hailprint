@@ -1,6 +1,8 @@
 """Atomic frame writes: a .tmp sibling, then one rename over the target."""
 
 import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import geopandas as gpd
@@ -18,6 +20,28 @@ METADATA = {"source": SOURCE, "product": PRODUCT, "confidence": CONFIDENCE}
 FORBIDDEN_WORD = "damage"
 
 
+@contextmanager
+def _atomic(path: Path) -> Iterator[Path]:
+    """Yield a per-process .tmp sibling; rename it over the path on success, drop it on failure."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # the pid keeps two concurrent runs (cron and a manual run) off one .tmp file
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    try:
+        yield tmp
+        tmp.replace(path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def write_text_atomic(text: str, path: Path) -> Path:
+    """Write UTF-8 text through a .tmp sibling; a failed write leaves the old target intact."""
+    path = Path(path)
+    with _atomic(path) as tmp:
+        tmp.write_text(text, encoding="utf-8")
+    return path
+
+
 def write_atomic(frame: pd.DataFrame, path: Path, metadata: dict[str, str] | None = None) -> Path:
     """Write to a per-process .tmp sibling, then rename over the target.
 
@@ -31,10 +55,7 @@ def write_atomic(frame: pd.DataFrame, path: Path, metadata: dict[str, str] | Non
     for text in [*merged, *merged.values()]:
         if FORBIDDEN_WORD in text.lower():
             raise ValueError(f"forbidden word in metadata: {text!r}")
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # the pid keeps two concurrent runs (cron and a manual run) off one .tmp file
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
-    try:
+    with _atomic(path) as tmp:
         if path.suffix == ".csv":
             frame.to_csv(tmp, index=False)
         else:
@@ -45,8 +66,4 @@ def write_atomic(frame: pd.DataFrame, path: Path, metadata: dict[str, str] | Non
                 table = pa.Table.from_pandas(frame, preserve_index=False)
             extra = {k.encode(): v.encode() for k, v in merged.items()}
             pq.write_table(table.replace_schema_metadata({**table.schema.metadata, **extra}), tmp)
-        tmp.replace(path)
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
     return path

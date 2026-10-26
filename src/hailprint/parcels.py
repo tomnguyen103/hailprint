@@ -44,6 +44,8 @@ def load_parcels(
     """
     if mask is not None:
         layer_crs = pyogrio.read_info(path, layer=layer)["crs"]
+        if layer_crs is None:
+            raise ValueError(f"{path} layer {layer} has no CRS")
         mask = gpd.GeoSeries([mask], crs="EPSG:4326").to_crs(layer_crs).iloc[0]
     gdf = gpd.read_file(path, layer=layer, columns=list(ALLOWED), mask=mask, engine="pyogrio")
     return cast(gpd.GeoDataFrame, gdf.rename(columns=ALLOWED))

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from hailprint import net, reports
+from hailprint import files, net, reports
 from hailprint.paths import DERIVED_DIR, RAW_DIR
 
 # shortcut: the 1955-2025 file holds no 2026 day, so all_days fills later days from the SPC daily
@@ -79,27 +79,33 @@ def wcm_last_day(path: Path) -> date:
 
 
 def daily_csv(storm_date: date, cache_dir: Path, today: date) -> str | None:
-    """SPC daily hail CSV text; None for an HTTP 404. A day older than FRESH_DAYS is cached."""
+    """SPC daily hail CSV text; None for an HTTP 404. A day older than FRESH_DAYS is cached.
+
+    Only text that parses is cached. A cache file that no longer parses is fetched again.
+    """
     cache = cache_dir / f"{storm_date:%y%m%d}.csv"
     if cache.exists():
-        return cache.read_text(encoding="utf-8")
+        cached = cache.read_text(encoding="utf-8")
+        try:
+            reports.parse(cached)
+            return cached
+        except ValueError:
+            print(f"SPC daily CSV cache {cache.name} is invalid, fetched again", file=sys.stderr)
     try:
         text = reports.fetch_hail_csv(storm_date)
+        reports.parse(text)
     except urllib.error.HTTPError as exc:
         if exc.code != 404:
             raise RuntimeError(f"SPC daily CSV for {storm_date} failed: {exc}") from exc
         print(f"SPC daily CSV for {storm_date} not found (HTTP 404), skipped", file=sys.stderr)
         return None
-    except (OSError, http.client.HTTPException) as exc:
+    except (OSError, http.client.HTTPException, ValueError) as exc:
         raise RuntimeError(f"SPC daily CSV for {storm_date} failed: {exc}") from exc
     if (today - storm_date).days > FRESH_DAYS:
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        tmp = cache.with_name(f"{cache.name}.{os.getpid()}.tmp")
         try:
-            tmp.write_text(text, encoding="utf-8")
-            tmp.replace(cache)
-        finally:
-            tmp.unlink(missing_ok=True)
+            files.write_text_atomic(text, cache)
+        except OSError as exc:
+            raise RuntimeError(f"SPC daily CSV cache write for {storm_date} failed: {exc}") from exc
     return text
 
 
@@ -118,6 +124,10 @@ def all_days(
     later = sorted(d for d in index["storm_date"] if d > wcm_end)
     with ThreadPoolExecutor(FETCH_THREADS) as pool:
         texts = list(pool.map(lambda d: daily_csv(d, cache_dir, today), later))
+    if later and all(text is None for text in texts):
+        raise RuntimeError(
+            f"SPC daily CSV not found for any of the {len(later)} days after the WCM"
+        )
     rows = []
     for day, text in zip(later, texts, strict=True):
         harris = reports.harris_reports(day, text=text) if text is not None else None

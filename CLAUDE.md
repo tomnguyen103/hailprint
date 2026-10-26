@@ -39,7 +39,8 @@ Data flow, one module per step (`src/hailprint/`):
 mesh.py       S3 (noaa-mrms-pds, anonymous) -> gz GRIB2 -> eccodes decode -> xarray cropped to Harris bbox
    |          key_for(storm_date) picks the single D+1 12:00 UTC MESH_Max_1440min file; sentinels -3/-1 masked to NaN
 swath.py      daily max raster -> one dissolved polygon per size class (7 nested thresholds) -> GeoParquet
-reports.py    SPC preliminary hail CSV for the day -> points with county and state; nearby_reports keeps BUFFER_KM = 50 km around the outline, harris_reports keeps Harris, TX
+reports.py    SPC preliminary hail CSV for the day -> points with county and state; nearby_reports keeps BUFFER_KM = 50 km around the outline (buffer only), harris_reports keeps
+              Harris, TX by county and state name (name only, as the WCM count does)
 plot.py       swaths + county outline + report points -> PNG (Agg backend)
 archive.py    one bucket listing -> one row per archive day (storm_date, file_count, bytes, has_12z)
 candidates.py SPC WCM hail database -> Harris County days (FIPS 201); all_days adds the days after the WCM end from SPC daily CSVs -> ranked, joined with the index

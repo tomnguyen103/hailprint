@@ -303,3 +303,50 @@ def test_candidates_command_writes_the_report_source_column(tmp_path, monkeypatc
     assert list(written.columns) == candidates.COLUMNS
     assert written["report_source"].tolist() == ["wcm", "spc-daily"]
     assert "spc-daily" in capsys.readouterr().out
+
+
+def test_all_days_does_not_cache_a_body_that_fails_to_parse(tmp_path, monkeypatch):
+    day = date(2026, 1, 5)
+    _serve(monkeypatch, {day: "<html>Service Unavailable</html>"})
+
+    with pytest.raises(RuntimeError, match="2026-01-05"):
+        _all_days(tmp_path, _index(day))
+
+    assert list((tmp_path / "daily").glob("*")) == []
+
+
+def test_all_days_fetches_again_when_the_cache_file_no_longer_parses(tmp_path, monkeypatch, capsys):
+    day = date(2026, 1, 5)
+    cache = tmp_path / "daily"
+    cache.mkdir()
+    (cache / "260105.csv").write_text("", encoding="utf-8")
+    calls = _serve(monkeypatch, {day: THREE_HARRIS})
+
+    days = _all_days(tmp_path, _index(day))
+
+    assert calls == [day]
+    assert days.loc[days["report_source"] == "spc-daily", "report_count"].tolist() == [3]
+    assert (cache / "260105.csv").read_text(encoding="utf-8") == THREE_HARRIS
+    assert "260105.csv" in capsys.readouterr().err
+
+
+def test_all_days_raises_when_every_fill_day_is_a_404(tmp_path, monkeypatch):
+    days = [date(2026, 1, 5), date(2026, 1, 6)]
+    not_found = urllib.error.HTTPError("u", 404, "Not Found", EmailMessage(), None)
+    _serve(monkeypatch, {d: not_found for d in days})
+
+    with pytest.raises(RuntimeError, match="any of the 2 days"):
+        _all_days(tmp_path, _index(*days))
+
+
+def test_all_days_names_the_date_when_the_cache_write_fails(tmp_path, monkeypatch):
+    day = date(2026, 1, 5)
+    _serve(monkeypatch, {day: THREE_HARRIS})
+
+    def boom(text, path):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(candidates.files, "write_text_atomic", boom)
+
+    with pytest.raises(RuntimeError, match="2026-01-05"):
+        _all_days(tmp_path, _index(day))
