@@ -5,6 +5,7 @@ out/
 *.grib2.gz
 *.idx
 *.parquet
+!tests/fixtures/*.parquet
 *.pmtiles
 *.shp
 *.shx

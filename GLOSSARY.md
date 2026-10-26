@@ -29,4 +29,9 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Neighbourhood buffer | The 50 km distance (`reports.BUFFER_KM`) around the county outline. `nearby_reports` keeps the SPC reports inside it, by distance only. `harris_reports` keeps the reports named Harris, TX, by name only. Measured in EPSG:32615 metres. |
 | WCM end | The last convective day in the WCM database. Storm dates after it have no WCM row. |
 | Daily-CSV fill | The Harris County, TX report count for a storm date after the WCM end, taken from the SPC preliminary daily CSV. `report_source` reads `spc-daily`; a WCM row reads `wcm`. SPC may still change a day under four days old, so such a count is preliminary. |
+| Scored report | An SPC report that `score_day` keeps: the report point lies inside the scoring domain, the crop shrunk by the scoring radius and one cell. Reports outside it count as excluded. |
+| Scoring radius | The distance in km (`score.DEFAULT_RADIUS_KM` = 5, at most `score.MAX_RADIUS_KM` = 20) within which a swath counts as a forecast for a report. Not the neighbourhood buffer. |
+| Scoring domain | The Harris bbox shrunk by the scoring radius plus one cell (`score.EDGE_M`). The swath is only known inside the bbox, so a report near its edge is not scored. |
+| Contingency table | For one size class and one scoring radius: hits, misses, false alarms, and correct negatives over the scored reports. POD, FAR, CSI, and HSS come from it. |
+| Unverifiable area | The part of a swath class, in km2, farther than the scoring radius from every SPC report. No report could confirm or deny hail there. |
 | Spike | The week-1 run, replaced by `ingest` in week 2. Its evidence stays in `docs/WEEK-01.md`. |

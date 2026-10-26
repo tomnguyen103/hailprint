@@ -20,6 +20,23 @@ SIZE_CLASSES_MM = (19.05, 25.4, 31.75, 38.1, 44.45, 50.8, 63.5)
 COLUMNS = ["storm_date", "threshold_mm", "threshold_in", "label", "geometry"]
 
 
+def label(threshold_mm: float) -> str:
+    """The label text of one size class."""
+    return f"radar-estimated hail size >= {threshold_mm / 25.4:.2f} in"
+
+
+def require_nested(swaths: gpd.GeoDataFrame, tolerance: float) -> None:
+    """Raise ValueError when a class reaches outside the next lower class (rows sorted by size).
+
+    The tolerance is in the units of the frame CRS.
+    """
+    geoms = swaths.geometry.tolist()
+    sizes = swaths["threshold_mm"].tolist()
+    for lower, higher, size in zip(geoms, geoms[1:], sizes[1:], strict=False):
+        if not higher.difference(lower.buffer(tolerance)).is_empty:
+            raise ValueError(f"size class {size} mm is not inside the next lower class")
+
+
 def _transform(da: xr.DataArray):
     lon, lat = da.longitude.values, da.latitude.values
     dx, dy = float(lon[1] - lon[0]), float(lat[0] - lat[1])
@@ -47,7 +64,7 @@ def build_swaths(da: xr.DataArray, storm_date: date) -> gpd.GeoDataFrame:
                 "storm_date": storm_date.isoformat(),
                 "threshold_mm": threshold,
                 "threshold_in": threshold_in,
-                "label": f"radar-estimated hail size >= {threshold_in:.2f} in",
+                "label": label(threshold),
                 "geometry": shapely.MultiPolygon(
                     shapely.get_parts(shapely.unary_union(polygons)).tolist()
                 ),

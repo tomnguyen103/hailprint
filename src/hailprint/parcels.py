@@ -8,6 +8,8 @@ import pandas as pd
 import pyogrio
 from shapely.geometry.base import BaseGeometry
 
+from hailprint import swath
+
 ALLOWED = {
     "HCAD_NUM_1": "hcad_num",
     "LOWPARCELID": "low_parcel_id",
@@ -71,7 +73,9 @@ def count_parcels(
     if parcels.crs is None:
         raise ValueError(f"{parcels_path.name} layer {layer} has no CRS")
     swaths_native = densified.to_crs(parcels.crs)
-    _require_nested(swaths_native)
+    # shortcut: classes are treated as nested after reprojection; the guard raises if they are
+    # not, upgrade if the guard ever fires
+    swath.require_nested(swaths_native, NEST_TOLERANCE_FT)
     hits = gpd.sjoin(
         parcels.loc[:, ["hcad_num", "geometry"]],
         # one row per polygon part: the spatial index then skips parts far from a parcel
@@ -82,14 +86,3 @@ def count_parcels(
     out = swaths.drop(columns="geometry").copy()
     out["parcel_count"] = [int((top >= t).sum()) for t in out["threshold_mm"]]
     return out.loc[:, COUNT_COLUMNS]
-
-
-def _require_nested(swaths: gpd.GeoDataFrame) -> None:
-    """Raise ValueError when a class reaches outside the next lower class (rows sorted by size)."""
-    # shortcut: classes are treated as nested after reprojection; the guard raises if they are
-    # not, upgrade if the guard ever fires
-    geoms = swaths.geometry.tolist()
-    sizes = swaths["threshold_mm"].tolist()
-    for lower, higher, size in zip(geoms, geoms[1:], sizes[1:], strict=False):
-        if not higher.difference(lower.buffer(NEST_TOLERANCE_FT)).is_empty:
-            raise ValueError(f"size class {size} mm is not inside the next lower class")
