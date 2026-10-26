@@ -10,6 +10,19 @@ import matplotlib.pyplot as plt  # noqa: E402
 from matplotlib.lines import Line2D  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
+from hailprint.swath import SIZE_CLASSES_MM  # noqa: E402
+
+# design hail ramp, light to dark, parallel to SIZE_CLASSES_MM; the site map uses the same hex
+CLASS_COLORS = ("#DCEBF2", "#A9D2E3", "#6FB0CF", "#3F86B8", "#2E5E9E", "#33397A", "#2A1748")
+# the lightest class needs an edge to stay visible on a white page
+EDGE_COLOR = "#5B6B73"
+_COLOR_BY_CLASS = dict(zip(SIZE_CLASSES_MM, CLASS_COLORS, strict=True))
+
+
+def color_for(threshold_mm: float) -> str:
+    """Hex colour of one size class; KeyError for a threshold outside SIZE_CLASSES_MM."""
+    return _COLOR_BY_CLASS[threshold_mm]
+
 
 def render(
     swaths: gpd.GeoDataFrame,
@@ -20,14 +33,16 @@ def render(
 ) -> Path:
     """Save the PNG at 150 dpi: classes light to dark, outline in black, reports as triangles."""
     fig, ax = plt.subplots(figsize=(9, 8))
-    colors = plt.get_cmap("YlOrRd")([i / max(len(swaths) - 1, 1) for i in range(len(swaths))])
+    colors = [color_for(t) for t in swaths["threshold_mm"]]
     for color, geometry in zip(colors, swaths.geometry, strict=True):
-        gpd.GeoSeries([geometry], crs=swaths.crs).plot(ax=ax, color=color, linewidth=0)
+        gpd.GeoSeries([geometry], crs=swaths.crs).plot(
+            ax=ax, facecolor=color, edgecolor=EDGE_COLOR, linewidth=0.4
+        )
     outline.boundary.plot(ax=ax, color="black", linewidth=1)
     if reports is not None and len(reports):
         reports.plot(ax=ax, color="black", marker="^", markersize=reports["size_in"] * 60)
     handles = [
-        Patch(color=color, label=label)
+        Patch(facecolor=color, edgecolor=EDGE_COLOR, linewidth=0.4, label=label)
         for color, label in zip(colors, swaths["label"], strict=True)
     ]
     if reports is not None and len(reports):
