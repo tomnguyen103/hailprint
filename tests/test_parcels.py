@@ -2,33 +2,35 @@ from datetime import date
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
 import pyarrow.parquet as pq
+import pytest
 import shapely
 
 import hailprint.__main__ as cli
 from hailprint import swath
 from hailprint.__main__ import main
-from hailprint.parcels import COUNT_COLUMNS, OWNER_FIELDS, count_parcels, load_parcels
+from hailprint.parcels import ALLOWED, COUNT_COLUMNS, OWNER_FIELDS, count_parcels, load_parcels
 
 FIXTURE = Path(__file__).parent / "fixtures" / "parcels_sample.gpkg"
 ALLOW_LIST = {"hcad_num", "low_parcel_id", "zip", "city", "yr_impr", "stated_area", "stacked"}
 
 
-def test_load_keeps_only_the_allow_list_in_4326():
+def test_load_keeps_only_the_allow_list_in_the_layer_crs():
     gdf = load_parcels(FIXTURE)
     assert set(gdf.columns) == ALLOW_LIST | {"geometry"}
-    assert gdf.crs.to_epsg() == 4326
+    assert gdf.crs.to_epsg() == 2278
     assert len(gdf) == 5
 
 
 def test_load_with_a_mask_reads_the_covered_parcels_only():
-    parcels = load_parcels(FIXTURE)
+    parcels = load_parcels(FIXTURE).to_crs("EPSG:4326")
     mask = shapely.box(*parcels.iloc[:2].total_bounds)
 
     masked = load_parcels(FIXTURE, mask=mask)
 
     assert sorted(masked["hcad_num"]) == ["0000000000001", "0000000000002"]
-    assert masked.crs.to_epsg() == 4326
+    assert masked.crs.to_epsg() == 2278
 
 
 def test_written_parquet_has_no_owner_field(tmp_path):
@@ -41,26 +43,33 @@ def test_written_parquet_has_no_owner_field(tmp_path):
         assert field not in text
 
 
-def _swaths(parcels):
-    two = shapely.box(*parcels.iloc[:2].total_bounds)
-    none = shapely.box(-95.0, 29.0, -94.99, 29.01)
+def _swath_frame(geoms, thresholds=(19.05, 25.4)):
+    inches = [t / 25.4 for t in thresholds]
     return gpd.GeoDataFrame(
         {
-            "storm_date": ["2024-05-28", "2024-05-28"],
-            "threshold_mm": [19.05, 25.4],
-            "threshold_in": [0.75, 1.0],
-            "label": [
-                "radar-estimated hail size >= 0.75 in",
-                "radar-estimated hail size >= 1.00 in",
-            ],
+            "storm_date": ["2024-05-28"] * len(geoms),
+            "threshold_mm": list(thresholds),
+            "threshold_in": inches,
+            "label": [f"radar-estimated hail size >= {i:.2f} in" for i in inches],
         },
-        geometry=[shapely.MultiPolygon([two]), shapely.MultiPolygon([none])],
+        geometry=[shapely.MultiPolygon([g]) for g in geoms],
         crs="EPSG:4326",
     )
 
 
+def _swaths(parcels):
+    """Class 19.05 covers parcels 1 and 2; class 25.4 sits in the gap between them."""
+    two = shapely.box(*parcels.iloc[:2].total_bounds)
+    gap = shapely.box(-95.43130, 29.78440, -95.43120, 29.78450)
+    return _swath_frame([two, gap])
+
+
+def _parcels_4326():
+    return load_parcels(FIXTURE).to_crs("EPSG:4326")
+
+
 def test_count_parcels_two_in_class_19_and_zero_in_class_25():
-    parcels = load_parcels(FIXTURE)
+    parcels = _parcels_4326()
 
     counts = count_parcels(_swaths(parcels), FIXTURE)
 
@@ -69,6 +78,41 @@ def test_count_parcels_two_in_class_19_and_zero_in_class_25():
     assert counts["parcel_count"].tolist() == [2, 0]
     assert counts["storm_date"].tolist() == ["2024-05-28", "2024-05-28"]
     assert counts["label"].iloc[0] == "radar-estimated hail size >= 0.75 in"
+
+
+def test_count_parcels_nested_classes_count_a_parcel_in_every_class_at_or_below_its_highest():
+    parcels = _parcels_4326()
+    outer = shapely.box(*parcels.iloc[:2].total_bounds)
+    inner = shapely.box(*parcels.iloc[0].geometry.bounds)
+
+    counts = count_parcels(_swath_frame([outer, inner]), FIXTURE)
+
+    assert counts["parcel_count"].tolist() == [2, 1]
+
+
+def test_count_parcels_rejects_a_higher_class_outside_the_lower_class():
+    parcels = _parcels_4326()
+    first = shapely.box(*parcels.iloc[0].geometry.bounds)
+    last = shapely.box(*parcels.iloc[4].geometry.bounds)
+
+    with pytest.raises(ValueError, match="25.4"):
+        count_parcels(_swath_frame([first, last]), FIXTURE)
+
+
+def test_count_parcels_counts_stacked_polygons_with_one_hcad_num_once(tmp_path):
+    parcels = load_parcels(FIXTURE)
+    stacked = pd.concat([parcels.iloc[[0]], parcels.iloc[[0]]], ignore_index=True)
+    path = tmp_path / "stacked.gpkg"
+    stacked.rename(columns={v: k for k, v in ALLOWED.items()}).to_file(
+        path, layer="Parcels", driver="GPKG"
+    )
+    swaths = _swath_frame(
+        [shapely.box(*parcels.to_crs("EPSG:4326").iloc[0].geometry.bounds)], thresholds=(19.05,)
+    )
+
+    counts = count_parcels(swaths, path)
+
+    assert counts["parcel_count"].tolist() == [1]
 
 
 def test_count_parcels_empty_swaths_gives_empty_frame():
@@ -87,7 +131,7 @@ def test_parcels_command_without_swath_file_exits_1(tmp_path, monkeypatch, capsy
 
 
 def test_parcels_command_counts_the_fixture(tmp_path, monkeypatch, capsys):
-    parcels = load_parcels(FIXTURE)
+    parcels = _parcels_4326()
     swaths_dir = tmp_path / "swaths"
     swath.write_swaths(_swaths(parcels), swaths_dir / "swaths-2024-05-28.parquet", 1, 30.0)
     monkeypatch.setattr(cli, "DERIVED_DIR", swaths_dir)
