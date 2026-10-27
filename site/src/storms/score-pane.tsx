@@ -2,6 +2,7 @@ import { useMemo, useState } from "preact/hooks";
 import { fetchJson } from "../data/fetch";
 import { guardPairs } from "../data/guard";
 import { DataError, type Storm, type TableRow } from "../data/types";
+import { METRICS, METRIC_LABELS, formatInches, metricText } from "../format";
 import { scoredCount } from "../pool";
 import { rescore } from "../rescore";
 import { RULER } from "../ruler";
@@ -10,11 +11,8 @@ import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
-import { formatInches, metricText } from "./select";
 
 const FILE = "pairs.json";
-const METRICS = ["pod", "far", "csi", "hss"] as const;
-const METRIC_LABELS: Record<(typeof METRICS)[number], string> = { pod: "POD", far: "FAR", csi: "CSI", hss: "HSS" };
 
 export function ScorePane({ storm, radiusKm: defaultRadiusKm }: { storm: Storm; radiusKm: number }) {
   const pairs = useLoad(storm.files.pairs, () => fetchJson(storm.files.pairs, guardPairs));

@@ -27,7 +27,7 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 | Item | Value |
 |---|---|
 | Storm dates served | 25, from the week-4 `site/data/` |
-| Site tests | 139 passed in 14 vitest files (pool, curve, point-form, csv, geo, router, rescore, guards, stamp, ruler, theme, county, select, sub-tabs) |
+| Site tests | 143 passed in 15 vitest files (pool, curve, point-form, csv, geo, router, rescore, guards, stamp, ruler, theme, county, select, sub-tabs, format) |
 | Python tests | 302 passed; ruff, format, and pyright clean, 2026-10-26 |
 | Type check | `tsc --noEmit` clean under `strict` with `noUncheckedIndexedAccess` |
 | Impeccable detector | exit 0, `[]` findings on `site/index.html` and `site/src` |
@@ -76,7 +76,7 @@ The main session captured every row under `docs/evidence/week-06/` with the file
 | 1920 | light | `/try/run` | before Copy | `1920-light-try_run-copy.png` |
 | 1920 | light | `/try/run` | after Copy, "Copied" | `1920-light-try_run-copied.png` |
 | 1920 | dark | `/try/run` | fallback "Select and copy" | `1920-dark-try_run-fallback.png` |
-| 390 | light | `/try/run` | commands wrap | `390-light-try_run-copy.png` |
+| 390 | light | `/try/run` | commands scroll inside the code block | `390-light-try_run-copy.png` |
 
 Slop test on the shipped surface: no KPI card row; no eyebrow or kicker label; no gradient text; no emoji or Unicode icon; shadow only on the receipt pop; monospace only on dates, numbers, and code; motion only on the marker move, the map fit, and the fly to a point, off under reduced motion; every control names its action; every error names the file and the recovery. Verdict: pass, on the 27 captures above.
 

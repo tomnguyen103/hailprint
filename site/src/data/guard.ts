@@ -78,6 +78,7 @@ export function guardPairs(value: unknown): Pairs {
   const file = "pairs.json";
   const root = rec(file, value, "pairs");
   guardReceipt(file, root["receipt"]);
+  num(file, root["radius_km_default"], "radius_km_default");
   num(file, root["radius_km_max"], "radius_km_max");
   num(file, root["edge_margin_m"], "edge_margin_m");
   const classes = list(file, root["classes"], "classes");
@@ -149,6 +150,12 @@ export function guardSwath(value: unknown): SwathFile {
   guardReceipt(file, rec(file, value, "collection")["receipt"]);
   guardCollection(file, value).forEach((props, i) => {
     num(file, props["threshold_mm"], `features[${i}].properties.threshold_mm`);
+  });
+  list(file, rec(file, value, "collection")["features"], "features").forEach((item, i) => {
+    const geometry = rec(file, rec(file, item, `features[${i}]`)["geometry"], `features[${i}].geometry`);
+    if (geometry["type"] !== "MultiPolygon") {
+      throw new DataError(file, `features[${i}].geometry.type is not MultiPolygon`);
+    }
   });
   return value as SwathFile;
 }

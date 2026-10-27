@@ -1,7 +1,8 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
-import { fetchCounty } from "../county";
+import { HARRIS_BBOX, contains, fetchCounty } from "../county";
 import { DataError, type StormsIndex } from "../data/types";
+import { BELOW_FIRST_CLASS, formatInches } from "../format";
 import { href } from "../router";
 import { objectName } from "../ruler";
 import { Link } from "../shell/link";
@@ -12,7 +13,6 @@ import { useSwathsAll } from "../state/swaths-all";
 import { useTheme } from "../state/theme";
 import type { MapHandle } from "../storms/map/create-map";
 import { coveringAt } from "../storms/map/geo";
-import { BELOW_FIRST_CLASS, formatInches } from "../storms/select";
 import "../styles/map.css";
 import { POINT_HINT, parsePoint } from "./point-form";
 
@@ -54,6 +54,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
         handle.current = next;
         next.map.on("click", (event) => {
           const { lng, lat } = event.lngLat;
+          if (!contains(HARRIS_BBOX, [lng, lat])) return;
           setLatText(lat.toFixed(4));
           setLonText(lng.toFixed(4));
           setInvalid(false);

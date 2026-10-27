@@ -52,6 +52,7 @@ export function Run({ index }: { index: StormsIndex }) {
       if (node) selectText(node);
       return;
     }
+    setFallback(false);
     // A second press inside the window restarts the timer; the live text stays "Copied", so it announces once.
     window.clearTimeout(timer.current);
     setCopied(i);
@@ -66,7 +67,7 @@ export function Run({ index }: { index: StormsIndex }) {
     a.href = url;
     a.download = `score-${date}-R${radius}.csv`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   };
 
   const files: [string, string | null][] = storm

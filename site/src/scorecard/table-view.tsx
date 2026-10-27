@@ -3,7 +3,7 @@ import type { PooledRow } from "../pool";
 import { RULER } from "../ruler";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ClassPick } from "./class-pick";
-import { METRIC_LABELS, METRICS } from "./curve";
+import { METRIC_LABELS, METRICS } from "../format";
 import { MetricText } from "./metric-text";
 
 export function TableView({

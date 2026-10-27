@@ -3,7 +3,7 @@ import { useEffect, useRef } from "preact/hooks";
 import type { Receipt, ReportProps } from "../../data/types";
 import { objectName } from "../../ruler";
 import { ReceiptChip } from "../../shell/receipt-chip";
-import { BELOW_FIRST_CLASS } from "../select";
+import { BELOW_FIRST_CLASS } from "../../format";
 
 export interface Pick {
   lngLat: [number, number];

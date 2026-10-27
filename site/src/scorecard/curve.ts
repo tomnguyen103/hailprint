@@ -7,10 +7,6 @@ export const X_MIN_IN = 0.75;
 export const X_MAX_IN = 2.5;
 export const LITERATURE_HSS = 0.38;
 
-export const METRICS = ["pod", "far", "csi", "hss"] as const;
-export type MetricKey = (typeof METRICS)[number];
-export const METRIC_LABELS: Record<MetricKey, string> = { pod: "POD", far: "FAR", csi: "CSI", hss: "HSS" };
-
 /** Threshold in inches to the plot x: 0.75 in at the left plot edge, 2.50 in at the right. */
 export function xOf(thresholdIn: number): number {
   const plot = WIDTH - MARGIN.left - MARGIN.right;

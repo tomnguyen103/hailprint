@@ -1,7 +1,7 @@
 // Port of hailprint.score.pool: sum the counts and areas per size class over storm dates,
 // then recompute the skill. Never a mean of metrics.
-import type { Pairs, TableRow } from "./data/types";
-import { skill } from "./rescore";
+import { DataError, type Pairs, type TableRow } from "./data/types";
+import { rescore, skill } from "./rescore";
 import { RULER } from "./ruler";
 
 export interface PooledRow extends TableRow {
@@ -50,4 +50,23 @@ export function pool(tables: TableRow[][], reportCounts: number[]): PooledRow[] 
       unverifiable_km2: sum((r) => r.unverifiable_km2),
     };
   });
+}
+
+const FILE = "pairs.json";
+
+/** The pooled rows and the scored report count at a radius, or the DataError a malformed file raises. */
+export function pooledRows(pairs: Pairs[], radius: number): { rows: PooledRow[]; scored: number } | { error: DataError } {
+  try {
+    const counts = pairs.map((p) => scoredCount(p, radius));
+    return {
+      rows: pool(
+        pairs.map((p) => rescore(p, radius)),
+        counts,
+      ),
+      scored: counts.reduce((a, b) => a + b, 0),
+    };
+  } catch (error) {
+    if (error instanceof DataError) return { error };
+    return { error: new DataError(FILE, error instanceof Error ? error.message : String(error)) };
+  }
 }

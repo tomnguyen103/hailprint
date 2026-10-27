@@ -2,7 +2,8 @@ import type { Receipt, ReportsFile, Storm } from "../data/types";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { CELLS, cellFor, cells } from "../stamp";
 import type { Load } from "../state/load";
-import { formatInches, objectForSize } from "./select";
+import { formatInches } from "../format";
+import { objectForSize } from "./select";
 
 interface Props {
   storm: Storm;

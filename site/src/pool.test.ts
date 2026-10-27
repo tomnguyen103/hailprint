@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import type { Pairs, StormsIndex, TableRow } from "./data/types";
-import { pool, scoredCount, type PooledRow } from "./pool";
+import { pool, pooledRows, scoredCount, type PooledRow } from "./pool";
 import { rescore } from "./rescore";
 import { RULER } from "./ruler";
 
@@ -63,6 +63,31 @@ describe("pool", () => {
   it("refuses zero tables and a report count list of another length", () => {
     expect(() => pool([], [])).toThrow(RangeError);
     expect(() => pool([table(1, 0, 0, 0)], [])).toThrow(RangeError);
+  });
+});
+
+describe("pooledRows", () => {
+  it("returns the pool of one pairs file and its scored count", () => {
+    const doc: Pairs = {
+      receipt: {} as Pairs["receipt"],
+      radius_km_default: 1,
+      radius_km_max: 1,
+      edge_margin_m: 1000,
+      classes: RULER.map((m, i) => ({
+        threshold_mm: m.threshold_mm,
+        threshold_in: m.threshold_in,
+        label: m.object,
+        swath_km2: i,
+        unverifiable_km2: [0, 1],
+      })),
+      reports: [
+        { id: 0, size_in: 1, edge_m: 5000, dist_m: [0, 0, 500, null, null, null, null] },
+        { id: 1, size_in: 2, edge_m: 1500, dist_m: [0, 0, 0, 0, 0, 0, 0] },
+      ],
+    };
+    const scored = scoredCount(doc, 1);
+    expect(scored).toBe(1);
+    expect(pooledRows([doc], 1)).toEqual({ rows: pool([rescore(doc, 1)], [scored]), scored });
   });
 });
 

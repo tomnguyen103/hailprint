@@ -1,7 +1,7 @@
 import { useId, useState } from "preact/hooks";
 import type { StormsIndex } from "../data/types";
 import { RULER, diameterPx } from "../ruler";
-import { METRICS, METRIC_LABELS, type MetricKey } from "../scorecard/curve";
+import { METRICS, METRIC_LABELS, type MetricKey } from "../format";
 import { MetricText } from "../scorecard/metric-text";
 import { ThresholdCurve } from "../scorecard/threshold-curve";
 import { ContingencyGrid } from "../shell/contingency-grid";

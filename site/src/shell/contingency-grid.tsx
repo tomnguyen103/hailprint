@@ -1,5 +1,5 @@
 import type { TableRow } from "../data/types";
-import { formatCount, formatInches } from "../storms/select";
+import { formatCount, formatInches } from "../format";
 
 /** A 2 by 2 grid for one class; each cell's square scales with its count. */
 export function ContingencyGrid({ row }: { row: TableRow }) {

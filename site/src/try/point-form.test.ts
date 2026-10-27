@@ -11,6 +11,10 @@ describe("parsePoint", () => {
     expect(parsePoint("abc", "-95")).toBeNull();
     expect(parsePoint("", "")).toBeNull();
   });
+
+  it("returns null when only the longitude lies outside the bbox", () => {
+    expect(parsePoint("29.76", "-94")).toBeNull();
+  });
 });
 
 describe("POINT_HINT", () => {

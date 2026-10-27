@@ -128,6 +128,7 @@ const cases: [string, string, (value: unknown) => unknown, unknown, string[]][] 
       "receipt.confidence",
       "receipt.run_time",
       "receipt.package_version",
+      "radius_km_default",
       "radius_km_max",
       "edge_margin_m",
       "classes",
@@ -225,6 +226,15 @@ describe("guardPairs", () => {
   it("accepts null inside dist_m", () => {
     const nullDist = { ...pairs, reports: [{ ...pairs.reports[0], dist_m: [null] }] };
     expect(guardPairs(nullDist).reports[0]!.dist_m[0]).toBeNull();
+  });
+});
+
+describe("guardSwath", () => {
+  it("rejects a geometry that is not a MultiPolygon", () => {
+    const feature = { ...swath.features[0], geometry: { type: "Point", coordinates: [] } };
+    expect(() => guardSwath({ ...swath, features: [feature] })).toThrow(
+      /swath\.geojson: features\[0\]\.geometry\.type is not MultiPolygon/,
+    );
   });
 });
 

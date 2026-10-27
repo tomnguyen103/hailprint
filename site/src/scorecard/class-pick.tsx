@@ -1,5 +1,5 @@
 import { diameterPx, type Mark } from "../ruler";
-import { formatInches } from "../storms/select";
+import { formatInches } from "../format";
 
 /** One size class as a pressed button: the ruler mark, the object name, the threshold in inches. */
 export function ClassPick({ mark, pressed, onPick }: { mark: Mark; pressed: boolean; onPick: (mm: number) => void }) {

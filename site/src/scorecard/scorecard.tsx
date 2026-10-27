@@ -1,8 +1,8 @@
 import { useMemo, useState } from "preact/hooks";
 import "../styles/scorecard.css";
-import { DataError, type StormsIndex } from "../data/types";
-import { pool, scoredCount, type PooledRow } from "../pool";
-import { rescore } from "../rescore";
+import type { StormsIndex } from "../data/types";
+import type { MetricKey } from "../format";
+import { pooledRows } from "../pool";
 import { SCORECARD_VIEWS, href, type ScorecardView } from "../router";
 import { RULER } from "../ruler";
 import { RadiusSlider } from "../shell/radius-slider";
@@ -10,7 +10,6 @@ import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState, PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { usePairsAll } from "../state/pairs-all";
-import type { MetricKey } from "./curve";
 import { GridView } from "./grid-view";
 import { TableView } from "./table-view";
 import { ThresholdCurve } from "./threshold-curve";
@@ -24,21 +23,6 @@ export const VIEW_LABELS: Record<ScorecardView, string> = {
 const FILE = "pairs.json";
 const SENTENCE = "The scorecard pools the contingency table across every storm date.";
 
-/** The pooled rows at a radius, or the DataError a malformed file raises. */
-export function pooledRows(pairs: Parameters<typeof rescore>[0][], radius: number): { rows: PooledRow[] } | { error: DataError } {
-  try {
-    return {
-      rows: pool(
-        pairs.map((p) => rescore(p, radius)),
-        pairs.map((p) => scoredCount(p, radius)),
-      ),
-    };
-  } catch (error) {
-    if (error instanceof DataError) return { error };
-    return { error: new DataError(FILE, error instanceof Error ? error.message : String(error)) };
-  }
-}
-
 export function Scorecard({ index, view }: { index: StormsIndex; view: ScorecardView }) {
   const pairs = usePairsAll(index);
   const [radius, setRadius] = useState(index.radius_km_default);
@@ -46,7 +30,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
   const [metric, setMetric] = useState<MetricKey>("hss");
   const data = pairs.status === "ready" ? pairs.data : null;
   const table = useMemo(() => (data === null ? null : pooledRows(data, radius)), [data, radius]);
-  const scored = useMemo(() => data?.reduce((acc, p) => acc + scoredCount(p, radius), 0) ?? null, [data, radius]);
+  const scored = table !== null && !("error" in table) ? table.scored : null;
 
   // shortcut: the pooled receipt chip opens the newest pairs.json receipt, upgrade when a pooled receipt is published
   const receipt = data?.[0]?.receipt;

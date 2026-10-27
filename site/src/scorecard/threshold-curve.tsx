@@ -1,21 +1,8 @@
 import { useRef, useState } from "preact/hooks";
 import type { PooledRow } from "../pool";
-import { href } from "../router";
+import { METRIC_LABELS, METRICS, formatInches, type MetricKey } from "../format";
 import { objectName } from "../ruler";
-import { Link } from "../shell/link";
-import { formatInches } from "../storms/select";
-import {
-  HEIGHT,
-  LITERATURE_HSS,
-  MARGIN,
-  METRIC_LABELS,
-  METRICS,
-  WIDTH,
-  pathOf,
-  xOf,
-  yOf,
-  type MetricKey,
-} from "./curve";
+import { HEIGHT, LITERATURE_HSS, MARGIN, WIDTH, pathOf, xOf, yOf } from "./curve";
 
 const MARKER_R = 4;
 const HIGHLIGHT_R = 6;
@@ -141,7 +128,6 @@ export function ThresholdCurve({
                 cy={p.y}
                 r={MARKER_R}
                 tabIndex={0}
-                role="button"
                 aria-label={`${objectName(p.row.threshold_mm)}, ${formatInches(p.row.threshold_in)}, ${METRIC_LABELS[metric]} ${p.value.toFixed(2)}`}
                 onFocus={() => setFocus(i)}
                 onBlur={() => setFocus(null)}
@@ -153,9 +139,6 @@ export function ThresholdCurve({
         )}
         {tooltip}
       </svg>
-      <p class="pane-note">
-        <Link href={href({ area: "scorecard", view: "table" })}>Table view</Link> lists the same rows.
-      </p>
     </div>
   );
 }
