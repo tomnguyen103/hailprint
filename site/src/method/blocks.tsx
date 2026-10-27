@@ -9,7 +9,7 @@ import { ReceiptChip } from "../shell/receipt-chip";
 import { EmptyState, ErrorState, LoadingState } from "../shell/states";
 import { CELLS, cells } from "../stamp";
 import { useLoad, type Load } from "../state/load";
-import { usePairsAll } from "../state/pairs-all";
+import { useAllFiles, usePairsAll } from "../state/pairs-all";
 import type { Block, FigureId } from "./content";
 import { GuessReveal } from "./guess-reveal";
 
@@ -73,13 +73,14 @@ function figure(id: FigureId, index: Index) {
 
 function Receipt({ index }: { index: StormsIndex }) {
   const storm = index.storms[0]!;
-  const pairs = useLoad(storm.files.pairs, () => fetchJson(storm.files.pairs, guardPairs));
+  // the pairs cache: the Scoring figures read the same file, so one fetch serves both
+  const pairs = useAllFiles([storm.files.pairs], guardPairs);
   if (pairs.status === "error") return <ErrorState error={pairs.error} onRetry={pairs.retry} />;
   if (pairs.status === "loading") return pairs.showLoading ? <LoadingState file="pairs.json" /> : null;
   return (
     <p>
       Receipt of the newest storm date, <span class="mono">{storm.storm_date}</span>:{" "}
-      <ReceiptChip receipt={pairs.data.receipt} file="pairs.json" />
+      <ReceiptChip receipt={pairs.data[0]!.receipt} file="pairs.json" />
     </p>
   );
 }

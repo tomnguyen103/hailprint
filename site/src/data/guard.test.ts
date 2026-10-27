@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { MAX_RUNS, guardIndex, guardOutline, guardPairs, guardPipeline, guardReports, guardSwath, guardZipCounts } from "./guard";
+import { FILE_PATH, MAX_RUNS, guardIndex, guardOutline, guardPairs, guardPipeline, guardReports, guardSwath, guardZipCounts } from "./guard";
 import { DataError } from "./types";
 
 const receipt = {
@@ -260,6 +260,20 @@ describe("guardIndex", () => {
   it("accepts a null zip_counts", () => {
     const files = { ...storm.files, zip_counts: null };
     expect(guardIndex({ ...index, storms: [{ ...storm, files }] }).storms[0]!.files.zip_counts).toBeNull();
+  });
+  it("accepts the file paths that storms.schema.json accepts and rejects the ones it rejects", () => {
+    const schemaPath = fileURLToPath(new URL("../../../src/hailprint/schemas/storms.schema.json", import.meta.url));
+    const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as { $defs: Record<string, { pattern: string }> };
+    const geojson = new RegExp(schema.$defs["geojson_file"]!.pattern);
+    const json = new RegExp(schema.$defs["json_file"]!.pattern);
+    for (const path of ["storms/2024-05-28/swath.geojson", "storms/2024-05-28/pairs.json"]) {
+      expect(FILE_PATH.test(path)).toBe(true);
+      expect(geojson.test(path) || json.test(path)).toBe(true);
+    }
+    for (const path of ["storms/x/pairs.json", "../secret.json", "storms/2024-05-28/pairs.txt"]) {
+      expect(FILE_PATH.test(path)).toBe(false);
+      expect(geojson.test(path) || json.test(path)).toBe(false);
+    }
   });
 });
 

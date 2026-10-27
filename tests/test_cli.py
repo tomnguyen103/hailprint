@@ -495,6 +495,18 @@ def test_a_second_run_that_finds_the_lock_file_stops_with_exit_1(env, capsys):
     assert lock.read_text(encoding="utf-8") == "1"
 
 
+def test_a_corrupt_archive_index_stops_the_run_before_any_write(env, capsys):
+    env.add_day(LATER)
+    archive.INDEX_PATH.parent.mkdir(parents=True)
+    archive.INDEX_PATH.write_text("nope", encoding="utf-8")
+
+    assert cli.main(["publish"]) == 1
+
+    assert "mesh-archive.parquet" in capsys.readouterr().err
+    assert not (env.site / "storms.json").exists()
+    assert not env.storm_dir(LATER).exists()
+
+
 def test_a_deleted_zip_file_of_an_earlier_date_nulls_its_entry_and_keeps_exit_0(env):
     env.add_day(EARLIER)
     env.add_day(LATER)

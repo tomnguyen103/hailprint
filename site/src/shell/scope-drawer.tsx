@@ -1,5 +1,6 @@
 import type { ComponentChildren, RefObject } from "preact";
 import { useEffect } from "preact/hooks";
+import "../styles/scope.css";
 
 /** Escape closes the drawer while it is open. */
 function useEscape(open: boolean, onClose: () => void): void {

@@ -343,7 +343,10 @@ def read_published(path: Path, kind: str) -> Doc:
         doc = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ValueError(f"{path}: not valid JSON, delete it or fix it") from exc
-    validate(doc, kind)
+    try:
+        validate(doc, kind)
+    except ValueError as exc:
+        raise ValueError(f"{path}: {exc}") from None
     return doc
 
 

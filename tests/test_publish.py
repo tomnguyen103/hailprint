@@ -879,7 +879,7 @@ def test_read_published_names_a_file_that_is_not_json_and_one_that_breaks_its_sc
         publish.read_published(broken, "pairs")
 
     broken.write_text("{}", encoding="utf-8")
-    with pytest.raises(ValueError, match="pairs"):
+    with pytest.raises(ValueError, match=r"pairs\.json: pairs: "):
         publish.read_published(broken, "pairs")
 
 

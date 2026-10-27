@@ -262,29 +262,35 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _archive_summary() -> dict | None:
+    """The archive coverage from the archive index, or None without an index."""
+    if not archive.INDEX_PATH.exists():
+        return None
+    try:
+        return publish.archive_summary(pd.read_parquet(archive.INDEX_PATH))
+    except (OSError, ValueError, KeyError) as exc:
+        raise ValueError(
+            f"{archive.INDEX_PATH}: not a readable archive index, run hailprint index again"
+        ) from exc
+
+
 def _pipeline_doc(
     old_runs: list[dict],
     storm_dates: list[str],
     receipts: list[dict],
+    summary: dict | None,
     file_count: int,
     run_time: datetime,
 ) -> dict:
-    """Build and validate the pipeline document: this run, the archive coverage, the sources.
+    """Build the pipeline document: this run, the archive coverage, the sources.
 
     `storm_dates` are the dates of this run. `receipts` are the pairs and ZIP count receipts of
     every published storm date, so the sources cover the whole index and not this run alone.
     """
     run = publish.run_entry(storm_dates, file_count, run_time)
-    summary = (
-        publish.archive_summary(pd.read_parquet(archive.INDEX_PATH))
-        if archive.INDEX_PATH.exists()
-        else None
-    )
-    doc = publish.pipeline_doc(
+    return publish.pipeline_doc(
         publish.merge_runs(old_runs, run), summary, publish.sources_of(receipts), run_time
     )
-    publish.validate(doc, "pipeline")
-    return doc
 
 
 def publish_days(storm_dates: list[date]) -> list[Path]:
@@ -293,9 +299,9 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
     One run at a time: a second run that finds the lock file stops with exit 1. A date without
     an SPC daily CSV is skipped. A date that fails a check writes no file and is named in the
     final error. The index holds the dates of this run over the entries of the earlier runs.
-    A malformed storms.json or pipeline.json stops the run before any write. A malformed
-    per-date file of an earlier run, or a pipeline document that fails its schema, stops the
-    run before the index write.
+    A malformed storms.json, pipeline.json, or archive index stops the run before any write. A
+    malformed per-date file of an earlier run, or a pipeline document that fails its schema,
+    stops the run before the index write.
     """
     with files.lock(SITE_DATA_DIR / LOCK_FILE):
         return _publish_days(storm_dates)
@@ -312,6 +318,7 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
     old_runs = (
         publish.read_published(pipeline_path, "pipeline")["runs"] if pipeline_path.exists() else []
     )
+    summary = _archive_summary()
     run_time = _utc_now()
     entries, written, failed = [], [], []
     file_count = 0
@@ -361,10 +368,11 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
     merged = publish.merge_entries(old, entries, SITE_DATA_DIR)
     receipts = publish.index_receipts(merged, SITE_DATA_DIR)
     doc = publish.storms_doc(merged, run_time)
-    publish.validate(doc, "storms")
     this_run = [entry["storm_date"] for entry in entries]
-    pipeline = _pipeline_doc(old_runs, this_run, receipts, file_count, run_time)
+    pipeline = _pipeline_doc(old_runs, this_run, receipts, summary, file_count, run_time)
     # both documents pass validate and dumps before the first index write
+    publish.validate(doc, "storms")
+    publish.validate(pipeline, "pipeline")
     index_text = publish.dumps(doc, "storms")
     pipeline_text = publish.dumps(pipeline, "pipeline")
     written.append(files.write_text_atomic(index_text, index_path))

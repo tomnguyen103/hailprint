@@ -48,9 +48,10 @@ def lock(path: Path) -> Iterator[None]:
         raise RuntimeError(
             f"{path} exists: another run holds it, or delete it after a crash"
         ) from None
-    os.write(fd, str(os.getpid()).encode())
-    os.close(fd)
+    # shortcut: no pid liveness check, upgrade when a cron run needs self-healing after power loss
     try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(str(os.getpid()))
         yield
     finally:
         path.unlink(missing_ok=True)

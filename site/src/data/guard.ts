@@ -11,8 +11,8 @@ type Rec = Record<string, unknown>;
 /** The run log cap; `publish.MAX_RUNS` writes the same number. */
 export const MAX_RUNS = 50;
 
-/** A published file path inside `site/data/`, as `storms.json` lists it. */
-const FILE_PATH = /^storms\/\d{4}-\d{2}-\d{2}\/[a-z-]+\.(geojson|json)$/;
+/** A published file path inside `site/data/`, as `storms.json` lists it; the schema `$defs` hold the same two patterns. */
+export const FILE_PATH =/^storms\/\d{4}-\d{2}-\d{2}\/[a-z-]+\.(geojson|json)$/;
 
 /** A run time as `publish` writes it: UTC to the second, no fraction. */
 const RUN_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
