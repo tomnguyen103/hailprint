@@ -27,6 +27,9 @@ const storm = {
     reports: "storms/2024-05-28/reports.geojson",
     pairs: "storms/2024-05-28/pairs.json",
     zip_counts: "storms/2024-05-28/zip-counts.json",
+    power: null,
+    internet: null,
+    warnings: null,
   },
 };
 
@@ -133,6 +136,9 @@ const cases: [string, string, (value: unknown) => unknown, unknown, string[]][] 
       "storms.0.files.reports",
       "storms.0.files.pairs",
       "storms.0.files.zip_counts",
+      "storms.0.files.power",
+      "storms.0.files.internet",
+      "storms.0.files.warnings",
     ],
   ],
   [
@@ -261,6 +267,19 @@ describe("guardIndex", () => {
     const files = { ...storm.files, zip_counts: null };
     expect(guardIndex({ ...index, storms: [{ ...storm, files }] }).storms[0]!.files.zip_counts).toBeNull();
   });
+  it("accepts an impact key as a path or null and rejects a path of the wrong kind", () => {
+    const files = {
+      ...storm.files,
+      power: "storms/2024-05-28/power.json",
+      internet: null,
+      warnings: "storms/2024-05-28/warnings.geojson",
+    };
+    expect(guardIndex({ ...index, storms: [{ ...storm, files }] }).storms[0]!.files.power).toBe(files.power);
+    const swapped = { ...storm.files, power: "storms/2024-05-28/power.geojson" };
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, files: swapped }] })).toThrow(/files.power/);
+    const json = { ...storm.files, warnings: "storms/2024-05-28/warnings.json" };
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, files: json }] })).toThrow(/files.warnings/);
+  });
   it("accepts the file paths that storms.schema.json accepts and rejects the ones it rejects", () => {
     const schemaPath = fileURLToPath(new URL("../../../src/hailprint/schemas/storms.schema.json", import.meta.url));
     const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as { $defs: Record<string, { pattern: string }> };
@@ -357,9 +376,9 @@ describe("guardPipeline", () => {
 });
 
 describe("guardOutline", () => {
-  it("accepts a collection without a receipt and names county.geojson otherwise", () => {
+  it("accepts a collection without a receipt and names counties.geojson otherwise", () => {
     const outline = { type: "FeatureCollection", features: [] };
     expect(guardOutline(outline)).toBe(outline);
-    expect(() => guardOutline({ type: "Feature" })).toThrow(/county\.geojson: type is not FeatureCollection/);
+    expect(() => guardOutline({ type: "Feature" })).toThrow(/counties\.geojson: type is not FeatureCollection/);
   });
 });

@@ -44,6 +44,9 @@ export interface StormFiles {
   reports: string;
   pairs: string;
   zip_counts: string | null;
+  power: string | null;
+  internet: string | null;
+  warnings: string | null;
 }
 
 export interface Storm {

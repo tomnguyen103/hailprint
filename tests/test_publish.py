@@ -27,6 +27,7 @@ SOURCES = [
     }
 ]
 SCHEMAS = ["receipt", "swath", "reports", "pairs", "zip-counts", "storms", "pipeline"]
+IMPACT_KEYS = ("power", "internet", "warnings")
 
 
 def _receipt():
@@ -658,9 +659,18 @@ def _entry(storm_date, **changes):
             "reports": f"storms/{storm_date}/reports.geojson",
             "pairs": f"storms/{storm_date}/pairs.json",
             "zip_counts": None,
+            "power": None,
+            "internet": None,
+            "warnings": None,
         },
     }
     return entry | changes
+
+
+def _old_entry(storm_date):
+    """An index entry as the run before the impact keys wrote it."""
+    entry = _entry(storm_date)
+    return entry | {"files": {k: v for k, v in entry["files"].items() if k not in IMPACT_KEYS}}
 
 
 def test_storms_doc_sorts_the_entries_newest_first_and_states_the_band_and_the_run_time():
@@ -858,6 +868,73 @@ def test_merge_entries_clears_the_zip_fields_of_an_entry_whose_zip_file_is_gone(
     assert merged["files"]["zip_counts"] is None
     assert merged["parcel_total"] is None
     assert entry["parcel_total"] == 4
+
+
+def test_an_old_index_without_the_impact_keys_reads_and_merge_entries_fills_null(tmp_path):
+    entry = _published_day(tmp_path, "2024-05-28", zips=True)
+    old = _old_entry("2024-05-28") | {"parcel_total": 4}
+    old["files"]["zip_counts"] = entry["files"]["zip_counts"]
+    index = tmp_path / "storms.json"
+    index.write_text(json.dumps(publish.storms_doc([old], RUN_TIME)), encoding="utf-8")
+
+    loaded = publish.read_published(index, "storms")["storms"]
+    assert not set(IMPACT_KEYS) & set(loaded[0]["files"])
+    [merged] = publish.merge_entries(loaded, [], tmp_path)
+
+    assert {k: merged["files"][k] for k in IMPACT_KEYS} == dict.fromkeys(IMPACT_KEYS)
+    assert merged["files"]["zip_counts"] == entry["files"]["zip_counts"]
+    assert merged["parcel_total"] == 4
+    publish.validate(publish.storms_doc([merged], RUN_TIME), "storms")
+
+
+def test_merge_entries_fills_the_impact_keys_of_a_new_entry_and_keeps_a_set_key(tmp_path):
+    kept = _published_day(tmp_path, "2024-05-28", zips=False)
+    kept["files"]["warnings"] = "storms/2024-05-28/warnings.geojson"
+    fresh = _published_day(tmp_path, "2023-06-23", zips=False)
+    fresh["files"] = {k: v for k, v in fresh["files"].items() if k not in IMPACT_KEYS}
+
+    merged = {e["storm_date"]: e for e in publish.merge_entries([kept], [fresh], tmp_path)}
+
+    assert merged["2024-05-28"]["files"]["warnings"] == "storms/2024-05-28/warnings.geojson"
+    assert merged["2024-05-28"]["files"]["power"] is None
+    assert [merged["2023-06-23"]["files"][k] for k in IMPACT_KEYS] == [None, None, None]
+
+
+def test_build_day_writes_the_three_impact_keys_as_null():
+    _, entry = _build_day()
+
+    assert {k: entry["files"][k] for k in IMPACT_KEYS} == dict.fromkeys(IMPACT_KEYS)
+
+
+def test_the_storms_schema_accepts_an_impact_path_and_refuses_an_extra_or_misplaced_key():
+    ok = _entry("2024-05-28")
+    ok["files"] |= {
+        "power": "storms/2024-05-28/power.json",
+        "internet": "storms/2024-05-28/internet.json",
+        "warnings": "storms/2024-05-28/warnings.geojson",
+    }
+    publish.validate(publish.storms_doc([ok], RUN_TIME), "storms")
+
+    extra = _entry("2024-05-28")
+    extra["files"]["outages"] = None
+    wrong_type = _entry("2024-05-28")
+    wrong_type["files"]["warnings"] = "storms/2024-05-28/warnings.json"
+    outside = _entry("2024-05-28")
+    outside["files"]["power"] = "../power.json"
+    for bad in (extra, wrong_type, outside):
+        with pytest.raises(ValueError, match=r"storms: \$\.storms\[0\]\.files"):
+            publish.validate(publish.storms_doc([bad], RUN_TIME), "storms")
+
+
+def test_index_receipts_lists_the_impact_files_and_skips_a_null_key(tmp_path):
+    assert publish.RECEIPT_FILES[2:] == (
+        ("power", "power"),
+        ("internet", "internet"),
+        ("warnings", "warnings"),
+    )
+    entry = _published_day(tmp_path, "2024-05-28", zips=False)
+
+    assert publish.index_receipts([entry], tmp_path) == [_receipt()]
 
 
 def test_index_receipts_reads_the_pairs_and_the_zip_count_receipt_of_every_entry(tmp_path):

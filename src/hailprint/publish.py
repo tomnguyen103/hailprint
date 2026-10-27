@@ -39,7 +39,15 @@ HCAD_PRODUCT = "Parcels.gdb"
 PIPELINE_FILE = "pipeline.json"
 MAX_RUNS = 50
 # The index entry file keys that carry a receipt the sources table reads, with their schema kind.
-RECEIPT_FILES = (("pairs", "pairs"), ("zip_counts", "zip-counts"))
+RECEIPT_FILES = (
+    ("pairs", "pairs"),
+    ("zip_counts", "zip-counts"),
+    ("power", "power"),
+    ("internet", "internet"),
+    ("warnings", "warnings"),
+)
+# The entry file keys an older index lacks; merge_entries fills each with null.
+IMPACT_KEYS = ("power", "internet", "warnings")
 
 
 @cache
@@ -321,7 +329,8 @@ def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
     """The old entries with the new entries over them by storm date.
 
     An entry stays only while its swath, reports, and pairs files exist under `data_dir`. An
-    entry whose ZIP count file is gone loses `zip_counts` and `parcel_total`.
+    entry whose ZIP count file is gone loses `zip_counts` and `parcel_total`. An entry that
+    lacks an impact key gains it as null: this is the one migration site for an older index.
     """
     # shortcut: an entry stays until its directory vanishes, upgrade when a prune command is needed
     merged = {e["storm_date"]: e for e in old} | {e["storm_date"]: e for e in new}
@@ -329,11 +338,12 @@ def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
     kept = [
         e for e in merged.values() if all((data_dir / e["files"][k]).exists() for k in required)
     ]
+    filled = [e | {"files": dict.fromkeys(IMPACT_KEYS) | e["files"]} for e in kept]
     return [
         e
         if not e["files"]["zip_counts"] or (data_dir / e["files"]["zip_counts"]).exists()
         else e | {"parcel_total": None, "files": e["files"] | {"zip_counts": None}}
-        for e in kept
+        for e in filled
     ]
 
 
@@ -351,7 +361,7 @@ def read_published(path: Path, kind: str) -> Doc:
 
 
 def index_receipts(entries: list[Doc], data_dir: Path) -> list[Doc]:
-    """The pairs and ZIP count receipts of every index entry, read from `data_dir`."""
+    """The receipts of every non-null file of every index entry, read from `data_dir`."""
     return [
         read_published(data_dir / e["files"][key], kind)["receipt"]
         for e in entries
@@ -538,6 +548,7 @@ def build_day(
             "reports": f"{folder}/{REPORTS_FILE}",
             "pairs": f"{folder}/{PAIRS_FILE}",
             "zip_counts": f"{folder}/{ZIPS_FILE}" if ZIPS_FILE in texts else None,
+            **dict.fromkeys(IMPACT_KEYS),
         },
     }
     validate(storms_doc([entry], run_time), "storms")

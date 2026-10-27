@@ -84,7 +84,10 @@
               "swath": { "$ref": "#/$defs/geojson_file" },
               "reports": { "$ref": "#/$defs/geojson_file" },
               "pairs": { "$ref": "#/$defs/json_file" },
-              "zip_counts": { "oneOf": [{ "$ref": "#/$defs/json_file" }, { "type": "null" }] }
+              "zip_counts": { "oneOf": [{ "$ref": "#/$defs/json_file" }, { "type": "null" }] },
+              "power": { "oneOf": [{ "$ref": "#/$defs/json_file" }, { "type": "null" }] },
+              "internet": { "oneOf": [{ "$ref": "#/$defs/json_file" }, { "type": "null" }] },
+              "warnings": { "oneOf": [{ "$ref": "#/$defs/geojson_file" }, { "type": "null" }] }
             }
           }
         }

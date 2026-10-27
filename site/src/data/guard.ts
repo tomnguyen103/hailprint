@@ -14,6 +14,12 @@ export const MAX_RUNS = 50;
 /** The published file paths inside `site/data/`, as `storms.json` lists them; the schema `$defs` hold the same two patterns. */
 export const GEOJSON_PATH = /^storms\/\d{4}-\d{2}-\d{2}\/[a-z-]+\.geojson$/;
 export const JSON_PATH = /^storms\/\d{4}-\d{2}-\d{2}\/[a-z-]+\.json$/;
+/** The index keys for the impact files, each a path or null. */
+const IMPACT_FILES: [string, RegExp][] = [
+  ["power", JSON_PATH],
+  ["internet", JSON_PATH],
+  ["warnings", GEOJSON_PATH],
+];
 
 /** A run time as `publish` writes it: UTC to the second, no fraction. */
 const RUN_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
@@ -87,6 +93,10 @@ export function guardIndex(value: unknown): StormsIndex {
     const files = rec(file, storm["files"], `${at}.files`);
     for (const key of ["swath", "reports"]) filePath(file, files[key], `${at}.files.${key}`, GEOJSON_PATH);
     filePath(file, files["pairs"], `${at}.files.pairs`, JSON_PATH);
+    // The impact keys have no default: a missing key is undefined, and filePath throws on it.
+    for (const [key, pattern] of IMPACT_FILES) {
+      if (files[key] !== null) filePath(file, files[key], `${at}.files.${key}`, pattern);
+    }
     if (files["zip_counts"] !== null) filePath(file, files["zip_counts"], `${at}.files.zip_counts`, JSON_PATH);
   });
   return value as StormsIndex;
@@ -225,6 +235,6 @@ export function guardSwath(value: unknown): SwathFile {
 
 /** The committed county outline: a FeatureCollection with no receipt. */
 export function guardOutline(value: unknown): FeatureCollection<MultiPolygon> {
-  guardCollection("county.geojson", value);
+  guardCollection("counties.geojson", value);
   return value as FeatureCollection<MultiPolygon>;
 }
