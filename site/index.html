@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hailprint</title>
+    <meta name="description" content="Radar-estimated hail size over Harris County, scored against SPC hail reports." />
+    <meta name="color-scheme" content="light dark" />
+    <script>
+      // Stamp the theme before first paint. Mirrors resolve() and read() in src/theme.ts.
+      (function () {
+        var stored = null;
+        try {
+          stored = localStorage.getItem("theme");
+        } catch (error) {
+          stored = null;
+        }
+        var resolved =
+          stored === "light" || stored === "dark"
+            ? stored
+            : matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+        var root = document.documentElement;
+        root.setAttribute("data-theme", resolved);
+        root.style.colorScheme = resolved;
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <noscript>Hailprint needs JavaScript to draw the hail swath and the score tables.</noscript>
+  </body>
+</html>

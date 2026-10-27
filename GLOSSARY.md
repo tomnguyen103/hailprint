@@ -38,3 +38,11 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Receipt | The provenance block of a published file: `storm_date`, `sources` (each with `source`, `product`, and `file`), the one confidence band `swath.CONFIDENCE`, `run_time` (one UTC second per run), and `package_version`. |
 | Edge distance | `edge_m`: the signed metre distance from a report point to the swath crop edge, positive inside the Harris bbox and negative outside. A report is scored at radius R when `edge_m > R*1000 + score.EDGE_M`. Stored per report in `pairs.json`, so the browser re-scores at any whole-kilometre radius. |
 | Spike | The week-1 run, replaced by `ingest` in week 2. Its evidence stays in `docs/WEEK-01.md`. |
+| Scope sidebar | The Storms page tree: storm dates grouped by year, newest first, each with a report-count badge. A 240 px pane at 1280 px and up, a 56 px rail below that, a sheet below 768 px. |
+| Storm stamp | The header block of one storm date: the date in mono, the 24-cell 12Z-to-12Z bar with one cell per hour and a filled cell for each hour with a report, the report count, and the max size. |
+| Size ruler | The hail-size legend: seven circles at true relative diameter, 0.75 to 2.50 in, each with its object name (penny, quarter, half dollar, walnut, golf ball, hen egg, tennis ball). Also the track of the radius and threshold sliders. |
+| Contingency grid | The 2 by 2 block for one size class: hit, miss, false alarm, and unverifiable area, each cell sized by its count. |
+| Receipt chip | The mono chip after a number on the site. It opens a drawer with the receipt of the published file that holds the number: source, product, file, run time, and confidence band. |
+| Caveat line | The footer text on every page, exact: "Radar-estimated hail size. Literature skill: HSS about 0.38 at 30 mm." |
+| Inspector | The Storms drawer that opens on a map click: the point, the largest size class that covers it, the nearest report, and one receipt chip. Docked at 1280 px and up, an overlay below, a full-screen sheet below 768 px. |
+| Basemap | The optional PMTiles file `site/public/basemap.pmtiles`, an extract of the Harris bbox from the Protomaps build. The map draws it when present and paper with the county outline when absent. |

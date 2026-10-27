@@ -1,0 +1,15 @@
+[
+  {
+    "date": "2026-10-26",
+    "surface": "site shell and Storms workspace (PR E)",
+    "design_md": ".scratch/portfolio-v5/design.md",
+    "archetype": "analytics",
+    "macrostructure": "top bar, scope sidebar, storm stamp, sub-tabs, pane; footer with the appearance control",
+    "detector": {
+      "command": "node ~/.claude/skills/impeccable/scripts/detect.mjs --json site/index.html site/src",
+      "exit": 0
+    },
+    "slop_test": "pass",
+    "notes": "No KPI card row, no eyebrow labels, no gradient text, no emoji icons. Shadow only on the receipt pop and the inspector. Mono only on dates, numbers, and code."
+  }
+]

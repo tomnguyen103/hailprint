@@ -1,0 +1,202 @@
+/* Map pane: stage, legend, corner note, inspector at three widths. */
+
+.map-pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  position: relative;
+}
+
+.map-stage {
+  position: relative;
+}
+
+.map-frame {
+  height: min(70dvh, 640px);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.map-frame:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.map-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--paper) 70%, transparent);
+  border-radius: var(--radius-pane);
+}
+
+.map-note {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--sheet);
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+/* Legend */
+
+.ruler-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+  background: var(--sheet);
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--radius-control);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.legend-item:hover {
+  background: var(--sheet-muted);
+}
+
+.legend-item[aria-pressed="false"] {
+  color: var(--ink-muted);
+}
+
+.legend-item[aria-pressed="false"] .legend-circle {
+  opacity: 0.25;
+}
+
+.legend-item[aria-pressed="false"] .legend-text {
+  text-decoration: line-through;
+}
+
+.legend-circle {
+  flex: none;
+  box-sizing: content-box;
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  transition: opacity var(--motion);
+}
+
+/* Inspector */
+
+.inspector {
+  padding: 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+  background: var(--sheet);
+  box-shadow: var(--shadow);
+}
+
+.inspector:focus {
+  outline: none;
+}
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.inspector h2 {
+  margin: 0;
+}
+
+/* MapLibre chrome in the tokens */
+
+.map-frame .maplibregl-ctrl-group {
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  box-shadow: none;
+}
+
+.map-frame .maplibregl-ctrl-group button + button {
+  border-top-color: var(--rule);
+}
+
+/* MapLibre ships black SVG icons; the dark tokens invert them */
+.map-frame .maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: var(--ctrl-icon-filter);
+}
+
+.map-frame .maplibregl-ctrl-attrib {
+  background: color-mix(in srgb, var(--sheet) 80%, transparent);
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+}
+
+.map-frame .maplibregl-ctrl-attrib a {
+  color: var(--ink-muted);
+}
+
+@media (min-width: 1280px) {
+  .map-pane[data-inspector="true"] {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+
+  .inspector {
+    align-self: start;
+    position: sticky;
+    top: calc(var(--bar-height) + 24px);
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  .inspector {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 4;
+    width: min(360px, calc(100% - 32px));
+  }
+}
+
+@media (max-width: 767px) {
+  .inspector {
+    position: fixed;
+    inset: var(--bar-height) 0 0 0;
+    z-index: 40;
+    border: 0;
+    border-radius: 0;
+    overflow-y: auto;
+  }
+
+  .ruler-legend {
+    left: 8px;
+    bottom: 8px;
+    padding: 4px;
+  }
+
+  .legend-item {
+    min-height: 24px;
+    font-size: 0.75rem;
+  }
+}
