@@ -18,7 +18,7 @@ No test ran `hailprint publish` with a power file on disk. The wiring between th
 
 ## Fix
 
-- `_publish_days` reads the power file of the date, passes it as `power=`, and removes a stale `power.json` (`src/hailprint/__main__.py:547`, `:566`, `:583`).
-- Command-level tests cover the EAGLE-I file, the ODIN file with its utilities, the missing file, the stale file, and a file without metadata (`tests/test_cli.py:1175`). A warnings test covers the same wiring.
+- `_publish_days` in `src/hailprint/__main__.py` reads the power file of the date, passes it as `power=`, and removes a stale `power.json`.
+- Command-level tests in `tests/test_cli.py` cover the EAGLE-I file, the ODIN file with its utilities, the missing file, the stale file, and a file without metadata. A warnings test covers the same wiring.
 
 Rule: every new published layer gets a `cli.main(["publish", ...])` test that starts from the derived Parquet file, before the PR opens. A script that writes the output by hand proves the site, not the pipeline.
