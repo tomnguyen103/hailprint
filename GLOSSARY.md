@@ -58,3 +58,8 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Run log | The Runs view table of publish runs, newest first: run time, package version, storm date count, file count. The pressed row opens the inspector with its storm dates. At most 50 runs, merged by `run_time`. |
 | Archive coverage | The Archive view table: per year, the archive days, the days with a 12Z file, and that share as a bar; a total row closes it. Built from the archive index at publish time. |
 | Replay frame | One cropped MESH frame of the 2-minute product inside a storm date, for an animation. Cut in PR G: about 720 CONUS GRIB2 files, about 1 GB per storm date (`docs/DECISIONS.md` row 8). |
+| Missing candidate day | A candidate day with a 12Z file and no swath file. `hailprint candidates --missing` prints them newest first. |
+| Nightly run | `scripts/nightly.sh`: index, missing candidate days, ingest, parcels, score, publish, deploy, under `data/nightly.lock`, at most `MAX_INGEST` storm dates. |
+| Deploy | `scripts/deploy.sh`: the prebuilt Vercel flow from a machine that holds `site/data/`. |
+| Dry run | `--dry-run`: the build into `site/dist` with the artifact check and no `vercel` call. |
+| Cron entry | `scripts/hailprint.cron`: the crontab line at 14:00 UTC that starts the nightly run. |

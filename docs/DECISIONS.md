@@ -13,6 +13,7 @@ Plan section 16 listed six decisions. Tom approved the plan on 2026-10-24 and ad
 | 7 | Report scope | `nearby_reports` keeps SPC reports within 50 km of the county outline, for the scorer. `harris_reports` keeps Harris, TX by name, so a candidate day count matches the WCM count | Revisit the radius when the scorer reports its false alarm sensitivity |
 | 8 | Replay frames (plan v5 A5) | Cut. One storm date of the 2-minute MESH product needs about 720 CONUS GRIB2 files, about 1 GB | Revisit with a cropped tile source |
 | 9 | Pipeline file writer | `publish` alone writes `site/data/pipeline.json`, so the file has one writer. `index` stays a Parquet writer | none |
+| 10 | Site data path | Git deployments off for `main` in `vercel.json`; the cron host builds with `site/data/` present and uploads with the prebuilt flow; PR branches keep data-free previews | The dashboard ignored build step is dead after this row; remove it at launch |
 
 ## Standing constraints
 
