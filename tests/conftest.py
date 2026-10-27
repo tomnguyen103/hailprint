@@ -1,3 +1,4 @@
+import os
 import shutil
 from datetime import date
 from pathlib import Path
@@ -22,6 +23,10 @@ needs_hcad = pytest.mark.skipif(
     reason=f"needs the HCAD gdb at {HCAD_GDB} and the swath file at {SWATHS_0528}",
 )
 needs_wcm = pytest.mark.skipif(not WCM_PATH.exists(), reason=f"needs the WCM zip at {WCM_PATH}")
+# A live check runs only when the caller opts in: HAILPRINT_NETWORK=1 uv run pytest
+needs_network = pytest.mark.skipif(
+    os.environ.get("HAILPRINT_NETWORK") != "1", reason="needs the network: set HAILPRINT_NETWORK=1"
+)
 # Git Bash first: the System32 bash.exe on Windows is the WSL launcher
 GIT_BASH = Path(r"C:\Program Files\Git\bin\bash.exe")
 BASH = str(GIT_BASH) if GIT_BASH.exists() else shutil.which("bash")

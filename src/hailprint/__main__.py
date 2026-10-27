@@ -1,4 +1,4 @@
-"""Command line entry: ``hailprint ingest|index|candidates|parcels|score|publish``."""
+"""Command line entry: ``hailprint ingest|index|candidates|parcels|score|warnings|publish``."""
 
 import argparse
 import math
@@ -21,6 +21,7 @@ from hailprint import (
     plot,
     publish,
     reports,
+    sbw,
     score,
     swath,
 )
@@ -31,6 +32,7 @@ OUT_DIR = paths.OUT_DIR
 PARCELS_GDB = paths.RAW_DIR / "hcad" / "extracted" / "Parcels.gdb"
 PARCELS_DIR = paths.DERIVED_DIR / "parcels"
 SCORES_DIR = paths.DERIVED_DIR / "scores"
+WARNINGS_DIR = paths.DERIVED_DIR / "warnings"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
 
@@ -90,6 +92,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=score.DEFAULT_RADIUS_KM,
         help=f"scoring radius in km, 0 to {score.MAX_RADIUS_KM}, default {score.DEFAULT_RADIUS_KM}",
     )
+    warnings_cmd = commands.add_parser(
+        "warnings", help="store the IEM storm-based warnings of the impact window per storm date"
+    )
+    warnings_cmd.add_argument(
+        "storm_dates", nargs="*", type=_storm_date, help="SPC convective day, YYYY-MM-DD"
+    )
+    warnings_cmd.add_argument(
+        "--missing",
+        action="store_true",
+        help="fetch each swath date with a closed impact window and no warnings file",
+    )
     publish_cmd = commands.add_parser(
         "publish", help="write the site data files and the storms index for storm dates"
     )
@@ -103,7 +116,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.command == "warnings" and bool(args.storm_dates) == args.missing:
+        parser.error("warnings takes storm dates or --missing, not both and not neither")
     try:
         if args.command == "ingest":
             ingest(args.storm_dates)
@@ -115,6 +131,8 @@ def main(argv: list[str] | None = None) -> int:
             count_parcels(args.storm_date)
         elif args.command == "score":
             score_days(args.storm_dates, args.radius_km)
+        elif args.command == "warnings":
+            warn_days(args.storm_dates, args.missing)
         elif args.command == "publish":
             publish_days(args.storm_dates)
     except (RuntimeError, OSError, ValueError) as exc:
@@ -272,6 +290,29 @@ def score_days(storm_dates: list[date], radius_km: float) -> list[Path]:
 
 def _utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
+    """One warnings file per storm date from the IEM feed of the impact window.
+
+    With `missing`, the dates are the swath dates whose window has closed and that have no
+    warnings file yet. A failed fetch stops the run; the next `--missing` run starts again.
+    """
+    if missing:
+        now = _utc_now()
+        storm_dates = [
+            d
+            for d, _ in _swath_files([])
+            if sbw.window(d)[1] <= now and not (WARNINGS_DIR / sbw.file_name(d)).exists()
+        ]
+    written = []
+    for storm_date in storm_dates:
+        frame = sbw.parse(sbw.fetch(storm_date), storm_date)
+        written.append(
+            files.write_atomic(frame, WARNINGS_DIR / sbw.file_name(storm_date), sbw.METADATA)
+        )
+        print(f"{storm_date}: {len(frame)} warnings")
+    return written
 
 
 def _archive_summary() -> dict | None:

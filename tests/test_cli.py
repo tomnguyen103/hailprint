@@ -1,12 +1,17 @@
 """The publish command: files, index, skips, and failures, on the two real fixture days."""
 
+import io
 import json
 import shutil
+import urllib.error
+import urllib.request
+from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import pyarrow.parquet as pq
 import pytest
 
 from hailprint import __main__ as cli
@@ -32,6 +37,7 @@ class Env:
         self.swaths = root / "swaths"
         self.parcels = root / "parcels"
         self.site = root / "site"
+        self.warnings = root / "warnings"
         self.served: dict[date, object] = {}
 
     def add_day(self, storm_date: date, *, metadata: bool = True) -> Path:
@@ -89,6 +95,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "DERIVED_DIR", env.swaths)
     monkeypatch.setattr(cli, "PARCELS_DIR", env.parcels)
     monkeypatch.setattr(cli, "SITE_DATA_DIR", env.site)
+    monkeypatch.setattr(cli, "WARNINGS_DIR", env.warnings)
     monkeypatch.setattr(cli, "_utc_now", lambda: RUN_TIME)
     monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "index" / "mesh-archive.parquet")
     monkeypatch.setattr(candidates, "CANDIDATES_PATH", tmp_path / "candidate-days.csv")
@@ -152,6 +159,9 @@ def test_publish_one_date_writes_three_valid_files_and_one_index_entry(env, caps
         "reports": "storms/2024-05-28/reports.geojson",
         "pairs": "storms/2024-05-28/pairs.json",
         "zip_counts": None,
+        "power": None,
+        "internet": None,
+        "warnings": None,
     }
     assert f"confidence: {swath.CONFIDENCE}" in capsys.readouterr().out
 
@@ -519,3 +529,119 @@ def test_a_deleted_zip_file_of_an_earlier_date_nulls_its_entry_and_keeps_exit_0(
     earlier = {e["storm_date"]: e for e in env.index()["storms"]}["2023-06-23"]
     assert earlier["files"]["zip_counts"] is None
     assert earlier["parcel_total"] is None
+
+
+SBW_FEED = FIXTURES / "iem_sbw_hgx.geojson"
+SBW_KEPT = [107, 101, 102, 109, 103]
+OPEN_WINDOW = date(2024, 5, 31)
+
+
+class Iem:
+    """The IEM boundary: urlopen serves the body and records each requested URL."""
+
+    def __init__(self):
+        self.body = SBW_FEED.read_bytes()
+        self.urls: list[str] = []
+
+
+@pytest.fixture
+def iem(monkeypatch):
+    iem = Iem()
+
+    @contextmanager
+    def urlopen(url, timeout=None):
+        iem.urls.append(url)
+        yield io.BytesIO(iem.body)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    return iem
+
+
+def _warnings_file(env, storm_date):
+    return env.warnings / f"warnings-{storm_date}.parquet"
+
+
+def test_warnings_writes_one_parquet_per_date_with_the_iem_and_sbw_metadata(env, iem, capsys):
+    assert cli.main(["warnings", "2024-05-28"]) == 0
+
+    path = _warnings_file(env, LATER)
+    assert gpd.read_parquet(path)["eventid"].tolist() == SBW_KEPT
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"iem", b"sbw")
+    assert capsys.readouterr().out == "2024-05-28: 5 warnings\n"
+    assert len(iem.urls) == 1
+
+
+def test_warnings_missing_makes_no_second_fetch_for_a_date_that_has_a_file(env, iem):
+    env.add_day(LATER)
+
+    assert cli.main(["warnings", "--missing"]) == 0
+    assert cli.main(["warnings", "--missing"]) == 0
+
+    assert len(iem.urls) == 1
+    assert _warnings_file(env, LATER).exists()
+
+
+def test_warnings_missing_skips_a_date_whose_impact_window_is_not_closed(env, iem):
+    env.add_day(LATER)
+    shutil.copy(
+        env.swaths / f"swaths-{LATER}.parquet", env.swaths / f"swaths-{OPEN_WINDOW}.parquet"
+    )
+
+    assert cli.main(["warnings", "--missing"]) == 0
+
+    assert [u.split("begints=")[1][:17] for u in iem.urls] == ["2024-05-28T12:00Z"]
+    assert not _warnings_file(env, OPEN_WINDOW).exists()
+
+
+def test_an_explicit_warnings_rerun_writes_the_same_bytes(env, iem):
+    cli.main(["warnings", "2024-05-28"])
+    first = _warnings_file(env, LATER).read_bytes()
+
+    cli.main(["warnings", "2024-05-28"])
+
+    assert _warnings_file(env, LATER).read_bytes() == first
+    assert len(iem.urls) == 2
+    assert list(env.warnings.glob("*.tmp")) == []
+
+
+def test_warnings_exits_1_with_one_line_and_no_file_when_iem_answers_5xx_three_times(
+    env, monkeypatch, capsys
+):
+    calls = []
+
+    def urlopen(url, timeout=None):
+        calls.append(url)
+        raise urllib.error.HTTPError(url, 503, "Service Unavailable", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(cli.sbw.net.time, "sleep", lambda s: None)
+
+    assert cli.main(["warnings", "2024-05-28"]) == 1
+
+    assert len(calls) == 3
+    (line,) = capsys.readouterr().err.splitlines()
+    assert "2024-05-28" in line and "503" in line
+    assert not env.warnings.exists() or list(env.warnings.iterdir()) == []
+
+
+def test_warnings_exits_1_naming_the_eventid_for_a_null_geometry_and_writes_no_file(
+    env, iem, capsys
+):
+    feed = json.loads(iem.body)
+    next(f for f in feed["features"] if f["properties"]["eventid"] == 101)["geometry"] = None
+    iem.body = json.dumps(feed).encode()
+
+    assert cli.main(["warnings", "2024-05-28"]) == 1
+
+    assert "warning 101 has no geometry" in capsys.readouterr().err
+    assert not env.warnings.exists() or list(env.warnings.iterdir()) == []
+
+
+@pytest.mark.parametrize("argv", [["warnings"], ["warnings", "--missing", "2024-05-28"]])
+def test_warnings_takes_storm_dates_or_missing_and_not_both_or_neither(env, iem, argv):
+    with pytest.raises(SystemExit) as stop:
+        cli.main(argv)
+
+    assert stop.value.code == 2
+    assert iem.urls == []
