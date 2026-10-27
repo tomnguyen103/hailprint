@@ -6,11 +6,14 @@ import { rescore } from "../rescore";
 import { SCORECARD_VIEWS, href, type ScorecardView } from "../router";
 import { RULER } from "../ruler";
 import { RadiusSlider } from "../shell/radius-slider";
+import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState, PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { usePairsAll } from "../state/pairs-all";
+import type { MetricKey } from "./curve";
 import { GridView } from "./grid-view";
 import { TableView } from "./table-view";
+import { ThresholdCurve } from "./threshold-curve";
 
 export const VIEW_LABELS: Record<ScorecardView, string> = {
   table: "Table",
@@ -40,6 +43,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
   const pairs = usePairsAll(index);
   const [radius, setRadius] = useState(index.radius_km_default);
   const [classMm, setClassMm] = useState(RULER[0]!.threshold_mm);
+  const [metric, setMetric] = useState<MetricKey>("hss");
   const data = pairs.status === "ready" ? pairs.data : null;
   const table = useMemo(() => (data === null ? null : pooledRows(data, radius)), [data, radius]);
   const scored = useMemo(() => data?.reduce((acc, p) => acc + scoredCount(p, radius), 0) ?? null, [data, radius]);
@@ -57,7 +61,16 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
     body = <TableView rows={table.rows} classMm={classMm} onClass={setClassMm} receipt={receipt} file={file} />;
   } else if (view === "grid") {
     body = <GridView rows={table.rows} classMm={classMm} onClass={setClassMm} receipt={receipt} file={file} />;
-  } else body = null;
+  } else {
+    body = (
+      <>
+        <ThresholdCurve rows={table.rows} metric={metric} onMetric={setMetric} />
+        <p class="pane-note">
+          <ReceiptChip receipt={receipt} file={file} />
+        </p>
+      </>
+    );
+  }
 
   return (
     <>

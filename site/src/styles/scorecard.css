@@ -14,3 +14,88 @@
 .class-picker .class-pick {
   margin: 0;
 }
+
+/* Threshold curve: one series, text in text tokens, markers focusable. */
+
+.metric-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.curve {
+  display: block;
+  width: 100%;
+  max-width: 640px;
+  height: auto;
+  overflow: visible;
+}
+
+.curve text {
+  font: 12px var(--mono);
+  fill: var(--ink-muted);
+}
+
+.curve .axis {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.curve .series {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.curve .literature {
+  stroke: var(--ink-muted);
+  stroke-width: 1;
+  stroke-dasharray: 6 4;
+}
+
+.curve .marker {
+  fill: var(--accent);
+  stroke: var(--sheet);
+  stroke-width: 2;
+  cursor: pointer;
+  transition:
+    cx var(--motion),
+    cy var(--motion);
+}
+
+.curve .marker:focus-visible {
+  outline: none;
+  stroke: var(--ink);
+  stroke-width: 3;
+}
+
+.curve .highlight {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  transition:
+    cx var(--motion),
+    cy var(--motion);
+}
+
+.curve-tooltip {
+  pointer-events: none;
+}
+
+.curve-tooltip rect {
+  fill: var(--sheet);
+  stroke: var(--rule);
+}
+
+.curve-tooltip text {
+  fill: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .curve .marker,
+  .curve .highlight {
+    transition: none;
+  }
+}

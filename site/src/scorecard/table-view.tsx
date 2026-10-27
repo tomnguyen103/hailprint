@@ -3,10 +3,8 @@ import type { PooledRow } from "../pool";
 import { RULER } from "../ruler";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ClassPick } from "./class-pick";
+import { METRIC_LABELS, METRICS } from "./curve";
 import { MetricText } from "./metric-text";
-
-const METRICS = ["pod", "far", "csi", "hss"] as const;
-const METRIC_LABELS: Record<(typeof METRICS)[number], string> = { pod: "POD", far: "FAR", csi: "CSI", hss: "HSS" };
 
 export function TableView({
   rows,
