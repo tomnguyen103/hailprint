@@ -33,49 +33,51 @@ function ParcelsTable({ path }: { path: string }) {
       <section>
         <h2>Parcels by size class</h2>
         <p class="pane-note">HCAD parcels, no address or owner data</p>
-        <table class="table">
-          <thead>
-            <tr>
-              <th scope="col">Size class</th>
-              <th scope="col" class="num">
-                Parcels
-              </th>
-              <th scope="col">
-                <span class="visually-hidden">Receipt</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {RULER.map((m) => {
-              // A class the file omits has no parcel; the table keeps all seven rows.
-              const count = classes.find((c) => c.threshold_mm === m.threshold_mm)?.parcel_count ?? 0;
-              return (
-                <tr key={m.threshold_mm}>
-                  <td>
-                    <button
-                      type="button"
-                      class="class-pick"
-                      aria-pressed={m.threshold_mm === selected}
-                      onClick={() => setSelected(m.threshold_mm)}
-                    >
-                      <span
-                        class="ruler-mark"
-                        style={{ width: diameterPx(m.threshold_in), height: diameterPx(m.threshold_in) }}
-                      />
-                      <span>
-                        &ge; {formatInches(m.threshold_in)}, {objectName(m.threshold_mm)}
-                      </span>
-                    </button>
-                  </td>
-                  <td class="num">{formatCount(count)}</td>
-                  <td>
-                    <ReceiptChip receipt={zip.data.receipt} file={FILE} />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div class="table-scroll">
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Size class</th>
+                <th scope="col" class="num">
+                  Parcels
+                </th>
+                <th scope="col">
+                  <span class="visually-hidden">Receipt</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {RULER.map((m) => {
+                // A class the file omits has no parcel; the table keeps all seven rows.
+                const count = classes.find((c) => c.threshold_mm === m.threshold_mm)?.parcel_count ?? 0;
+                return (
+                  <tr key={m.threshold_mm}>
+                    <td>
+                      <button
+                        type="button"
+                        class="class-pick"
+                        aria-pressed={m.threshold_mm === selected}
+                        onClick={() => setSelected(m.threshold_mm)}
+                      >
+                        <span
+                          class="ruler-mark"
+                          style={{ width: diameterPx(m.threshold_in), height: diameterPx(m.threshold_in) }}
+                        />
+                        <span>
+                          &ge; {formatInches(m.threshold_in)}, {objectName(m.threshold_mm)}
+                        </span>
+                      </button>
+                    </td>
+                    <td class="num">{formatCount(count)}</td>
+                    <td>
+                      <ReceiptChip receipt={zip.data.receipt} file={FILE} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
       <section>
         <h2>
@@ -84,24 +86,26 @@ function ParcelsTable({ path }: { path: string }) {
         {rows.length === 0 ? (
           <EmptyState sentence={`No parcel at ${formatInches(mark.threshold_in)} on this storm date.`} />
         ) : (
-          <table class="table">
-            <thead>
-              <tr>
-                <th scope="col">ZIP</th>
-                <th scope="col" class="num">
-                  Parcels
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={row.zip}>
-                  <td class="mono">{row.zip}</td>
-                  <td class="num">{formatCount(row.parcel_count)}</td>
+          <div class="table-scroll">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th scope="col">ZIP</th>
+                  <th scope="col" class="num">
+                    Parcels
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.zip}>
+                    <td class="mono">{row.zip}</td>
+                    <td class="num">{formatCount(row.parcel_count)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>

@@ -95,6 +95,8 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
     bounds: HARRIS_BBOX as LngLatBoundsLike,
     fitBoundsOptions: { padding: FIT_PADDING },
     attributionControl: basemap ? { compact: true } : false,
+    // On touch, one finger scrolls the page and two fingers move the map; a mouse keeps wheel zoom.
+    cooperativeGestures: window.matchMedia("(pointer: coarse)").matches,
   });
   map.addControl(new NavigationControl({ showCompass: false }), "top-left");
   await new Promise<void>((resolve, reject) => {
