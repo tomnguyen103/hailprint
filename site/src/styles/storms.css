@@ -243,12 +243,6 @@
   color: var(--ink-muted);
 }
 
-.map-frame {
-  height: min(70dvh, 640px);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pane);
-  background: var(--sheet-muted);
-}
 
 /* Tables */
 

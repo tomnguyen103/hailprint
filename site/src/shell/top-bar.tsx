@@ -1,5 +1,5 @@
 import { AREA_LABELS, AREAS, type Area, href } from "../router";
-import { CodeIcon } from "./icons";
+import { AREA_ICONS, CodeIcon } from "./icons";
 import { Link } from "./link";
 import { ThemeToggle } from "./theme-toggle";
 
@@ -49,4 +49,3 @@ export function BottomBar({ active }: { active: Area | null }) {
   );
 }
 
-import { AREA_ICONS } from "./icons";

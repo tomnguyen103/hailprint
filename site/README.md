@@ -32,5 +32,5 @@ The root `vercel.json` sets the fields: install `cd site && npm ci`, build
 
 ## Dev harness
 
-`?harness` on any route shows the scenario bar: index loading, index empty, index error, and
+In `npm run dev`, the scenario bar sits under the footer: index loading, index empty, index error, and
 swath error.

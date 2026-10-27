@@ -29,7 +29,7 @@ export function SubTabs({ date, tab }: { date: string; tab: Tab }) {
           role="tab"
           id={`tab-${t}`}
           aria-selected={t === tab}
-          aria-controls={`pane-${t}`}
+          aria-controls={t === tab ? `pane-${t}` : undefined}
           tabIndex={t === tab ? 0 : -1}
           href={href({ area: "storms", date, tab: t })}
           onKeyDown={(event) => onKey(event, i)}

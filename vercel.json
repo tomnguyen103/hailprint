@@ -4,5 +4,5 @@
   "installCommand": "cd site && npm ci",
   "buildCommand": "cd site && npm run build",
   "outputDirectory": "site/dist",
-  "rewrites": [{ "source": "/:path((?!.*\.).*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/:path((?!.*\\.).*)", "destination": "/index.html" }]
 }
