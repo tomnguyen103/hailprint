@@ -945,6 +945,45 @@ def test_power_missing_skips_a_date_without_a_power_source_and_exits_0(env, caps
     ]
 
 
+def test_power_for_two_dates_writes_the_second_when_the_first_fails_and_exits_1(
+    env, capsys, monkeypatch
+):
+    _write_eaglei(env, 2023, ("48201", "2023-06-23 22:00", 11))
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    build = power.build
+
+    def failing_first(storm_date, *args):
+        if storm_date == EARLIER:
+            raise ValueError("broken source")
+        return build(storm_date, *args)
+
+    monkeypatch.setattr(power, "build", failing_first)
+
+    assert cli.main(["power", str(EARLIER), str(LATER)]) == 1
+
+    assert not _power_file(env, EARLIER).exists()
+    assert _power_file(env, LATER).exists()
+    captured = capsys.readouterr()
+    assert captured.err.splitlines() == [
+        "2023-06-23: broken source",
+        "power failed for: 2023-06-23",
+    ]
+    assert captured.out == "2024-05-28: 2 of 1536 county steps have a row\n"
+
+
+def test_power_missing_rebuilds_a_power_file_that_is_not_a_parquet_file(env):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    env.power.mkdir(parents=True)
+    _power_file(env, LATER).write_bytes(b"junk")
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    path = _power_file(env, LATER)
+    assert pq.read_schema(path).metadata[b"source"] == b"eaglei"
+    assert pd.read_parquet(path)["customers_out"].notna().sum() == 2
+
+
 def test_a_window_across_new_year_needs_both_year_files(env, capsys):
     new_year_eve = "2023-12-31"
     _write_eaglei(env, 2023, ("48201", "2023-12-31 23:45", 7))
@@ -1166,3 +1205,84 @@ def test_the_odin_command_takes_no_lock_and_writes_only_the_odin_directory(env, 
     assert sorted(p.name for p in env.site.iterdir()) == ["publish.lock"]
     assert [p.name for p in env.odin.iterdir()] == ["odin-2024-05-28.parquet"]
     assert not env.swaths.exists() and not env.power.exists()
+
+
+def _published(env, storm_date, name):
+    return json.loads((env.storm_dir(storm_date) / name).read_text(encoding="utf-8"))
+
+
+def test_publish_writes_power_json_from_the_eaglei_power_file_of_the_date(env):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    cli.main(["power", "2024-05-28"])
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    doc = _published(env, LATER, publish.POWER_FILE)
+    publish.validate(doc, "power")
+    assert (doc["source"], doc["utilities"]) == ("eaglei", None)
+    assert [s["source"] for s in doc["receipt"]["sources"]] == ["eaglei"]
+    assert env.index()["storms"][0]["files"]["power"] == f"storms/{LATER}/{publish.POWER_FILE}"
+
+
+def test_publish_writes_the_odin_utilities_into_power_json(env):
+    env.add_day(LATER)
+    _write_odin(env, "2024-05-28", *ODIN_ROWS)
+    cli.main(["power", "2024-05-28"])
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    doc = _published(env, LATER, publish.POWER_FILE)
+    assert (doc["source"], doc["utilities"]) == ("odin", ["CENTERPOINT ENERGY"])
+
+
+def test_publish_without_a_power_file_writes_no_power_json_and_nulls_the_entry(env):
+    env.add_day(LATER)
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.POWER_FILE).exists()
+    assert env.index()["storms"][0]["files"]["power"] is None
+
+
+def test_publish_removes_a_stale_power_json_when_the_power_file_is_gone(env):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    cli.main(["power", "2024-05-28"])
+    cli.main(["publish", "2024-05-28"])
+    _power_file(env, LATER).unlink()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.POWER_FILE).exists()
+    assert env.index()["storms"][0]["files"]["power"] is None
+
+
+def test_publish_exits_1_and_names_the_file_for_a_power_file_without_metadata(env, capsys):
+    env.add_day(LATER)
+    frame = pd.DataFrame(
+        {"fips": [], "step_utc": pd.to_datetime([], utc=True), "customers_out": []}
+    )
+    env.power.mkdir(parents=True)
+    frame.to_parquet(_power_file(env, LATER))
+
+    assert cli.main(["publish", "2024-05-28"]) == 1
+
+    assert "power-2024-05-28.parquet" in capsys.readouterr().err
+    assert not env.storm_dir(LATER).exists()
+
+
+def test_publish_writes_warnings_geojson_from_the_warnings_file_and_removes_it_when_gone(env, iem):
+    env.add_day(LATER)
+    cli.main(["warnings", "2024-05-28"])
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert (env.storm_dir(LATER) / publish.WARNINGS_FILE).exists()
+    assert env.index()["storms"][0]["files"]["warnings"] == f"storms/{LATER}/warnings.geojson"
+    _warnings_file(env, LATER).unlink()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.WARNINGS_FILE).exists()
+    assert env.index()["storms"][0]["files"]["warnings"] is None

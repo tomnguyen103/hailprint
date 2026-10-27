@@ -402,19 +402,33 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     With `missing`, the dates are the swath dates whose window has closed and that have no power
     file, or whose power file comes from ODIN while the EAGLE-I year files now cover the window.
     A date with no source is skipped and counted. An explicit date with no source stops the run
-    with exit 1.
+    with exit 1. A failed date does not stop the other dates. The run prints one line per failed
+    date, then exits 1.
     """
     # shortcut: an EAGLE-I year file counts as covering its year, upgrade to a check of the last
     # row time if a partial year file is ever ingested
+    # shortcut: an explicit date runs for an open window too and writes a file with null future
+    # steps that `--missing` then skips; add a closed-window check when explicit reruns of
+    # recent days become routine.
     if missing:
         now = _utc_now()
         storm_dates = [
             d for d, _ in _swath_files([]) if sbw.window(d)[1] <= now and _needs_power(d)
         ]
     written = []
+    failed = []
     skipped = 0
     for storm_date in storm_dates:
-        built = power.build(storm_date, EAGLEI_DIR, ODIN_DIR)
+        try:
+            built = power.build(storm_date, EAGLEI_DIR, ODIN_DIR)
+            if built is not None:
+                frame, metadata = built
+                path = POWER_DIR / power.day_file_name(storm_date)
+                written.append(files.write_atomic(frame, path, metadata))
+        except (RuntimeError, ValueError, OSError) as exc:
+            print(f"{storm_date}: {exc}", file=sys.stderr)
+            failed.append(storm_date.isoformat())
+            continue
         if built is None:
             if not missing:
                 absent = [
@@ -428,9 +442,7 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
                 )
             skipped += 1
             continue
-        frame, metadata = built
-        path = POWER_DIR / power.day_file_name(storm_date)
-        written.append(files.write_atomic(frame, path, metadata))
+        frame, _ = built
         known = frame["customers_out"].count()
         print(f"{storm_date}: {known} of {len(frame)} county steps have a row")
     if skipped:
@@ -438,6 +450,8 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
             f"{skipped} date{'s' if skipped > 1 else ''} skipped "
             "without an EAGLE-I file or an ODIN snapshot"
         )
+    if failed:
+        raise ValueError(f"power failed for: {', '.join(failed)}")
     return written
 
 
@@ -446,8 +460,12 @@ def _needs_power(storm_date: date) -> bool:
     path = POWER_DIR / power.day_file_name(storm_date)
     if not path.exists():
         return True
+    try:
+        source = power.file_source(path)
+    except (OSError, ValueError):
+        return True  # an unreadable file is rebuilt
     covered = all((EAGLEI_DIR / power.file_name(y)).exists() for y in power.years_of(storm_date))
-    return covered and power.file_source(path) == odin.METADATA["source"]
+    return covered and source == odin.METADATA["source"]
 
 
 def odin_snapshot() -> Path:
@@ -543,6 +561,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
         hcad = publish.hcad_source(zips_path.name) if has_zips else None
         warnings_path = WARNINGS_DIR / sbw.file_name(storm_date)
         has_warnings = warnings_path.exists()
+        power_path = POWER_DIR / power.day_file_name(storm_date)
+        has_power = power_path.exists()
         try:
             mrms, max_mesh_mm = publish.swath_source(swath_path)
             texts, entry = publish.build_day(
@@ -561,6 +581,11 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
                     if has_warnings
                     else None
                 ),
+                power=(
+                    (pd.read_parquet(power_path), publish.power_source(power_path))
+                    if has_power
+                    else None
+                ),
             )
         except ValueError as exc:
             print(f"{storm_date}: {exc}", file=sys.stderr)
@@ -573,6 +598,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
             (folder / publish.ZIPS_FILE).unlink(missing_ok=True)
         if publish.WARNINGS_FILE not in texts:
             (folder / publish.WARNINGS_FILE).unlink(missing_ok=True)
+        if publish.POWER_FILE not in texts:
+            (folder / publish.POWER_FILE).unlink(missing_ok=True)
         entries.append(entry)
         file_count += len(texts)
         print(f"{storm_date}: published {len(texts)} files")

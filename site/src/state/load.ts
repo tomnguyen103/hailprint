@@ -15,12 +15,13 @@ const KEEP_FOR_MS = 500;
  * the latest wins, and an error without a DataError takes `key` as its file name.
  * `showLoading` turns on 300 ms after a request starts and stays on at least 500 ms,
  * so a fast response never flashes the loading state.
+ * A render with a new key returns loading before the effect runs.
  */
 export function useLoad<T>(
   key: string,
   start: () => Promise<T>,
 ): Load<T> & { showLoading: boolean; retry: () => void } {
-  const [state, setState] = useState<Load<T>>({ status: "loading" });
+  const [state, setState] = useState<{ key: string; load: Load<T> }>({ key, load: { status: "loading" } });
   const [showLoading, setShowLoading] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const run = useRef(latest<T>());
@@ -28,7 +29,7 @@ export function useLoad<T>(
   useEffect(() => {
     let live = true;
     let shownAt = 0;
-    setState({ status: "loading" });
+    setState({ key, load: { status: "loading" } });
     setShowLoading(false);
     const show = window.setTimeout(() => {
       shownAt = Date.now();
@@ -41,7 +42,7 @@ export function useLoad<T>(
       window.setTimeout(() => {
         if (!live) return;
         setShowLoading(false);
-        setState(next);
+        setState({ key, load: next });
       }, wait);
     };
     run
@@ -63,5 +64,6 @@ export function useLoad<T>(
   }, [key, attempt]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
-  return { ...state, showLoading, retry };
+  const load: Load<T> = state.key === key ? state.load : { status: "loading" };
+  return { ...load, showLoading, retry };
 }
