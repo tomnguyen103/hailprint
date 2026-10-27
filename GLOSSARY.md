@@ -36,7 +36,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Scoring domain | The Harris bbox shrunk by the scoring radius plus one cell (`score.EDGE_M`). The swath is only known inside the bbox, so a report near its edge is not scored. |
 | Contingency table | For one size class and one scoring radius: hits, misses, false alarms, and correct negatives over the scored reports. POD, FAR, CSI, and HSS come from it. |
 | Unverifiable area | The part of a swath class, in km2, farther than the scoring radius from every SPC report. No report could confirm or deny hail there. |
-| Published file | One JSON or GeoJSON file under `site/data/` that `hailprint publish` writes for the site: `swath.geojson`, `reports.geojson`, `pairs.json`, `zip-counts.json`, and `warnings.geojson` (only where `warnings` ran) per storm date, and the `storms.json` index. Each validates against its schema in `src/hailprint/schemas/` and carries a receipt. |
+| Published file | One JSON or GeoJSON file under `site/data/` that `hailprint publish` writes for the site: `swath.geojson`, `reports.geojson`, `pairs.json`, `zip-counts.json`, `warnings.geojson` (only where `warnings` ran), and `power.json` (only where `power` ran) per storm date, and the `storms.json` index. Each validates against its schema in `src/hailprint/schemas/` and carries a receipt. |
 | Receipt | The provenance block of a published file: `storm_date`, `sources` (each with `source`, `product`, and `file`), the one confidence band `swath.CONFIDENCE`, `run_time` (one UTC second per run), and `package_version`. |
 | Edge distance | `edge_m`: the signed metre distance from a report point to the swath crop edge, positive inside the Harris bbox and negative outside. A report is scored at radius R when `edge_m > R*1000 + score.EDGE_M`. Stored per report in `pairs.json`, so the browser re-scores at any whole-kilometre radius. |
 | Spike | The week-1 run, replaced by `ingest` in week 2. Its evidence stays in `docs/reports/week-01.md`. |
@@ -53,7 +53,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Point check | The Try it tool that takes a latitude and longitude inside the Harris bbox, or a map click, and lists for every storm date the largest size class whose swath holds the point, or "below 0.75 in". |
 | Swipe compare | The Try it tool that draws two storm dates on two synced maps in one frame; a native range sets the split where the right map starts. |
 | Scoring radius slider | The native range on the Score pane, the Scorecard, and the Tune tool that sets the scoring radius in whole kilometres from 0 to `radius_km_max`; every table re-scores from `pairs.json` at the chosen radius. |
-| Method page | One of the five reading pages under `/method/<page>`: Data, Storm date, Size classes, Scoring, Limits. Typed blocks (heading, prose, list, code, figure, caveat) from the one file `site/src/method/content.ts`, in a 680 px column. |
+| Method page | One of the six reading pages under `/method/<page>`: Data, Storm date, Size classes, Scoring, Limits, Impacts. Typed blocks (heading, prose, list, code, figure, caveat) from the one file `site/src/method/content.ts`, in a 680 px column. |
 | Prose budget | The test on the Method content: at most 120 words above the fold per page, every sentence at most 25 words, no sentence that starts with an `-ing` form, and the forbidden word absent. `site/src/method/prose.ts`. |
 | Guess-then-reveal | The Scoring page widget: a range from 0 to 1 for the pooled HSS of one size class at the default radius. Reveal shows the guess, the actual from the pooled `pairs.json`, and the signed difference. |
 | Pipeline view | One of the three views under `/pipeline/<view>`: Runs, Archive, Sources. Each reads `pipeline.json`, the file `publish` writes beside `storms.json`. The sidebar lists three services with a presence dot and the age of the last run. |
@@ -61,13 +61,22 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Archive coverage | The Archive view table: per year, the archive days, the days with a 12Z file, and that share as a bar; a total row closes it. Built from the archive index at publish time. |
 | Replay frame | One cropped MESH frame of the 2-minute product inside a storm date, for an animation. Cut in PR G: about 720 CONUS GRIB2 files, about 1 GB per storm date (`docs/DECISIONS.md` row 8). |
 | Impact window | 12:00 UTC on storm date D to 12:00 UTC on D+2: 192 steps of 15 minutes. The first 96 steps are the convective day. |
-| Step | One 15-minute slot of the impact window, named by its start time in UTC and numbered 0 to 191. Step 0 starts at 12:00 UTC on D. |
+| Step | One 15-minute interval of the impact window, named by its start time in UTC and numbered 0 to 191. Step 0 starts at 12:00 UTC on D. |
+| Slot | The quarter hour at or before the fetch time of an ODIN snapshot, in UTC (`odin.slot_of`). A rerun of a slot replaces its rows. A step reads the snapshot whose slot equals the step start. |
 | Warning polygon | One NWS storm-based warning polygon (`SV`, `TO`, or `FF`, significance `W`) from WFO HGX, with its begin and end time. `hailprint warnings` stores them per storm date. |
 | Impact layer | A map layer with a time axis. The warnings layer is the first one. |
 | Time slider | The native range under the map over the 192 steps of the impact window. The step in the path `/storms/<date>/map/<step>` is its value. |
-| Storm timeline | The chart under the time slider with two strips on the 48-hour axis: warnings, one bar per warning polygon, and report times, one tick per SPC report. A cursor marks the slider step, and a click on a strip moves it. |
+| Storm timeline | The chart under the time slider with strips on the 48-hour axis: power, the share out of the picked county; warnings, one bar per warning polygon; and report times, one tick per SPC report. A cursor marks the slider step, and a click on a strip moves it. |
+| EAGLE-I | The ORNL record of customers out per county, one CSV per year, every 15 minutes, in UTC. `hailprint eaglei <year>` stores the metro rows. |
+| ODIN | The ORNL open outage feed. It gives open incidents now and holds no history. `hailprint odin` stores one snapshot every 15 minutes. In the metro it holds CenterPoint customers only. |
+| MCC | The EAGLE-I file `MCC.csv`: customers per county as of 2022. Its value is the denominator of the share out for every year. |
+| Customers out | The count of customers without power in one county at one step, from EAGLE-I or ODIN. A count, never a cause. |
+| Share out | Customers out divided by the MCC value of the county, at one step. A null step has no share. The site clamps the colour, never the number. |
+| Power file | `power.json` of one storm date: per metro county, the share out and the customers out at each of the 192 steps, and one source, `eaglei` or `odin`. A file never mixes the two. |
+| Power layer | The county fill of the share out at the slider step, and the power strip of the storm timeline. The fill control picks none or power. |
+| CenterPoint customers only | The label on every value of an ODIN-sourced power file. Such a value is a lower bound. |
 | Missing candidate day | A candidate day with a 12Z file and no swath file. `hailprint candidates --missing` prints them newest first. |
-| Nightly run | `scripts/nightly.sh`: index, missing candidate days, ingest, parcels, score, warnings, publish, deploy, under `data/nightly.lock`, at most `MAX_INGEST` storm dates. |
+| Nightly run | `scripts/nightly.sh`: index, missing candidate days, ingest, parcels, score, warnings, power, publish, deploy, under `data/nightly.lock`, at most `MAX_INGEST` storm dates. A failed warnings or power step logs one line, and `publish` still runs. |
 | Deploy | `scripts/deploy.sh`: the prebuilt Vercel flow from a machine that holds `site/data/`. |
 | Dry run | `--dry-run`: the build into `site/dist` with the artifact check and no `vercel` call. |
-| Cron entry | `scripts/hailprint.cron`: the crontab line at 14:00 UTC that starts the nightly run. |
+| Cron entry | `scripts/hailprint.cron`: two crontab lines. One starts the nightly run at 14:00 UTC. One runs `hailprint odin` every 15 minutes. |

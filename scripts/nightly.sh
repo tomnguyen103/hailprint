@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nightly run: index, missing candidate days, ingest, parcels, score, warnings, publish, deploy.
+# Nightly run: index, missing candidate days, ingest, parcels, score, warnings, power, publish, deploy.
 # Usage: scripts/nightly.sh [--dry-run]
 #   --dry-run   passes through to scripts/deploy.sh: build site/dist and stop before vercel.
 # MAX_INGEST (default 5) caps the storm dates that one night ingests.
@@ -103,6 +103,9 @@ uv run hailprint score
 log "warnings --missing"
 # the warnings are an add-on layer, so a feed failure never blocks the hail publish; the next night retries
 uv run hailprint warnings --missing || log "warnings failed; publish goes on"
+log "power --missing"
+# power is an add-on layer too: a failed step leaves the hail publish alone; the next night retries
+uv run hailprint power --missing || log "power failed; publish goes on"
 log "publish"
 uv run hailprint publish
 log "deploy ${1:-}"

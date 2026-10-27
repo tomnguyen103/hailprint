@@ -306,6 +306,7 @@ INGEST_ONLY = [INGEST[0], INGEST[2]]
 TAIL = [
     "uv run hailprint score @ tree",
     "uv run hailprint warnings --missing @ tree",
+    "uv run hailprint power --missing @ tree",
     "uv run hailprint publish @ tree",
 ]
 
@@ -494,7 +495,32 @@ def test_nightly_logs_a_failed_warnings_run_and_publishes(tmp_path):
 
 
 @needs_bash
-def test_nightly_max_ingest_limits_ingest_only_and_warnings_runs_once(tmp_path):
+def test_nightly_runs_power_between_warnings_and_publish(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": ""})
+
+    assert done.returncode == 0, done.stderr
+    calls = tree.calls()
+    power = calls.index("uv run hailprint power --missing @ tree")
+    assert calls[power - 1] == "uv run hailprint warnings --missing @ tree"
+    assert calls[power + 1] == "uv run hailprint publish @ tree"
+
+
+@needs_bash
+def test_nightly_logs_a_failed_power_run_and_publishes(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": "", "STUB_FAIL": "power"})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == HEAD + TAIL + ["deploy @ tree"]
+    assert "power failed; publish goes on" in done.stdout
+    assert "warnings failed" not in done.stdout
+
+
+@needs_bash
+def test_nightly_max_ingest_limits_ingest_only_and_impact_steps_run_once(tmp_path):
     tree = nightly_tree(tmp_path)
 
     done = tree.run("nightly.sh", env={"STUB_MISSING": MISSING_TWO, "MAX_INGEST": "1"})
@@ -502,10 +528,11 @@ def test_nightly_max_ingest_limits_ingest_only_and_warnings_runs_once(tmp_path):
     assert done.returncode == 0, done.stderr
     calls = tree.calls()
     assert "uv run hailprint candidates --missing --top 1 @ tree" in calls
-    assert calls.count("uv run hailprint warnings --missing @ tree") == 1
-    assert not any(
-        call.startswith("uv run hailprint warnings") and "--top" in call for call in calls
-    )
+    for step in ("warnings", "power"):
+        assert calls.count(f"uv run hailprint {step} --missing @ tree") == 1
+        assert not any(
+            call.startswith(f"uv run hailprint {step}") and "--top" in call for call in calls
+        )
 
 
 @needs_bash
@@ -519,14 +546,30 @@ def test_nightly_rejects_an_unknown_argument_with_usage(tmp_path):
     assert tree.calls() == []
 
 
-def test_cron_entry_starts_the_nightly_run_at_14_utc():
+def cron_lines():
     lines = (SCRIPTS / "hailprint.cron").read_text(encoding="utf-8").splitlines()
     entries = [
         ln for ln in lines if ln and not ln.startswith("#") and not ln.split("=")[0].isupper()
     ]
+    return lines, entries
 
-    assert len(entries) == 1
-    assert entries[0].startswith("0 14 * * *")
-    assert "scripts/nightly.sh" in entries[0]
+
+def test_cron_entry_starts_the_nightly_run_at_14_utc():
+    lines, entries = cron_lines()
+
+    nightly = [ln for ln in entries if "scripts/nightly.sh" in ln]
+    assert len(nightly) == 1
+    assert nightly[0].startswith("0 14 * * *")
     assert "CRON_TZ=UTC" in lines
     assert any(ln.startswith("PATH=") for ln in lines)
+
+
+def test_cron_file_holds_the_15_minute_odin_line():
+    lines, entries = cron_lines()
+
+    odin = [ln for ln in entries if "hailprint odin" in ln]
+    assert len(entries) == 2
+    assert odin == [
+        "*/15 * * * * cd /path/to/hailprint && uv run hailprint odin >> data/odin.log 2>&1"
+    ]
+    assert any(ln.startswith("#") and "ODIN" in ln for ln in lines)
