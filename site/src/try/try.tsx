@@ -7,6 +7,7 @@ import { pooledRows } from "../scorecard/scorecard";
 import { PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { useAllFiles } from "../state/pairs-all";
+import { PointCheck } from "./point";
 import { Tune } from "./tune";
 
 export const TOOL_LABELS: Record<TryTool, string> = {
@@ -86,6 +87,7 @@ export function TryIt({ index, tool }: { index: StormsIndex; tool: TryTool }) {
       <section class="pane" role="tabpanel" id={`panel-${tool}`} aria-labelledby={`tab-${tool}`}>
         <h2 class="visually-hidden">{TOOL_LABELS[tool]}</h2>
         {tool === "tune" ? <Tune index={index} /> : null}
+        {tool === "point" ? <PointCheck index={index} /> : null}
       </section>
     </>
   );

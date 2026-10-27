@@ -14,10 +14,11 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { Protocol } from "pmtiles";
 import { type Bbox, HARRIS_BBOX } from "../../county";
 import type { ReportsFile, SwathFile } from "../../data/types";
-import type { FeatureCollection, MultiPolygon } from "geojson";
+import type { FeatureCollection, MultiPolygon, Point } from "geojson";
 import { BASEMAP_FILE, BASEMAP_SOURCE, basemapLayers, probeBasemap } from "./basemap";
 import {
   COUNTY_SOURCE,
+  POINT_SOURCE,
   REPORTS_SOURCE,
   SWATH_SOURCE,
   type PaintName,
@@ -50,6 +51,7 @@ function style(theme: Theme, basemap: boolean): StyleSpecification {
     [SWATH_SOURCE]: { type: "geojson", data: EMPTY },
     [COUNTY_SOURCE]: { type: "geojson", data: EMPTY },
     [REPORTS_SOURCE]: { type: "geojson", data: EMPTY },
+    [POINT_SOURCE]: { type: "geojson", data: EMPTY },
   };
   if (basemap) {
     sources[BASEMAP_SOURCE] = { type: "vector", url: `pmtiles://${BASEMAP_FILE}`, attribution: "Protomaps, OpenStreetMap" };
@@ -73,7 +75,14 @@ export interface MapHandle {
   setTheme(theme: Theme): void;
   setClassVisible(thresholdMm: number, visible: boolean): void;
   fit(bounds: Bbox | null): void;
+  /** Place the one checked point, or remove it with null. */
+  setPoint(lngLat: [number, number] | null): void;
+  flyTo(lngLat: [number, number], zoom: number): void;
   destroy(): void;
+}
+
+function reduceMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 /** Create the map in `container`, probe the basemap, and resolve once the style has loaded. */
@@ -119,8 +128,17 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
       map.setLayoutProperty(fillLayerId(thresholdMm), "visibility", visible ? "visible" : "none");
     },
     fit(bounds) {
-      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      map.fitBounds((bounds ?? HARRIS_BBOX) as LngLatBoundsLike, { padding: FIT_PADDING, duration: reduce ? 0 : FLY_MS });
+      map.fitBounds((bounds ?? HARRIS_BBOX) as LngLatBoundsLike, { padding: FIT_PADDING, duration: reduceMotion() ? 0 : FLY_MS });
+    },
+    setPoint(lngLat) {
+      const data: FeatureCollection<Point> = {
+        type: "FeatureCollection",
+        features: lngLat === null ? [] : [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: lngLat } }],
+      };
+      geojson(POINT_SOURCE)?.setData(data);
+    },
+    flyTo(lngLat, zoom) {
+      map.flyTo({ center: lngLat, zoom, duration: reduceMotion() ? 0 : FLY_MS });
     },
     destroy() {
       map.remove();
