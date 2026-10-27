@@ -262,6 +262,32 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _publish_pipeline(receipts: list[dict], file_count: int, run_time: datetime) -> Path:
+    """Write pipeline.json: this run over the old runs, the archive coverage, and the sources."""
+    pipeline_path = SITE_DATA_DIR / publish.PIPELINE_FILE
+    old_runs: list[dict] = []
+    if pipeline_path.exists():
+        try:
+            previous = json.loads(pipeline_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise ValueError(f"{pipeline_path}: not valid JSON, delete it or fix it") from exc
+        publish.validate(previous, "pipeline")
+        old_runs = previous["runs"]
+    run = publish.run_entry([rcpt["storm_date"] for rcpt in receipts], file_count, run_time)
+    summary = (
+        publish.archive_summary(pd.read_parquet(archive.INDEX_PATH))
+        if archive.INDEX_PATH.exists()
+        else None
+    )
+    doc = publish.pipeline_doc(
+        publish.merge_runs(old_runs, run), summary, publish.sources_of(receipts), run_time
+    )
+    publish.validate(doc, "pipeline")
+    path = files.write_text_atomic(publish.dumps(doc, "pipeline"), pipeline_path)
+    print(f"published {publish.PIPELINE_FILE} ({len(doc['runs'])} runs)")
+    return path
+
+
 def publish_days(storm_dates: list[date]) -> list[Path]:
     """Write the site data files per storm date, then the storms index.
 
@@ -284,6 +310,8 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
         old = previous["storms"]
     run_time = _utc_now()
     entries, written, failed = [], [], []
+    receipts: list[dict] = []
+    file_count = 0
     for storm_date, swath_path in selected:
         try:
             text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, date.today())
@@ -295,6 +323,8 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
             continue
         zips_path = PARCELS_DIR / f"zip-counts-{storm_date}.parquet"
         has_zips = zips_path.exists()
+        spc = publish.spc_source(storm_date)
+        hcad = publish.hcad_source(zips_path.name) if has_zips else None
         try:
             mrms, max_mesh_mm = publish.swath_source(swath_path)
             texts, entry = publish.build_day(
@@ -303,9 +333,9 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
                 reports.nearby_reports(storm_date, text),
                 mrms=mrms,
                 max_mesh_mm=max_mesh_mm,
-                spc=publish.spc_source(storm_date),
+                spc=spc,
                 zips=pd.read_parquet(zips_path) if has_zips else None,
-                hcad=publish.hcad_source(zips_path.name) if has_zips else None,
+                hcad=hcad,
                 facts=facts.get(storm_date.isoformat()),
                 run_time=run_time,
             )
@@ -319,6 +349,9 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
         if publish.ZIPS_FILE not in texts:
             (folder / publish.ZIPS_FILE).unlink(missing_ok=True)
         entries.append(entry)
+        sources = [mrms, spc] + ([hcad] if hcad else [])
+        receipts.append({"storm_date": storm_date.isoformat(), "sources": sources})
+        file_count += len(texts)
         print(f"{storm_date}: published {len(texts)} files")
     if not entries:
         raise RuntimeError(
@@ -328,6 +361,7 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
     publish.validate(doc, "storms")
     written.append(files.write_text_atomic(publish.dumps(doc, "storms"), index_path))
     print(f"storms index: {len(doc['storms'])} entries")
+    written.append(_publish_pipeline(receipts, file_count, run_time))
     print(f"confidence: {swath.CONFIDENCE}")
     if failed:
         raise ValueError(f"publish failed for: {', '.join(failed)}")

@@ -211,7 +211,8 @@ def test_two_runs_with_a_fixed_run_time_give_equal_bytes_and_leave_no_tmp_file(e
     cli.main(["publish"])
 
     assert env.tree() == first
-    assert len(first) == 8
+    assert len(first) == 9
+    assert "pipeline.json" in first
     assert not [name for name in first if name.endswith(".tmp")]
 
 

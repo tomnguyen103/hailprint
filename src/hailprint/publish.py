@@ -36,6 +36,8 @@ ZIPS_FILE = "zip-counts.json"
 METADATA_KEYS = tuple(METADATA)
 SPC_PRODUCT = "preliminary hail reports"
 HCAD_PRODUCT = "Parcels.gdb"
+PIPELINE_FILE = "pipeline.json"
+MAX_RUNS = 50
 
 
 @cache
@@ -324,6 +326,72 @@ def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
     return [
         e for e in merged.values() if all((data_dir / e["files"][k]).exists() for k in required)
     ]
+
+
+def archive_summary(frame: pd.DataFrame) -> Doc:
+    """Archive coverage from the archive index: days per year and the days without a 12Z file."""
+    days = [
+        (pd.Timestamp(d).date(), bool(z))
+        for d, z in zip(frame["storm_date"], frame["has_12z"], strict=True)
+    ]
+    years = sorted({d.year for d, _ in days})
+    return {
+        "days": len(days),
+        "first_storm_date": min(d for d, _ in days).isoformat(),
+        "last_storm_date": max(d for d, _ in days).isoformat(),
+        "days_without_12z": sum(1 for _, z in days if not z),
+        "years": [
+            {
+                "year": year,
+                "days": sum(1 for d, _ in days if d.year == year),
+                "days_with_12z": sum(1 for d, z in days if d.year == year and z),
+            }
+            for year in years
+        ],
+    }
+
+
+def sources_of(receipts: list[Doc]) -> list[Doc]:
+    """One row per (source, product) over the receipts, with the storm dates sorted."""
+    dates: dict[tuple[str, str], set[str]] = {}
+    for rcpt in receipts:
+        for entry in rcpt["sources"]:
+            dates.setdefault((entry["source"], entry["product"]), set()).add(rcpt["storm_date"])
+    return [
+        {"source": source, "product": product, "storm_dates": sorted(dates[source, product])}
+        for source, product in sorted(dates)
+    ]
+
+
+def merge_runs(old: list[Doc], new: Doc) -> list[Doc]:
+    """The old runs with the new run over them, newest first, at most 50."""
+    # shortcut: merge_runs dedupes by run_time only, upgrade to a run id when two hosts publish
+    kept = [run for run in old if run["run_time"] != new["run_time"]]
+    return sorted([new, *kept], key=lambda run: run["run_time"], reverse=True)[:MAX_RUNS]
+
+
+def run_entry(storm_dates: list[str], file_count: int, run_time: datetime) -> Doc:
+    """One run log row: the run time, the package version, the storm dates, the file count."""
+    return {
+        "run_time": _utc_text(run_time),
+        "package_version": version("hailprint"),
+        "storm_dates": storm_dates,
+        "file_count": file_count,
+    }
+
+
+def pipeline_doc(
+    runs: list[Doc], archive: Doc | None, sources: list[Doc], run_time: datetime
+) -> Doc:
+    """The pipeline file: the run log, the archive coverage or null, and the sources."""
+    return {
+        "confidence": swath.CONFIDENCE,
+        "run_time": _utc_text(run_time),
+        "package_version": version("hailprint"),
+        "runs": runs,
+        "archive": archive,
+        "sources": sources,
+    }
 
 
 def swath_source(path: Path) -> tuple[Doc, float | None]:

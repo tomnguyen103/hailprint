@@ -26,7 +26,7 @@ SOURCES = [
         "file": "swaths-2024-05-28.parquet",
     }
 ]
-SCHEMAS = ["receipt", "swath", "reports", "pairs", "zip-counts", "storms"]
+SCHEMAS = ["receipt", "swath", "reports", "pairs", "zip-counts", "storms", "pipeline"]
 
 
 def _receipt():
@@ -827,3 +827,125 @@ def test_merge_entries_keeps_an_old_entry_with_files_drops_one_without_and_repla
         "2024-05-28",
         "2023-06-23",
     ]
+
+
+def _run(run_time="2024-05-29T13:00:07Z", dates=("2024-05-28",), file_count=4):
+    return {
+        "run_time": run_time,
+        "package_version": version("hailprint"),
+        "storm_dates": list(dates),
+        "file_count": file_count,
+    }
+
+
+def _archive_frame():
+    return pd.DataFrame(
+        {
+            "storm_date": [date(2023, 6, 23), date(2024, 4, 1), date(2024, 5, 28)],
+            "file_count": [720, 719, 720],
+            "bytes": [3, 2, 3],
+            "has_12z": [True, False, True],
+        }
+    )
+
+
+def _pipeline_doc(**changes):
+    sources = publish.sources_of([_receipt()])
+    doc = publish.pipeline_doc(
+        [_run()], publish.archive_summary(_archive_frame()), sources, RUN_TIME
+    )
+    return doc | changes
+
+
+def test_archive_summary_counts_days_per_year_and_days_without_12z():
+    summary = publish.archive_summary(_archive_frame())
+
+    assert summary == {
+        "days": 3,
+        "first_storm_date": "2023-06-23",
+        "last_storm_date": "2024-05-28",
+        "days_without_12z": 1,
+        "years": [
+            {"year": 2023, "days": 1, "days_with_12z": 1},
+            {"year": 2024, "days": 2, "days_with_12z": 1},
+        ],
+    }
+
+
+def test_sources_of_groups_by_source_and_product_with_sorted_dates():
+    first = publish.receipt(date(2024, 5, 28), SOURCES, RUN_TIME)
+    second = publish.receipt(
+        date(2023, 6, 23),
+        [SOURCES[0], publish.hcad_source("zip-counts-2023-06-23.parquet")],
+        RUN_TIME,
+    )
+
+    rows = publish.sources_of([first, second])
+
+    assert rows == [
+        {"source": "hcad", "product": publish.HCAD_PRODUCT, "storm_dates": ["2023-06-23"]},
+        {
+            "source": "noaa-mrms-pds",
+            "product": "MESH_Max_1440min_00.50",
+            "storm_dates": ["2023-06-23", "2024-05-28"],
+        },
+    ]
+
+
+def test_merge_runs_replaces_the_same_run_time_sorts_newest_first_and_caps_at_fifty():
+    old = [_run(f"2024-01-{day:02d}T12:00:00Z", file_count=1) for day in range(1, 31)]
+    old += [_run(f"2024-02-{day:02d}T12:00:00Z", file_count=1) for day in range(1, 22)]
+    assert len(old) == 51
+
+    replaced = publish.merge_runs(old, _run("2024-02-21T12:00:00Z", file_count=9))
+    newer = publish.merge_runs(old, _run("2024-03-01T12:00:00Z"))
+
+    assert len(replaced) == 50
+    assert replaced[0]["run_time"] == "2024-02-21T12:00:00Z"
+    assert replaced[0]["file_count"] == 9
+    assert [r["run_time"] for r in replaced].count("2024-02-21T12:00:00Z") == 1
+    assert replaced[-1]["run_time"] == "2024-01-02T12:00:00Z"
+    assert newer[0]["run_time"] == "2024-03-01T12:00:00Z"
+    assert len(newer) == 50
+    assert publish.merge_runs([], _run()) == [_run()]
+
+
+def test_pipeline_doc_validates_and_carries_the_confidence_band():
+    doc = _pipeline_doc()
+
+    publish.validate(doc, "pipeline")
+
+    assert doc["confidence"] == swath.CONFIDENCE
+    assert doc["run_time"] == "2024-05-29T13:00:07Z"
+    assert doc["runs"][0] == _run() == publish.run_entry(["2024-05-28"], 4, RUN_TIME)
+    assert doc["archive"]["days"] == 3
+    assert doc["sources"][0]["storm_dates"] == ["2024-05-28"]
+    assert publish.dumps(doc, "pipeline")
+
+
+def test_pipeline_doc_with_archive_none_validates():
+    publish.validate(_pipeline_doc(archive=None), "pipeline")
+
+
+def test_pipeline_schema_refuses_a_directory_a_missing_archive_and_a_bad_date():
+    with_dir = _pipeline_doc()
+    with_dir["sources"][0]["product"] = "storms/MESH_Max_1440min_00.50"
+    with pytest.raises(ValueError, match=r"pipeline: \$\.sources\[0\]\.product"):
+        publish.validate(with_dir, "pipeline")
+
+    without_archive = _pipeline_doc()
+    del without_archive["archive"]
+    with pytest.raises(ValueError, match="pipeline: .*archive"):
+        publish.validate(without_archive, "pipeline")
+
+    bad_date = _pipeline_doc()
+    bad_date["runs"][0]["storm_dates"] = ["28-05-2024"]
+    with pytest.raises(ValueError, match=r"pipeline: \$\.runs\[0\]\.storm_dates\[0\]"):
+        publish.validate(bad_date, "pipeline")
+
+
+def test_pipeline_dumps_refuses_the_forbidden_word():
+    doc = _pipeline_doc(confidence=f"hail {files_module.FORBIDDEN_WORD} band")
+
+    with pytest.raises(ValueError, match=files_module.FORBIDDEN_WORD):
+        publish.dumps(doc, "pipeline")
