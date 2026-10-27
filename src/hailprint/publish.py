@@ -360,8 +360,10 @@ def index_receipts(entries: list[Doc], data_dir: Path) -> list[Doc]:
     ]
 
 
-def archive_summary(frame: pd.DataFrame) -> Doc:
-    """Archive coverage from the archive index: days per year and the days without a 12Z file."""
+def archive_summary(frame: pd.DataFrame) -> Doc | None:
+    """Archive coverage from the archive index, or None for an index with no rows."""
+    if frame.empty:
+        return None
     days = [
         (pd.Timestamp(d).date(), bool(z))
         for d, z in zip(frame["storm_date"], frame["has_12z"], strict=True)

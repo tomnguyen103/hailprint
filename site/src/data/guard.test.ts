@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { FILE_PATH, MAX_RUNS, guardIndex, guardOutline, guardPairs, guardPipeline, guardReports, guardSwath, guardZipCounts } from "./guard";
+import { GEOJSON_PATH, JSON_PATH, MAX_RUNS, guardIndex, guardOutline, guardPairs, guardPipeline, guardReports, guardSwath, guardZipCounts } from "./guard";
 import { DataError } from "./types";
 
 const receipt = {
@@ -266,14 +266,28 @@ describe("guardIndex", () => {
     const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as { $defs: Record<string, { pattern: string }> };
     const geojson = new RegExp(schema.$defs["geojson_file"]!.pattern);
     const json = new RegExp(schema.$defs["json_file"]!.pattern);
-    for (const path of ["storms/2024-05-28/swath.geojson", "storms/2024-05-28/pairs.json"]) {
-      expect(FILE_PATH.test(path)).toBe(true);
-      expect(geojson.test(path) || json.test(path)).toBe(true);
+    const cases: [RegExp, RegExp, string[]][] = [
+      [GEOJSON_PATH, geojson, ["storms/2024-05-28/swath.geojson", "storms/2024-05-28/reports.geojson"]],
+      [JSON_PATH, json, ["storms/2024-05-28/pairs.json", "storms/2024-05-28/zip-counts.json"]],
+    ];
+    const bad = [
+      "storms/x/pairs.json",
+      "../secret.json",
+      "storms/2024-05-28/pairs.txt",
+      "storms/2024-05-28/swath.json",
+      "storms/2024-05-28/pairs.geojson",
+    ];
+    for (const [ours, theirs, good] of cases) {
+      for (const path of good) {
+        expect(ours.test(path)).toBe(true);
+        expect(theirs.test(path)).toBe(true);
+      }
+      for (const path of bad) expect(ours.test(path)).toBe(theirs.test(path));
     }
-    for (const path of ["storms/x/pairs.json", "../secret.json", "storms/2024-05-28/pairs.txt"]) {
-      expect(FILE_PATH.test(path)).toBe(false);
-      expect(geojson.test(path) || json.test(path)).toBe(false);
-    }
+  });
+  it("rejects a pairs path with the geojson extension", () => {
+    const files = { ...storm.files, pairs: "storms/2024-05-28/pairs.geojson" };
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, files }] })).toThrow(/files\.pairs/);
   });
 });
 

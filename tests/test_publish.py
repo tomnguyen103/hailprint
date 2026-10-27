@@ -934,6 +934,10 @@ def test_archive_summary_counts_days_per_year_and_days_without_12z():
     }
 
 
+def test_archive_summary_of_an_empty_index_is_none():
+    assert publish.archive_summary(_archive_frame().iloc[0:0]) is None
+
+
 def test_sources_of_groups_by_source_and_product_with_sorted_dates():
     first = publish.receipt(date(2024, 5, 28), SOURCES, RUN_TIME)
     second = publish.receipt(

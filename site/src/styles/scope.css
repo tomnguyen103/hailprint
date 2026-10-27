@@ -147,11 +147,17 @@
     border-right: 1px solid var(--rule);
     box-shadow: var(--shadow);
     transform: translateX(-100%);
-    transition: transform var(--motion);
+    /* Closed: out of the tab order once the slide ends. */
+    visibility: hidden;
+    transition:
+      transform var(--motion),
+      visibility 0s var(--motion);
   }
 
   .scope[data-open="true"] {
     transform: none;
+    visibility: visible;
+    transition-delay: 0s;
   }
 
   .scope-close {
