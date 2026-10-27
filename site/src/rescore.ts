@@ -2,6 +2,7 @@
 // read time so the site and the Python scorer agree at every whole km.
 import type { Metric, Pairs, TableRow } from "./data/types";
 import { DataError } from "./data/types";
+import { RULER } from "./ruler";
 
 export interface Skill {
   pod: Metric;
@@ -33,14 +34,18 @@ function hundredths(inches: number): number {
   return Math.round(inches * 100);
 }
 
-/** The contingency table at a whole-km radius, one row per class in classes order. */
+/** The contingency table at a whole-km radius, one row per size class in RULER order. */
 export function rescore(pairs: Pairs, radiusKm: number): TableRow[] {
   if (!Number.isInteger(radiusKm) || radiusKm < 0 || radiusKm > pairs.radius_km_max) {
     throw new RangeError(`radius ${radiusKm} km is not a whole number in 0..${pairs.radius_km_max}`);
   }
   const radiusM = radiusKm * 1000;
   const scored = pairs.reports.filter((r) => r.edge_m > radiusM + pairs.edge_margin_m);
-  return pairs.classes.map((cls, k) => {
+  return RULER.map((mark) => {
+    // dist_m follows the classes order of the file, so the class index comes from the file.
+    const k = pairs.classes.findIndex((c) => c.threshold_mm === mark.threshold_mm);
+    const cls = pairs.classes[k];
+    if (cls === undefined) throw new DataError("pairs.json", `missing size class ${mark.threshold_mm} mm`);
     const unverifiable = cls.unverifiable_km2[radiusKm];
     if (unverifiable === undefined) {
       throw new DataError("pairs.json", `classes[${k}].unverifiable_km2 has no entry for ${radiusKm} km`);

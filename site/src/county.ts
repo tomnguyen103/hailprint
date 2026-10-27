@@ -1,6 +1,7 @@
 // Harris County bounds for the map. Pure: no MapLibre, no Preact.
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { DataError } from "./data/types";
+import { fetchJson } from "./data/fetch";
+import { guardOutline } from "./data/guard";
 
 export type Bbox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
 
@@ -17,19 +18,6 @@ export function contains(bbox: Bbox, [lon, lat]: [number, number]): boolean {
 }
 
 /** The committed outline, copied verbatim from the Python package data. */
-export async function fetchCounty(): Promise<FeatureCollection<MultiPolygon>> {
-  let response: Response;
-  try {
-    response = await fetch(COUNTY_FILE);
-  } catch (error) {
-    throw new DataError(COUNTY_FILE, error instanceof Error ? error.message : String(error));
-  }
-  if (!response.ok) throw new DataError(COUNTY_FILE, `HTTP ${response.status}`);
-  const body: unknown = await response.json().catch(() => {
-    throw new DataError(COUNTY_FILE, "body is not JSON");
-  });
-  if (typeof body !== "object" || body === null || (body as { type?: unknown }).type !== "FeatureCollection") {
-    throw new DataError(COUNTY_FILE, "type is not FeatureCollection");
-  }
-  return body as FeatureCollection<MultiPolygon>;
+export function fetchCounty(): Promise<FeatureCollection<MultiPolygon>> {
+  return fetchJson(COUNTY_FILE, guardOutline, "");
 }

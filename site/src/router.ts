@@ -31,7 +31,8 @@ export type Route =
 
 export type Target = { area: "storms"; date: string; tab?: Tab } | { area: LaterArea };
 
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** A storm date as the path and the index carry it. The guards share it. */
+export const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isArea(value: string): value is Area {
   return (AREAS as readonly string[]).includes(value);

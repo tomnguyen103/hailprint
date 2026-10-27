@@ -6,20 +6,20 @@ export type Fetch = typeof fetch;
 
 let impl: Fetch | null = null;
 
-/** Tests inject a fake fetch; null restores the global one. */
+/** Tests and the dev harness inject a fake fetch; null restores the global one. */
 export function setFetch(next: Fetch | null): void {
   impl = next;
 }
 
 export const DATA_BASE = "/data/";
 
-/** Fetch `/data/<path>` and pass the parsed body through `guard`. */
-export async function fetchJson<T>(path: string, guard: (value: unknown) => T): Promise<T> {
+/** Fetch `<base><path>` and pass the parsed body through `guard`. The default base is `/data/`. */
+export async function fetchJson<T>(path: string, guard: (value: unknown) => T, base = DATA_BASE): Promise<T> {
   const file = path.slice(path.lastIndexOf("/") + 1);
   const run = impl ?? fetch;
   let response: Response;
   try {
-    response = await run(DATA_BASE + path);
+    response = await run(base + path);
   } catch (error) {
     throw new DataError(file, `network error, ${String(error)}`);
   }

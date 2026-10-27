@@ -1,6 +1,7 @@
 import { DATA_BASE, fetchJson } from "../data/fetch";
 import { guardPairs } from "../data/guard";
 import type { Storm } from "../data/types";
+import { ReceiptList } from "../shell/receipt-list";
 import { ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
 
@@ -35,7 +36,7 @@ export function DataPane({ storm }: { storm: Storm }) {
         </ul>
         <h2>Reproduce</h2>
         <pre class="code-block">
-          <code>{`uv run hailprint ingest ${storm.storm_date}\nuv run hailprint publish`}</code>
+          <code>{`uv run hailprint ingest ${storm.storm_date}\nuv run hailprint parcels ${storm.storm_date}\nuv run hailprint publish`}</code>
         </pre>
       </section>
       <section>
@@ -43,26 +44,16 @@ export function DataPane({ storm }: { storm: Storm }) {
         {pairs.status === "error" ? <ErrorState error={pairs.error} onRetry={pairs.retry} /> : null}
         {pairs.status === "loading" && pairs.showLoading ? <LoadingState file={FILE} /> : null}
         {pairs.status === "ready" ? (
-          <dl class="receipt-list">
-            <dt>Storm date</dt>
-            <dd class="mono">{pairs.data.receipt.storm_date}</dd>
-            {pairs.data.receipt.sources.map((s) => (
+          <ReceiptList
+            receipt={pairs.data.receipt}
+            file={FILE}
+            extra={
               <>
-                <dt>Source</dt>
-                <dd>
-                  <span class="mono">{s.source}</span>, {s.product}, <span class="mono">{s.file}</span>
-                </dd>
+                <dt>Report source</dt>
+                <dd class="mono">{storm.report_source}</dd>
               </>
-            ))}
-            <dt>Confidence</dt>
-            <dd>{pairs.data.receipt.confidence}</dd>
-            <dt>Run time</dt>
-            <dd class="mono">{pairs.data.receipt.run_time}</dd>
-            <dt>Package</dt>
-            <dd class="mono">{pairs.data.receipt.package_version}</dd>
-            <dt>Report source</dt>
-            <dd class="mono">{storm.report_source}</dd>
-          </dl>
+            }
+          />
         ) : null}
       </section>
     </div>

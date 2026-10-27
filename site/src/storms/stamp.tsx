@@ -48,7 +48,6 @@ export function Stamp({ storm, reports, indexReceipt, onOpenDates }: Props) {
         )}
       </span>
       <ReceiptChip receipt={indexReceipt} file="storms.json" />
-      {reports.status === "error" ? <span class="stamp-note">{reports.error.message}</span> : null}
       <span class="visually-hidden">{times.map(cellFor).filter((c) => c !== null).length} reports placed</span>
     </div>
   );

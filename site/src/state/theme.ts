@@ -1,26 +1,38 @@
-import { useCallback, useEffect, useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import { apply, read, resolve, store, type Resolved, type Selection } from "../theme";
 
-const QUERY = "(prefers-color-scheme: dark)";
+// One store for the page: one preference, one listener set, one matchMedia listener.
+const media = window.matchMedia("(prefers-color-scheme: dark)");
+let pref: Selection = read();
+let systemDark = media.matches;
+const listeners = new Set<() => void>();
 
-/** The stored selection, the resolved theme, and a setter that stores and applies. */
-export function useTheme(): { selection: Selection; resolved: Resolved; set: (next: Selection) => void } {
-  const [selection, setSelection] = useState<Selection>(() => read());
-  const [systemDark, setSystemDark] = useState(() => window.matchMedia(QUERY).matches);
+function notify(): void {
+  apply(resolve(pref, systemDark));
+  listeners.forEach((fn) => fn());
+}
 
+media.addEventListener("change", (event) => {
+  systemDark = event.matches;
+  notify();
+});
+
+/** Store the preference, stamp the resolved theme on the root, and notify every subscriber. */
+export function setTheme(next: Selection): void {
+  store(next);
+  pref = next;
+  notify();
+}
+
+/** The stored preference, the resolved theme, and the setter. Every caller sees one value. */
+export function useTheme(): { pref: Selection; resolved: Resolved; set: (next: Selection) => void } {
+  const [, bump] = useState(0);
   useEffect(() => {
-    const media = window.matchMedia(QUERY);
-    const onChange = (event: MediaQueryListEvent) => setSystemDark(event.matches);
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
+    const fn = () => bump((n) => n + 1);
+    listeners.add(fn);
+    return () => {
+      listeners.delete(fn);
+    };
   }, []);
-
-  const resolved = resolve(selection, systemDark);
-  useEffect(() => apply(resolved), [resolved]);
-
-  const set = useCallback((next: Selection) => {
-    store(next);
-    setSelection(next);
-  }, []);
-  return { selection, resolved, set };
+  return { pref, resolved: resolve(pref, systemDark), set: setTheme };
 }

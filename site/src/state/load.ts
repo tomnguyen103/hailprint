@@ -11,9 +11,10 @@ const SHOW_AFTER_MS = 300;
 const KEEP_FOR_MS = 500;
 
 /**
- * Load one resource keyed by `key`. A key change starts a new request and the latest
- * wins. `showLoading` turns on 300 ms after a request starts and stays on at least
- * 500 ms, so a fast response never flashes the loading state.
+ * Load one resource. `key` identifies the request: a key change starts a new request,
+ * the latest wins, and an error without a DataError takes `key` as its file name.
+ * `showLoading` turns on 300 ms after a request starts and stays on at least 500 ms,
+ * so a fast response never flashes the loading state.
  */
 export function useLoad<T>(
   key: string,

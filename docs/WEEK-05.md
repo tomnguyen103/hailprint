@@ -46,6 +46,14 @@ The `create-map` chunk exceeds the Vite 500 kB warning. The chunk is lazy: the s
 - Every published file reaches the browser through a guard; a guard failure names the file and the field. No `innerHTML` in `site/src`. No forbidden word in `site/` or under `docs/evidence/week-05/`.
 - `.hallmark/log.json` holds the one entry for this surface with the detector exit code.
 
+### Evidence notes
+
+Preview on port 4173, playwright, 1440x900.
+
+- US-E2.4: tab A toggled dark; tab B loaded with `data-theme=dark`. A second write of `dark` changed nothing.
+- US-E2.5: `index.html:33` holds a noscript that names Hailprint. The head script stamps `data-theme` before the bundle runs.
+- US-E3.4: ArrowRight moved the focus to Parcels without a URL change. Enter activates the tab with one pushState. Back returned to the previous sub-tab.
+- US-E4.4: two date clicks within 200 ms. The URL, the stamp, and the chip all show the last date. The page holds one canvas.
 ## Screenshots
 
 A playwright-core script drives the installed Chrome against `vite preview` of the production build and saves every row under `docs/evidence/week-05/`. The file name is `<viewport>-<theme>-<route>-<state>.png` with the route slashes as underscores. Three extra captures at 1920 and 390 wide carry the `audit` state for the audit loop. Every capture measured `scrollWidth == innerWidth` and logged no console error. The empty-parcels row comes from a preview copy of `storms.json` with `files.zip_counts` set to null for 2021-03-17; the published file is unchanged.
@@ -57,7 +65,7 @@ A playwright-core script drives the installed Chrome against `vite preview` of t
 | 1440 | light | `/storms/2024-05-28/score` | default radius | contingency table and the four metrics |
 | 1440 | dark | `/storms/2024-05-28/score` | default radius | the same with the dark tokens |
 | 1440 | light | `/storms/2024-05-28/parcels` | counts | per-class and per-ZIP counts |
-| 1440 | light | `/storms/2024-05-28/data` | files | the four files with their receipt chips |
+| 1440 | light | `/storms/2024-05-28/data` | files | the four files as links with their receipt |
 | 1280 | light | `/storms/2024-05-28/map` | inspector open | the inspector docks and the map frame narrows |
 | 768 | light | `/storms/2024-05-28/map` | inspector open | the scope rail and the drawer inspector |
 | 414 | light | `/storms/2024-05-28/map` | legend | legend inside the frame, no horizontal scroll |

@@ -2,7 +2,7 @@ import { useState } from "preact/hooks";
 import { fetchJson } from "../data/fetch";
 import { guardZipCounts } from "../data/guard";
 import type { Storm } from "../data/types";
-import { RULER, diameterPx } from "../ruler";
+import { RULER, diameterPx, objectName } from "../ruler";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { EmptyState, ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
@@ -45,27 +45,28 @@ function ParcelsTable({ path }: { path: string }) {
             </tr>
           </thead>
           <tbody>
-            {classes.map((cls) => {
-              const object = RULER.find((m) => m.threshold_mm === cls.threshold_mm)?.object ?? "";
+            {RULER.map((m) => {
+              // A class the file omits has no parcel; the table keeps all seven rows.
+              const count = classes.find((c) => c.threshold_mm === m.threshold_mm)?.parcel_count ?? 0;
               return (
-                <tr key={cls.threshold_mm}>
+                <tr key={m.threshold_mm}>
                   <td>
                     <button
                       type="button"
                       class="class-pick"
-                      aria-pressed={cls.threshold_mm === selected}
-                      onClick={() => setSelected(cls.threshold_mm)}
+                      aria-pressed={m.threshold_mm === selected}
+                      onClick={() => setSelected(m.threshold_mm)}
                     >
                       <span
                         class="ruler-mark"
-                        style={{ width: diameterPx(cls.threshold_in), height: diameterPx(cls.threshold_in) }}
+                        style={{ width: diameterPx(m.threshold_in), height: diameterPx(m.threshold_in) }}
                       />
                       <span>
-                        &ge; {formatInches(cls.threshold_in)}, {object}
+                        &ge; {formatInches(m.threshold_in)}, {objectName(m.threshold_mm)}
                       </span>
                     </button>
                   </td>
-                  <td class="num">{formatCount(cls.parcel_count)}</td>
+                  <td class="num">{formatCount(count)}</td>
                   <td>
                     <ReceiptChip receipt={zip.data.receipt} file={FILE} />
                   </td>

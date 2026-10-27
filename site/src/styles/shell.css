@@ -1,4 +1,4 @@
-/* The one layout: top bar, main, footer, bottom bar, states, buttons. */
+/* The one layout: top bar, main, footer, bottom bar, states, buttons, receipt list and chip. */
 
 .shell {
   display: flex;
@@ -41,6 +41,7 @@
 .wordmark {
   font: 600 20px/1 var(--serif);
   color: var(--ink);
+  padding: 2px 0;
   text-decoration: none;
   white-space: nowrap;
 }
@@ -248,6 +249,61 @@
   cursor: pointer;
 }
 
+.receipt-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+}
+
+.receipt-list dt {
+  color: var(--ink-muted);
+}
+
+.receipt-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Receipt list and chip */
+
+.chip-host {
+  position: relative;
+  display: inline-block;
+}
+
+.chip {
+  padding: 1px 6px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--sheet);
+  color: var(--ink-muted);
+  min-height: 24px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.chip:hover,
+.chip[aria-expanded="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.receipt-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 15;
+  width: min(360px, 80vw);
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+  background: var(--sheet);
+  box-shadow: var(--shadow);
+  font-size: 0.85rem;
+  white-space: normal;
+  text-align: left;
+}
 /* Dev harness */
 
 .harness {

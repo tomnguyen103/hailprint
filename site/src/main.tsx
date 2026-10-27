@@ -11,4 +11,6 @@ import { App } from "./app";
 
 const host = document.getElementById("app");
 if (!host) throw new Error("index.html lacks #app");
+// The harness installs its fake fetch before the first render. The build drops the branch.
+if (import.meta.env.DEV) (await import("./dev/harness")).install();
 render(<App />, host);

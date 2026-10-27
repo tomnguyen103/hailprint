@@ -28,6 +28,14 @@ it("passes the parsed body through the guard", async () => {
   await expect(fetchJson("storms.json", (v) => (v as { n: number }).n)).resolves.toBe(1);
 });
 
+it("fetches from the site root when the base is empty", async () => {
+  setFetch(async (input) => {
+    expect(String(input)).toBe("/county.geojson");
+    return response(200, "{}");
+  });
+  await expect(fetchJson("/county.geojson", (v) => v, "")).resolves.toEqual({});
+});
+
 it("lets the latest request win across two overlapping calls", async () => {
   const run = latest<string>();
   const slow = new Promise<string>((resolve) => setTimeout(() => resolve("first"), 30));

@@ -32,5 +32,7 @@ The root `vercel.json` sets the fields: install `cd site && npm ci`, build
 
 ## Dev harness
 
-In `npm run dev`, the scenario bar sits under the footer: index loading, index empty, index error, and
-swath error.
+In `npm run dev`, `main.tsx` imports `src/dev/harness.tsx` and mounts the scenario bar after `#app`.
+A button stores the scenario in `sessionStorage` and reloads. The harness then installs a fake fetch
+before the first render: index loading, index empty, and one HTTP 500 for the index, the swath, the
+reports, the pairs, or the ZIP counts. The production build drops the module.

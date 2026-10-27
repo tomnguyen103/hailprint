@@ -60,13 +60,10 @@ export function chromeLayers(): LayerSpecification[] {
 export type PaintName = "fill-color" | "line-color" | "circle-color" | "circle-stroke-color";
 
 export function themedPaint(): Record<string, Partial<Record<PaintName, string>>> {
-  const paint: Record<string, Partial<Record<PaintName, string>>> = {
-    "swath-outline": { "line-color": token("--rule") },
-    "county-line": { "line-color": token("--ink") },
-    "report-points": { "circle-color": token("--report"), "circle-stroke-color": token("--sheet") },
-  };
-  RULER.forEach((mark, i) => {
-    paint[fillLayerId(mark.threshold_mm)] = { "fill-color": token(`--hail-${i + 1}`) };
-  });
+  const paint: Record<string, Partial<Record<PaintName, string>>> = {};
+  for (const layer of [...fillLayers(), ...chromeLayers()]) {
+    const colours = Object.entries(layer.paint ?? {}).filter(([key]) => key.endsWith("-color"));
+    paint[layer.id] = Object.fromEntries(colours) as Partial<Record<PaintName, string>>;
+  }
   return paint;
 }

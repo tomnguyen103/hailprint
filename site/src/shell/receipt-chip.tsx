@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "preact/hooks";
 import type { Receipt } from "../data/types";
+import { ReceiptList } from "./receipt-list";
 
 /**
  * A mono chip after a published number. It opens a small dialog with the receipt of
@@ -46,26 +47,7 @@ export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string 
       </button>
       {open ? (
         <div ref={pop} id={id} class="receipt-pop" role="dialog" aria-label={`Receipt for ${file}`}>
-          <dl class="receipt-list">
-            <dt>File</dt>
-            <dd class="mono">{file}</dd>
-            <dt>Storm date</dt>
-            <dd class="mono">{receipt.storm_date}</dd>
-            {receipt.sources.map((s) => (
-              <>
-                <dt>Source</dt>
-                <dd>
-                  <span class="mono">{s.source}</span>, {s.product}, <span class="mono">{s.file}</span>
-                </dd>
-              </>
-            ))}
-            <dt>Confidence</dt>
-            <dd>{receipt.confidence}</dd>
-            <dt>Run time</dt>
-            <dd class="mono">{receipt.run_time}</dd>
-            <dt>Package</dt>
-            <dd class="mono">{receipt.package_version}</dd>
-          </dl>
+          <ReceiptList receipt={receipt} file={file} />
         </div>
       ) : null}
     </span>

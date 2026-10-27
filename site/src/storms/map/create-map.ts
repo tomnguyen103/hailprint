@@ -90,7 +90,6 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
   map.addControl(new NavigationControl({ showCompass: false }), "top-left");
   await new Promise<void>((resolve) => map.once("load", () => resolve()));
 
-  const hidden = new Set<number>();
   const geojson = (id: string) => map.getSource(id) as GeoJSONSource | undefined;
 
   return {
@@ -102,7 +101,6 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
       geojson(COUNTY_SOURCE)?.setData(county ?? EMPTY);
     },
     setTheme(nextTheme) {
-      if (!map.isStyleLoaded()) return;
       map.setPaintProperty("paper", "background-color", token("--paper"));
       for (const [id, paint] of Object.entries(themedPaint())) {
         for (const [prop, value] of Object.entries(paint) as [PaintName, string][]) map.setPaintProperty(id, prop, value);
@@ -115,8 +113,6 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
       }
     },
     setClassVisible(thresholdMm, visible) {
-      if (visible) hidden.delete(thresholdMm);
-      else hidden.add(thresholdMm);
       map.setLayoutProperty(fillLayerId(thresholdMm), "visibility", visible ? "visible" : "none");
     },
     fit(bounds) {

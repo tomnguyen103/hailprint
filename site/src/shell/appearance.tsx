@@ -5,7 +5,7 @@ const LABELS: Record<Selection, string> = { light: "Light", dark: "Dark", system
 
 /** Light / Dark / System radio group; System follows the OS scheme live. */
 export function Appearance() {
-  const { selection, set } = useTheme();
+  const { pref, set } = useTheme();
   return (
     <fieldset class="appearance">
       <legend class="section-label">Appearance</legend>
@@ -15,7 +15,7 @@ export function Appearance() {
             type="radio"
             name="appearance"
             value={value}
-            checked={selection === value}
+            checked={pref === value}
             onChange={() => set(value)}
           />
           {LABELS[value]}

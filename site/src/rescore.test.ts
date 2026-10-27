@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { DataError } from "./data/types";
-import type { Pairs, StormsIndex } from "./data/types";
+import type { Pairs, PairsClass, StormsIndex } from "./data/types";
 import { rescore, skill } from "./rescore";
+import { RULER } from "./ruler";
 
 const receipt = {
   storm_date: "2024-01-01",
@@ -14,17 +15,26 @@ const receipt = {
   package_version: "0.0.0",
 };
 
-function doc(reports: Pairs["reports"]): Pairs {
+const CLASSES: PairsClass[] = RULER.map((mark, i) => ({
+  threshold_mm: mark.threshold_mm,
+  threshold_in: mark.threshold_in,
+  label: mark.object,
+  swath_km2: 10 - i,
+  unverifiable_km2: Array<number>(21).fill(4 - i / 2),
+}));
+
+/** Seven classes in RULER order; a short `dist_m` is padded with null for the larger classes. */
+function doc(reports: { id: number; size_in: number; edge_m: number; dist_m: (number | null)[] }[]): Pairs {
   return {
     receipt,
     radius_km_default: 5,
     radius_km_max: 20,
     edge_margin_m: 1000,
-    classes: [
-      { threshold_mm: 19.05, threshold_in: 0.75, label: "a", swath_km2: 10, unverifiable_km2: Array(21).fill(4) },
-      { threshold_mm: 25.4, threshold_in: 1, label: "b", swath_km2: 5, unverifiable_km2: Array(21).fill(2) },
-    ],
-    reports,
+    classes: CLASSES,
+    reports: reports.map((r) => ({
+      ...r,
+      dist_m: [...r.dist_m, ...Array<null>(RULER.length - r.dist_m.length).fill(null)],
+    })),
   };
 }
 
@@ -34,10 +44,19 @@ const three = doc([
   { id: 2, size_in: 2.0, edge_m: 9000, dist_m: [12000, null] },
 ]);
 
+/** The same document with the classes and every `dist_m` reversed. */
+function reversed(pairs: Pairs): Pairs {
+  return {
+    ...pairs,
+    classes: [...pairs.classes].reverse(),
+    reports: pairs.reports.map((r) => ({ ...r, dist_m: [...r.dist_m].reverse() })),
+  };
+}
+
 describe("rescore", () => {
   it("scores the reports inside the domain at R = 5", () => {
     const rows = rescore(three, 5);
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(RULER.length);
     const first = rows[0]!;
     expect(first.hits).toBe(1);
     expect(first.misses).toBe(1);
@@ -64,9 +83,23 @@ describe("rescore", () => {
     expect(() => rescore(three, -1)).toThrow(RangeError);
   });
   it("names pairs.json for a dist_m list of the wrong length", () => {
-    const bad = doc([{ id: 0, size_in: 1, edge_m: 40000, dist_m: [0] }]);
+    const bad = { ...three, reports: [{ id: 0, size_in: 1, edge_m: 40000, dist_m: [0] }] };
     expect(() => rescore(bad, 5)).toThrow(DataError);
     expect(() => rescore(bad, 5)).toThrow(/pairs\.json/);
+  });
+  it("names the missing size class", () => {
+    const drop = (_: unknown, i: number) => i !== 1;
+    const bad = {
+      ...three,
+      classes: CLASSES.filter(drop),
+      reports: three.reports.map((r) => ({ ...r, dist_m: r.dist_m.filter(drop) })),
+    };
+    expect(() => rescore(bad, 5)).toThrow(DataError);
+    expect(() => rescore(bad, 5)).toThrow(/pairs\.json: missing size class 25\.4 mm/);
+  });
+  it("returns the same table in RULER order when the classes are shuffled", () => {
+    expect(rescore(reversed(three), 5)).toEqual(rescore(three, 5));
+    expect(rescore(three, 5).map((r) => r.threshold_mm)).toEqual(RULER.map((m) => m.threshold_mm));
   });
 });
 
