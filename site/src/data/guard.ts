@@ -212,7 +212,7 @@ export function guardReports(value: unknown): ReportsFile {
   guardReceipt(file, rec(file, value, "collection")["receipt"]);
   guardCollection(file, value).forEach((props, i) => {
     for (const key of ["time", "location"]) str(file, props[key], `features[${i}].properties.${key}`);
-    num(file, props["size_in"], `features[${i}].properties.size_in`);
+    for (const key of ["id", "size_in"]) num(file, props[key], `features[${i}].properties.${key}`);
   });
   return value as ReportsFile;
 }

@@ -227,6 +227,7 @@ const cases: [string, string, (value: unknown) => unknown, unknown, string[]][] 
       "receipt",
       "features",
       "features.0.properties",
+      "features.0.properties.id",
       "features.0.properties.time",
       "features.0.properties.location",
       "features.0.properties.size_in",
