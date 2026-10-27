@@ -83,7 +83,11 @@ export function Compare({ index }: { index: StormsIndex }) {
   const swipeId = useId();
 
   // Each pan on one map moves the other once; the flag stops the echo from the second map's own move event.
+  // The side that mounted last takes the other side's camera, so a Retry on one half keeps the pan.
+  const wasReady = useRef({ a: false, b: false });
   useEffect(() => {
+    const before = wasReady.current;
+    wasReady.current = { a: a.ready, b: b.ready };
     const mapA = a.handle.current?.map;
     const mapB = b.handle.current?.map;
     if (!a.ready || !b.ready || !mapA || !mapB) return;
@@ -98,7 +102,8 @@ export function Compare({ index }: { index: StormsIndex }) {
     const bToA = follow(mapB, mapA);
     mapA.on("move", aToB);
     mapB.on("move", bToA);
-    aToB(); // copy A's camera once, so B matches before the first pan
+    if (before.b && !before.a) bToA();
+    else aToB();
     return () => {
       mapA.off("move", aToB);
       mapB.off("move", bToA);

@@ -41,6 +41,8 @@ export function Run({ index }: { index: StormsIndex }) {
   const timer = useRef<number | undefined>(undefined);
   const codes = useRef<(HTMLElement | null)[]>([]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
+  // The pairs file owns the default radius; storms.json stands in until it arrives.
+  const defaultRadius = pairs.status === "ready" && pairs.data[0] ? pairs.data[0].radius_km_default : index.radius_km_default;
 
   const copy = async (i: number, text: string) => {
     const node = codes.current[i];
@@ -89,7 +91,7 @@ export function Run({ index }: { index: StormsIndex }) {
         <section>
           <h2>Commands</h2>
           <ol class="command-list">
-            {commandsFor(date, index.radius_km_default).map((text, i) => (
+            {commandsFor(date, defaultRadius).map((text, i) => (
               <li key={text} class="command-row">
                 <pre class="code-block">
                   <code

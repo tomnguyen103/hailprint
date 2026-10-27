@@ -186,12 +186,9 @@ export function PointCheck({ index }: { index: StormsIndex }) {
           <div class="map-overlay">
             <ErrorState error={mapError} onRetry={() => setAttempt((n) => n + 1)} />
           </div>
-        ) : county.status === "error" ? (
-          <div class="map-overlay">
-            <ErrorState error={county.error} onRetry={county.retry} />
-          </div>
         ) : null}
       </div>
+      {county.status === "error" ? <ErrorState error={county.error} onRetry={county.retry} /> : null}
       {table}
     </>
   );
