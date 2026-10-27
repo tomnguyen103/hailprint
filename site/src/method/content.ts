@@ -26,19 +26,21 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
       {
         kind: "prose",
         text:
-          "The pipeline reads four sources. MRMS MESH comes from the public S3 bucket noaa-mrms-pds as gzipped GRIB2 files. " +
-          "SPC publishes a preliminary hail CSV for each day. HCAD publishes the Harris County parcel geodatabase. " +
-          "The Iowa Environmental Mesonet publishes the NWS warning polygons.",
+          "The pipeline reads six sources. MRMS MESH comes from the S3 bucket noaa-mrms-pds as gzipped GRIB2 files. " +
+          "SPC publishes a daily preliminary hail CSV. HCAD publishes the Harris County parcel geodatabase. " +
+          "The Iowa Environmental Mesonet publishes the NWS warning polygons. " +
+          "ORNL publishes the EAGLE-I and ODIN power outages.",
       },
       { kind: "heading", text: "Published files per storm date" },
       {
         kind: "list",
         items: [
           "swath.geojson: one dissolved polygon per size class.",
-          "reports.geojson: the SPC reports within 50 km of the county outline.",
+          "reports.geojson: the SPC reports within 50 km of the county.",
           "pairs.json: the metre distance from each report to each size class, free of any radius.",
-          "zip-counts.json: distinct parcels per size class and per ZIP code, where parcels ran.",
-          "warnings.geojson: NWS severe thunderstorm, tornado, and flash flood warning polygons for the 48-hour window, where warnings ran.",
+          "zip-counts.json: distinct parcels per size class and per ZIP, where parcels ran.",
+          "warnings.geojson: NWS warning polygons for the 48-hour window, where warnings ran.",
+          "power.json: customers out per metro county and step, where power ran.",
         ],
       },
       { kind: "figure", id: "receipt" },
