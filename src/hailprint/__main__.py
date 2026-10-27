@@ -388,6 +388,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
         has_zips = zips_path.exists()
         spc = publish.spc_source(storm_date)
         hcad = publish.hcad_source(zips_path.name) if has_zips else None
+        warnings_path = WARNINGS_DIR / sbw.file_name(storm_date)
+        has_warnings = warnings_path.exists()
         try:
             mrms, max_mesh_mm = publish.swath_source(swath_path)
             texts, entry = publish.build_day(
@@ -401,6 +403,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
                 hcad=hcad,
                 facts=facts.get(storm_date.isoformat()),
                 run_time=run_time,
+                warnings=gpd.read_parquet(warnings_path) if has_warnings else None,
+                iem=publish.warnings_source(warnings_path) if has_warnings else None,
             )
         except ValueError as exc:
             print(f"{storm_date}: {exc}", file=sys.stderr)
@@ -411,6 +415,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
             written.append(files.write_text_atomic(body, folder / name))
         if publish.ZIPS_FILE not in texts:
             (folder / publish.ZIPS_FILE).unlink(missing_ok=True)
+        if publish.WARNINGS_FILE not in texts:
+            (folder / publish.WARNINGS_FILE).unlink(missing_ok=True)
         entries.append(entry)
         file_count += len(texts)
         print(f"{storm_date}: published {len(texts)} files")

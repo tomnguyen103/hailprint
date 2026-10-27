@@ -12,6 +12,8 @@ SITE_SRC = paths.ROOT / "site" / "src"
 SITE_SUFFIXES = (".ts", ".tsx", ".css")
 # JSON has no NaN or Infinity literal; a browser JSON.parse rejects both
 NON_JSON_TOKENS = ("NaN", "Infinity")
+# Byte ceiling of each per-date impact file (spec Q13). The first real build re-checks them.
+SIZE_CEILINGS = {"warnings.geojson": 400_000, "power.json": 60_000, "internet.json": 80_000}
 
 
 def _files():
@@ -43,6 +45,13 @@ def test_published_files_hold_no_non_json_token():
         text = path.read_text(encoding="utf-8")
         for token in NON_JSON_TOKENS:
             assert token not in text, (path, token)
+
+
+@pytest.mark.skipif(not paths.SITE_DATA_DIR.exists(), reason="no published files yet")
+def test_published_impact_files_stay_under_their_size_ceiling():
+    for name, ceiling in SIZE_CEILINGS.items():
+        for path in paths.SITE_DATA_DIR.rglob(name):
+            assert path.stat().st_size < ceiling, path
 
 
 def test_site_source_holds_no_forbidden_word():
