@@ -48,7 +48,7 @@ The `create-map` chunk exceeds the Vite 500 kB warning. The chunk is lazy: the s
 
 ## Screenshots
 
-The main session captures every row through the Claude browser pane after the merge gate and saves it under `docs/evidence/week-05/`. The file name is `<viewport>-<theme>-<route>-<state>.png`.
+A playwright-core script drives the installed Chrome against `vite preview` of the production build and saves every row under `docs/evidence/week-05/`. The file name is `<viewport>-<theme>-<route>-<state>.png` with the route slashes as underscores. Three extra captures at 1920 and 390 wide carry the `audit` state for the audit loop. Every capture measured `scrollWidth == innerWidth` and logged no console error. The empty-parcels row comes from a preview copy of `storms.json` with `files.zip_counts` set to null for 2021-03-17; the published file is unchanged.
 
 | Viewport | Theme | Route | State | What it shows |
 |---|---|---|---|---|
@@ -62,7 +62,7 @@ The main session captures every row through the Claude browser pane after the me
 | 768 | light | `/storms/2024-05-28/map` | inspector open | the scope rail and the drawer inspector |
 | 414 | light | `/storms/2024-05-28/map` | legend | legend inside the frame, no horizontal scroll |
 | 375 | dark | `/storms/2024-05-28/map` | inspector open | the full-screen inspector |
-| 320 | light | `/storms/2024-05-28/score` | default radius | the table wraps without overflow |
+| 320 | light | `/storms/2024-05-28/score` | default radius | the table scrolls inside its container; the page has no horizontal scroll |
 | 1440 | light | `/storms/1999-01-01/map` | not found | "No storm date 1999-01-01 is published." with the link to the newest date |
 | 1440 | light | `/storms/<date without parcels>/parcels` | empty | the empty state for a date where `parcels` did not run |
 | 1440 | light | `/storms/2024-05-28/map` | theme control | the footer appearance group with the three options |

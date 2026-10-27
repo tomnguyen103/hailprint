@@ -142,6 +142,11 @@
   border-top-color: var(--rule);
 }
 
+/* MapLibre ships black SVG icons; the dark tokens invert them */
+.map-frame .maplibregl-ctrl button .maplibregl-ctrl-icon {
+  filter: var(--ctrl-icon-filter);
+}
+
 .map-frame .maplibregl-ctrl-attrib {
   background: color-mix(in srgb, var(--sheet) 80%, transparent);
   color: var(--ink-muted);

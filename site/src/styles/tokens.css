@@ -31,6 +31,7 @@
   --gutter: 32px;
   --bar-height: 64px;
   --motion: 150ms ease-out;
+  --ctrl-icon-filter: none;
 }
 
 :root[data-theme="dark"] {
@@ -46,6 +47,7 @@
   --note-bg: #2b2618;
   --note-ink: #ebd9a0;
   --shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
+  --ctrl-icon-filter: invert(1);
 }
 
 /* no-script case: the head script did not run, so the OS scheme decides */
@@ -63,6 +65,7 @@
     --note-bg: #2b2618;
     --note-ink: #ebd9a0;
     --shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
+    --ctrl-icon-filter: invert(1);
   }
 }
 
