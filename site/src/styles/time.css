@@ -1,4 +1,4 @@
-/* Time slider: the card under the map. Tokens only; the global rules own focus and reduced motion. */
+/* Time slider and storm timeline: the cards under the map. Tokens only; the global rules own focus and reduced motion. */
 
 .map-main {
   display: grid;
@@ -50,4 +50,138 @@
 
 .time-readout span {
   white-space: nowrap;
+}
+
+/* Storm timeline: one SVG on the 48-hour axis. Rows are 16 px each and the reports strip is 40 px, as in timeline.tsx. */
+
+.timeline {
+  min-width: 0;
+  padding: 8px 16px 12px;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+}
+
+.timeline-heading {
+  margin: 0 0 8px;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.timeline-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 12px;
+  align-items: start;
+}
+
+.timeline .timeline-labels {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.timeline-labels li {
+  display: flex;
+  align-items: center;
+}
+
+.timeline-plot {
+  position: relative;
+  min-width: 0;
+}
+
+.timeline-chart {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.timeline-strip {
+  fill: var(--sheet-muted);
+  stroke: var(--rule);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  cursor: pointer;
+}
+
+.timeline-grid,
+.timeline-bar,
+.timeline-tick,
+.timeline-cursor {
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.timeline-grid {
+  stroke: var(--rule);
+  stroke-width: 1px;
+}
+
+.timeline-bar {
+  stroke-width: 6px;
+}
+
+.timeline-bar-sv {
+  stroke: var(--warn-sv);
+}
+
+.timeline-bar-to {
+  stroke: var(--warn-to);
+}
+
+.timeline-bar-ff {
+  stroke: var(--warn-ff);
+}
+
+.timeline-tick {
+  stroke: var(--report);
+  stroke-width: 2px;
+}
+
+.timeline-cursor {
+  stroke: var(--accent);
+  stroke-width: 2px;
+}
+
+.timeline-empty {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: grid;
+  height: 48px;
+  margin: 0;
+  place-items: center;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
+.timeline .timeline-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  color: var(--ink-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.pane-grid > .timeline-numbers {
+  grid-column: 1 / -1;
+}
+
+.timeline-numbers .table caption {
+  padding: 8px 0;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.timeline-numbers .table-scroll + .table-scroll {
+  margin-top: 24px;
 }

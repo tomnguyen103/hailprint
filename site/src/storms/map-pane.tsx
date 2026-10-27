@@ -4,6 +4,7 @@ import { fetchCounty } from "../county";
 import { fetchJson } from "../data/fetch";
 import { guardSwath, guardWarnings } from "../data/guard";
 import { DataError, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
+import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type Load, useLoad } from "../state/load";
 import { useRoute } from "../state/route";
@@ -190,6 +191,7 @@ export function MapPane({ storm, reports }: Props) {
     container.current?.focus();
   }, []);
   const retryMap = useCallback(() => setAttempt((n) => n + 1), []);
+  const moveStep = useCallback((next: number) => replaceStep(storm.storm_date, next), [storm.storm_date]);
 
   // One overlay slot: the map chunk error first, then the swath, reports, and county errors in that order.
   const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : county.status === "error" ? county : null;
@@ -221,7 +223,8 @@ export function MapPane({ storm, reports }: Props) {
           />
           <RulerLegend hidden={hidden} onToggle={toggle} />
         </div>
-        <TimeSlider date={storm.storm_date} step={step} onStep={(next) => replaceStep(storm.storm_date, next)} />
+        <TimeSlider date={storm.storm_date} step={step} onStep={moveStep} />
+        <Timeline date={storm.storm_date} step={step} warnings={warningsData} reports={reportsData} onStep={moveStep} />
       </div>
       {pick !== null && receipt !== null ? <Inspector pick={pick} receipt={receipt} onClose={close} /> : null}
     </div>
