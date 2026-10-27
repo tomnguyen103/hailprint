@@ -3,7 +3,7 @@
 // Each guard checks every key the site reads from that file, and nothing more.
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { DATE } from "../router";
-import type { Pairs, PipelineFile, ReportsFile, StormsIndex, SwathFile, ZipCounts } from "./types";
+import type { Pairs, PipelineFile, ReportsFile, StormsIndex, SwathFile, WarningsFile, ZipCounts } from "./types";
 import { DataError } from "./types";
 
 type Rec = Record<string, unknown>;
@@ -224,13 +224,49 @@ export function guardSwath(value: unknown): SwathFile {
     num(file, props["threshold_mm"], `features[${i}].properties.threshold_mm`);
     num(file, props["threshold_in"], `features[${i}].properties.threshold_in`);
   });
+  guardMultiPolygons(file, value);
+  return value as SwathFile;
+}
+
+/** Every feature geometry is a MultiPolygon. */
+function guardMultiPolygons(file: string, value: unknown): void {
   list(file, rec(file, value, "collection")["features"], "features").forEach((item, i) => {
     const geometry = rec(file, rec(file, item, `features[${i}]`)["geometry"], `features[${i}].geometry`);
     if (geometry["type"] !== "MultiPolygon") {
       throw new DataError(file, `features[${i}].geometry.type is not MultiPolygon`);
     }
   });
-  return value as SwathFile;
+}
+
+/** The property keys a warning feature may carry, the same seven as the warnings schema. */
+const WARNING_KEYS = [
+  "phenomena",
+  "significance",
+  "event_label",
+  "eventid",
+  "polygon_begin",
+  "polygon_end",
+  "product_id",
+];
+
+export function guardWarnings(value: unknown): WarningsFile {
+  const file = "warnings.geojson";
+  guardReceipt(file, rec(file, value, "collection")["receipt"]);
+  guardCollection(file, value).forEach((props, i) => {
+    const at = `features[${i}].properties`;
+    for (const key of Object.keys(props)) {
+      if (!WARNING_KEYS.includes(key)) throw new DataError(file, `${at}.${key} is not an allowed property`);
+    }
+    if (!["SV", "TO", "FF"].includes(str(file, props["phenomena"], `${at}.phenomena`))) {
+      throw new DataError(file, `${at}.phenomena is not SV, TO, or FF`);
+    }
+    if (props["significance"] !== "W") throw new DataError(file, `${at}.significance is not W`);
+    for (const key of ["event_label", "product_id"]) str(file, props[key], `${at}.${key}`);
+    count(file, props["eventid"], `${at}.eventid`);
+    for (const key of ["polygon_begin", "polygon_end"]) runTime(file, props[key], `${at}.${key}`);
+  });
+  guardMultiPolygons(file, value);
+  return value as WarningsFile;
 }
 
 /** The committed county outline: a FeatureCollection with no receipt. */

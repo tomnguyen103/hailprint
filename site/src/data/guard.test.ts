@@ -1,7 +1,20 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
-import { GEOJSON_PATH, JSON_PATH, MAX_RUNS, guardIndex, guardOutline, guardPairs, guardPipeline, guardReports, guardSwath, guardZipCounts } from "./guard";
+import { afterEach, describe, expect, it } from "vitest";
+import { fetchJson, setFetch } from "./fetch";
+import {
+  GEOJSON_PATH,
+  JSON_PATH,
+  MAX_RUNS,
+  guardIndex,
+  guardOutline,
+  guardPairs,
+  guardPipeline,
+  guardReports,
+  guardSwath,
+  guardWarnings,
+  guardZipCounts,
+} from "./guard";
 import { DataError } from "./types";
 
 const receipt = {
@@ -78,6 +91,22 @@ const swath = {
       geometry: { type: "MultiPolygon", coordinates: [] },
     },
   ],
+};
+
+const warningProps = {
+  phenomena: "SV",
+  significance: "W",
+  event_label: "Severe Thunderstorm Warning",
+  eventid: 101,
+  polygon_begin: "2024-05-29T00:00:00Z",
+  polygon_end: "2024-05-29T01:00:00Z",
+  product_id: "202405290000-KHGX-WUUS54-SVRHGX",
+};
+
+const warnings = {
+  type: "FeatureCollection",
+  receipt,
+  features: [{ type: "Feature", properties: warningProps, geometry: { type: "MultiPolygon", coordinates: [] } }],
 };
 
 const run = { run_time: receipt.run_time, package_version: "0.1.0", storm_dates: ["2024-05-28"], file_count: 4 };
@@ -380,5 +409,48 @@ describe("guardOutline", () => {
     const outline = { type: "FeatureCollection", features: [] };
     expect(guardOutline(outline)).toBe(outline);
     expect(() => guardOutline({ type: "Feature" })).toThrow(/counties\.geojson: type is not FeatureCollection/);
+  });
+});
+
+describe("guardWarnings", () => {
+  afterEach(() => setFetch(null));
+
+  const withProps = (props: Record<string, unknown>) => ({
+    ...warnings,
+    features: [{ ...warnings.features[0], properties: { ...warningProps, ...props } }],
+  });
+
+  it("accepts a file whose properties match the allow-list", () => {
+    expect(guardWarnings(warnings)).toBe(warnings);
+  });
+
+  it("throws on a property outside the allow-list", () => {
+    expect(() => guardWarnings(withProps({ wfo: "HGX" }))).toThrow(
+      /^warnings\.geojson: features\[0\]\.properties\.wfo is not an allowed property/,
+    );
+  });
+
+  it("throws on a phenomena code other than SV, TO, and FF", () => {
+    expect(() => guardWarnings(withProps({ phenomena: "WS" }))).toThrow(/^warnings\.geojson: features\[0\]\.properties\.phenomena/);
+  });
+
+  it("throws on a time that is not UTC to the second", () => {
+    expect(() => guardWarnings(withProps({ polygon_end: "2024-05-29 01:00" }))).toThrow(
+      /^warnings\.geojson: features\[0\]\.properties\.polygon_end is not a run time/,
+    );
+  });
+
+  it("throws on a geometry that is not a MultiPolygon", () => {
+    const feature = { ...warnings.features[0], geometry: { type: "Point", coordinates: [] } };
+    expect(() => guardWarnings({ ...warnings, features: [feature] })).toThrow(
+      /^warnings\.geojson: features\[0\]\.geometry\.type is not MultiPolygon/,
+    );
+  });
+
+  it("answers a 404 with a DataError and no other throw", async () => {
+    setFetch(async () => new Response("nope", { status: 404 }));
+    const promise = fetchJson("storms/2024-05-28/warnings.geojson", guardWarnings);
+    await expect(promise).rejects.toBeInstanceOf(DataError);
+    await expect(promise).rejects.toThrow(/^warnings\.geojson: HTTP 404/);
   });
 });

@@ -124,6 +124,23 @@ export interface SwathFile extends FeatureCollection<MultiPolygon, SwathProps> {
   receipt: Receipt;
 }
 
+/** The warning types the file carries: severe thunderstorm, tornado, flash flood. */
+export type Phenomena = "SV" | "TO" | "FF";
+
+export interface WarningProps {
+  phenomena: Phenomena;
+  significance: "W";
+  event_label: string;
+  eventid: number;
+  polygon_begin: string;
+  polygon_end: string;
+  product_id: string;
+}
+
+export interface WarningsFile extends FeatureCollection<MultiPolygon, WarningProps> {
+  receipt: Receipt;
+}
+
 /** One `publish` run in the run log, newest first in `pipeline.json`. */
 export interface PipelineRun {
   run_time: string;
