@@ -1,0 +1,8 @@
+# Hailprint cron entry: one nightly run per day on the cron host.
+# Install after the path edit: crontab scripts/hailprint.cron
+# 14:00 UTC: the 12Z file of yesterday's storm date lands on S3 after 12:00 UTC.
+# VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID go in <repo>/.env, never here.
+# shortcut: no log rotation, upgrade to logrotate when the host runs past one year
+# shortcut: CRON_TZ needs cronie or Vixie cron, upgrade when the host runs systemd timers
+CRON_TZ=UTC
+0 14 * * * cd /path/to/hailprint && scripts/nightly.sh >> data/nightly.log 2>&1

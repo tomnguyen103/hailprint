@@ -18,4 +18,7 @@ site:
 deploy-dry:
 	scripts/deploy.sh --dry-run
 
-.PHONY: setup lint test ingest site deploy-dry
+nightly:
+	scripts/nightly.sh
+
+.PHONY: setup lint test ingest site deploy-dry nightly

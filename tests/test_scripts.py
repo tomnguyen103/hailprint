@@ -10,7 +10,7 @@ from tests.conftest import BASH, needs_bash
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 
-STUB = '#!/usr/bin/env bash\necho "{name} $* @ $(basename "$PWD")" >> "$STUB_LOG"\n{body}'
+STUB = '#!/usr/bin/env bash\necho "{name}${{*:+ $*}} @ $(basename "$PWD")" >> "$STUB_LOG"\n{body}'
 
 # a build writes index.html; STUB_BUILD_EMPTY=1 leaves out data/storms.json
 NPM_BODY = """if [ "$1 $2" = "run build" ]; then
@@ -43,8 +43,10 @@ class Tree:
         self.stub("npm", NPM_BODY)
         self.stub("vercel", VERCEL_BODY)
 
-    def stub(self, name: str, body: str = "", folder: Path | None = None) -> Path:
-        path = (folder or self.bin) / name
+    def stub(
+        self, name: str, body: str = "", folder: Path | None = None, filename: str | None = None
+    ) -> Path:
+        path = (folder or self.bin) / (filename or name)
         path.write_text(STUB.format(name=name, body=body), encoding="utf-8", newline="\n")
         path.chmod(0o755)
         return path
@@ -55,7 +57,8 @@ class Tree:
             "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
             "STUB_LOG": self.log.as_posix(),
         }
-        run_env.pop("VERCEL_TOKEN", None)
+        for name in ("VERCEL_TOKEN", "MAX_INGEST", "STUB_MISSING", "STUB_FAIL"):
+            run_env.pop(name, None)
         run_env.update(env or {})
         assert BASH is not None
         return subprocess.run(
@@ -178,3 +181,139 @@ def test_deploy_live_stops_before_deploy_when_the_build_lacks_the_index(tmp_path
     assert done.returncode == 1
     assert "storms.json" in done.stderr
     assert not any(call.startswith("vercel deploy") for call in tree.calls())
+
+
+# --- nightly.sh ---
+
+# the uv stub prints STUB_MISSING on `candidates` and exits 3 on the STUB_FAIL command
+UV_BODY = """if [ "$2 $3" = "hailprint candidates" ]; then printf '%s\\n' "${STUB_MISSING:-}"; fi
+if [ "$2 $3" = "hailprint ${STUB_FAIL:-none}" ]; then exit 3; fi
+"""
+MISSING_TWO = "2026-01-05\n2024-06-01"
+HEAD = ["uv run hailprint index @ tree", "uv run hailprint candidates --missing --top 5 @ tree"]
+INGEST = [
+    "uv run hailprint ingest 2026-01-05 2024-06-01 @ tree",
+    "uv run hailprint parcels 2026-01-05 @ tree",
+    "uv run hailprint parcels 2024-06-01 @ tree",
+]
+TAIL = ["uv run hailprint score @ tree", "uv run hailprint publish @ tree"]
+
+
+def nightly_tree(tmp_path: Path, gdb: bool = True) -> Tree:
+    tree = Tree(tmp_path)
+    tree.stub("uv", UV_BODY)
+    tree.stub("deploy", folder=tree.root / "scripts", filename="deploy.sh")
+    if gdb:
+        (tree.root / "data" / "raw" / "hcad" / "extracted" / "Parcels.gdb").mkdir(parents=True)
+    return tree
+
+
+@needs_bash
+def test_nightly_runs_every_step_in_order(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": MISSING_TWO})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == HEAD + INGEST + TAIL + ["deploy @ tree"]
+    assert not (tree.root / "data" / "nightly.lock").exists()
+
+
+@needs_bash
+def test_nightly_skips_ingest_and_parcels_without_a_missing_day(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": ""})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == HEAD + TAIL + ["deploy @ tree"]
+    assert "no missing candidate day" in done.stdout
+
+
+@needs_bash
+def test_nightly_skips_parcels_without_the_hcad_gdb(tmp_path):
+    tree = nightly_tree(tmp_path, gdb=False)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": MISSING_TWO})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == HEAD + INGEST[:1] + TAIL + ["deploy @ tree"]
+    assert "parcels skipped" in done.stdout
+
+
+@needs_bash
+def test_nightly_max_ingest_caps_the_candidates_call(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    tree.run("nightly.sh", env={"STUB_MISSING": "", "MAX_INGEST": "2"})
+
+    assert "uv run hailprint candidates --missing --top 2 @ tree" in tree.calls()
+
+
+@needs_bash
+def test_nightly_reads_max_ingest_from_dot_env(tmp_path):
+    tree = nightly_tree(tmp_path)
+    (tree.root / ".env").write_text("MAX_INGEST=1\n", encoding="utf-8")
+
+    tree.run("nightly.sh", env={"STUB_MISSING": ""})
+
+    assert "uv run hailprint candidates --missing --top 1 @ tree" in tree.calls()
+
+
+@needs_bash
+def test_nightly_passes_dry_run_to_the_deploy(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", "--dry-run", env={"STUB_MISSING": ""})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls()[-1] == "deploy --dry-run @ tree"
+
+
+@needs_bash
+def test_nightly_refuses_when_the_lock_is_present_and_keeps_it(tmp_path):
+    tree = nightly_tree(tmp_path)
+    lock = tree.root / "data" / "nightly.lock"
+    lock.mkdir(parents=True)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": ""})
+
+    assert done.returncode == 1
+    assert "nightly.lock" in done.stderr
+    assert done.stdout == ""
+    assert tree.calls() == []
+    assert lock.is_dir()
+
+
+@needs_bash
+def test_nightly_stops_on_a_failed_score_and_removes_the_lock(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": "", "STUB_FAIL": "score"})
+
+    assert done.returncode == 3
+    assert tree.calls() == HEAD + TAIL[:1]
+    assert not (tree.root / "data" / "nightly.lock").exists()
+
+
+@needs_bash
+def test_nightly_rejects_an_unknown_argument_with_usage(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", "--bogus")
+
+    assert done.returncode == 2
+    assert "usage:" in done.stderr
+    assert tree.calls() == []
+
+
+def test_cron_entry_starts_the_nightly_run_at_14_utc():
+    lines = (SCRIPTS / "hailprint.cron").read_text(encoding="utf-8").splitlines()
+    entries = [
+        ln for ln in lines if ln and not ln.startswith("#") and not ln.split("=")[0].isupper()
+    ]
+
+    assert len(entries) == 1
+    assert entries[0].startswith("0 14 * * *")
+    assert "scripts/nightly.sh" in entries[0]
+    assert "CRON_TZ=UTC" in lines
