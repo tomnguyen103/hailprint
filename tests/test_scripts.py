@@ -303,7 +303,11 @@ INGEST = [
     "uv run hailprint parcels 2024-06-01 @ tree",
 ]
 INGEST_ONLY = [INGEST[0], INGEST[2]]
-TAIL = ["uv run hailprint score @ tree", "uv run hailprint publish @ tree"]
+TAIL = [
+    "uv run hailprint score @ tree",
+    "uv run hailprint warnings --missing @ tree",
+    "uv run hailprint publish @ tree",
+]
 
 
 def nightly_tree(tmp_path: Path, gdb: bool = True) -> Tree:
@@ -476,6 +480,32 @@ def test_nightly_stops_on_a_failed_score_and_removes_the_lock(tmp_path):
     assert done.returncode == 3
     assert tree.calls() == HEAD + TAIL[:1]
     assert not (tree.root / "data" / "nightly.lock").exists()
+
+
+@needs_bash
+def test_nightly_logs_a_failed_warnings_run_and_publishes(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": "", "STUB_FAIL": "warnings"})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == HEAD + TAIL + ["deploy @ tree"]
+    assert "warnings failed; publish goes on" in done.stdout
+
+
+@needs_bash
+def test_nightly_max_ingest_limits_ingest_only_and_warnings_runs_once(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": MISSING_TWO, "MAX_INGEST": "1"})
+
+    assert done.returncode == 0, done.stderr
+    calls = tree.calls()
+    assert "uv run hailprint candidates --missing --top 1 @ tree" in calls
+    assert calls.count("uv run hailprint warnings --missing @ tree") == 1
+    assert not any(
+        call.startswith("uv run hailprint warnings") and "--top" in call for call in calls
+    )
 
 
 @needs_bash

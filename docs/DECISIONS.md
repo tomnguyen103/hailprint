@@ -14,6 +14,7 @@ Plan section 16 listed six decisions. Tom approved the plan on 2026-10-24 and ad
 | 8 | Replay frames (plan v5 A5) | Cut. One storm date of the 2-minute MESH product needs about 720 CONUS GRIB2 files, about 1 GB | Revisit with a cropped tile source |
 | 9 | Pipeline file writer | `publish` alone writes `site/data/pipeline.json`, so the file has one writer. `index` stays a Parquet writer | none |
 | 10 | Site data path | Git deployments off for `main` in `vercel.json`; the cron host builds with `site/data/` present and uploads with the prebuilt flow; PR branches keep data-free previews | The dashboard ignored build step is dead after this row; remove it at launch |
+| 11 | Impact scope | The impact layers (warnings, power, internet) cover the 8 metro counties: Harris, Fort Bend, Montgomery, Brazoria, Galveston, Waller, Liberty, and Chambers. Row 4 stands for hail, scoring, and parcels | Revisit row 4 as a whole for the v2 nine-county metro |
 
 ## Standing constraints
 

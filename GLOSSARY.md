@@ -17,6 +17,8 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Sentinel | A negative MRMS cell value that is not a size: `-3` means no radar coverage, `-1` means no data. Masked before any arithmetic. |
 | Harris bbox | The bounds of the Harris County outline padded by 0.05 degree. Every raster is cropped to it. |
 | County outline | The Harris County polygon, GEOID `48201`, from the Census cartographic boundary file `cb_2024_us_county_500k`. |
+| Metro counties | Harris and its seven neighbours: Fort Bend, Montgomery, Brazoria, Galveston, Waller, Liberty, and Chambers. The scope of the impact layers only. Hail, scoring, and parcels stay Harris only (`docs/DECISIONS.md` row 11). |
+| Metro outlines | The 8 county polygons of the metro counties, from `cb_2024_us_county_500k`. `county.metro()` returns them. `County outline` keeps its meaning: the Harris polygon. |
 | Size class | One hail-size threshold in millimetres: 19.05, 25.4, 31.75, 38.1, 44.45, 50.8, 63.5 (0.75 to 2.5 inch). |
 | Swath | The dissolved polygon of every cell whose daily max is at or above one size class. Classes nest. |
 | Swath file | One GeoParquet per storm date, one row per size class, with the confidence metadata. |
@@ -34,7 +36,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Scoring domain | The Harris bbox shrunk by the scoring radius plus one cell (`score.EDGE_M`). The swath is only known inside the bbox, so a report near its edge is not scored. |
 | Contingency table | For one size class and one scoring radius: hits, misses, false alarms, and correct negatives over the scored reports. POD, FAR, CSI, and HSS come from it. |
 | Unverifiable area | The part of a swath class, in km2, farther than the scoring radius from every SPC report. No report could confirm or deny hail there. |
-| Published file | One JSON or GeoJSON file under `site/data/` that `hailprint publish` writes for the site: `swath.geojson`, `reports.geojson`, `pairs.json`, `zip-counts.json` per storm date, and the `storms.json` index. Each validates against its schema in `src/hailprint/schemas/` and carries a receipt. |
+| Published file | One JSON or GeoJSON file under `site/data/` that `hailprint publish` writes for the site: `swath.geojson`, `reports.geojson`, `pairs.json`, `zip-counts.json`, and `warnings.geojson` (only where `warnings` ran) per storm date, and the `storms.json` index. Each validates against its schema in `src/hailprint/schemas/` and carries a receipt. |
 | Receipt | The provenance block of a published file: `storm_date`, `sources` (each with `source`, `product`, and `file`), the one confidence band `swath.CONFIDENCE`, `run_time` (one UTC second per run), and `package_version`. |
 | Edge distance | `edge_m`: the signed metre distance from a report point to the swath crop edge, positive inside the Harris bbox and negative outside. A report is scored at radius R when `edge_m > R*1000 + score.EDGE_M`. Stored per report in `pairs.json`, so the browser re-scores at any whole-kilometre radius. |
 | Spike | The week-1 run, replaced by `ingest` in week 2. Its evidence stays in `docs/reports/week-01.md`. |
@@ -45,7 +47,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Receipt chip | The mono chip after a number on the site. It opens a drawer with the receipt of the published file that holds the number: source, product, file, run time, and confidence band. |
 | Caveat line | The footer text on every page, exact: "Radar-estimated hail size. Literature skill: HSS about 0.38 at 30 mm." |
 | Inspector | The Storms drawer that opens on a map click: the point, the largest size class that covers it, the nearest report, and one receipt chip. Docked at 1280 px and up, an overlay below, a full-screen sheet below 768 px. |
-| Basemap | The optional PMTiles file `site/public/basemap.pmtiles`, an extract of the Harris bbox from the Protomaps build. The map draws it when present and paper with the county outline when absent. |
+| Basemap | The optional PMTiles file `site/public/basemap.pmtiles`, an extract of the metro bbox, the Metro outlines padded by 0.05 degree, from the Protomaps build. The map draws it when present and paper with the county outline when absent. |
 | Pooled table | The contingency table summed over every published storm date at one scoring radius: one row per size class, the counts added, the metrics recomputed from the sums. `site/src/pool.ts` builds it in the browser; `site/scripts/pool_golden.py` is its Python oracle. |
 | Threshold curve | The Scorecard chart of one metric (POD, FAR, CSI, or HSS) against the seven size classes in inches, y from 0 to 1, one marker per class; the HSS view carries the dashed literature line at 0.38. |
 | Point check | The Try it tool that takes a latitude and longitude inside the Harris bbox, or a map click, and lists for every storm date the largest size class whose swath holds the point, or "below 0.75 in". |
@@ -58,8 +60,14 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Run log | The Runs view table of publish runs, newest first: run time, package version, storm date count, file count. The pressed row opens the inspector with its storm dates. At most 50 runs, merged by `run_time`. |
 | Archive coverage | The Archive view table: per year, the archive days, the days with a 12Z file, and that share as a bar; a total row closes it. Built from the archive index at publish time. |
 | Replay frame | One cropped MESH frame of the 2-minute product inside a storm date, for an animation. Cut in PR G: about 720 CONUS GRIB2 files, about 1 GB per storm date (`docs/DECISIONS.md` row 8). |
+| Impact window | 12:00 UTC on storm date D to 12:00 UTC on D+2: 192 steps of 15 minutes. The first 96 steps are the convective day. |
+| Step | One 15-minute slot of the impact window, named by its start time in UTC and numbered 0 to 191. Step 0 starts at 12:00 UTC on D. |
+| Warning polygon | One NWS storm-based warning polygon (`SV`, `TO`, or `FF`, significance `W`) from WFO HGX, with its begin and end time. `hailprint warnings` stores them per storm date. |
+| Impact layer | A map layer with a time axis. The warnings layer is the first one. |
+| Time slider | The native range under the map over the 192 steps of the impact window. The step in the path `/storms/<date>/map/<step>` is its value. |
+| Storm timeline | The chart under the time slider with two strips on the 48-hour axis: warnings, one bar per warning polygon, and report times, one tick per SPC report. A cursor marks the slider step, and a click on a strip moves it. |
 | Missing candidate day | A candidate day with a 12Z file and no swath file. `hailprint candidates --missing` prints them newest first. |
-| Nightly run | `scripts/nightly.sh`: index, missing candidate days, ingest, parcels, score, publish, deploy, under `data/nightly.lock`, at most `MAX_INGEST` storm dates. |
+| Nightly run | `scripts/nightly.sh`: index, missing candidate days, ingest, parcels, score, warnings, publish, deploy, under `data/nightly.lock`, at most `MAX_INGEST` storm dates. |
 | Deploy | `scripts/deploy.sh`: the prebuilt Vercel flow from a machine that holds `site/data/`. |
 | Dry run | `--dry-run`: the build into `site/dist` with the artifact check and no `vercel` call. |
 | Cron entry | `scripts/hailprint.cron`: the crontab line at 14:00 UTC that starts the nightly run. |
