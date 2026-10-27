@@ -283,6 +283,8 @@ describe("guardIndex", () => {
         expect(theirs.test(path)).toBe(true);
       }
       for (const path of bad) expect(ours.test(path)).toBe(theirs.test(path));
+      expect(ours.test("../secret.json")).toBe(false);
+      expect(ours.test("storms/x/pairs.json")).toBe(false);
     }
   });
   it("rejects a pairs path with the geojson extension", () => {

@@ -1,5 +1,5 @@
 import type { ComponentChildren, RefObject } from "preact";
-import { useEffect } from "preact/hooks";
+import { useEffect, useRef } from "preact/hooks";
 import "../styles/scope.css";
 
 /** Escape closes the drawer while it is open. */
@@ -12,6 +12,15 @@ function useEscape(open: boolean, onClose: () => void): void {
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+}
+
+/** A close returns focus to the element that opened the drawer, before the drawer turns hidden. */
+function useFocusReturn(open: boolean): void {
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (open) opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    else opener.current?.focus();
+  }, [open]);
 }
 
 interface Props {
@@ -29,6 +38,7 @@ interface Props {
 /** The scope sidebar of the Method and Pipeline areas: a drawer below 1280 px with a backdrop, a head, and a Close button. */
 export function ScopeDrawer({ label, title, open, onClose, children, navRef, onKeyDown }: Props) {
   useEscape(open, onClose);
+  useFocusReturn(open);
   return (
     <>
       {open ? <button type="button" class="scope-backdrop" aria-label={`Close ${label}`} onClick={onClose} /> : null}
