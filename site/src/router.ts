@@ -3,10 +3,16 @@
 
 export const AREAS = ["storms", "scorecard", "try", "method", "pipeline"] as const;
 export type Area = (typeof AREAS)[number];
-export type LaterArea = Exclude<Area, "storms">;
+export type LaterArea = Extract<Area, "method" | "pipeline">;
 
 export const TABS = ["map", "parcels", "score", "data"] as const;
 export type Tab = (typeof TABS)[number];
+
+export const SCORECARD_VIEWS = ["table", "grid", "curve"] as const;
+export type ScorecardView = (typeof SCORECARD_VIEWS)[number];
+
+export const TRY_TOOLS = ["tune", "point", "compare", "run"] as const;
+export type TryTool = (typeof TRY_TOOLS)[number];
 
 export const AREA_LABELS: Record<Area, string> = {
   storms: "Storms",
@@ -26,10 +32,16 @@ export const TAB_LABELS: Record<Tab, string> = {
 export type Route =
   | { kind: "redirect-latest" }
   | { kind: "storms"; date: string; tab: Tab }
+  | { kind: "scorecard"; view: ScorecardView }
+  | { kind: "try"; tool: TryTool }
   | { kind: "area"; area: LaterArea }
   | { kind: "not-found" };
 
-export type Target = { area: "storms"; date: string; tab?: Tab } | { area: LaterArea };
+export type Target =
+  | { area: "storms"; date: string; tab?: Tab }
+  | { area: "scorecard"; view?: ScorecardView }
+  | { area: "try"; tool?: TryTool }
+  | { area: LaterArea };
 
 /** A storm date as the path and the index carry it. The guards share it. */
 export const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -42,11 +54,27 @@ function isTab(value: string): value is Tab {
   return (TABS as readonly string[]).includes(value);
 }
 
+/** The second path part of an area with sub-pages: the first option when absent, null when unknown. */
+function subOf<T extends string>(options: readonly T[], parts: string[]): T | null {
+  const [, sub] = parts;
+  if (parts.length === 1) return options[0]!;
+  if (parts.length === 2 && sub !== undefined && (options as readonly string[]).includes(sub)) return sub as T;
+  return null;
+}
+
 export function match(path: string): Route {
   const parts = path.split("/").filter((p) => p !== "");
   const [head, date, tab, ...rest] = parts;
   if (head === undefined) return { kind: "redirect-latest" };
   if (!isArea(head)) return { kind: "not-found" };
+  if (head === "scorecard") {
+    const view = subOf(SCORECARD_VIEWS, parts);
+    return view === null ? { kind: "not-found" } : { kind: "scorecard", view };
+  }
+  if (head === "try") {
+    const tool = subOf(TRY_TOOLS, parts);
+    return tool === null ? { kind: "not-found" } : { kind: "try", tool };
+  }
   if (head !== "storms") {
     return parts.length === 1 ? { kind: "area", area: head } : { kind: "not-found" };
   }
@@ -57,6 +85,8 @@ export function match(path: string): Route {
 
 export function href(target: Target): string {
   if (target.area === "storms") return `/storms/${target.date}/${target.tab ?? "map"}`;
+  if (target.area === "scorecard") return target.view === undefined ? "/scorecard" : `/scorecard/${target.view}`;
+  if (target.area === "try") return target.tool === undefined ? "/try" : `/try/${target.tool}`;
   return `/${target.area}`;
 }
 

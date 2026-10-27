@@ -16,9 +16,22 @@ it("falls back to map for a bad tab", () => {
   expect(match("/storms/2024-05-28/nope")).toEqual({ kind: "storms", date: "2024-05-28", tab: "map" });
 });
 
-it("gives the area for the four later areas", () => {
-  expect(match("/scorecard")).toEqual({ kind: "area", area: "scorecard" });
+it("gives the area for the two later areas", () => {
+  expect(match("/method")).toEqual({ kind: "area", area: "method" });
   expect(match("/pipeline")).toEqual({ kind: "area", area: "pipeline" });
+});
+
+it("resolves Scorecard views, Table by default", () => {
+  expect(match("/scorecard")).toEqual({ kind: "scorecard", view: "table" });
+  expect(match("/scorecard/curve")).toEqual({ kind: "scorecard", view: "curve" });
+  expect(match("/scorecard/nope")).toEqual({ kind: "not-found" });
+});
+
+it("resolves Try it tools, Tune by default", () => {
+  expect(match("/try")).toEqual({ kind: "try", tool: "tune" });
+  expect(match("/try/run")).toEqual({ kind: "try", tool: "run" });
+  expect(match("/try/compare")).toEqual({ kind: "try", tool: "compare" });
+  expect(match("/try/x")).toEqual({ kind: "not-found" });
 });
 
 it("gives not-found for an unknown path or a bad date", () => {
@@ -31,4 +44,7 @@ it("builds paths without query strings", () => {
   expect(href({ area: "storms", date: "2024-05-28", tab: "data" })).toBe("/storms/2024-05-28/data");
   expect(href({ area: "storms", date: "2024-05-28" })).toBe("/storms/2024-05-28/map");
   expect(href({ area: "method" })).toBe("/method");
+  expect(href({ area: "scorecard" })).toBe("/scorecard");
+  expect(href({ area: "scorecard", view: "grid" })).toBe("/scorecard/grid");
+  expect(href({ area: "try", tool: "point" })).toBe("/try/point");
 });

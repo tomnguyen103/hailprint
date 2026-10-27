@@ -64,7 +64,7 @@ __main__.py   argparse CLI wiring the six commands and the fixed paths under dat
 ```
 
 `site/` is the static site (Preact 10, Vite 8, TypeScript strict, MapLibre GL 6). Routes:
-`/storms/<date>/map|parcels|score|data`, `/scorecard`, `/try`, `/method`, `/pipeline`; `/` redirects
+`/storms/<date>/map|parcels|score|data`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`, `/method`, `/pipeline`; `/` redirects
 to the newest storm date. It reads `storms.json` first, then the four per-date files, each through
 a guard in `site/src/data/guard.ts`, and re-scores `pairs.json` in `site/src/rescore.ts` with the
 same radius rule as `publish.rescore`. Every MapLibre import lives under `site/src/storms/map/`.

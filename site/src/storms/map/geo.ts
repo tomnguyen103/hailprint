@@ -1,6 +1,7 @@
 // Pure geometry for the map inspector. No MapLibre import.
-import type { Feature, FeatureCollection, Point, Position } from "geojson";
+import type { Feature, FeatureCollection, MultiPolygon, Point, Polygon, Position } from "geojson";
 import type { Bbox } from "../../county";
+import type { SwathFile, SwathProps } from "../../data/types";
 
 const EARTH_RADIUS_KM = 6371.0088;
 
@@ -34,6 +35,39 @@ export function coveringClass(features: readonly { properties: { threshold_mm: n
     if (max === null || f.properties.threshold_mm > max) max = f.properties.threshold_mm;
   }
   return max;
+}
+
+/** Even-odd ray cast over one ring with the half-open edge test, so a vertex gives one fixed answer. */
+function inRing(ring: Position[], [x, y]: [number, number]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i] as [number, number];
+    const [xj, yj] = ring[j] as [number, number];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+function inPolygon(rings: Position[][], point: [number, number]): boolean {
+  const [outer, ...holes] = rings;
+  if (!outer || !inRing(outer, point)) return false;
+  return !holes.some((hole) => inRing(hole, point));
+}
+
+/** True when the point lies inside the outer ring and inside no hole of any polygon. */
+export function containsPoint(geometry: Polygon | MultiPolygon, point: [number, number]): boolean {
+  if (geometry.type === "Polygon") return inPolygon(geometry.coordinates, point);
+  return geometry.coordinates.some((rings) => inPolygon(rings, point));
+}
+
+/** The properties of the largest size class whose feature holds the point, or null outside the swath. */
+export function coveringAt(swath: SwathFile, point: [number, number]): SwathProps | null {
+  let best: SwathProps | null = null;
+  for (const feature of swath.features) {
+    if (best !== null && feature.properties.threshold_mm <= best.threshold_mm) continue;
+    if (containsPoint(feature.geometry, point)) best = feature.properties;
+  }
+  return best;
 }
 
 /** The bounds of every coordinate in the collection, or null when it holds none. */

@@ -6,7 +6,8 @@ import { RULER, diameterPx, objectName } from "../ruler";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { EmptyState, ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
-import { formatCount, formatInches, zipRows } from "./select";
+import { formatCount, formatInches } from "../format";
+import { zipRows } from "./select";
 
 const FILE = "zip-counts.json";
 

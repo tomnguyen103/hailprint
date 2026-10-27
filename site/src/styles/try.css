@@ -1,0 +1,263 @@
+/* Try it: the controls row, the ruler strip, the metric row. Tokens only. */
+
+.try-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 32px;
+  align-items: start;
+  margin-bottom: 24px;
+}
+
+.try-controls > * {
+  flex: 1 1 280px;
+  max-width: 480px;
+}
+
+.scope-select {
+  display: grid;
+  gap: 6px;
+}
+
+.scope-select label {
+  font: 500 13px/1.3 var(--sans);
+}
+
+.scope-select select {
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.threshold-slider output {
+  min-width: 7ch;
+}
+
+.ruler-strip {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
+}
+
+.ruler-strip [aria-current="true"] {
+  background: var(--accent);
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  max-width: 640px;
+  margin-bottom: 8px;
+}
+
+.metric-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+  background: var(--sheet);
+}
+
+@media (max-width: 479px) {
+  .metric-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Point check */
+
+.point-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+
+.point-form .field {
+  display: grid;
+  gap: 6px;
+}
+
+.point-form label {
+  font: 500 13px/1.3 var(--sans);
+}
+
+.point-form input {
+  width: 10ch;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: 0.95rem;
+}
+
+.point-form input[aria-invalid="true"] {
+  border-color: var(--report);
+}
+
+.point-form .button {
+  height: 44px;
+}
+
+.point-hint {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--report);
+}
+
+.point-map {
+  margin-bottom: 24px;
+}
+
+/* Run it yourself */
+
+.command-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.command-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.command-row + .command-row {
+  margin-top: 8px;
+}
+
+.command-row .code-block {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.csv-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+}
+
+/* Swipe compare: two maps in one frame, B clipped at the split, one native range as the swipe bar. */
+
+.compare-stage {
+  position: relative;
+  margin-top: 16px;
+}
+
+.compare-frame {
+  position: relative;
+}
+
+.compare-map {
+  position: absolute;
+  inset: 0;
+}
+
+.compare-error {
+  z-index: 3;
+}
+
+.compare-label {
+  position: absolute;
+  top: 12px;
+  z-index: 2;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.compare-label-a {
+  left: 12px;
+}
+
+.compare-label-b {
+  right: 12px;
+}
+
+.compare-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+  pointer-events: none;
+}
+
+/* The range spans 22 px past each edge so the 44 px thumb centre sits on the split line. */
+.compare-swipe {
+  position: absolute;
+  top: 50%;
+  left: -22px;
+  z-index: 4;
+  width: calc(100% + 44px);
+  height: 44px;
+  margin: 0;
+  transform: translateY(-50%);
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  cursor: ew-resize;
+}
+
+.compare-swipe::-webkit-slider-runnable-track {
+  height: 44px;
+  background: transparent;
+}
+
+.compare-swipe::-moz-range-track {
+  height: 44px;
+  background: transparent;
+}
+
+.compare-swipe::-webkit-slider-thumb {
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--sheet);
+  pointer-events: auto;
+}
+
+.compare-swipe::-moz-range-thumb {
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--sheet);
+  pointer-events: auto;
+}
+
+.compare-swipe:focus-visible {
+  outline: none;
+}
+
+.compare-swipe:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.compare-swipe:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

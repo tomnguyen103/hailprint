@@ -46,3 +46,8 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Caveat line | The footer text on every page, exact: "Radar-estimated hail size. Literature skill: HSS about 0.38 at 30 mm." |
 | Inspector | The Storms drawer that opens on a map click: the point, the largest size class that covers it, the nearest report, and one receipt chip. Docked at 1280 px and up, an overlay below, a full-screen sheet below 768 px. |
 | Basemap | The optional PMTiles file `site/public/basemap.pmtiles`, an extract of the Harris bbox from the Protomaps build. The map draws it when present and paper with the county outline when absent. |
+| Pooled table | The contingency table summed over every published storm date at one scoring radius: one row per size class, the counts added, the metrics recomputed from the sums. `site/src/pool.ts` builds it in the browser; `site/scripts/pool_golden.py` is its Python oracle. |
+| Threshold curve | The Scorecard chart of one metric (POD, FAR, CSI, or HSS) against the seven size classes in inches, y from 0 to 1, one marker per class; the HSS view carries the dashed literature line at 0.38. |
+| Point check | The Try it tool that takes a latitude and longitude inside the Harris bbox, or a map click, and lists for every storm date the largest size class whose swath holds the point, or "below 0.75 in". |
+| Swipe compare | The Try it tool that draws two storm dates on two synced maps in one frame; a native range sets the split where the right map starts. |
+| Scoring radius slider | The native range on the Score pane, the Scorecard, and the Tune tool that sets the scoring radius in whole kilometres from 0 to `radius_km_max`; every table re-scores from `pairs.json` at the chosen radius. |

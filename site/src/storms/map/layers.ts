@@ -7,6 +7,7 @@ export type Theme = "light" | "dark";
 export const SWATH_SOURCE = "swath";
 export const COUNTY_SOURCE = "county";
 export const REPORTS_SOURCE = "reports";
+export const POINT_SOURCE = "point";
 export const FILL_OPACITY = 0.85;
 
 /** A design token's current value, read from the document so the theme drives it. */
@@ -48,6 +49,17 @@ export function chromeLayers(): LayerSpecification[] {
       source: REPORTS_SOURCE,
       paint: {
         "circle-radius": 5,
+        "circle-color": token("--report"),
+        "circle-stroke-width": 2,
+        "circle-stroke-color": token("--sheet"),
+      },
+    },
+    {
+      id: "point-check",
+      type: "circle",
+      source: POINT_SOURCE,
+      paint: {
+        "circle-radius": 6,
         "circle-color": token("--report"),
         "circle-stroke-width": 2,
         "circle-stroke-color": token("--sheet"),

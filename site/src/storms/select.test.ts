@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { Storm, ZipCounts } from "../data/types";
-import { groupByYear, metricText, objectForSize, zipRows } from "./select";
+import { groupByYear, objectForSize, zipRows } from "./select";
 
 function storm(date: string): Storm {
   return { storm_date: date } as Storm;
@@ -23,12 +23,6 @@ it("returns the ZIP rows of one class sorted by count descending then ZIP ascend
   } as ZipCounts;
   expect(zipRows(zip, 19.05).map((r) => r.zip)).toEqual(["77003", "77001", "77002"]);
   expect(zipRows(zip, 63.5)).toEqual([]);
-});
-
-it("renders a null metric as an en dash with the hidden text", () => {
-  expect(metricText(null)).toEqual({ text: "\u2013", hidden: "undefined, zero denominator" });
-  expect(metricText(0.5)).toEqual({ text: "0.50", hidden: null });
-  expect(metricText(1)).toEqual({ text: "1.00", hidden: null });
 });
 
 it("names the object for a report size", () => {
