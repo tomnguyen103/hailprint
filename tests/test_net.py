@@ -1,6 +1,9 @@
 import http.client
 import io
+import threading
 import urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from types import SimpleNamespace
 
 import pytest
 
@@ -106,3 +109,78 @@ def test_get_retries_a_timeout(monkeypatch):
 
     assert net.get(URL) == b"ok"
     assert len(calls) == 2
+
+
+@pytest.fixture
+def server():
+    """A local HTTP server. `hits` counts the requests per path."""
+    hits: dict[str, int] = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            hits[self.path] = count = hits.get(self.path, 0) + 1
+            if self.path == "/missing":
+                self.send_error(404)
+            elif self.path == "/down" or (self.path == "/flaky" and count <= 2):
+                self.send_error(503)
+            else:
+                # /short promises 100 bytes, sends 40, and closes the connection
+                body = b"x" * 40 if self.path == "/short" else b"abcdef"
+                self.send_response(200)
+                self.send_header("Content-Length", "100" if self.path == "/short" else "6")
+                self.end_headers()
+                self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    yield SimpleNamespace(url=lambda path: f"http://127.0.0.1:{httpd.server_port}{path}", hits=hits)
+    httpd.shutdown()
+    httpd.server_close()
+
+
+@pytest.fixture
+def sleeps(monkeypatch):
+    slept: list[float] = []
+    monkeypatch.setattr(net.time, "sleep", slept.append)
+    return slept
+
+
+def test_open_stream_reads_a_whole_body_in_pieces(server, sleeps):
+    with net.open_stream(server.url("/ok")) as stream:
+        assert stream.read(4) == b"abcd"
+        assert stream.read() == b"ef"
+    assert sleeps == []
+
+
+def test_open_stream_retries_a_connect_that_fails_twice(server, sleeps):
+    with net.open_stream(server.url("/flaky")) as stream:
+        assert stream.read() == b"abcdef"
+    assert server.hits["/flaky"] == 3
+    assert sleeps == [0.5, 1.0]
+
+
+def test_open_stream_never_retries_a_404(server, sleeps):
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        net.open_stream(server.url("/missing"))
+    assert exc.value.code == 404
+    assert server.hits["/missing"] == 1
+    assert sleeps == []
+
+
+def test_open_stream_raises_the_status_after_three_5xx_tries(server, sleeps):
+    with pytest.raises(urllib.error.HTTPError, match="503"):
+        net.open_stream(server.url("/down"))
+    assert server.hits["/down"] == 3
+    assert sleeps == [0.5, 1.0]
+
+
+def test_open_stream_raises_on_the_read_after_a_body_that_stops_early(server, sleeps):
+    with net.open_stream(server.url("/short")) as stream:
+        assert stream.read(40) == b"x" * 40
+        with pytest.raises(http.client.IncompleteRead):
+            stream.read(1)
+    assert server.hits["/short"] == 1  # the body is never retried
+    assert sleeps == []
