@@ -461,6 +461,40 @@ def test_a_corrupt_pairs_file_of_an_earlier_run_stops_the_run_before_the_index_w
     assert env.index() == before
 
 
+def test_a_pipeline_document_that_fails_its_schema_keeps_the_old_index(env, monkeypatch, capsys):
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    cli.main(["publish", "2023-06-23"])
+    before = env.index(), env.pipeline()
+    real = publish.validate
+
+    def reject_pipeline(doc, kind):
+        real(doc, kind)
+        if kind == "pipeline":
+            raise ValueError("pipeline: $: forced")
+
+    monkeypatch.setattr(publish, "validate", reject_pipeline)
+
+    assert cli.main(["publish", "2024-05-28"]) == 1
+
+    assert "pipeline: $: forced" in capsys.readouterr().err
+    assert (env.index(), env.pipeline()) == before
+
+
+def test_a_second_run_that_finds_the_lock_file_stops_with_exit_1(env, capsys):
+    env.add_day(LATER)
+    cli.main(["publish"])
+    before = env.index()
+    lock = env.site / cli.LOCK_FILE
+    lock.write_text("1", encoding="utf-8")
+
+    assert cli.main(["publish"]) == 1
+
+    assert cli.LOCK_FILE in capsys.readouterr().err
+    assert env.index() == before
+    assert lock.read_text(encoding="utf-8") == "1"
+
+
 def test_a_deleted_zip_file_of_an_earlier_date_nulls_its_entry_and_keeps_exit_0(env):
     env.add_day(EARLIER)
     env.add_day(LATER)

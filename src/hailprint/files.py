@@ -34,6 +34,28 @@ def _atomic(path: Path) -> Iterator[Path]:
         raise
 
 
+@contextmanager
+def lock(path: Path) -> Iterator[None]:
+    """Hold one run lock; a second run stops instead of a silent last-write-wins merge.
+
+    The lock file holds the pid of the run. A run that finds the file stops with RuntimeError
+    and leaves the file in place. The run that made the file removes it on exit.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        raise RuntimeError(
+            f"{path} exists: another run holds it, or delete it after a crash"
+        ) from None
+    os.write(fd, str(os.getpid()).encode())
+    os.close(fd)
+    try:
+        yield
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def write_text_atomic(text: str, path: Path) -> Path:
     """Write UTF-8 text through a .tmp sibling; a failed write leaves the old target intact."""
     path = Path(path)

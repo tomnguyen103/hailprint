@@ -58,7 +58,8 @@ publish.py    swaths + nearby_reports + ZIP counts -> validated JSON with a rece
               the contingency table in Python for any whole-km radius; dumps() refuses NaN, the forbidden word, and owner fields;
               also pipeline.json (runs newest first, cap 50, merged by run_time; archive summary per year or null; one sources row per source and product)
 county.py     committed Harris County GeoJSON (package data) -> outline() and bbox()
-files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata
+files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata;
+              lock(path): one publish run at a time, pid in site/data/publish.lock, a second run stops with exit 1
 paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR; every data path hangs from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
 __main__.py   argparse CLI wiring the six commands and the fixed paths under data/, out/, and site/data/

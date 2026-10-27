@@ -32,6 +32,7 @@ PARCELS_GDB = paths.RAW_DIR / "hcad" / "extracted" / "Parcels.gdb"
 PARCELS_DIR = paths.DERIVED_DIR / "parcels"
 SCORES_DIR = paths.DERIVED_DIR / "scores"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
+LOCK_FILE = "publish.lock"
 
 
 def _storm_date(text: str) -> date:
@@ -261,14 +262,14 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _publish_pipeline(
+def _pipeline_doc(
     old_runs: list[dict],
     storm_dates: list[str],
     receipts: list[dict],
     file_count: int,
     run_time: datetime,
-) -> Path:
-    """Write pipeline.json: this run over the old runs, the archive coverage, and the sources.
+) -> dict:
+    """Build and validate the pipeline document: this run, the archive coverage, the sources.
 
     `storm_dates` are the dates of this run. `receipts` are the pairs and ZIP count receipts of
     every published storm date, so the sources cover the whole index and not this run alone.
@@ -283,21 +284,24 @@ def _publish_pipeline(
         publish.merge_runs(old_runs, run), summary, publish.sources_of(receipts), run_time
     )
     publish.validate(doc, "pipeline")
-    path = files.write_text_atomic(
-        publish.dumps(doc, "pipeline"), SITE_DATA_DIR / publish.PIPELINE_FILE
-    )
-    print(f"published {publish.PIPELINE_FILE} ({len(doc['runs'])} runs)")
-    return path
+    return doc
 
 
 def publish_days(storm_dates: list[date]) -> list[Path]:
     """Write the site data files per storm date, then the storms index, then the pipeline file.
 
-    A date without an SPC daily CSV is skipped. A date that fails a check writes no file and is
-    named in the final error. The index holds the dates of this run over the entries of the
-    earlier runs. A malformed storms.json or pipeline.json stops the run before any write; a
-    malformed per-date file of an earlier run stops it before the index write.
+    One run at a time: a second run that finds the lock file stops with exit 1. A date without
+    an SPC daily CSV is skipped. A date that fails a check writes no file and is named in the
+    final error. The index holds the dates of this run over the entries of the earlier runs.
+    A malformed storms.json or pipeline.json stops the run before any write. A malformed
+    per-date file of an earlier run, or a pipeline document that fails its schema, stops the
+    run before the index write.
     """
+    with files.lock(SITE_DATA_DIR / LOCK_FILE):
+        return _publish_days(storm_dates)
+
+
+def _publish_days(storm_dates: list[date]) -> list[Path]:
     selected = _swath_files(storm_dates)
     if not candidates.CANDIDATES_PATH.exists():
         raise FileNotFoundError(f"run hailprint candidates first: {candidates.CANDIDATES_PATH}")
@@ -358,10 +362,15 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
     receipts = publish.index_receipts(merged, SITE_DATA_DIR)
     doc = publish.storms_doc(merged, run_time)
     publish.validate(doc, "storms")
-    written.append(files.write_text_atomic(publish.dumps(doc, "storms"), index_path))
-    print(f"storms index: {len(doc['storms'])} entries")
     this_run = [entry["storm_date"] for entry in entries]
-    written.append(_publish_pipeline(old_runs, this_run, receipts, file_count, run_time))
+    pipeline = _pipeline_doc(old_runs, this_run, receipts, file_count, run_time)
+    # both documents pass validate and dumps before the first index write
+    index_text = publish.dumps(doc, "storms")
+    pipeline_text = publish.dumps(pipeline, "pipeline")
+    written.append(files.write_text_atomic(index_text, index_path))
+    print(f"storms index: {len(doc['storms'])} entries")
+    written.append(files.write_text_atomic(pipeline_text, pipeline_path))
+    print(f"published {publish.PIPELINE_FILE} ({len(pipeline['runs'])} runs)")
     print(f"confidence: {swath.CONFIDENCE}")
     if failed:
         raise ValueError(f"publish failed for: {', '.join(failed)}")
