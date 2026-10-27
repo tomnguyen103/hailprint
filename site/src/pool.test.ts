@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import type { Pairs, TableRow } from "./data/types";
+import type { Pairs, StormsIndex, TableRow } from "./data/types";
 import { pool, scoredCount, type PooledRow } from "./pool";
 import { rescore } from "./rescore";
 import { RULER } from "./ruler";
@@ -57,6 +57,7 @@ describe("pool", () => {
 
 const dataDir = fileURLToPath(new URL("../data/", import.meta.url));
 const goldenPath = join(dataDir, "pooled-golden.json");
+const indexPath = join(dataDir, "storms.json");
 
 interface Golden {
   radius_km_max: number;
@@ -71,6 +72,30 @@ function allPairs(): Pairs[] {
   const stormsDir = join(dataDir, "storms");
   return readdirSync(stormsDir).map((date) => readJson<Pairs>(join(stormsDir, date, "pairs.json")));
 }
+
+describe("pool over the published storm dates", () => {
+  it.skipIf(!existsSync(indexPath))("sums to the storms.json tables at the default radius", () => {
+    const index = readJson<StormsIndex>(indexPath);
+    const pairs = allPairs();
+    const radius = index.radius_km_default;
+    const rows = pool(
+      pairs.map((p) => rescore(p, radius)),
+      pairs.map((p) => scoredCount(p, radius)),
+    );
+    expect(rows).toHaveLength(RULER.length);
+    const scored = index.storms.reduce((acc, s) => acc + s.scored_reports, 0);
+    for (const row of rows) {
+      expect(row.report_count).toBe(scored);
+      for (const key of ["hits", "misses", "false_alarms", "correct_negatives"] as const) {
+        const want = index.storms.reduce(
+          (acc, s) => acc + (s.table.find((t) => t.threshold_mm === row.threshold_mm)?.[key] ?? Number.NaN),
+          0,
+        );
+        expect(row[key], `${row.threshold_mm} mm ${key}`).toBe(want);
+      }
+    }
+  });
+});
 
 describe("pool golden", () => {
   it.skipIf(!existsSync(goldenPath))("matches hailprint.score.pool at every whole radius", () => {

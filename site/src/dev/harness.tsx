@@ -12,6 +12,7 @@ const SCENARIOS = [
   "swath-error",
   "reports-error",
   "pairs-error",
+  "one-pairs-error",
   "zip-error",
 ] as const;
 type Scenario = (typeof SCENARIOS)[number];
@@ -27,6 +28,7 @@ const LABELS: Record<Scenario, string> = {
   "swath-error": "Swath error",
   "reports-error": "Reports error",
   "pairs-error": "Pairs error",
+  "one-pairs-error": "One pairs error",
   "zip-error": "ZIP error",
 };
 
@@ -46,11 +48,17 @@ function current(): Scenario {
 
 function fake(scenario: Scenario): typeof fetch {
   const failing = FAILING[scenario];
+  // "one-pairs-error" fails the first pairs.json the page asks for (the newest storm date) and no other.
+  let onePairs: string | null = null;
   return async (input, init) => {
     const url = String(input);
     const file = url.slice(url.lastIndexOf("/") + 1);
     if (scenario === "index-loading" && file === INDEX_FILE) return new Promise<never>(() => undefined);
     if (file === failing) return new Response(null, { status: 500 });
+    if (scenario === "one-pairs-error" && file === "pairs.json") {
+      onePairs ??= url;
+      if (url === onePairs) return new Response(null, { status: 500 });
+    }
     const response = await fetch(input, init);
     if (scenario === "index-empty" && file === INDEX_FILE) {
       const body = (await response.json()) as Record<string, unknown>;

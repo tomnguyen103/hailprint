@@ -37,10 +37,6 @@ export function App() {
     body = <EmptyState sentence="No page at this address." link={{ href: "/storms", label: "Storms" }} />;
   } else if (route.kind === "area") {
     body = <LaterArea area={route.area} />;
-  } else if (route.kind === "scorecard") {
-    body = <Scorecard view={route.view} />;
-  } else if (route.kind === "try") {
-    body = <TryIt tool={route.tool} />;
   } else if (index.status === "error") {
     body = <ErrorState error={index.error} onRetry={index.retry} />;
   } else if (index.status === "loading") {
@@ -49,6 +45,10 @@ export function App() {
     body = <EmptyState sentence={NO_INDEX} />;
   } else if (route.kind === "redirect-latest") {
     body = null;
+  } else if (route.kind === "scorecard") {
+    body = <Scorecard index={index.data} view={route.view} />;
+  } else if (route.kind === "try") {
+    body = <TryIt tool={route.tool} />;
   } else {
     const storm = storms.find((s) => s.storm_date === route.date);
     body = storm ? (

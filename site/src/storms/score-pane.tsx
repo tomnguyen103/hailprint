@@ -5,11 +5,12 @@ import { DataError, type Storm, type TableRow } from "../data/types";
 import { scoredCount } from "../pool";
 import { rescore } from "../rescore";
 import { RULER } from "../ruler";
+import { ContingencyGrid } from "../shell/contingency-grid";
 import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
-import { formatCount, formatInches, metricText } from "./select";
+import { formatInches, metricText } from "./select";
 
 const FILE = "pairs.json";
 const METRICS = ["pod", "far", "csi", "hss"] as const;
@@ -107,32 +108,5 @@ export function ScorePane({ storm, radiusKm: defaultRadiusKm }: { storm: Storm; 
       </section>
       {row ? <ContingencyGrid row={row} /> : null}
     </div>
-  );
-}
-
-/** A 2 by 2 grid for one class; each cell's square scales with its count. */
-function ContingencyGrid({ row }: { row: TableRow }) {
-  const cells = [
-    { label: "Hits", count: row.hits },
-    { label: "False alarms", count: row.false_alarms },
-    { label: "Misses", count: row.misses },
-    { label: "Correct negatives", count: row.correct_negatives },
-  ];
-  const max = Math.max(1, ...cells.map((c) => c.count));
-  return (
-    <section>
-      <h2>
-        Contingency grid, &ge; {formatInches(row.threshold_in)}
-      </h2>
-      <div class="cgrid" role="group" aria-label={`Contingency grid at ${formatInches(row.threshold_in)}`}>
-        {cells.map((cell) => (
-          <div key={cell.label} class="cgrid-cell">
-            <span class="cgrid-fill" style={{ "--k": Math.sqrt(cell.count / max) }} />
-            <span class="stat mono">{formatCount(cell.count)}</span>
-            <span class="cgrid-label">{cell.label}</span>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }

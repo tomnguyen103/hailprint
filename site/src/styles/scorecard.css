@@ -1,0 +1,16 @@
+/* Scorecard: the controls row and the class picker. The table and the grid reuse storms.css. */
+
+.scorecard-controls {
+  margin-top: 8px;
+}
+
+.class-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 24px;
+}
+
+.class-picker .class-pick {
+  margin: 0;
+}
