@@ -120,3 +120,41 @@ export interface ReportsFile extends FeatureCollection<Point, ReportProps> {
 export interface SwathFile extends FeatureCollection<MultiPolygon, SwathProps> {
   receipt: Receipt;
 }
+
+/** One `publish` run in the run log, newest first in `pipeline.json`. */
+export interface PipelineRun {
+  run_time: string;
+  package_version: string;
+  storm_dates: string[];
+  file_count: number;
+}
+
+export interface ArchiveYear {
+  year: number;
+  days: number;
+  days_with_12z: number;
+}
+
+/** Archive coverage from the archive index; null until `hailprint index` ran. */
+export interface ArchiveSummary {
+  days: number;
+  first_storm_date: string;
+  last_storm_date: string;
+  days_without_12z: number;
+  years: ArchiveYear[];
+}
+
+export interface SourceRow {
+  source: string;
+  product: string;
+  storm_dates: string[];
+}
+
+export interface PipelineFile {
+  confidence: string;
+  run_time: string;
+  package_version: string;
+  runs: PipelineRun[];
+  archive: ArchiveSummary | null;
+  sources: SourceRow[];
+}

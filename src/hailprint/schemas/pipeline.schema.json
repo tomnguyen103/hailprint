@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hailprint.invalid/schemas/pipeline.schema.json",
+  "title": "Pipeline file",
+  "description": "The run log newest first, the archive coverage from the archive index or null, and the sources of the published storm dates. File names only, never a directory.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["confidence", "run_time", "package_version", "runs", "archive", "sources"],
+  "$defs": {
+    "date": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "runTime": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$" },
+    "fileName": { "type": "string", "minLength": 1, "pattern": "^[^/\\\\]+$" }
+  },
+  "properties": {
+    "confidence": { "type": "string", "minLength": 1 },
+    "run_time": { "$ref": "#/$defs/runTime" },
+    "package_version": { "type": "string", "minLength": 1 },
+    "runs": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["run_time", "package_version", "storm_dates", "file_count"],
+        "properties": {
+          "run_time": { "$ref": "#/$defs/runTime" },
+          "package_version": { "type": "string", "minLength": 1 },
+          "storm_dates": { "type": "array", "items": { "$ref": "#/$defs/date" } },
+          "file_count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "archive": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["days", "first_storm_date", "last_storm_date", "days_without_12z", "years"],
+          "properties": {
+            "days": { "type": "integer", "minimum": 0 },
+            "first_storm_date": { "$ref": "#/$defs/date" },
+            "last_storm_date": { "$ref": "#/$defs/date" },
+            "days_without_12z": { "type": "integer", "minimum": 0 },
+            "years": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["year", "days", "days_with_12z"],
+                "properties": {
+                  "year": { "type": "integer", "minimum": 1900 },
+                  "days": { "type": "integer", "minimum": 0 },
+                  "days_with_12z": { "type": "integer", "minimum": 0 }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "product", "storm_dates"],
+        "properties": {
+          "source": { "$ref": "#/$defs/fileName" },
+          "product": { "$ref": "#/$defs/fileName" },
+          "storm_dates": { "type": "array", "items": { "$ref": "#/$defs/date" } }
+        }
+      }
+    }
+  }
+}

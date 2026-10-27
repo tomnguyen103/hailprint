@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { guardIndex, guardOutline, guardPairs, guardReports, guardSwath, guardZipCounts } from "./guard";
+import { GEOJSON_PATH, JSON_PATH, MAX_RUNS, guardIndex, guardOutline, guardPairs, guardPipeline, guardReports, guardSwath, guardZipCounts } from "./guard";
 import { DataError } from "./types";
 
 const receipt = {
@@ -73,6 +75,26 @@ const swath = {
       geometry: { type: "MultiPolygon", coordinates: [] },
     },
   ],
+};
+
+const run = { run_time: receipt.run_time, package_version: "0.1.0", storm_dates: ["2024-05-28"], file_count: 4 };
+
+const pipeline = {
+  confidence: receipt.confidence,
+  run_time: receipt.run_time,
+  package_version: receipt.package_version,
+  runs: [run],
+  archive: {
+    days: 3,
+    first_storm_date: "2023-06-23",
+    last_storm_date: "2024-05-28",
+    days_without_12z: 1,
+    years: [
+      { year: 2023, days: 1, days_with_12z: 1 },
+      { year: 2024, days: 2, days_with_12z: 1 },
+    ],
+  },
+  sources: [{ source: "noaa-mrms-pds", product: "MESH_Max_1440min_00.50", storm_dates: ["2024-05-28"] }],
 };
 
 /** A deep copy with the dotted `path` deleted. */
@@ -184,6 +206,35 @@ const cases: [string, string, (value: unknown) => unknown, unknown, string[]][] 
     swath,
     ["receipt", "features", "features.0.properties", "features.0.properties.threshold_mm", "features.0.properties.threshold_in", "features.0.geometry"],
   ],
+  [
+    "guardPipeline",
+    "pipeline.json",
+    guardPipeline,
+    pipeline,
+    [
+      "confidence",
+      "run_time",
+      "package_version",
+      "runs",
+      "runs.0.run_time",
+      "runs.0.package_version",
+      "runs.0.storm_dates",
+      "runs.0.file_count",
+      "archive",
+      "archive.days",
+      "archive.first_storm_date",
+      "archive.last_storm_date",
+      "archive.days_without_12z",
+      "archive.years",
+      "archive.years.0.year",
+      "archive.years.0.days",
+      "archive.years.0.days_with_12z",
+      "sources",
+      "sources.0.source",
+      "sources.0.product",
+      "sources.0.storm_dates",
+    ],
+  ],
 ];
 
 describe.each(cases)("%s", (_name, file, guard, good, paths) => {
@@ -210,6 +261,36 @@ describe("guardIndex", () => {
     const files = { ...storm.files, zip_counts: null };
     expect(guardIndex({ ...index, storms: [{ ...storm, files }] }).storms[0]!.files.zip_counts).toBeNull();
   });
+  it("accepts the file paths that storms.schema.json accepts and rejects the ones it rejects", () => {
+    const schemaPath = fileURLToPath(new URL("../../../src/hailprint/schemas/storms.schema.json", import.meta.url));
+    const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as { $defs: Record<string, { pattern: string }> };
+    const geojson = new RegExp(schema.$defs["geojson_file"]!.pattern);
+    const json = new RegExp(schema.$defs["json_file"]!.pattern);
+    const cases: [RegExp, RegExp, string[]][] = [
+      [GEOJSON_PATH, geojson, ["storms/2024-05-28/swath.geojson", "storms/2024-05-28/reports.geojson"]],
+      [JSON_PATH, json, ["storms/2024-05-28/pairs.json", "storms/2024-05-28/zip-counts.json"]],
+    ];
+    const bad = [
+      "storms/x/pairs.json",
+      "../secret.json",
+      "storms/2024-05-28/pairs.txt",
+      "storms/2024-05-28/swath.json",
+      "storms/2024-05-28/pairs.geojson",
+    ];
+    for (const [ours, theirs, good] of cases) {
+      for (const path of good) {
+        expect(ours.test(path)).toBe(true);
+        expect(theirs.test(path)).toBe(true);
+      }
+      for (const path of bad) expect(ours.test(path)).toBe(theirs.test(path));
+      expect(ours.test("../secret.json")).toBe(false);
+      expect(ours.test("storms/x/pairs.json")).toBe(false);
+    }
+  });
+  it("rejects a pairs path with the geojson extension", () => {
+    const files = { ...storm.files, pairs: "storms/2024-05-28/pairs.geojson" };
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, files }] })).toThrow(/files\.pairs/);
+  });
 });
 
 describe("guardPairs", () => {
@@ -235,6 +316,43 @@ describe("guardSwath", () => {
     expect(() => guardSwath({ ...swath, features: [feature] })).toThrow(
       /swath\.geojson: features\[0\]\.geometry\.type is not MultiPolygon/,
     );
+  });
+});
+
+describe("guardPipeline", () => {
+  it("rejects more than 50 runs", () => {
+    const runs = Array.from({ length: 51 }, () => run);
+    expect(() => guardPipeline({ ...pipeline, runs })).toThrow(/^pipeline\.json: runs has 51 entries/);
+  });
+  it("rejects a storm date that is not a date", () => {
+    const runs = [{ ...run, storm_dates: ["yesterday"] }];
+    expect(() => guardPipeline({ ...pipeline, runs })).toThrow(/^pipeline\.json: runs\[0\]\.storm_dates\[0\] is not a date/);
+  });
+  it("rejects a negative file count", () => {
+    const runs = [{ ...run, file_count: -1 }];
+    expect(() => guardPipeline({ ...pipeline, runs })).toThrow(/^pipeline\.json: runs\[0\]\.file_count is not a count/);
+  });
+  it("rejects a run_time that is not UTC to the second", () => {
+    expect(() => guardPipeline({ ...pipeline, run_time: "2026-10-26T23:02:33.123Z" })).toThrow(
+      /^pipeline\.json: run_time is not a run time/,
+    );
+    const runs = [{ ...run, run_time: "yesterday" }];
+    expect(() => guardPipeline({ ...pipeline, runs })).toThrow(/^pipeline\.json: runs\[0\]\.run_time is not a run time/);
+  });
+  it("rejects a negative or fractional archive count", () => {
+    const negative = { ...pipeline, archive: { ...pipeline.archive, days: -1 } };
+    expect(() => guardPipeline(negative)).toThrow(/^pipeline\.json: archive\.days is not a count/);
+    const fractional = { ...pipeline, archive: { ...pipeline.archive, years: [{ year: 2024, days: 1.5, days_with_12z: 1 }] } };
+    expect(() => guardPipeline(fractional)).toThrow(/^pipeline\.json: archive\.years\[0\]\.days is not a count/);
+  });
+  it("caps the runs where pipeline.schema.json does", () => {
+    const schemaPath = fileURLToPath(new URL("../../../src/hailprint/schemas/pipeline.schema.json", import.meta.url));
+    const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as { properties: { runs: { maxItems: number } } };
+    expect(schema.properties.runs.maxItems).toBe(MAX_RUNS);
+  });
+  it("rejects a document without the archive key and accepts archive null", () => {
+    expect(() => guardPipeline(without(pipeline, "archive"))).toThrow(/^pipeline\.json: archive/);
+    expect(guardPipeline({ ...pipeline, archive: null }).archive).toBeNull();
   });
 });
 

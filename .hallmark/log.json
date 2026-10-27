@@ -24,5 +24,18 @@
     },
     "slop_test": "pass",
     "notes": "One series per chart, no legend, y 0..1, x over the seven thresholds in inches, dashed literature line on HSS only. Native range for every slider and the swipe. Receipt chip on every table and metric row."
+  },
+  {
+    "date": "2026-10-27",
+    "surface": "Method and Pipeline",
+    "design_md": ".scratch/portfolio-v5/design.md",
+    "archetype": "editor + monitoring",
+    "macrostructure": "same shell: top bar and scope sidebar; Method: page list in the sidebar, one 680 px reading column of typed blocks with one signature figure per page; Pipeline: services with a presence dot in the sidebar, sub-tabs, pane with the run log, the coverage table, or the source list",
+    "detector": {
+      "command": "node ~/.claude/skills/impeccable/scripts/detect.mjs --json site/index.html site/src",
+      "exit": 0
+    },
+    "slop_test": "pass",
+    "notes": "No KPI card row, no eyebrow labels, no gradient text, no icon-card grid, no nested card. Prose under the 120-word fold and 25-word sentence budget by test. Native range for the guess slider. Share bar capped at 96 px inside its cell. Mono only on dates, numbers, versions, and code."
   }
 ]

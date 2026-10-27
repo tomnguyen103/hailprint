@@ -1,0 +1,139 @@
+/* Method: the editor archetype. The page tree is the scope sidebar; the main column is a 680 px reading canvas. */
+
+.reading {
+  max-width: 680px;
+}
+
+.reading-title {
+  margin: 0 0 24px;
+  font-weight: 500;
+}
+
+.reading h2 {
+  margin: 32px 0 12px;
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.reading p,
+.reading li {
+  max-width: 68ch;
+  line-height: 1.6;
+}
+
+.reading p {
+  margin: 0 0 16px;
+}
+
+.reading ul {
+  margin: 0 0 16px;
+  padding-left: 20px;
+}
+
+.reading li + li {
+  margin-top: 6px;
+}
+
+.reading .caveat {
+  display: inline-block;
+  margin-top: 8px;
+}
+
+.figure {
+  margin: 24px 0 28px;
+}
+
+.figure .cgrid {
+  max-width: 360px;
+}
+
+.figure .state {
+  padding: 0;
+}
+
+/* Signature figures */
+
+.stamp-figure {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.stamp-hours {
+  display: flex;
+  justify-content: space-between;
+  width: calc(24 * 9px - 2px);
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+}
+
+.ruler-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ruler-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.ruler-row .ruler-mark {
+  border-color: var(--rule);
+}
+
+/* Guess-then-reveal: class row, one native range, one button, three mono values after Reveal */
+
+.guess {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+}
+
+.guess-classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.guess-classes .class-pick {
+  margin: 0;
+}
+
+.guess .radius-slider {
+  width: 100%;
+}
+
+.guess-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  margin: 0;
+}
+
+.guess-row dt {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.guess-row dd {
+  margin: 2px 0 0;
+  font-size: 1.25rem;
+}
+
+/* Page tree: flat list, no year groups */
+
+.method .scope-list a {
+  padding-left: 8px;
+}
+
+@media (max-width: 767px) {
+  .stamp-hours {
+    width: 100%;
+  }
+}

@@ -36,6 +36,10 @@ ZIPS_FILE = "zip-counts.json"
 METADATA_KEYS = tuple(METADATA)
 SPC_PRODUCT = "preliminary hail reports"
 HCAD_PRODUCT = "Parcels.gdb"
+PIPELINE_FILE = "pipeline.json"
+MAX_RUNS = 50
+# The index entry file keys that carry a receipt the sources table reads, with their schema kind.
+RECEIPT_FILES = (("pairs", "pairs"), ("zip_counts", "zip-counts"))
 
 
 @cache
@@ -316,14 +320,112 @@ def storms_doc(entries: list[Doc], run_time: datetime) -> Doc:
 def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
     """The old entries with the new entries over them by storm date.
 
-    An entry stays only while its swath, reports, and pairs files exist under `data_dir`.
+    An entry stays only while its swath, reports, and pairs files exist under `data_dir`. An
+    entry whose ZIP count file is gone loses `zip_counts` and `parcel_total`.
     """
     # shortcut: an entry stays until its directory vanishes, upgrade when a prune command is needed
     merged = {e["storm_date"]: e for e in old} | {e["storm_date"]: e for e in new}
     required = ("swath", "reports", "pairs")
-    return [
+    kept = [
         e for e in merged.values() if all((data_dir / e["files"][k]).exists() for k in required)
     ]
+    return [
+        e
+        if not e["files"]["zip_counts"] or (data_dir / e["files"]["zip_counts"]).exists()
+        else e | {"parcel_total": None, "files": e["files"] | {"zip_counts": None}}
+        for e in kept
+    ]
+
+
+def read_published(path: Path, kind: str) -> Doc:
+    """Read one published file and check it against its schema; a bad file raises ValueError."""
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError(f"{path}: not valid JSON, delete it or fix it") from exc
+    try:
+        validate(doc, kind)
+    except ValueError as exc:
+        raise ValueError(f"{path}: {exc}") from None
+    return doc
+
+
+def index_receipts(entries: list[Doc], data_dir: Path) -> list[Doc]:
+    """The pairs and ZIP count receipts of every index entry, read from `data_dir`."""
+    return [
+        read_published(data_dir / e["files"][key], kind)["receipt"]
+        for e in entries
+        for key, kind in RECEIPT_FILES
+        if e["files"][key]
+    ]
+
+
+def archive_summary(frame: pd.DataFrame) -> Doc | None:
+    """Archive coverage from the archive index, or None for an index with no rows."""
+    if frame.empty:
+        return None
+    days = [
+        (pd.Timestamp(d).date(), bool(z))
+        for d, z in zip(frame["storm_date"], frame["has_12z"], strict=True)
+    ]
+    years = sorted({d.year for d, _ in days})
+    return {
+        "days": len(days),
+        "first_storm_date": min(d for d, _ in days).isoformat(),
+        "last_storm_date": max(d for d, _ in days).isoformat(),
+        "days_without_12z": sum(1 for _, z in days if not z),
+        "years": [
+            {
+                "year": year,
+                "days": sum(1 for d, _ in days if d.year == year),
+                "days_with_12z": sum(1 for d, z in days if d.year == year and z),
+            }
+            for year in years
+        ],
+    }
+
+
+def sources_of(receipts: list[Doc]) -> list[Doc]:
+    """One row per (source, product) over the receipts, with the storm dates sorted."""
+    dates: dict[tuple[str, str], set[str]] = {}
+    for rcpt in receipts:
+        for entry in rcpt["sources"]:
+            dates.setdefault((entry["source"], entry["product"]), set()).add(rcpt["storm_date"])
+    return [
+        {"source": source, "product": product, "storm_dates": sorted(dates[source, product])}
+        for source, product in sorted(dates)
+    ]
+
+
+def merge_runs(old: list[Doc], new: Doc) -> list[Doc]:
+    """The old runs with the new run over them, newest first, at most 50."""
+    # shortcut: merge_runs dedupes by run_time only, upgrade to a run id when two hosts publish
+    kept = [run for run in old if run["run_time"] != new["run_time"]]
+    return sorted([new, *kept], key=lambda run: run["run_time"], reverse=True)[:MAX_RUNS]
+
+
+def run_entry(storm_dates: list[str], file_count: int, run_time: datetime) -> Doc:
+    """One run log row: the run time, the package version, the storm dates, the file count."""
+    return {
+        "run_time": _utc_text(run_time),
+        "package_version": version("hailprint"),
+        "storm_dates": storm_dates,
+        "file_count": file_count,
+    }
+
+
+def pipeline_doc(
+    runs: list[Doc], archive: Doc | None, sources: list[Doc], run_time: datetime
+) -> Doc:
+    """The pipeline file: the run log, the archive coverage or null, and the sources."""
+    return {
+        "confidence": swath.CONFIDENCE,
+        "run_time": _utc_text(run_time),
+        "package_version": version("hailprint"),
+        "runs": runs,
+        "archive": archive,
+        "sources": sources,
+    }
 
 
 def swath_source(path: Path) -> tuple[Doc, float | None]:

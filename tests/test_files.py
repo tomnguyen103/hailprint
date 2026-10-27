@@ -1,3 +1,5 @@
+import os
+
 import geopandas as gpd
 import pandas as pd
 import pyarrow.parquet as pq
@@ -100,3 +102,18 @@ def test_write_text_atomic_writes_utf8_and_keeps_the_old_file_on_failure(tmp_pat
     monkeypatch.undo()
     assert path.read_bytes() == b"one\r\n"
     assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_lock_refuses_a_second_holder_and_is_gone_after_an_exception(tmp_path):
+    path = tmp_path / "a" / "publish.lock"
+
+    with pytest.raises(OSError, match="disk full"):
+        with files.lock(path):
+            assert path.read_text(encoding="utf-8") == str(os.getpid())
+            with pytest.raises(RuntimeError, match="another run"):
+                with files.lock(path):
+                    pass
+            assert path.exists()
+            raise OSError("disk full")
+
+    assert not path.exists()

@@ -81,14 +81,18 @@
             "additionalProperties": false,
             "required": ["swath", "reports", "pairs", "zip_counts"],
             "properties": {
-              "swath": { "type": "string", "minLength": 1 },
-              "reports": { "type": "string", "minLength": 1 },
-              "pairs": { "type": "string", "minLength": 1 },
-              "zip_counts": { "type": ["string", "null"], "minLength": 1 }
+              "swath": { "$ref": "#/$defs/geojson_file" },
+              "reports": { "$ref": "#/$defs/geojson_file" },
+              "pairs": { "$ref": "#/$defs/json_file" },
+              "zip_counts": { "oneOf": [{ "$ref": "#/$defs/json_file" }, { "type": "null" }] }
             }
           }
         }
       }
     }
+  },
+  "$defs": {
+    "geojson_file": { "type": "string", "pattern": "^storms/\\d{4}-\\d{2}-\\d{2}/[a-z-]+\\.geojson$" },
+    "json_file": { "type": "string", "pattern": "^storms/\\d{4}-\\d{2}-\\d{2}/[a-z-]+\\.json$" }
   }
 }

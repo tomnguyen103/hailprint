@@ -1,6 +1,7 @@
 import type { Storm } from "../data/types";
 import { href } from "../router";
 import { Link } from "../shell/link";
+import { ScopeDrawer } from "../shell/scope-drawer";
 import { groupByYear } from "./select";
 
 interface Props {
@@ -18,15 +19,7 @@ export function ScopeSidebar({ storms, current, open, onClose }: Props) {
   const groups = groupByYear(storms);
   const newestYear = groups[0]?.year;
   return (
-    <>
-      {open ? <button type="button" class="scope-backdrop" aria-label="Close storm dates" onClick={onClose} /> : null}
-      <nav class="scope" aria-label="Storm dates" data-open={open}>
-        <div class="scope-head">
-          <span class="section-label">Storm dates</span>
-          <button type="button" class="button button-small scope-close" onClick={onClose}>
-            Close
-          </button>
-        </div>
+    <ScopeDrawer label="Storm dates" title="Storm dates" open={open} onClose={onClose}>
         {/* shortcut: year groups do not persist their open state, upgrade when the list passes a few years */}
         {groups.map((group) => (
           <details key={group.year} open={group.year === newestYear || group.year === current.storm_date.slice(0, 4)}>
@@ -53,7 +46,6 @@ export function ScopeSidebar({ storms, current, open, onClose }: Props) {
             </ul>
           </details>
         ))}
-      </nav>
-    </>
+    </ScopeDrawer>
   );
 }
