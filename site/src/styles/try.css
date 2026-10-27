@@ -120,6 +120,37 @@
   margin-bottom: 24px;
 }
 
+/* Run it yourself */
+
+.command-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.command-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.command-row + .command-row {
+  margin-top: 8px;
+}
+
+.command-row .code-block {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.csv-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin: 0;
+}
+
 /* Swipe compare: two maps in one frame, B clipped at the split, one native range as the swipe bar. */
 
 .compare-stage {

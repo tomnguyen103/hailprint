@@ -12,6 +12,12 @@ npm run check    # tsc --noEmit && vitest run && vite build
 
 `make site` at the repo root runs `npm ci` and `npm run check`.
 
+## Routes
+
+`/storms/<date>/map|parcels|score|data`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`,
+`/method`, `/pipeline`. `/` redirects to the newest storm date, `/scorecard` opens the Table view, and
+`/try` opens the Tune tool.
+
 ## Data
 
 `uv run hailprint publish` at the repo root writes `site/data/storms.json` and one folder per

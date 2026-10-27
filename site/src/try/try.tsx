@@ -9,6 +9,7 @@ import { SubTabs } from "../shell/sub-tabs";
 import { useAllFiles } from "../state/pairs-all";
 import { Compare } from "./compare";
 import { PointCheck } from "./point";
+import { Run } from "./run";
 import { Tune } from "./tune";
 
 export const TOOL_LABELS: Record<TryTool, string> = {
@@ -90,6 +91,7 @@ export function TryIt({ index, tool }: { index: StormsIndex; tool: TryTool }) {
         {tool === "tune" ? <Tune index={index} /> : null}
         {tool === "point" ? <PointCheck index={index} /> : null}
         {tool === "compare" ? <Compare index={index} /> : null}
+        {tool === "run" ? <Run index={index} /> : null}
       </section>
     </>
   );
