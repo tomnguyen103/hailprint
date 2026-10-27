@@ -54,6 +54,16 @@ export function writeStep(date: string, step: number, ports: WritePorts): boolea
   return true;
 }
 
+export interface Held {
+  date: string;
+  step: number;
+}
+
+/** The step to show. A held move counts only on the storm date it was made on, so a storm switch never shows it. */
+export function shownStep(held: Held | null, date: string, routeStep: number): number {
+  return held !== null && held.date === date ? held.step : routeStep;
+}
+
 export interface StepState {
   /** The step the user moved to and the path does not hold yet. */
   pending: number | null;
@@ -78,14 +88,17 @@ export function reconcile(state: StepState, routeStep: number): StepState & { ca
 export function useStep(date: string): { step: number; setStep: (next: number) => void } {
   const { route } = useRoute();
   const routeStep = resolveStep(route.kind === "storms" ? route.step : null);
-  const [pending, setPending] = useState<number | null>(null);
+  const [held, setHeld] = useState<Held | null>(null);
   // The effect reads refs: a move can land between a render and its effect, and state would be stale there.
   const pendingRef = useRef<number | null>(null);
   const written = useRef<number | null>(null);
-  const hold = useCallback((next: number | null) => {
-    pendingRef.current = next;
-    setPending(next);
-  }, []);
+  const hold = useCallback(
+    (next: number | null) => {
+      pendingRef.current = next;
+      setHeld(next === null ? null : { date, step: next });
+    },
+    [date],
+  );
   const writer = useMemo(
     () =>
       createWriter({
@@ -116,5 +129,5 @@ export function useStep(date: string): { step: number; setStep: (next: number) =
     },
     [writer, hold],
   );
-  return { step: pending ?? routeStep, setStep };
+  return { step: shownStep(held, date, routeStep), setStep };
 }

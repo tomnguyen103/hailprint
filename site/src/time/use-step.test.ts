@@ -1,5 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WRITE_MS, createWriter, reconcile, writeStep } from "./use-step";
+import { WRITE_MS, createWriter, reconcile, shownStep, writeStep } from "./use-step";
+
+describe("shownStep", () => {
+  it("shows the held move on its own storm date", () => {
+    expect(shownStep({ date: "2024-05-28", step: 40 }, "2024-05-28", 0)).toBe(40);
+  });
+
+  it("shows the path step when the storm date changed under a held move", () => {
+    expect(shownStep({ date: "2024-05-28", step: 40 }, "2024-06-01", 7)).toBe(7);
+  });
+
+  it("shows the path step with no held move", () => {
+    expect(shownStep(null, "2024-05-28", 12)).toBe(12);
+  });
+});
 
 describe("writeStep", () => {
   const DATE = "2024-05-28";
