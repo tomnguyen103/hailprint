@@ -48,7 +48,7 @@ export function App() {
   } else if (route.kind === "scorecard") {
     body = <Scorecard index={index.data} view={route.view} />;
   } else if (route.kind === "try") {
-    body = <TryIt tool={route.tool} />;
+    body = <TryIt index={index.data} tool={route.tool} />;
   } else {
     const storm = storms.find((s) => s.storm_date === route.date);
     body = storm ? (

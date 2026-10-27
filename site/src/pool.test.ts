@@ -49,6 +49,17 @@ describe("pool", () => {
     expect(row.unverifiable_km2).toBe(0.5);
   });
 
+  it("keeps the counts of one table and takes its report count", () => {
+    const only = table(5, 2, 3, 7)[0]!;
+    const rows = pool([[only]], [17]);
+    expect(rows).toHaveLength(1);
+    const row = rows[0]!;
+    expect(row.report_count).toBe(17);
+    expect([row.hits, row.misses, row.false_alarms, row.correct_negatives]).toEqual([5, 2, 3, 7]);
+    expect(row.swath_km2).toBe(only.swath_km2);
+    expect(row.pod).toBeCloseTo(5 / 7, 12);
+  });
+
   it("refuses zero tables and a report count list of another length", () => {
     expect(() => pool([], [])).toThrow(RangeError);
     expect(() => pool([table(1, 0, 0, 0)], [])).toThrow(RangeError);
