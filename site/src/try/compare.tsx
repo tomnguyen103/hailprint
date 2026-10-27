@@ -4,7 +4,7 @@ import { fetchCounty } from "../county";
 import { guardSwath } from "../data/guard";
 import { DataError, type StormsIndex, type SwathFile } from "../data/types";
 import { ErrorState, LoadingState } from "../shell/states";
-import { useLoad } from "../state/load";
+import { type Load, useLoad } from "../state/load";
 import { useAllFiles } from "../state/pairs-all";
 import { useTheme } from "../state/theme";
 import type { MapHandle } from "../storms/map/create-map";
@@ -56,16 +56,18 @@ function useMap(theme: Theme) {
 }
 
 /** One side of the compare: the date's swath through the shared file cache, drawn on its own map. */
-function useSide(index: StormsIndex, date: string, theme: Theme, county: FeatureCollection<MultiPolygon> | null) {
+function useSide(index: StormsIndex, date: string, theme: Theme, county: Load<FeatureCollection<MultiPolygon>> & { retry: () => void }) {
   const storm = index.storms.find((s) => s.storm_date === date);
   const load = useAllFiles<SwathFile>(storm ? [storm.files.swath] : [], guardSwath);
   const swath = load.status === "ready" ? (load.data[0] ?? null) : null;
+  const countyData = county.status === "ready" ? county.data : null;
   const map = useMap(theme);
   useEffect(() => {
-    if (map.ready) map.handle.current?.setData(swath, null, county);
-  }, [map.ready, swath, county]);
-  const error = map.error ?? (load.status === "error" ? load.error : null);
-  const retry = map.error ? map.retry : load.retry;
+    if (map.ready) map.handle.current?.setData(swath, null, countyData);
+  }, [map.ready, swath, countyData]);
+  const failed = load.status === "error" ? load : county.status === "error" ? county : null;
+  const error = map.error ?? failed?.error ?? null;
+  const retry = map.error ? map.retry : failed ? failed.retry : load.retry;
   return { ...map, error, retry, loading: load.status !== "ready" && load.status !== "error" && load.showLoading };
 }
 
@@ -76,9 +78,8 @@ export function Compare({ index }: { index: StormsIndex }) {
   const [split, setSplit] = useState(50);
   const { resolved: theme } = useTheme();
   const county = useLoad("county", fetchCounty);
-  const countyData = county.status === "ready" ? county.data : null;
-  const a = useSide(index, dateA, theme, countyData);
-  const b = useSide(index, dateB, theme, countyData);
+  const a = useSide(index, dateA, theme, county);
+  const b = useSide(index, dateB, theme, county);
   const swipeId = useId();
 
   // Each pan on one map moves the other once; the flag stops the echo from the second map's own move event.
@@ -97,6 +98,7 @@ export function Compare({ index }: { index: StormsIndex }) {
     const bToA = follow(mapB, mapA);
     mapA.on("move", aToB);
     mapB.on("move", bToA);
+    aToB(); // copy A's camera once, so B matches before the first pan
     return () => {
       mapA.off("move", aToB);
       mapB.off("move", bToA);

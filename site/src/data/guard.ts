@@ -150,6 +150,7 @@ export function guardSwath(value: unknown): SwathFile {
   guardReceipt(file, rec(file, value, "collection")["receipt"]);
   guardCollection(file, value).forEach((props, i) => {
     num(file, props["threshold_mm"], `features[${i}].properties.threshold_mm`);
+    num(file, props["threshold_in"], `features[${i}].properties.threshold_in`);
   });
   list(file, rec(file, value, "collection")["features"], "features").forEach((item, i) => {
     const geometry = rec(file, rec(file, item, `features[${i}]`)["geometry"], `features[${i}].geometry`);

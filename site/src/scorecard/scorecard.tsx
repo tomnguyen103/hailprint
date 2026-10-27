@@ -5,7 +5,7 @@ import type { MetricKey } from "../format";
 import { pooledRows } from "../pool";
 import { SCORECARD_VIEWS, href, type ScorecardView } from "../router";
 import { RULER } from "../ruler";
-import { RadiusSlider } from "../shell/radius-slider";
+import { RADIUS_MAX_FALLBACK, RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState, PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
@@ -69,11 +69,9 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
           )}
         </p>
       </PageHeader>
-      {data !== null && data[0] !== undefined ? (
-        <div class="scorecard-controls">
-          <RadiusSlider value={radius} max={data[0].radius_km_max} onChange={setRadius} />
-        </div>
-      ) : null}
+      <div class="scorecard-controls">
+        <RadiusSlider value={radius} max={data?.[0]?.radius_km_max ?? RADIUS_MAX_FALLBACK} onChange={setRadius} />
+      </div>
       <SubTabs
         label="Scorecard views"
         tabs={SCORECARD_VIEWS.map((v) => ({ id: v, label: VIEW_LABELS[v], href: href({ area: "scorecard", view: v }) }))}

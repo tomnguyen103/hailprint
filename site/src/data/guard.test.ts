@@ -182,7 +182,7 @@ const cases: [string, string, (value: unknown) => unknown, unknown, string[]][] 
     "swath.geojson",
     guardSwath,
     swath,
-    ["receipt", "features", "features.0.properties", "features.0.properties.threshold_mm", "features.0.geometry"],
+    ["receipt", "features", "features.0.properties", "features.0.properties.threshold_mm", "features.0.properties.threshold_in", "features.0.geometry"],
   ],
 ];
 

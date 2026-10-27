@@ -5,6 +5,7 @@ import { useLoad } from "./load";
 
 // One promise per published path for the page session. A rejected path leaves the cache,
 // so Retry refetches the failed files only.
+// shortcut: a file that passes its guard but fails a later step (rescore) stays cached, evict on that failure when guardPairs checks the per-class array lengths
 const cache = new Map<string, Promise<unknown>>();
 
 function cached<T>(path: string, guard: (value: unknown) => T): Promise<T> {

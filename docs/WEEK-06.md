@@ -27,7 +27,7 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 | Item | Value |
 |---|---|
 | Storm dates served | 25, from the week-4 `site/data/` |
-| Site tests | 143 passed in 15 vitest files (pool, curve, point-form, csv, geo, router, rescore, guards, stamp, ruler, theme, county, select, sub-tabs, format) |
+| Site tests | 144 passed in 15 vitest files (pool, curve, point-form, csv, geo, router, rescore, guards, stamp, ruler, theme, county, select, sub-tabs, format) |
 | Python tests | 302 passed; ruff, format, and pyright clean, 2026-10-26 |
 | Type check | `tsc --noEmit` clean under `strict` with `noUncheckedIndexedAccess` |
 | Impeccable detector | exit 0, `[]` findings on `site/index.html` and `site/src` |

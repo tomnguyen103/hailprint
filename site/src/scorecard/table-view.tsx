@@ -25,7 +25,7 @@ export function TableView({
         <thead>
           <tr>
             <th scope="col">Size class</th>
-            <th scope="col" class="num">Reports</th>
+            <th scope="col" class="num">Scored reports</th>
             <th scope="col" class="num">Hits</th>
             <th scope="col" class="num">Misses</th>
             <th scope="col" class="num">False alarms</th>

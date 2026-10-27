@@ -13,11 +13,11 @@ import { ScopeSelect, newestFirst } from "./try";
 const PAIRS_FILE = "pairs.json";
 const COPIED_MS = 1500;
 
-function commandsFor(date: string): string[] {
+function commandsFor(date: string, radius: number): string[] {
   return [
     `uv run hailprint ingest ${date}`,
     `uv run hailprint parcels ${date}`,
-    "uv run hailprint score --radius-km 5",
+    `uv run hailprint score --radius-km ${radius}`,
     "uv run hailprint publish",
     "cd site && npm run dev",
   ];
@@ -67,7 +67,8 @@ export function Run({ index }: { index: StormsIndex }) {
     a.href = url;
     a.download = `score-${date}-R${radius}.csv`;
     a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    // Revoke after the click has started the download; 0 ms races the fetch in some browsers.
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const files: [string, string | null][] = storm
@@ -88,7 +89,7 @@ export function Run({ index }: { index: StormsIndex }) {
         <section>
           <h2>Commands</h2>
           <ol class="command-list">
-            {commandsFor(date).map((text, i) => (
+            {commandsFor(date, index.radius_km_default).map((text, i) => (
               <li key={text} class="command-row">
                 <pre class="code-block">
                   <code

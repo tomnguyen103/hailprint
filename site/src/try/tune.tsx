@@ -5,13 +5,11 @@ import { METRICS, METRIC_LABELS, type MetricKey } from "../format";
 import { MetricText } from "../scorecard/metric-text";
 import { ThresholdCurve } from "../scorecard/threshold-curve";
 import { ContingencyGrid } from "../shell/contingency-grid";
-import { RadiusSlider } from "../shell/radius-slider";
+import { RADIUS_MAX_FALLBACK, RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { ALL_SCOPE, ScopeSelect, useScopeRows } from "./try";
 
-// shortcut: 20 km stands in for radius_km_max until the first pairs.json arrives, upgrade when storms.json carries it
-const RADIUS_MAX_FALLBACK = 20;
 const DEFAULT_CLASS = 1; // quarter, 1.00 in
 
 export function Tune({ index }: { index: StormsIndex }) {
