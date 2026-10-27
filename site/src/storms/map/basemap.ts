@@ -1,4 +1,5 @@
 // The optional Protomaps basemap. Present: layers in the token colours. Absent: paper.
+// shortcut: one local PMTiles file found by a HEAD probe, upgrade to a hosted tile source when every deploy needs a basemap.
 import { layers, namedFlavor } from "@protomaps/basemaps";
 import type { LayerSpecification } from "maplibre-gl";
 import { type Theme, token } from "./layers";

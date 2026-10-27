@@ -86,7 +86,9 @@ export function guardPairs(value: unknown): Pairs {
     const cls = rec(file, item, at);
     for (const key of ["threshold_mm", "threshold_in", "swath_km2"]) num(file, cls[key], `${at}.${key}`);
     str(file, cls["label"], `${at}.label`);
-    list(file, cls["unverifiable_km2"], `${at}.unverifiable_km2`);
+    list(file, cls["unverifiable_km2"], `${at}.unverifiable_km2`).forEach((v, j) =>
+      num(file, v, `${at}.unverifiable_km2[${j}]`),
+    );
   });
   list(file, root["reports"], "reports").forEach((item, i) => {
     const at = `reports[${i}]`;
@@ -96,6 +98,7 @@ export function guardPairs(value: unknown): Pairs {
     if (dist.length !== classes.length) {
       throw new DataError(file, `${at}.dist_m has ${dist.length} entries for ${classes.length} classes`);
     }
+    dist.forEach((v, j) => numOrNull(file, v, `${at}.dist_m[${j}]`));
   });
   return value as Pairs;
 }

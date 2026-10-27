@@ -92,6 +92,10 @@ export function MapPane({ storm, reports }: Props) {
   useEffect(() => {
     if (ready) handle.current?.setTheme(theme);
   }, [ready, theme]);
+  useEffect(() => {
+    if (!ready || !handle.current) return;
+    for (const m of RULER) handle.current.setClassVisible(m.threshold_mm, !hidden.has(m.threshold_mm));
+  }, [ready, hidden]);
 
   const toggle = useCallback(
     (thresholdMm: number) => {
@@ -99,7 +103,6 @@ export function MapPane({ storm, reports }: Props) {
       const visible = next.has(thresholdMm);
       if (visible) next.delete(thresholdMm);
       else next.add(thresholdMm);
-      handle.current?.setClassVisible(thresholdMm, visible);
       setHidden(next);
     },
     [hidden],

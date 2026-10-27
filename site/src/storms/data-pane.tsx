@@ -36,7 +36,13 @@ export function DataPane({ storm }: { storm: Storm }) {
         </ul>
         <h2>Reproduce</h2>
         <pre class="code-block">
-          <code>{`uv run hailprint ingest ${storm.storm_date}\nuv run hailprint parcels ${storm.storm_date}\nuv run hailprint publish`}</code>
+          <code>
+            {[
+              `uv run hailprint ingest ${storm.storm_date}`,
+              ...(storm.files.zip_counts ? [`uv run hailprint parcels ${storm.storm_date}`] : []),
+              "uv run hailprint publish",
+            ].join("\n")}
+          </code>
         </pre>
       </section>
       <section>

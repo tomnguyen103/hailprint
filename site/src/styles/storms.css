@@ -464,7 +464,8 @@
     border-right: 0;
     border-top: 1px solid var(--rule);
     border-radius: var(--radius-pane) var(--radius-pane) 0 0;
-    transform: translateY(100%);
+    /* Closed: the whole sheet, head included, sits below the 60px bottom bar. */
+    transform: translateY(calc(100% + 60px));
   }
 
   .stamp-bar {

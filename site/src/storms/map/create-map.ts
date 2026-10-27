@@ -88,7 +88,10 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
     attributionControl: basemap ? { compact: true } : false,
   });
   map.addControl(new NavigationControl({ showCompass: false }), "top-left");
-  await new Promise<void>((resolve) => map.once("load", () => resolve()));
+  await new Promise<void>((resolve, reject) => {
+    map.once("load", () => resolve());
+    map.once("error", (e) => reject(e.error ?? new Error("map failed to load")));
+  });
 
   const geojson = (id: string) => map.getSource(id) as GeoJSONSource | undefined;
 

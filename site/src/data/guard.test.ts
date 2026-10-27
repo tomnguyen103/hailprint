@@ -216,6 +216,16 @@ describe("guardPairs", () => {
     const bad = { ...pairs, reports: [{ ...pairs.reports[0], dist_m: [0, 1] }] };
     expect(() => guardPairs(bad)).toThrow(/pairs\.json: reports\[0\]\.dist_m has 2 entries for 1 classes/);
   });
+  it("rejects a non-number inside dist_m and unverifiable_km2", () => {
+    const badDist = { ...pairs, reports: [{ ...pairs.reports[0], dist_m: ["0"] }] };
+    expect(() => guardPairs(badDist)).toThrow(/pairs\.json: reports\[0\]\.dist_m\[0\]/);
+    const badArea = { ...pairs, classes: [{ ...pairs.classes[0], unverifiable_km2: ["1"] }] };
+    expect(() => guardPairs(badArea)).toThrow(/pairs\.json: classes\[0\]\.unverifiable_km2\[0\]/);
+  });
+  it("accepts null inside dist_m", () => {
+    const nullDist = { ...pairs, reports: [{ ...pairs.reports[0], dist_m: [null] }] };
+    expect(guardPairs(nullDist).reports[0]!.dist_m[0]).toBeNull();
+  });
 });
 
 describe("guardOutline", () => {
