@@ -1,8 +1,13 @@
 import type { Feature, MultiPolygon, Point } from "geojson";
 import type { ComponentChild, VNode } from "preact";
-import { describe, expect, it } from "vitest";
-import type { Phenomena, ReportProps, ReportsFile, Receipt, WarningProps, WarningsFile } from "../data/types";
-import { Timeline, TimelineTables, barKey, reportTicks, stepAt, warningBars } from "./timeline";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Phenomena, PowerFile, ReportProps, ReportsFile, Receipt, WarningProps, WarningsFile } from "../data/types";
+import { ReceiptChip } from "../shell/receipt-chip";
+import { FileItem } from "../storms/data-pane";
+import { CountySection, countyRows } from "../storms/map/inspector";
+import { createPlayer } from "../time/slider";
+import { HARRIS_FIPS, ODIN_LABEL, percentText, shareOut } from "./power";
+import { PowerTable, Timeline, TimelineTables, barKey, powerSeries, reportTicks, runsOf, stepAt, warningBars } from "./timeline";
 
 type Node = VNode<Record<string, unknown>>;
 
@@ -57,6 +62,8 @@ function chart(props: Partial<Parameters<typeof Timeline>[0]> = {}) {
     warnings: warnings(BEFORE_START, INSIDE, FLOOD),
     note: null,
     reports: reports(report(1, "1200"), report(2, "1145")),
+    power: null,
+    fips: HARRIS_FIPS,
     onStep: (next) => calls.push(next),
     ...props,
   });
@@ -231,5 +238,278 @@ describe("the Data pane tables", () => {
 
   it("says so when there is no warning", () => {
     expect(textOf(TimelineTables({ ...props, warnings: warnings() }))).toContain("No warnings in the window");
+  });
+});
+
+// A 192-step series: `over` sets single steps, `rest` fills the others.
+function series(over: Record<number, number | null> = {}, rest: number | null = 0): (number | null)[] {
+  return Array.from({ length: 192 }, (_, i) => (i in over ? (over[i] ?? null) : rest));
+}
+
+// Harris has 2000 customers and Fort Bend has 400, so 250 out in Harris is 12.5% and 100 out in Fort Bend is 25%.
+function power(source: "eaglei" | "odin" = "eaglei", harris = series(), fortBend = series()): PowerFile {
+  return {
+    receipt: RECEIPT,
+    window: { start: "2024-05-28T12:00:00Z", step_minutes: 15, steps: 192 },
+    source,
+    utilities: source === "odin" ? ["CenterPoint"] : null,
+    counties: [
+      { fips: "48201", name: "Harris", customers: 2000, out: harris },
+      { fips: "48157", name: "Fort Bend", customers: 400, out: fortBend },
+    ],
+  };
+}
+
+const FORT_BEND = "48157";
+const lines = (tree: ComponentChild) => findAll(tree, withClass("timeline-power-line"));
+const gaps = (tree: ComponentChild) => findAll(tree, withClass("timeline-power-gap"));
+const pointsOf = (line: Node) =>
+  String(line.props["d"])
+    .split(/[ML]/)
+    .filter((part) => part.trim() !== "")
+    .map((part) => part.trim().split(" ").map(Number) as [number, number]);
+const rowsOf = (tree: ComponentChild) =>
+  findAll(tree, (v) => v.type === "tr")
+    .map((tr) => findAll(tr, (v) => v.type === "td").map((td) => textOf(td).trim()))
+    .filter((row) => row.length > 0);
+const powerStrip = (tree: ComponentChild) => findAll(tree, (v) => v.props["data-strip"] === "power");
+
+describe("the power runs", () => {
+  it("split a series into runs of values and runs of gaps", () => {
+    expect(runsOf([1, null, null, 2, 3])).toEqual([
+      { from: 0, to: 1, gap: false },
+      { from: 1, to: 3, gap: true },
+      { from: 3, to: 5, gap: false },
+    ]);
+    expect(runsOf([])).toEqual([]);
+    expect(runsOf([null, null])).toEqual([{ from: 0, to: 2, gap: true }]);
+  });
+});
+
+describe("the power strip", () => {
+  it("draws one line through every step and no gap when the county has no null", () => {
+    const { tree } = chart({ power: power("eaglei", series({ 20: 250 })) });
+    expect(lines(tree)).toHaveLength(1);
+    expect(pointsOf(lines(tree)[0]!)).toHaveLength(192);
+    expect(gaps(tree)).toHaveLength(0);
+  });
+
+  it("breaks the line at a null step and draws the gap as a gap", () => {
+    const { tree, unit } = chart({ power: power("eaglei", series({ 12: null })) });
+    expect(lines(tree)).toHaveLength(2);
+    const steps = lines(tree)
+      .flatMap(pointsOf)
+      .map(([x]) => x / unit - 0.5);
+    expect(steps).toHaveLength(191);
+    expect(steps).not.toContain(12);
+    const [gap] = gaps(tree);
+    expect([Number(gap!.props["x"]) / unit, Number(gap!.props["width"]) / unit]).toEqual([12, 1]);
+  });
+
+  it("draws a zero share as a flat line and a county with no data as one gap", () => {
+    const zero = chart({ power: power() }).tree;
+    expect(gaps(zero)).toHaveLength(0);
+    expect(new Set(pointsOf(lines(zero)[0]!).map(([, y]) => y)).size).toBe(1);
+    const none = chart({ power: power("eaglei", series({}, null)) });
+    expect(lines(none.tree)).toHaveLength(0);
+    expect(gaps(none.tree)).toHaveLength(1);
+    expect(Number(gaps(none.tree)[0]!.props["width"]) / none.unit).toBe(192);
+  });
+
+  it("follows the picked county and names it with the scale", () => {
+    const file = power("eaglei", series(), series({ 20: 100 }));
+    const harris = chart({ power: file, fips: HARRIS_FIPS });
+    const fortBend = chart({ power: file, fips: FORT_BEND });
+    expect(textOf(harris.tree)).toContain("Harris County");
+    expect(textOf(fortBend.tree)).toContain("Fort Bend County");
+    expect(textOf(fortBend.tree)).toContain("Scale 0 to 25.0%");
+    const flat = pointsOf(lines(harris.tree)[0]!)[0]![1];
+    const top = Math.min(...pointsOf(lines(fortBend.tree)[0]!).map(([, y]) => y));
+    expect(top).toBeLessThan(flat);
+  });
+
+  it("reports the clicked step from the power strip", () => {
+    const { tree, calls } = chart({ power: power() });
+    const [strip] = powerStrip(tree);
+    (strip!.props["onClick"] as (e: unknown) => void)({
+      clientX: 580,
+      currentTarget: { getBoundingClientRect: () => ({ left: 100, width: 960 }) },
+    });
+    expect(calls).toEqual([96]);
+  });
+
+  it("draws no power row without a file or for a county the file lacks", () => {
+    for (const props of [{ power: null }, { power: power(), fips: "99999" }]) {
+      const { tree } = chart(props);
+      expect(powerStrip(tree)).toHaveLength(0);
+      expect(textOf(tree)).not.toContain("Scale 0 to");
+    }
+  });
+
+  it("names the strip with a title that gives the peak and the steps without data", () => {
+    const { tree } = chart({ power: power("eaglei", series({ 12: null, 20: 250 })) });
+    const text = textOf(powerStrip(tree)[0]);
+    expect(text).toContain("Harris County");
+    expect(text).toContain("peak 12.5% at step 20");
+    expect(text).toContain("1 step without data");
+    expect(textOf(findAll(tree, (v) => v.type === "title")[0])).toContain("Harris power peak 12.5%");
+    const empty = chart({ power: power("eaglei", series({}, null)) }).tree;
+    expect(textOf(powerStrip(empty)[0])).toContain("no data");
+    expect(textOf(findAll(empty, (v) => v.type === "title")[0])).toContain("Harris power unavailable");
+  });
+
+  it("labels an ODIN file on the strip and leaves an EAGLE-I file unlabelled", () => {
+    expect(textOf(chart({ power: power("odin") }).tree)).toContain(ODIN_LABEL);
+    expect(textOf(chart({ power: power("eaglei") }).tree)).not.toContain(ODIN_LABEL);
+  });
+});
+
+describe("the power series", () => {
+  it("returns the shares, the peak and the count of gap steps", () => {
+    const series_ = powerSeries(power("eaglei", series({ 3: null, 20: 250 })), HARRIS_FIPS)!;
+    expect(series_.county.name).toBe("Harris");
+    expect(series_.shares[20]).toBe(shareOut(250, 2000));
+    expect(series_.shares[3]).toBeNull();
+    expect(series_).toMatchObject({ peak: 0.125, peakStep: 20, gapSteps: 1, scale: 0.125 });
+  });
+
+  it("holds the scale at 1% for a county with no outage and returns null for an unknown county", () => {
+    expect(powerSeries(power(), HARRIS_FIPS)).toMatchObject({ peak: 0, scale: 0.01 });
+    expect(powerSeries(power("eaglei", series({}, null)), HARRIS_FIPS)).toMatchObject({ peak: null, peakStep: null, gapSteps: 192 });
+    expect(powerSeries(power(), "99999")).toBeNull();
+    expect(powerSeries(null, HARRIS_FIPS)).toBeNull();
+  });
+});
+
+describe("the Data pane power table", () => {
+  const file = power("eaglei", series({ 12: null, 20: 250, 21: 100 }));
+  const table = () => PowerTable({ date: DATE, power: file, fips: HARRIS_FIPS });
+
+  it("lists every step with the customers out and the share, and says no data for a null step", () => {
+    const rows = rowsOf(table());
+    expect(rows).toHaveLength(192);
+    expect(rows[20]).toEqual(["20", "2024-05-28 17:00", "250", "12.5%"]);
+    expect(rows[12]).toEqual(["12", "2024-05-28 15:00", "no data", "no data"]);
+    expect(rows[0]).toEqual(["0", "2024-05-28 12:00", "0", "0%"]);
+  });
+
+  it("shows the same numbers as the strip", () => {
+    const { tree, unit } = chart({ power: file });
+    const rows = rowsOf(table());
+    const onStrip = lines(tree)
+      .flatMap(pointsOf)
+      .map(([x, y]) => ({ step: x / unit - 0.5, y }));
+    expect(onStrip.map((p) => p.step)).toEqual(rows.filter((row) => row[3] !== "no data").map((row) => Number(row[0])));
+    const top = onStrip.reduce((a, b) => (b.y < a.y ? b : a));
+    expect(rows[top.step]![3]).toBe(percentText(shareOut(250, 2000)));
+  });
+
+  it("labels an ODIN file and says so for a county the file lacks", () => {
+    expect(textOf(PowerTable({ date: DATE, power: power("odin"), fips: HARRIS_FIPS }))).toContain(ODIN_LABEL);
+    expect(textOf(table())).not.toContain(ODIN_LABEL);
+    expect(textOf(PowerTable({ date: DATE, power: file, fips: "99999" }))).toContain("No power data for this county");
+  });
+});
+
+describe("the Data pane file list", () => {
+  it("shows the receipt chip after a file that has a receipt", () => {
+    const [chip] = findAll(FileItem({ name: "power.json", path: "storms/2024-05-28/power.json", receipt: RECEIPT }), (v) => v.type === ReceiptChip);
+    expect(chip!.props["file"]).toBe("power.json");
+    expect(chip!.props["receipt"]).toBe(RECEIPT);
+  });
+
+  it("shows none for a file the date lacks and no chip for a file without a receipt", () => {
+    const missing = FileItem({ name: "power.json", path: null, receipt: null });
+    expect(textOf(missing)).toContain("none");
+    expect(findAll(missing, (v) => v.type === ReceiptChip)).toHaveLength(0);
+    expect(findAll(FileItem({ name: "pairs.json", path: "p.json", receipt: null }), (v) => v.type === ReceiptChip)).toHaveLength(0);
+  });
+});
+
+describe("the inspector county section", () => {
+  const file = power("eaglei", series({ 20: 250 }), series({ 20: 100 }));
+  const three: PowerFile = { ...file, counties: [...file.counties, { fips: "48339", name: "Montgomery", customers: 500, out: series({}, null) }] };
+  const section = (over: Partial<Parameters<typeof CountySection>[0]> = {}) =>
+    CountySection({ file: three, step: 20, fips: HARRIS_FIPS, onPick: () => undefined, ...over });
+
+  it("lists the counties by share out, the largest first and a null step last", () => {
+    expect(countyRows(three, 20).map((row) => [row.name, row.share])).toEqual([
+      ["Fort Bend", 0.25],
+      ["Harris", 0.125],
+      ["Montgomery", null],
+    ]);
+    expect(countyRows(three, 20)[0]).toMatchObject({ fips: FORT_BEND, customers: 400, out: 100 });
+  });
+
+  it("shows the picked county with the share out, the customers out and the receipt chip", () => {
+    const tree = section();
+    const detail = textOf(findAll(tree, (v) => v.type === "dl"));
+    expect(detail).toContain("12.5%");
+    expect(detail).toContain("250");
+    const [chip] = findAll(tree, (v) => v.type === ReceiptChip);
+    expect(chip!.props["file"]).toBe("power.json");
+    expect(chip!.props["receipt"]).toBe(RECEIPT);
+  });
+
+  it("reads a null step as no data and never as 0%", () => {
+    const detail = textOf(findAll(section({ fips: "48339" }), (v) => v.type === "dl"));
+    expect(detail).toContain("no data");
+    expect(detail).not.toContain("0%");
+  });
+
+  it("marks the picked county and picks another on a click", () => {
+    const picked: string[] = [];
+    const buttons = findAll(section({ onPick: (fips) => picked.push(fips) }), (v) => v.type === "button");
+    expect(buttons.map((b) => b.props["aria-pressed"])).toEqual([false, true, false]);
+    (buttons[0]!.props["onClick"] as () => void)();
+    expect(picked).toEqual([FORT_BEND]);
+  });
+
+  it("labels an ODIN file and leaves an EAGLE-I file unlabelled", () => {
+    expect(textOf(section({ file: { ...three, source: "odin" } }))).toContain(ODIN_LABEL);
+    expect(textOf(section())).not.toContain(ODIN_LABEL);
+  });
+});
+
+describe("a county pick during play", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("keeps the step and the play state", () => {
+    vi.useFakeTimers();
+    let step = 48;
+    let playing = false;
+    let county: string = HARRIS_FIPS;
+    const player = createPlayer({
+      step: () => step,
+      move: (next) => {
+        step = next;
+      },
+      playing: (on) => {
+        playing = on;
+      },
+      reduced: () => false,
+    });
+    player.toggle();
+    vi.advanceTimersByTime(400);
+    expect(step).toBe(52);
+
+    const tree = CountySection({
+      file: power(),
+      step,
+      fips: county,
+      onPick: (fips) => {
+        county = fips;
+      },
+    });
+    const row = findAll(tree, (v) => v.type === "button" && v.props["data-fips"] === FORT_BEND)[0]!;
+    (row.props["onClick"] as () => void)();
+
+    expect(county).toBe(FORT_BEND);
+    expect(step).toBe(52);
+    expect(playing).toBe(true);
+    vi.advanceTimersByTime(400);
+    expect(step).toBe(56);
+    player.stop();
+    expect(playing).toBe(false);
   });
 });

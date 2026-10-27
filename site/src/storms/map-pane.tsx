@@ -8,6 +8,7 @@ import { type Fill, powerNote } from "../impact/power";
 import { PowerFillControl, PowerLegend } from "../impact/power-fill";
 import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
+import { countyAt } from "../state/county";
 import { type Load, useLoad } from "../state/load";
 import { useTheme } from "../state/theme";
 import "../styles/map.css";
@@ -30,9 +31,12 @@ interface Props {
   power: Load<PowerFile | null>;
   step: number;
   onStep: (step: number) => void;
+  /** The picked county for the power strip; the workspace owns it so a pick never moves the step. */
+  fips: string;
+  onCounty: (fips: string) => void;
 }
 
-export function MapPane({ storm, reports, power, step, onStep }: Props) {
+export function MapPane({ storm, reports, power, step, onStep, fips, onCounty }: Props) {
   const swath = useLoad(storm.files.swath, () => fetchJson(storm.files.swath, guardSwath));
   const county = useLoad("county", fetchCounty);
   const metro = useLoad("counties", fetchCounties);
@@ -52,6 +56,9 @@ export function MapPane({ storm, reports, power, step, onStep }: Props) {
   const [pick, setPick] = useState<Pick | null>(null);
   const reportsRef = useRef<ReportsFile | null>(null);
   reportsRef.current = reports.status === "ready" ? reports.data : null;
+  const outlinesRef = useRef<FeatureCollection<MultiPolygon> | null>(null);
+  const onCountyRef = useRef(onCounty);
+  onCountyRef.current = onCounty;
 
   // Create the map once; MapLibre arrives in its own chunk. Retry runs the import again.
   useEffect(() => {
@@ -73,6 +80,8 @@ export function MapPane({ storm, reports, power, step, onStep }: Props) {
           const layers = RULER.map((m) => fillLayerId(m.threshold_mm));
           const hits = next.map.queryRenderedFeatures(event.point, { layers }) as unknown as { properties: { threshold_mm: number } }[];
           const lngLat: [number, number] = [event.lngLat.lng, event.lngLat.lat];
+          const clicked = countyAt(lngLat, outlinesRef.current);
+          if (clicked !== null) onCountyRef.current(clicked);
           setPick({
             lngLat,
             coveringMm: coveringClass(hits),
@@ -99,6 +108,7 @@ export function MapPane({ storm, reports, power, step, onStep }: Props) {
   const warningsData = warnings.status === "ready" ? warnings.data : null;
   const powerData = power.status === "ready" ? power.data : null;
   const outlines: FeatureCollection<MultiPolygon> | null = metro.status === "ready" ? metro.data : null;
+  outlinesRef.current = outlines;
   useEffect(() => {
     if (!ready || !handle.current) return;
     handle.current.setData(swathData, reportsData, countyData);
@@ -186,9 +196,20 @@ export function MapPane({ storm, reports, power, step, onStep }: Props) {
           </div>
         </div>
         <TimeSlider date={storm.storm_date} step={step} onStep={onStep} />
-        <Timeline date={storm.storm_date} step={step} warnings={warningsData} note={warningsLine} reports={reportsData} onStep={onStep} />
+        <Timeline
+          date={storm.storm_date}
+          step={step}
+          warnings={warningsData}
+          note={warningsLine}
+          reports={reportsData}
+          power={powerData}
+          fips={fips}
+          onStep={onStep}
+        />
       </div>
-      {pick !== null && receipt !== null ? <Inspector pick={pick} receipt={receipt} onClose={close} /> : null}
+      {pick !== null && receipt !== null ? (
+        <Inspector pick={pick} receipt={receipt} power={powerData} step={step} fips={fips} onCounty={onCounty} onClose={close} />
+      ) : null}
     </div>
   );
 }

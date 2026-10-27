@@ -3,7 +3,7 @@ import "../styles/storms.css";
 import { fetchJson } from "../data/fetch";
 import { guardPower, guardReports } from "../data/guard";
 import type { PowerFile, Receipt, Storm, StormsIndex } from "../data/types";
-import { harrisPeak } from "../impact/power";
+import { HARRIS_FIPS, harrisPeak } from "../impact/power";
 import { TABS, TAB_LABELS, href, type Tab } from "../router";
 import { SubTabs } from "../shell/sub-tabs";
 import { useLoad } from "../state/load";
@@ -23,6 +23,8 @@ interface Props {
 
 export function Workspace({ index, storm, tab }: Props) {
   const [datesOpen, setDatesOpen] = useState(false);
+  // The county of the power strip lives here, apart from the step and the play state: a pick moves neither.
+  const [fips, setFips] = useState<string>(HARRIS_FIPS);
   const powerFile = storm.files.power;
   const power = useLoad<PowerFile | null>(powerFile ?? "power:none", () =>
     powerFile === null ? Promise.resolve(null) : fetchJson(powerFile, guardPower),
@@ -39,10 +41,12 @@ export function Workspace({ index, storm, tab }: Props) {
   };
 
   let pane;
-  if (tab === "map") pane = <MapPane storm={storm} reports={reports} power={power} step={step} onStep={setStep} />;
+  if (tab === "map") {
+    pane = <MapPane storm={storm} reports={reports} power={power} step={step} onStep={setStep} fips={fips} onCounty={setFips} />;
+  }
   else if (tab === "parcels") pane = <ParcelsPane storm={storm} />;
   else if (tab === "score") pane = <ScorePane storm={storm} radiusKm={index.radius_km_default} />;
-  else pane = <DataPane storm={storm} />;
+  else pane = <DataPane storm={storm} power={power} fips={fips} />;
 
   return (
     <div class="workspace">
