@@ -44,6 +44,9 @@ export interface StormFiles {
   reports: string;
   pairs: string;
   zip_counts: string | null;
+  power: string | null;
+  internet: string | null;
+  warnings: string | null;
 }
 
 export interface Storm {
@@ -118,6 +121,24 @@ export interface ReportsFile extends FeatureCollection<Point, ReportProps> {
 }
 
 export interface SwathFile extends FeatureCollection<MultiPolygon, SwathProps> {
+  receipt: Receipt;
+}
+
+/** The warning types the file carries: severe thunderstorm, tornado, flash flood. */
+export const PHENOMENA = ["SV", "TO", "FF"] as const;
+export type Phenomena = (typeof PHENOMENA)[number];
+
+export interface WarningProps {
+  phenomena: Phenomena;
+  significance: "W";
+  event_label: string;
+  eventid: number;
+  polygon_begin: string;
+  polygon_end: string;
+  product_id: string;
+}
+
+export interface WarningsFile extends FeatureCollection<MultiPolygon, WarningProps> {
   receipt: Receipt;
 }
 

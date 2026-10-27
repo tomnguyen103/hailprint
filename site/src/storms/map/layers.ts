@@ -1,6 +1,11 @@
-// Layer specifications for the swath, the county outline, and the report points.
+// Layer specifications for the swath, the warnings, the county outline, and the report points.
+import type { Feature, FeatureCollection, MultiPolygon, Point } from "geojson";
 import type { LayerSpecification } from "maplibre-gl";
+import { PHENOMENA, type Phenomena, type ReportsFile, type WarningProps, type WarningsFile } from "../../data/types";
+import { WARNING_STYLES } from "../../impact/warning-styles";
 import { RULER } from "../../ruler";
+import type { Load } from "../../state/load";
+import { reportStep, stepTime } from "../../time/step";
 
 export type Theme = "light" | "dark";
 
@@ -8,7 +13,17 @@ export const SWATH_SOURCE = "swath";
 export const COUNTY_SOURCE = "county";
 export const REPORTS_SOURCE = "reports";
 export const POINT_SOURCE = "point";
+export const WARNINGS_SOURCE = "warnings";
 export const FILL_OPACITY = 0.85;
+/** A report after the slider step draws at this opacity. */
+export const REPORT_FADED = 0.3;
+/** The warning labels show from this zoom up; below it they crowd the county. */
+export const TAG_ZOOM = 9;
+/** The warning outline width in px, from design.md. */
+export const LINE_PX = 2;
+
+/** The map layers the control switches. */
+export type LayerName = "swath" | "reports" | "warnings";
 
 /** A design token's current value, read from the document so the theme drives it. */
 export function token(name: string): string {
@@ -29,6 +44,88 @@ export function fillLayers(): LayerSpecification[] {
   }));
 }
 
+export const REPORTS_LAYER = "report-points";
+
+export function warningLayerId(phenomena: Phenomena): string {
+  return `warnings-${phenomena.toLowerCase()}`;
+}
+
+export function warningLayers(): LayerSpecification[] {
+  return PHENOMENA.map((phenomena): LayerSpecification => {
+    const style = WARNING_STYLES[phenomena];
+    return {
+      id: warningLayerId(phenomena),
+      type: "line",
+      source: WARNINGS_SOURCE,
+      filter: ["==", ["get", "phenomena"], phenomena],
+      paint: { "line-color": token(style.token), "line-width": LINE_PX, ...(style.dash ? { "line-dasharray": style.dash } : {}) },
+    };
+  });
+}
+
+type WarningFeature = Feature<MultiPolygon, WarningProps>;
+
+/**
+ * The warnings in force at a step: begin at or before the step's start, end after it.
+ * shortcut: a warning shorter than one step can fall between two steps and never draw; draw the span when the data holds one.
+ */
+export function activeWarnings(file: WarningsFile | null, date: string, step: number): WarningFeature[] {
+  if (file === null) return [];
+  const at = stepTime(date, step).getTime();
+  return file.features.filter((f) => Date.parse(f.properties.polygon_begin) <= at && at < Date.parse(f.properties.polygon_end));
+}
+
+/** The reports with an `alpha`: full up to the cutoff step, faded after it; a bad time or no cutoff stays full. */
+export function reportsAtStep(reports: ReportsFile | null, cutoff: number | null): FeatureCollection<Point> {
+  const features = (reports?.features ?? []).map((f) => {
+    const at = cutoff === null ? null : reportStep(f.properties.time);
+    const alpha = cutoff === null || at === null || at <= cutoff ? 1 : REPORT_FADED;
+    return { ...f, properties: { ...f.properties, alpha } };
+  });
+  return { type: "FeatureCollection", features };
+}
+
+export interface WarningTag {
+  lngLat: [number, number];
+  text: Phenomena;
+}
+
+/**
+ * The middle of the bounding box of the largest outer ring; null when the geometry has no ring.
+ * shortcut: the box centre can sit outside a concave polygon; use a pole of inaccessibility when a label lands off its shape.
+ */
+function labelPoint(geometry: MultiPolygon): [number, number] | null {
+  let best: [number, number] | null = null;
+  let bestArea = -1;
+  for (const polygon of geometry.coordinates) {
+    const ring = polygon[0];
+    if (ring === undefined || ring.length === 0) continue;
+    const xs = ring.map((p) => p[0]!);
+    const ys = ring.map((p) => p[1]!);
+    const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)] as [number, number, number, number];
+    const area = (x1 - x0) * (y1 - y0);
+    if (area > bestArea) {
+      bestArea = area;
+      best = [(x0 + x1) / 2, (y0 + y1) / 2];
+    }
+  }
+  return best;
+}
+
+/** One text label per warning that has a polygon. */
+export function warningTags(features: WarningFeature[]): WarningTag[] {
+  return features.flatMap((f) => {
+    const lngLat = labelPoint(f.geometry);
+    return lngLat === null ? [] : [{ lngLat, text: f.properties.phenomena }];
+  });
+}
+
+/** The one line the layers control shows when the warnings file is missing or failed; null when nothing is wrong. */
+export function warningsNote(file: string | null, load: Load<WarningsFile | null>): string | null {
+  if (file === null) return "No warnings file for this storm date.";
+  return load.status === "error" ? `Warnings off. ${load.error.message}` : null;
+}
+
 export function chromeLayers(): LayerSpecification[] {
   return [
     {
@@ -44,7 +141,7 @@ export function chromeLayers(): LayerSpecification[] {
       paint: { "line-color": token("--ink"), "line-width": 1.5 },
     },
     {
-      id: "report-points",
+      id: REPORTS_LAYER,
       type: "circle",
       source: REPORTS_SOURCE,
       paint: {
@@ -52,6 +149,8 @@ export function chromeLayers(): LayerSpecification[] {
         "circle-color": token("--report"),
         "circle-stroke-width": 2,
         "circle-stroke-color": token("--sheet"),
+        "circle-opacity": ["coalesce", ["get", "alpha"], 1],
+        "circle-stroke-opacity": ["coalesce", ["get", "alpha"], 1],
       },
     },
     {
@@ -73,7 +172,7 @@ export type PaintName = "fill-color" | "line-color" | "circle-color" | "circle-s
 
 export function themedPaint(): Record<string, Partial<Record<PaintName, string>>> {
   const paint: Record<string, Partial<Record<PaintName, string>>> = {};
-  for (const layer of [...fillLayers(), ...chromeLayers()]) {
+  for (const layer of [...fillLayers(), ...warningLayers(), ...chromeLayers()]) {
     const colours = Object.entries(layer.paint ?? {}).filter(([key]) => key.endsWith("-color"));
     paint[layer.id] = Object.fromEntries(colours) as Partial<Record<PaintName, string>>;
   }

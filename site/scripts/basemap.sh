@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Extract the Harris County basemap from the Protomaps daily build.
+# Extract the metro county basemap from the Protomaps daily build.
 # Output: site/public/basemap.pmtiles. The site builds and runs without it.
 # Override the build with PROTOMAPS_BUILD=YYYYMMDD.pmtiles.
 set -euo pipefail
@@ -7,8 +7,8 @@ set -euo pipefail
 SITE_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$SITE_DIR/public/basemap.pmtiles"
 TMP="$OUT.$$.tmp"
-# hailprint.county.bbox(): the outline padded by 0.05 degrees, the same as site/src/county.ts.
-BBOX="-96.010733,29.44752,-94.858498,30.220606"
+# hailprint.county.metro_bbox(): the 8 metro outlines padded by 0.05 degrees, the same as METRO_BBOX in site/src/county.ts.
+BBOX="-96.242208,28.77556588,-94.303383,30.680284"
 MAXZOOM=12
 BUILDS_URL="https://build.protomaps.com"
 

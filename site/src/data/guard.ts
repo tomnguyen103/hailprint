@@ -3,8 +3,8 @@
 // Each guard checks every key the site reads from that file, and nothing more.
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { DATE } from "../router";
-import type { Pairs, PipelineFile, ReportsFile, StormsIndex, SwathFile, ZipCounts } from "./types";
-import { DataError } from "./types";
+import type { Pairs, PipelineFile, ReportsFile, StormsIndex, SwathFile, WarningsFile, ZipCounts } from "./types";
+import { DataError, PHENOMENA } from "./types";
 
 type Rec = Record<string, unknown>;
 
@@ -14,6 +14,12 @@ export const MAX_RUNS = 50;
 /** The published file paths inside `site/data/`, as `storms.json` lists them; the schema `$defs` hold the same two patterns. */
 export const GEOJSON_PATH = /^storms\/\d{4}-\d{2}-\d{2}\/[a-z-]+\.geojson$/;
 export const JSON_PATH = /^storms\/\d{4}-\d{2}-\d{2}\/[a-z-]+\.json$/;
+/** The index keys for the impact files, each a path or null. */
+const IMPACT_FILES: [string, RegExp][] = [
+  ["power", JSON_PATH],
+  ["internet", JSON_PATH],
+  ["warnings", GEOJSON_PATH],
+];
 
 /** A run time as `publish` writes it: UTC to the second, no fraction. */
 const RUN_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
@@ -87,6 +93,10 @@ export function guardIndex(value: unknown): StormsIndex {
     const files = rec(file, storm["files"], `${at}.files`);
     for (const key of ["swath", "reports"]) filePath(file, files[key], `${at}.files.${key}`, GEOJSON_PATH);
     filePath(file, files["pairs"], `${at}.files.pairs`, JSON_PATH);
+    // The impact keys have no default: a missing key is undefined, and filePath throws on it.
+    for (const [key, pattern] of IMPACT_FILES) {
+      if (files[key] !== null) filePath(file, files[key], `${at}.files.${key}`, pattern);
+    }
     if (files["zip_counts"] !== null) filePath(file, files["zip_counts"], `${at}.files.zip_counts`, JSON_PATH);
   });
   return value as StormsIndex;
@@ -202,7 +212,7 @@ export function guardReports(value: unknown): ReportsFile {
   guardReceipt(file, rec(file, value, "collection")["receipt"]);
   guardCollection(file, value).forEach((props, i) => {
     for (const key of ["time", "location"]) str(file, props[key], `features[${i}].properties.${key}`);
-    num(file, props["size_in"], `features[${i}].properties.size_in`);
+    for (const key of ["id", "size_in"]) num(file, props[key], `features[${i}].properties.${key}`);
   });
   return value as ReportsFile;
 }
@@ -214,17 +224,65 @@ export function guardSwath(value: unknown): SwathFile {
     num(file, props["threshold_mm"], `features[${i}].properties.threshold_mm`);
     num(file, props["threshold_in"], `features[${i}].properties.threshold_in`);
   });
-  list(file, rec(file, value, "collection")["features"], "features").forEach((item, i) => {
-    const geometry = rec(file, rec(file, item, `features[${i}]`)["geometry"], `features[${i}].geometry`);
-    if (geometry["type"] !== "MultiPolygon") {
-      throw new DataError(file, `features[${i}].geometry.type is not MultiPolygon`);
-    }
-  });
+  guardMultiPolygons(file, value);
   return value as SwathFile;
+}
+
+function isPosition(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 2 && value.every((n) => typeof n === "number" && Number.isFinite(n));
+}
+
+/** Every feature geometry is a MultiPolygon whose rings each hold 4 or more finite [x, y] positions. */
+function guardMultiPolygons(file: string, value: unknown): void {
+  list(file, rec(file, value, "collection")["features"], "features").forEach((item, i) => {
+    const at = `features[${i}].geometry`;
+    const geometry = rec(file, rec(file, item, `features[${i}]`)["geometry"], at);
+    if (geometry["type"] !== "MultiPolygon") throw new DataError(file, `${at}.type is not MultiPolygon`);
+    list(file, geometry["coordinates"], `${at}.coordinates`).forEach((polygon, p) => {
+      list(file, polygon, `${at}.coordinates[${p}]`).forEach((ring, r) => {
+        const path = `${at}.coordinates[${p}][${r}]`;
+        const positions = list(file, ring, path);
+        if (positions.length < 4 || !positions.every(isPosition)) {
+          throw new DataError(file, `${path} is not a ring of 4 or more finite [x, y] positions`);
+        }
+      });
+    });
+  });
+}
+
+/** The property keys a warning feature may carry, the same seven as the warnings schema. */
+const WARNING_KEYS = [
+  "phenomena",
+  "significance",
+  "event_label",
+  "eventid",
+  "polygon_begin",
+  "polygon_end",
+  "product_id",
+];
+
+export function guardWarnings(value: unknown): WarningsFile {
+  const file = "warnings.geojson";
+  guardReceipt(file, rec(file, value, "collection")["receipt"]);
+  guardCollection(file, value).forEach((props, i) => {
+    const at = `features[${i}].properties`;
+    for (const key of Object.keys(props)) {
+      if (!WARNING_KEYS.includes(key)) throw new DataError(file, `${at}.${key} is not an allowed property`);
+    }
+    if (!(PHENOMENA as readonly string[]).includes(str(file, props["phenomena"], `${at}.phenomena`))) {
+      throw new DataError(file, `${at}.phenomena is not SV, TO, or FF`);
+    }
+    if (props["significance"] !== "W") throw new DataError(file, `${at}.significance is not W`);
+    for (const key of ["event_label", "product_id"]) str(file, props[key], `${at}.${key}`);
+    count(file, props["eventid"], `${at}.eventid`);
+    for (const key of ["polygon_begin", "polygon_end"]) runTime(file, props[key], `${at}.${key}`);
+  });
+  guardMultiPolygons(file, value);
+  return value as WarningsFile;
 }
 
 /** The committed county outline: a FeatureCollection with no receipt. */
 export function guardOutline(value: unknown): FeatureCollection<MultiPolygon> {
-  guardCollection("county.geojson", value);
+  guardCollection("counties.geojson", value);
   return value as FeatureCollection<MultiPolygon>;
 }

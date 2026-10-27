@@ -14,9 +14,13 @@ import pytest
 import shapely
 from jsonschema import Draft202012Validator
 
+from hailprint import __main__ as cli
 from hailprint import files as files_module
-from hailprint import parcels, publish, reports, swath
+from hailprint import parcels, publish, reports, sbw, swath
 from hailprint.parcels import OWNER_FIELDS
+from tests.test_cli import EARLIER, LATER
+from tests.test_cli import env as cli_env  # noqa: F401  (pytest fixture)
+from tests.test_outputs_clean import SIZE_CEILINGS
 
 RUN_TIME = datetime(2024, 5, 29, 13, 0, 7, 987654, tzinfo=UTC)
 SOURCES = [
@@ -26,7 +30,8 @@ SOURCES = [
         "file": "swaths-2024-05-28.parquet",
     }
 ]
-SCHEMAS = ["receipt", "swath", "reports", "pairs", "zip-counts", "storms", "pipeline"]
+SCHEMAS = ["receipt", "swath", "reports", "pairs", "zip-counts", "storms", "pipeline", "warnings"]
+IMPACT_KEYS = ("power", "internet", "warnings")
 
 
 def _receipt():
@@ -658,9 +663,18 @@ def _entry(storm_date, **changes):
             "reports": f"storms/{storm_date}/reports.geojson",
             "pairs": f"storms/{storm_date}/pairs.json",
             "zip_counts": None,
+            "power": None,
+            "internet": None,
+            "warnings": None,
         },
     }
     return entry | changes
+
+
+def _old_entry(storm_date):
+    """An index entry as the run before the impact keys wrote it."""
+    entry = _entry(storm_date)
+    return entry | {"files": {k: v for k, v in entry["files"].items() if k not in IMPACT_KEYS}}
 
 
 def test_storms_doc_sorts_the_entries_newest_first_and_states_the_band_and_the_run_time():
@@ -759,7 +773,7 @@ def test_swath_source_gives_none_without_a_mesh_maximum_and_refuses_bare_metadat
         publish.swath_source(bare)
 
 
-def _build_day(zips=None, facts=None):
+def _build_day(zips=None, facts=None, warnings=None):
     nearby = reports.nearby_reports(
         date(2024, 5, 28),
         _spc_csv(("100", "Spring", 30.08, -95.42, ""), ("175", "Katy", 29.79, -95.82, "")),
@@ -775,6 +789,7 @@ def _build_day(zips=None, facts=None):
         hcad=None if zips is None else publish.hcad_source("zip-counts-2024-05-28.parquet"),
         facts=facts,
         run_time=RUN_TIME,
+        warnings=None if warnings is None else (warnings, IEM_SOURCE),
     )
 
 
@@ -858,6 +873,110 @@ def test_merge_entries_clears_the_zip_fields_of_an_entry_whose_zip_file_is_gone(
     assert merged["files"]["zip_counts"] is None
     assert merged["parcel_total"] is None
     assert entry["parcel_total"] == 4
+
+
+def test_an_old_index_without_the_impact_keys_reads_and_merge_entries_fills_null(tmp_path):
+    entry = _published_day(tmp_path, "2024-05-28", zips=True)
+    old = _old_entry("2024-05-28") | {"parcel_total": 4}
+    old["files"]["zip_counts"] = entry["files"]["zip_counts"]
+    index = tmp_path / "storms.json"
+    index.write_text(json.dumps(publish.storms_doc([old], RUN_TIME)), encoding="utf-8")
+
+    loaded = publish.read_published(index, "storms")["storms"]
+    assert not set(IMPACT_KEYS) & set(loaded[0]["files"])
+    [merged] = publish.merge_entries(loaded, [], tmp_path)
+
+    assert {k: merged["files"][k] for k in IMPACT_KEYS} == dict.fromkeys(IMPACT_KEYS)
+    assert merged["files"]["zip_counts"] == entry["files"]["zip_counts"]
+    assert merged["parcel_total"] == 4
+    publish.validate(publish.storms_doc([merged], RUN_TIME), "storms")
+
+
+def test_merge_entries_fills_the_impact_keys_of_a_new_entry_and_keeps_a_set_key(tmp_path):
+    kept = _published_day(tmp_path, "2024-05-28", zips=False)
+    kept["files"]["warnings"] = "storms/2024-05-28/warnings.geojson"
+    (tmp_path / "storms" / "2024-05-28" / "warnings.geojson").write_text("{}", encoding="utf-8")
+    fresh = _published_day(tmp_path, "2023-06-23", zips=False)
+    fresh["files"] = {k: v for k, v in fresh["files"].items() if k not in IMPACT_KEYS}
+
+    merged = {e["storm_date"]: e for e in publish.merge_entries([kept], [fresh], tmp_path)}
+
+    assert merged["2024-05-28"]["files"]["warnings"] == "storms/2024-05-28/warnings.geojson"
+    assert merged["2024-05-28"]["files"]["power"] is None
+    assert [merged["2023-06-23"]["files"][k] for k in IMPACT_KEYS] == [None, None, None]
+
+
+def test_merge_entries_clears_the_warnings_path_of_an_entry_whose_warnings_file_is_gone(tmp_path):
+    entry = _published_day(tmp_path, "2024-05-28", zips=False)
+    entry["files"]["warnings"] = "storms/2024-05-28/warnings.geojson"
+
+    [merged] = publish.merge_entries([entry], [], tmp_path)
+
+    assert merged["files"]["warnings"] is None
+    assert entry["files"]["warnings"] == "storms/2024-05-28/warnings.geojson"
+    assert publish.index_receipts([merged], tmp_path) == [_receipt()]
+
+
+def test_build_day_with_a_warnings_frame_adds_the_warnings_file_and_its_index_path():
+    texts, entry = _build_day(warnings=_warnings_frame())
+
+    assert sorted(texts) == ["pairs.json", "reports.geojson", "swath.geojson", "warnings.geojson"]
+    assert entry["files"]["warnings"] == "storms/2024-05-28/warnings.geojson"
+    assert entry["files"]["power"] is None
+    doc = json.loads(texts["warnings.geojson"])
+    assert [f["properties"]["eventid"] for f in doc["features"]] == WARNING_IDS
+    assert doc["receipt"]["sources"] == [IEM_SOURCE]
+
+
+def test_build_day_with_an_empty_warnings_frame_adds_an_empty_feature_collection():
+    texts, entry = _build_day(warnings=_warnings_frame().iloc[:0])
+
+    assert json.loads(texts["warnings.geojson"])["features"] == []
+    assert entry["files"]["warnings"] == "storms/2024-05-28/warnings.geojson"
+
+
+def test_build_day_stops_on_the_forbidden_word_in_a_warning_field():
+    frame = _warnings_frame().assign(event_label=f"Hail {files_module.FORBIDDEN_WORD} Warning")
+
+    with pytest.raises(ValueError, match=r"^warnings: forbidden word .* at \$\.features\[0\]"):
+        _build_day(warnings=frame)
+
+
+def test_build_day_writes_the_three_impact_keys_as_null():
+    _, entry = _build_day()
+
+    assert {k: entry["files"][k] for k in IMPACT_KEYS} == dict.fromkeys(IMPACT_KEYS)
+
+
+def test_the_storms_schema_accepts_an_impact_path_and_refuses_an_extra_or_misplaced_key():
+    ok = _entry("2024-05-28")
+    ok["files"] |= {
+        "power": "storms/2024-05-28/power.json",
+        "internet": "storms/2024-05-28/internet.json",
+        "warnings": "storms/2024-05-28/warnings.geojson",
+    }
+    publish.validate(publish.storms_doc([ok], RUN_TIME), "storms")
+
+    extra = _entry("2024-05-28")
+    extra["files"]["outages"] = None
+    wrong_type = _entry("2024-05-28")
+    wrong_type["files"]["warnings"] = "storms/2024-05-28/warnings.json"
+    outside = _entry("2024-05-28")
+    outside["files"]["power"] = "../power.json"
+    for bad in (extra, wrong_type, outside):
+        with pytest.raises(ValueError, match=r"storms: \$\.storms\[0\]\.files"):
+            publish.validate(publish.storms_doc([bad], RUN_TIME), "storms")
+
+
+def test_index_receipts_lists_the_impact_files_and_skips_a_null_key(tmp_path):
+    assert publish.RECEIPT_FILES[2:] == (
+        ("power", "power"),
+        ("internet", "internet"),
+        ("warnings", "warnings"),
+    )
+    entry = _published_day(tmp_path, "2024-05-28", zips=False)
+
+    assert publish.index_receipts([entry], tmp_path) == [_receipt()]
 
 
 def test_index_receipts_reads_the_pairs_and_the_zip_count_receipt_of_every_entry(tmp_path):
@@ -1027,3 +1146,229 @@ def test_pipeline_dumps_refuses_the_forbidden_word():
 
     with pytest.raises(ValueError, match=files_module.FORBIDDEN_WORD):
         publish.dumps(doc, "pipeline")
+
+
+# warnings.geojson
+
+SBW_FEED = FIXTURES / "iem_sbw_hgx.geojson"
+WARNING_IDS = [107, 101, 102, 109, 103]
+IEM_SOURCE = {"source": "iem", "product": "sbw", "file": "warnings-2024-05-28.parquet"}
+WARNING_KEYS = {
+    "phenomena",
+    "significance",
+    "event_label",
+    "eventid",
+    "polygon_begin",
+    "polygon_end",
+    "product_id",
+}
+
+
+def _warnings_frame(day=date(2024, 5, 28)):
+    return sbw.parse(SBW_FEED.read_text(encoding="utf-8"), day)
+
+
+def _warnings_doc(frame=None):
+    return publish.warnings_doc(_warnings_frame() if frame is None else frame, _receipt())
+
+
+def test_warnings_doc_has_one_multipolygon_feature_per_warning_with_the_allow_list_only():
+    doc = _warnings_doc()
+
+    publish.validate(doc, "warnings")
+    assert [f["properties"]["eventid"] for f in doc["features"]] == WARNING_IDS
+    assert {frozenset(f["properties"]) for f in doc["features"]} == {frozenset(WARNING_KEYS)}
+    assert {f["geometry"]["type"] for f in doc["features"]} == {"MultiPolygon"}
+    assert doc["features"][1]["properties"] == {
+        "phenomena": "SV",
+        "significance": "W",
+        "event_label": "Severe Thunderstorm Warning",
+        "eventid": 101,
+        "polygon_begin": "2024-05-28T21:00:00Z",
+        "polygon_end": "2024-05-28T22:00:00Z",
+        "product_id": "20240528101-KHGX-WUUS54-SVRHGX",
+    }
+
+
+def test_warnings_doc_leaves_out_a_column_outside_the_allow_list():
+    frame = _warnings_frame().assign(remark="Free text", wfo="HGX")
+
+    doc = _warnings_doc(frame)
+
+    assert {frozenset(f["properties"]) for f in doc["features"]} == {frozenset(WARNING_KEYS)}
+    assert "Free text" not in publish.dumps(doc, "warnings")
+
+
+def test_warnings_doc_rounds_coordinates_to_four_decimals():
+    ring = [(-95.1234567, 29.7654321), (-95.1234567, 29.8), (-95.05, 29.8), (-95.05, 29.7654321)]
+    frame = _warnings_frame().iloc[:1].copy()
+    frame["geometry"] = [shapely.Polygon(ring)]
+
+    doc = _warnings_doc(frame)
+
+    coordinates = [p for ring in doc["features"][0]["geometry"]["coordinates"][0] for p in ring]
+    assert [-95.1235, 29.7654] in coordinates
+    assert all(round(value, 4) == value for pair in coordinates for value in pair)
+
+
+def test_warnings_doc_of_a_frame_with_no_row_is_an_empty_feature_collection():
+    doc = _warnings_doc(_warnings_frame().iloc[:0])
+
+    publish.validate(doc, "warnings")
+    assert doc["features"] == []
+    assert doc["type"] == "FeatureCollection"
+    assert doc["receipt"] == _receipt()
+
+
+def test_warnings_doc_is_the_same_for_every_row_order():
+    frame = _warnings_frame()
+
+    assert _warnings_doc(frame.iloc[::-1]) == _warnings_doc(frame)
+
+
+def test_the_warnings_schema_refuses_a_property_outside_the_allow_list():
+    doc = _warnings_doc()
+    doc["features"][0]["properties"]["remark"] = "text"
+
+    with pytest.raises(ValueError, match=r"^warnings: \$\.features\[0\]\.properties: .*remark"):
+        publish.validate(doc, "warnings")
+
+
+def test_the_warnings_schema_refuses_a_missing_property_a_bad_phenomenon_and_a_bad_time():
+    missing = _warnings_doc()
+    del missing["features"][2]["properties"]["product_id"]
+    with pytest.raises(ValueError, match=r"^warnings: \$\.features\[2\]\.properties: .*product_id"):
+        publish.validate(missing, "warnings")
+    unknown = _warnings_doc()
+    unknown["features"][0]["properties"]["phenomena"] = "WS"
+    with pytest.raises(ValueError, match=r"^warnings: \$\.features\[0\]\.properties\.phenomena: "):
+        publish.validate(unknown, "warnings")
+    local = _warnings_doc()
+    local["features"][0]["properties"]["polygon_end"] = "2024-05-28T13:00:00-05:00"
+    with pytest.raises(
+        ValueError, match=r"^warnings: \$\.features\[0\]\.properties\.polygon_end: "
+    ):
+        publish.validate(local, "warnings")
+
+
+def test_dumps_names_the_file_kind_and_the_json_path_of_the_forbidden_word_in_a_warning_field():
+    word = files_module.FORBIDDEN_WORD
+    frame = _warnings_frame().assign(event_label=f"Hail {word.title()} Warning")
+
+    with pytest.raises(ValueError) as err:
+        publish.dumps(_warnings_doc(frame), "warnings")
+
+    assert str(err.value) == (
+        f"warnings: forbidden word {word!r} at $.features[0].properties.event_label"
+    )
+
+
+def test_dumps_names_the_json_path_of_an_owner_field_in_a_key():
+    field = OWNER_FIELDS[0]
+
+    with pytest.raises(ValueError) as err:
+        publish.dumps({"zips": [{"zip": "77002", field.upper(): 1}]}, "zip-counts")
+
+    assert str(err.value) == f"zip-counts: owner field {field!r} at $.zips[0].{field.upper()}"
+
+
+# publish over the fixture days
+
+
+def _warnings_parquet(env, storm_date, frame):
+    return files_module.write_atomic(frame, env.warnings / sbw.file_name(storm_date), sbw.METADATA)
+
+
+@pytest.fixture
+def two_days(cli_env):  # noqa: F811  (the imported fixture)
+    cli_env.add_day(LATER)
+    cli_env.add_day(EARLIER)
+    _warnings_parquet(cli_env, LATER, _warnings_frame(LATER))
+    _warnings_parquet(cli_env, EARLIER, _warnings_frame(EARLIER))
+    return cli_env
+
+
+def test_publish_writes_warnings_geojson_for_every_date_with_a_warnings_parquet(two_days):
+    assert cli.main(["publish"]) == 0
+
+    later = json.loads((two_days.storm_dir(LATER) / "warnings.geojson").read_text(encoding="utf-8"))
+    earlier = json.loads(
+        (two_days.storm_dir(EARLIER) / "warnings.geojson").read_text(encoding="utf-8")
+    )
+    publish.validate(later, "warnings")
+    publish.validate(earlier, "warnings")
+    assert [f["properties"]["eventid"] for f in later["features"]] == WARNING_IDS
+    assert earlier["features"] == []
+    assert later["receipt"]["sources"] == [IEM_SOURCE]
+    assert earlier["receipt"]["sources"] == [
+        {"source": "iem", "product": "sbw", "file": "warnings-2023-06-23.parquet"}
+    ]
+    paths = {e["storm_date"]: e["files"]["warnings"] for e in two_days.index()["storms"]}
+    assert paths == {
+        "2024-05-28": "storms/2024-05-28/warnings.geojson",
+        "2023-06-23": "storms/2023-06-23/warnings.geojson",
+    }
+
+
+def test_publish_lists_the_iem_sbw_source_with_both_dates_in_the_pipeline_file(two_days):
+    cli.main(["publish"])
+
+    rows = {(r["source"], r["product"]): r["storm_dates"] for r in two_days.pipeline()["sources"]}
+    assert rows[("iem", "sbw")] == ["2023-06-23", "2024-05-28"]
+
+
+def test_no_published_warnings_file_reaches_the_size_ceiling(two_days):
+    cli.main(["publish"])
+
+    sizes = [p.stat().st_size for p in two_days.site.rglob("warnings.geojson")]
+    assert len(sizes) == 2
+    assert max(sizes) < SIZE_CEILINGS["warnings.geojson"]
+
+
+def test_a_date_without_a_warnings_parquet_gets_a_null_key_and_loses_a_stale_file(two_days):
+    cli.main(["publish"])
+    (two_days.warnings / sbw.file_name(LATER)).unlink()
+
+    assert cli.main(["publish"]) == 0
+
+    assert not (two_days.storm_dir(LATER) / "warnings.geojson").exists()
+    assert (two_days.storm_dir(EARLIER) / "warnings.geojson").exists()
+    keys = {e["storm_date"]: e["files"]["warnings"] for e in two_days.index()["storms"]}
+    assert keys == {"2024-05-28": None, "2023-06-23": "storms/2023-06-23/warnings.geojson"}
+
+
+def test_a_repeat_publish_gives_the_same_bytes(two_days):
+    cli.main(["publish"])
+    first = two_days.tree()
+
+    cli.main(["publish"])
+
+    assert two_days.tree() == first
+    assert not [name for name in first if name.endswith(".tmp")]
+
+
+def test_a_second_publish_run_that_finds_the_lock_exits_1_and_writes_no_warnings_file(
+    two_days, capsys
+):
+    lock = two_days.site / cli.LOCK_FILE
+    lock.parent.mkdir(parents=True)
+    lock.write_text("1", encoding="utf-8")
+
+    assert cli.main(["publish"]) == 1
+
+    assert "publish.lock" in capsys.readouterr().err
+    assert list(two_days.site.rglob("warnings.geojson")) == []
+
+
+def test_a_warnings_parquet_without_metadata_fails_its_date_and_publishes_the_other(
+    two_days, capsys
+):
+    path = two_days.warnings / sbw.file_name(LATER)
+    path.unlink()
+    _warnings_frame(LATER).to_parquet(path)
+
+    assert cli.main(["publish"]) == 1
+
+    assert "2024-05-28: warnings-2024-05-28.parquet: the metadata lacks" in capsys.readouterr().err
+    assert (two_days.storm_dir(EARLIER) / "warnings.geojson").exists()
+    assert not (two_days.storm_dir(LATER) / "warnings.geojson").exists()

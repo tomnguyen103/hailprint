@@ -1,7 +1,20 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
-import { GEOJSON_PATH, JSON_PATH, MAX_RUNS, guardIndex, guardOutline, guardPairs, guardPipeline, guardReports, guardSwath, guardZipCounts } from "./guard";
+import { afterEach, describe, expect, it } from "vitest";
+import { fetchJson, setFetch } from "./fetch";
+import {
+  GEOJSON_PATH,
+  JSON_PATH,
+  MAX_RUNS,
+  guardIndex,
+  guardOutline,
+  guardPairs,
+  guardPipeline,
+  guardReports,
+  guardSwath,
+  guardWarnings,
+  guardZipCounts,
+} from "./guard";
 import { DataError } from "./types";
 
 const receipt = {
@@ -27,6 +40,9 @@ const storm = {
     reports: "storms/2024-05-28/reports.geojson",
     pairs: "storms/2024-05-28/pairs.json",
     zip_counts: "storms/2024-05-28/zip-counts.json",
+    power: null,
+    internet: null,
+    warnings: null,
   },
 };
 
@@ -75,6 +91,22 @@ const swath = {
       geometry: { type: "MultiPolygon", coordinates: [] },
     },
   ],
+};
+
+const warningProps = {
+  phenomena: "SV",
+  significance: "W",
+  event_label: "Severe Thunderstorm Warning",
+  eventid: 101,
+  polygon_begin: "2024-05-29T00:00:00Z",
+  polygon_end: "2024-05-29T01:00:00Z",
+  product_id: "202405290000-KHGX-WUUS54-SVRHGX",
+};
+
+const warnings = {
+  type: "FeatureCollection",
+  receipt,
+  features: [{ type: "Feature", properties: warningProps, geometry: { type: "MultiPolygon", coordinates: [] } }],
 };
 
 const run = { run_time: receipt.run_time, package_version: "0.1.0", storm_dates: ["2024-05-28"], file_count: 4 };
@@ -133,6 +165,9 @@ const cases: [string, string, (value: unknown) => unknown, unknown, string[]][] 
       "storms.0.files.reports",
       "storms.0.files.pairs",
       "storms.0.files.zip_counts",
+      "storms.0.files.power",
+      "storms.0.files.internet",
+      "storms.0.files.warnings",
     ],
   ],
   [
@@ -192,6 +227,7 @@ const cases: [string, string, (value: unknown) => unknown, unknown, string[]][] 
       "receipt",
       "features",
       "features.0.properties",
+      "features.0.properties.id",
       "features.0.properties.time",
       "features.0.properties.location",
       "features.0.properties.size_in",
@@ -261,6 +297,19 @@ describe("guardIndex", () => {
     const files = { ...storm.files, zip_counts: null };
     expect(guardIndex({ ...index, storms: [{ ...storm, files }] }).storms[0]!.files.zip_counts).toBeNull();
   });
+  it("accepts an impact key as a path or null and rejects a path of the wrong kind", () => {
+    const files = {
+      ...storm.files,
+      power: "storms/2024-05-28/power.json",
+      internet: null,
+      warnings: "storms/2024-05-28/warnings.geojson",
+    };
+    expect(guardIndex({ ...index, storms: [{ ...storm, files }] }).storms[0]!.files.power).toBe(files.power);
+    const swapped = { ...storm.files, power: "storms/2024-05-28/power.geojson" };
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, files: swapped }] })).toThrow(/files.power/);
+    const json = { ...storm.files, warnings: "storms/2024-05-28/warnings.json" };
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, files: json }] })).toThrow(/files.warnings/);
+  });
   it("accepts the file paths that storms.schema.json accepts and rejects the ones it rejects", () => {
     const schemaPath = fileURLToPath(new URL("../../../src/hailprint/schemas/storms.schema.json", import.meta.url));
     const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as { $defs: Record<string, { pattern: string }> };
@@ -319,6 +368,47 @@ describe("guardSwath", () => {
   });
 });
 
+describe("the MultiPolygon rings", () => {
+  const RING = [
+    [-95.5, 29.7],
+    [-95.4, 29.7],
+    [-95.4, 29.8],
+    [-95.5, 29.7],
+  ];
+  const withRing = (ring: unknown) => ({
+    ...swath,
+    features: [{ ...swath.features[0], geometry: { type: "MultiPolygon", coordinates: [[ring]] } }],
+  });
+
+  it("accepts a ring of four finite positions", () => {
+    const good = withRing(RING);
+    expect(guardSwath(good)).toBe(good);
+  });
+
+  it("rejects a ring of fewer than four positions", () => {
+    expect(() => guardSwath(withRing(RING.slice(0, 3)))).toThrow(
+      /^swath\.geojson: features\[0\]\.geometry\.coordinates\[0\]\[0\] is not a ring of 4 or more finite/,
+    );
+  });
+
+  it.each([
+    ["a null position", [...RING.slice(0, 3), null]],
+    ["a non-finite number", [...RING.slice(0, 3), [-95.5, Infinity]]],
+    ["a string coordinate", [...RING.slice(0, 3), ["-95.5", 29.7]]],
+    ["a three-number position", [...RING.slice(0, 3), [-95.5, 29.7, 12]]],
+  ])("rejects a ring with %s", (_name, ring) => {
+    expect(() => guardSwath(withRing(ring))).toThrow(/geometry\.coordinates\[0\]\[0\] is not a ring/);
+  });
+
+  it("rejects a ring that is not an array, in a warnings file too", () => {
+    const feature = { ...warnings.features[0], geometry: { type: "MultiPolygon", coordinates: [[RING.slice(0, 3)]] } };
+    expect(() => guardWarnings({ ...warnings, features: [feature] })).toThrow(
+      /^warnings\.geojson: features\[0\]\.geometry\.coordinates\[0\]\[0\] is not a ring/,
+    );
+    expect(() => guardSwath(withRing("ring"))).toThrow(/coordinates\[0\]\[0\] is not an array/);
+  });
+});
+
 describe("guardPipeline", () => {
   it("rejects more than 50 runs", () => {
     const runs = Array.from({ length: 51 }, () => run);
@@ -357,9 +447,52 @@ describe("guardPipeline", () => {
 });
 
 describe("guardOutline", () => {
-  it("accepts a collection without a receipt and names county.geojson otherwise", () => {
+  it("accepts a collection without a receipt and names counties.geojson otherwise", () => {
     const outline = { type: "FeatureCollection", features: [] };
     expect(guardOutline(outline)).toBe(outline);
-    expect(() => guardOutline({ type: "Feature" })).toThrow(/county\.geojson: type is not FeatureCollection/);
+    expect(() => guardOutline({ type: "Feature" })).toThrow(/counties\.geojson: type is not FeatureCollection/);
+  });
+});
+
+describe("guardWarnings", () => {
+  afterEach(() => setFetch(null));
+
+  const withProps = (props: Record<string, unknown>) => ({
+    ...warnings,
+    features: [{ ...warnings.features[0], properties: { ...warningProps, ...props } }],
+  });
+
+  it("accepts a file whose properties match the allow-list", () => {
+    expect(guardWarnings(warnings)).toBe(warnings);
+  });
+
+  it("throws on a property outside the allow-list", () => {
+    expect(() => guardWarnings(withProps({ wfo: "HGX" }))).toThrow(
+      /^warnings\.geojson: features\[0\]\.properties\.wfo is not an allowed property/,
+    );
+  });
+
+  it("throws on a phenomena code other than SV, TO, and FF", () => {
+    expect(() => guardWarnings(withProps({ phenomena: "WS" }))).toThrow(/^warnings\.geojson: features\[0\]\.properties\.phenomena/);
+  });
+
+  it("throws on a time that is not UTC to the second", () => {
+    expect(() => guardWarnings(withProps({ polygon_end: "2024-05-29 01:00" }))).toThrow(
+      /^warnings\.geojson: features\[0\]\.properties\.polygon_end is not a run time/,
+    );
+  });
+
+  it("throws on a geometry that is not a MultiPolygon", () => {
+    const feature = { ...warnings.features[0], geometry: { type: "Point", coordinates: [] } };
+    expect(() => guardWarnings({ ...warnings, features: [feature] })).toThrow(
+      /^warnings\.geojson: features\[0\]\.geometry\.type is not MultiPolygon/,
+    );
+  });
+
+  it("answers a 404 with a DataError and no other throw", async () => {
+    setFetch(async () => new Response("nope", { status: 404 }));
+    const promise = fetchJson("storms/2024-05-28/warnings.geojson", guardWarnings);
+    await expect(promise).rejects.toBeInstanceOf(DataError);
+    await expect(promise).rejects.toThrow(/^warnings\.geojson: HTTP 404/);
   });
 });

@@ -1,4 +1,4 @@
-"""Command line entry: ``hailprint ingest|index|candidates|parcels|score|publish``."""
+"""Command line entry: ``hailprint ingest|index|candidates|parcels|score|warnings|publish``."""
 
 import argparse
 import math
@@ -9,6 +9,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import pyarrow.parquet as pq
 
 from hailprint import (
     archive,
@@ -21,6 +22,7 @@ from hailprint import (
     plot,
     publish,
     reports,
+    sbw,
     score,
     swath,
 )
@@ -31,6 +33,7 @@ OUT_DIR = paths.OUT_DIR
 PARCELS_GDB = paths.RAW_DIR / "hcad" / "extracted" / "Parcels.gdb"
 PARCELS_DIR = paths.DERIVED_DIR / "parcels"
 SCORES_DIR = paths.DERIVED_DIR / "scores"
+WARNINGS_DIR = paths.DERIVED_DIR / "warnings"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
 
@@ -90,6 +93,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=score.DEFAULT_RADIUS_KM,
         help=f"scoring radius in km, 0 to {score.MAX_RADIUS_KM}, default {score.DEFAULT_RADIUS_KM}",
     )
+    warnings_cmd = commands.add_parser(
+        "warnings", help="store the IEM storm-based warnings of the impact window per storm date"
+    )
+    warnings_cmd.add_argument(
+        "storm_dates", nargs="*", type=_storm_date, help="SPC convective day, YYYY-MM-DD"
+    )
+    warnings_cmd.add_argument(
+        "--missing",
+        action="store_true",
+        help="fetch each swath date with a closed impact window and no warnings file",
+    )
     publish_cmd = commands.add_parser(
         "publish", help="write the site data files and the storms index for storm dates"
     )
@@ -103,7 +117,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.command == "warnings" and bool(args.storm_dates) == args.missing:
+        parser.error("warnings takes storm dates or --missing, not both and not neither")
     try:
         if args.command == "ingest":
             ingest(args.storm_dates)
@@ -115,6 +132,8 @@ def main(argv: list[str] | None = None) -> int:
             count_parcels(args.storm_date)
         elif args.command == "score":
             score_days(args.storm_dates, args.radius_km)
+        elif args.command == "warnings":
+            warn_days(args.storm_dates, args.missing)
         elif args.command == "publish":
             publish_days(args.storm_dates)
     except (RuntimeError, OSError, ValueError) as exc:
@@ -274,6 +293,54 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _warnings_settled(storm_date: date, now: datetime) -> bool:
+    """True when the warnings file holds a row, or holds none for a date older than FRESH_DAYS."""
+    path = WARNINGS_DIR / sbw.file_name(storm_date)
+    if not path.exists():
+        return False
+    # a gap is never zero: an empty file of a fresh date may be a late IEM feed
+    return (
+        pq.read_metadata(path).num_rows > 0
+        or (now.date() - storm_date).days > candidates.FRESH_DAYS
+    )
+
+
+def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
+    """One warnings file per storm date from the IEM feed of the impact window.
+
+    With `missing`, the dates are the swath dates whose window has closed and that have no
+    settled warnings file. A file with zero rows settles only after `candidates.FRESH_DAYS`.
+    A failed date does not stop the other dates. The run prints one line per failed date,
+    then exits 1. The next `--missing` run starts again with the failed dates.
+    """
+    # shortcut: an explicit date runs for an open window too and writes a partial file that
+    # `--missing` then skips; add a closed-window check when explicit reruns of recent days
+    # become routine.
+    if missing:
+        now = _utc_now()
+        storm_dates = [
+            d
+            for d, _ in _swath_files([])
+            if sbw.window(d)[1] <= now and not _warnings_settled(d, now)
+        ]
+    written = []
+    failed = []
+    for storm_date in storm_dates:
+        try:
+            frame = sbw.parse(sbw.fetch(storm_date), storm_date)
+            written.append(
+                files.write_atomic(frame, WARNINGS_DIR / sbw.file_name(storm_date), sbw.METADATA)
+            )
+        except (RuntimeError, ValueError) as exc:
+            print(f"{storm_date}: {exc}", file=sys.stderr)
+            failed.append(storm_date.isoformat())
+            continue
+        print(f"{storm_date}: {len(frame)} warnings")
+    if failed:
+        raise ValueError(f"warnings failed for: {', '.join(failed)}")
+    return written
+
+
 def _archive_summary() -> dict | None:
     """The archive coverage from the archive index, or None without an index."""
     if not archive.INDEX_PATH.exists():
@@ -347,6 +414,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
         has_zips = zips_path.exists()
         spc = publish.spc_source(storm_date)
         hcad = publish.hcad_source(zips_path.name) if has_zips else None
+        warnings_path = WARNINGS_DIR / sbw.file_name(storm_date)
+        has_warnings = warnings_path.exists()
         try:
             mrms, max_mesh_mm = publish.swath_source(swath_path)
             texts, entry = publish.build_day(
@@ -360,6 +429,11 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
                 hcad=hcad,
                 facts=facts.get(storm_date.isoformat()),
                 run_time=run_time,
+                warnings=(
+                    (gpd.read_parquet(warnings_path), publish.warnings_source(warnings_path))
+                    if has_warnings
+                    else None
+                ),
             )
         except ValueError as exc:
             print(f"{storm_date}: {exc}", file=sys.stderr)
@@ -370,6 +444,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
             written.append(files.write_text_atomic(body, folder / name))
         if publish.ZIPS_FILE not in texts:
             (folder / publish.ZIPS_FILE).unlink(missing_ok=True)
+        if publish.WARNINGS_FILE not in texts:
+            (folder / publish.WARNINGS_FILE).unlink(missing_ok=True)
         entries.append(entry)
         file_count += len(texts)
         print(f"{storm_date}: published {len(texts)} files")

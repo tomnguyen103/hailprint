@@ -23,7 +23,8 @@ uv run hailprint index                      # archive index from one S3 bucket l
 uv run hailprint candidates --top 20        # needs `index` first
 uv run hailprint parcels 2024-05-28         # needs `ingest` for that date and the HCAD gdb
 uv run hailprint score --radius-km 5        # needs `ingest`; scores every swath file against SPC daily CSVs
-uv run hailprint publish                    # needs `ingest`; writes site/data/ (ZIP counts only where `parcels` ran)
+uv run hailprint warnings --missing         # IEM storm-based warnings for each swath date with a closed impact window
+uv run hailprint publish                    # needs `ingest`; writes site/data/ (ZIP counts only where `parcels` ran, warnings only where `warnings` ran)
 make site                                   # cd site && npm ci && npm run check
 cd site && npm run dev                      # Vite dev server at http://localhost:5173
 cd site && npm run check                    # tsc --noEmit && vitest run && vite build
@@ -50,27 +51,35 @@ plot.py       swaths + county outline + report points -> PNG (Agg backend)
 archive.py    one bucket listing -> one row per archive day (storm_date, file_count, bytes, has_12z)
 candidates.py SPC WCM hail database -> Harris County days (FIPS 201); all_days adds the days after the WCM end from SPC daily CSVs -> ranked, joined with the index
 parcels.py    HCAD Parcels.gdb -> allow-listed columns only, layer CRS -> one sjoin -> distinct hcad_num per size class and per ZIP
+sbw.py        IEM storm-based warnings (WFO HGX; SV, TO, FF; significance W) for the impact window of a storm date -> allow-listed properties only ->
+              GeoParquet at data/derived/warnings/warnings-<date>.parquet; window() is 12:00 UTC on D up to 12:00 UTC on D+2
 score.py      swaths + nearby_reports -> per scored report, metre distance to each size class -> contingency table (hits, misses, false alarms, correct negatives) -> POD, FAR, CSI, HSS;
               scoring radius 5 km default, 20 km max; reports within radius + 1 km of the crop edge are excluded (scoring domain); unverifiable area = swath farther than the radius from every report;
               pool() sums counts and areas across days and recomputes the metrics; edge_m() is the signed metre distance to the crop edge
 publish.py    swaths + nearby_reports + ZIP counts -> validated JSON with a receipt under site/data/storms/<date>/ (swath.geojson, reports.geojson,
-              radius-free pairs.json with edge_m and per-class distances, zip-counts.json) and the storms.json index; rescore(pairs, R) recomputes
+              radius-free pairs.json with edge_m and per-class distances, zip-counts.json, and warnings.geojson where a warnings file exists) and the storms.json index; rescore(pairs, R) recomputes
               the contingency table in Python for any whole-km radius; dumps() refuses NaN, the forbidden word, and owner fields;
               also pipeline.json (runs newest first, cap 50, merged by run_time; archive summary per year or null; one sources row per source and product)
-county.py     committed Harris County GeoJSON (package data) -> outline() and bbox()
+county.py     committed GeoJSON (package data): outline() and bbox() for Harris County; metro() and metro_bbox() for the 8 metro counties (the impact layers only)
 files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata;
               lock(path): one publish run at a time, pid in site/data/publish.lock, a second run stops with exit 1
 paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR; every data path hangs from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
-__main__.py   argparse CLI wiring the six commands and the fixed paths under data/, out/, and site/data/
+__main__.py   argparse CLI wiring the seven commands and the fixed paths under data/, out/, and site/data/
 ```
 
 `site/` is the static site (Preact 10, Vite 8, TypeScript strict, MapLibre GL 6). Routes:
-`/storms/<date>/map|parcels|score|data`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`, `/method/<data|storm-date|size-classes|scoring|limits>`, `/pipeline/<runs|archive|sources>`; `/` redirects
-to the newest storm date. It reads `storms.json` first, then the four per-date files, each through
-a guard in `site/src/data/guard.ts`, and re-scores `pairs.json` in `site/src/rescore.ts` with the
+`/storms/<date>/map|parcels|score|data` and `/storms/<date>/map/<step>`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`, `/method/<data|storm-date|size-classes|scoring|limits>`, `/pipeline/<runs|archive|sources>`; `/` redirects
+to the newest storm date. It reads `storms.json` first, then the four per-date files and `warnings.geojson` when the date has it,
+each through a guard in `site/src/data/guard.ts`, and re-scores `pairs.json` in `site/src/rescore.ts` with the
 same radius rule as `publish.rescore`. Every MapLibre import lives under `site/src/storms/map/`.
 `site/README.md` holds the commands, the data path, the basemap step, and the Vercel fields.
+
+The `<step>` in `/storms/<date>/map/<step>` is a number from 0 to 191. Step 0 starts at 12:00 UTC on D, and each step lasts 15 minutes.
+`site/src/time/` holds the step math and the time slider. `site/src/impact/` holds the storm timeline.
+The warnings layer sits under `site/src/storms/map/`, and the layers control sits in `site/src/storms/map-pane.tsx`.
+`design.md` at the repo root is the locked design system: the tokens, the archetype of each area, and the layout rules.
+Read it before a UI change.
 
 Data paths hang from `paths.ROOT`, so a command writes under the repo `data/` and `out/` from any
 working directory. `data/`, `out/`, and `site/data/` are gitignored. No module holds a relative `Path("data...")`.

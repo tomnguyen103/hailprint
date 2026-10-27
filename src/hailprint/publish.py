@@ -28,10 +28,13 @@ RECEIPT_KIND = "receipt"
 RUN_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 MESSAGE_CHARS = 200
 COORD_DECIMALS = 6
+# Warning polygons are context, not a measurement: 4 decimals are about 11 m.
+WARNINGS_COORD_DECIMALS = 4
 STORMS_DIR = "storms"
 SWATH_FILE = "swath.geojson"
 REPORTS_FILE = "reports.geojson"
 PAIRS_FILE = "pairs.json"
+WARNINGS_FILE = "warnings.geojson"
 ZIPS_FILE = "zip-counts.json"
 METADATA_KEYS = tuple(METADATA)
 SPC_PRODUCT = "preliminary hail reports"
@@ -39,7 +42,15 @@ HCAD_PRODUCT = "Parcels.gdb"
 PIPELINE_FILE = "pipeline.json"
 MAX_RUNS = 50
 # The index entry file keys that carry a receipt the sources table reads, with their schema kind.
-RECEIPT_FILES = (("pairs", "pairs"), ("zip_counts", "zip-counts"))
+RECEIPT_FILES = (
+    ("pairs", "pairs"),
+    ("zip_counts", "zip-counts"),
+    ("power", "power"),
+    ("internet", "internet"),
+    ("warnings", "warnings"),
+)
+# The entry file keys an older index lacks; merge_entries fills each with null.
+IMPACT_KEYS = ("power", "internet", "warnings")
 
 
 @cache
@@ -81,18 +92,42 @@ def validate(doc: Doc, kind: str) -> None:
         raise ValueError(f"{kind}: {_json_path(errors[0].absolute_path)}: {message}")
 
 
+def _find(node: Any, needle: str, parts: tuple[str | int, ...] = ()) -> str | None:
+    """The JSON path of the first key or string value that holds `needle` in any case, or None."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if needle in str(key).lower():
+                return _json_path((*parts, key))
+            found = _find(value, needle, (*parts, key))
+            if found is not None:
+                return found
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            found = _find(value, needle, (*parts, index))
+            if found is not None:
+                return found
+    elif isinstance(node, str) and needle in node.lower():
+        return _json_path(parts)
+    return None
+
+
 def dumps(doc: Doc, kind: str) -> str:
-    """Compact JSON text; NaN, Infinity, the forbidden word, or an owner field raises ValueError."""
+    """Compact JSON text; NaN, Infinity, the forbidden word, or an owner field raises ValueError.
+
+    The message names the file kind and the JSON path of the first match.
+    """
     try:
         text = json.dumps(doc, allow_nan=False, separators=(",", ":"), ensure_ascii=False)
     except ValueError as err:
         raise ValueError(f"{kind}: {err}") from err
     lowered = text.lower()
     if FORBIDDEN_WORD in lowered:
-        raise ValueError(f"{kind}: forbidden word {FORBIDDEN_WORD!r} in the text")
+        where = _find(doc, FORBIDDEN_WORD) or "$"
+        raise ValueError(f"{kind}: forbidden word {FORBIDDEN_WORD!r} at {where}")
     for field in OWNER_FIELDS:
         if field.lower() in lowered:
-            raise ValueError(f"{kind}: owner field {field!r} in the text")
+            where = _find(doc, field.lower()) or "$"
+            raise ValueError(f"{kind}: owner field {field!r} at {where}")
     return text
 
 
@@ -122,11 +157,11 @@ def _ring(ring: shapely.LinearRing) -> list[list[float]]:
     return [[float(x), float(y)] for x, y in ring.coords]
 
 
-def _multipolygon(geometry: shapely.Geometry) -> Doc:
+def _multipolygon(geometry: shapely.Geometry, decimals: int = COORD_DECIMALS) -> Doc:
     """GeoJSON coordinates by RFC 7946: counter-clockwise exteriors, clockwise holes."""
     # shortcut: swath and report coordinates round to 6 decimals (0.1 m), upgrade when a
     # sub-metre use appears
-    rounded = shapely.transform(geometry, lambda xy: np.round(xy, COORD_DECIMALS))
+    rounded = shapely.transform(geometry, lambda xy: np.round(xy, decimals))
     polygons = [orient(polygon, 1.0) for polygon in shapely.get_parts(rounded)]
     return {
         "type": "MultiPolygon",
@@ -157,6 +192,32 @@ def swath_doc(swaths: gpd.GeoDataFrame, rcpt: Doc) -> Doc:
             "geometry": _multipolygon(row["geometry"]),
         }
         for row, area_m2 in zip(ordered.to_dict("records"), metric.area, strict=True)
+    ]
+    return {"type": "FeatureCollection", "receipt": rcpt, "features": features}
+
+
+def warnings_doc(frame: gpd.GeoDataFrame, rcpt: Doc) -> Doc:
+    """The warning polygons as MultiPolygon features, sorted by begin time, eventid, and type.
+
+    Only the allow-listed columns leave the machine. A frame with no row gives an empty
+    FeatureCollection.
+    """
+    ordered = frame.sort_values(["polygon_begin", "eventid", "phenomena", "product_id"])
+    features = [
+        {
+            "type": "Feature",
+            "properties": {
+                "phenomena": str(row["phenomena"]),
+                "significance": str(row["significance"]),
+                "event_label": str(row["event_label"]),
+                "eventid": int(row["eventid"]),
+                "polygon_begin": _utc_text(row["polygon_begin"]),
+                "polygon_end": _utc_text(row["polygon_end"]),
+                "product_id": str(row["product_id"]),
+            },
+            "geometry": _multipolygon(row["geometry"], WARNINGS_COORD_DECIMALS),
+        }
+        for row in ordered.to_dict("records")
     ]
     return {"type": "FeatureCollection", "receipt": rcpt, "features": features}
 
@@ -321,7 +382,9 @@ def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
     """The old entries with the new entries over them by storm date.
 
     An entry stays only while its swath, reports, and pairs files exist under `data_dir`. An
-    entry whose ZIP count file is gone loses `zip_counts` and `parcel_total`.
+    entry whose ZIP count file is gone loses `zip_counts` and `parcel_total`. An entry whose
+    impact file is gone loses that path, so `index_receipts` never reads a missing file. An entry
+    that lacks an impact key gains it as null: this is the one migration site for an older index.
     """
     # shortcut: an entry stays until its directory vanishes, upgrade when a prune command is needed
     merged = {e["storm_date"]: e for e in old} | {e["storm_date"]: e for e in new}
@@ -329,12 +392,19 @@ def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
     kept = [
         e for e in merged.values() if all((data_dir / e["files"][k]).exists() for k in required)
     ]
-    return [
-        e
-        if not e["files"]["zip_counts"] or (data_dir / e["files"]["zip_counts"]).exists()
-        else e | {"parcel_total": None, "files": e["files"] | {"zip_counts": None}}
-        for e in kept
-    ]
+    filled = [e | {"files": dict.fromkeys(IMPACT_KEYS) | e["files"]} for e in kept]
+
+    def settled(e: Doc) -> Doc:
+        if e["files"]["zip_counts"] and not (data_dir / e["files"]["zip_counts"]).exists():
+            e = e | {"parcel_total": None, "files": e["files"] | {"zip_counts": None}}
+        gone = {
+            k: None
+            for k in IMPACT_KEYS
+            if e["files"][k] and not (data_dir / e["files"][k]).exists()
+        }
+        return e | {"files": e["files"] | gone}
+
+    return [settled(e) for e in filled]
 
 
 def read_published(path: Path, kind: str) -> Doc:
@@ -351,7 +421,7 @@ def read_published(path: Path, kind: str) -> Doc:
 
 
 def index_receipts(entries: list[Doc], data_dir: Path) -> list[Doc]:
-    """The pairs and ZIP count receipts of every index entry, read from `data_dir`."""
+    """The receipts of every non-null file of every index entry, read from `data_dir`."""
     return [
         read_published(data_dir / e["files"][key], kind)["receipt"]
         for e in entries
@@ -443,6 +513,14 @@ def swath_source(path: Path) -> tuple[Doc, float | None]:
     return entry, float(max_mesh) if max_mesh else None
 
 
+def warnings_source(path: Path) -> Doc:
+    """The IEM source entry from the metadata of a warnings file.
+
+    A file without the source, product, or confidence key raises ValueError that names the file.
+    """
+    return swath_source(path)[0]
+
+
 def spc_source(storm_date: date) -> Doc:
     """The source entry of the SPC daily CSV of one storm date."""
     return {
@@ -488,6 +566,7 @@ def build_day(
     hcad: Doc | None,
     facts: Doc | None,
     run_time: datetime,
+    warnings: tuple[gpd.GeoDataFrame, Doc] | None = None,
 ) -> tuple[dict[str, str], Doc]:
     """The serialised files of one storm date, by file name, and its entry for the storms index.
 
@@ -495,7 +574,9 @@ def build_day(
     must re-score to the table of `score.score_day` at the default radius, or ValueError names
     the pairs file. `facts` holds the report_count, max_size_in, and report_source of the
     candidate file, or None when the date is absent there. `zips` and `hcad` are both None
-    when the date has no parcel counts.
+    when the date has no parcel counts. `warnings` holds the warnings frame and its IEM source
+    entry, or None when the date has no warnings file; an empty frame gives an empty
+    FeatureCollection.
     """
     day = score.score_day(swaths, nearby, storm_date, score.DEFAULT_RADIUS_KM)
 
@@ -512,6 +593,9 @@ def build_day(
         zip_counts = zip_doc(zips, stamp(mrms, hcad))
         documents[ZIPS_FILE] = ("zip-counts", zip_counts)
         parcel_total = zip_counts["classes"][0]["parcel_count"] if zip_counts["classes"] else 0
+    if warnings is not None:
+        frame, iem = warnings
+        documents[WARNINGS_FILE] = ("warnings", warnings_doc(frame, stamp(iem)))
     texts = {}
     for name, (kind, doc) in documents.items():
         validate(doc, kind)
@@ -538,6 +622,8 @@ def build_day(
             "reports": f"{folder}/{REPORTS_FILE}",
             "pairs": f"{folder}/{PAIRS_FILE}",
             "zip_counts": f"{folder}/{ZIPS_FILE}" if ZIPS_FILE in texts else None,
+            **dict.fromkeys(IMPACT_KEYS),
+            "warnings": f"{folder}/{WARNINGS_FILE}" if WARNINGS_FILE in texts else None,
         },
     }
     validate(storms_doc([entry], run_time), "storms")

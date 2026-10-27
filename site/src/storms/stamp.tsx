@@ -2,24 +2,33 @@ import type { Receipt, ReportsFile, Storm } from "../data/types";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { CELLS, cellFor, cells } from "../stamp";
 import type { Load } from "../state/load";
+import { STEPS_PER_HOUR } from "../time/step";
 import { formatInches } from "../format";
 import { objectForSize } from "./select";
 
 interface Props {
   storm: Storm;
   reports: Load<ReportsFile>;
+  /** The map step; null off the map tab, where no cell is marked. */
+  step: number | null;
   indexReceipt: Receipt;
   onOpenDates: () => void;
 }
 
 const HOUR_LABELS = Array.from({ length: CELLS }, (_, i) => `${String((i + 12) % 24).padStart(2, "0")}Z`);
 
+/** The stamp cell that holds a map step; null once the step is past the 24-cell storm window. */
+export function sliderCell(step: number): number | null {
+  return step < CELLS * STEPS_PER_HOUR ? Math.floor(step / STEPS_PER_HOUR) : null;
+}
+
 /** Storm date in mono, the 24-cell 12Z-to-12Z bar, the report count, and the max size. */
-export function Stamp({ storm, reports, indexReceipt, onOpenDates }: Props) {
+export function Stamp({ storm, reports, step, indexReceipt, onOpenDates }: Props) {
   const times = reports.status === "ready" ? reports.data.features.map((f) => f.properties.time) : [];
   const filled = cells(times);
   const hours = HOUR_LABELS.filter((_, i) => filled[i]);
-  const label = `Storm window 12Z to 12Z, reports in ${hours.length} of ${CELLS} hours`;
+  const marked = step === null ? null : sliderCell(step);
+  const label = `Storm window 12Z to 12Z, reports in ${hours.length} of ${CELLS} hours${marked === null ? "" : `, map time in the ${HOUR_LABELS[marked]} hour`}`;
   return (
     <div class="stamp">
       <button type="button" class="stamp-date stamp-date-button mono" aria-haspopup="dialog" onClick={onOpenDates}>
@@ -28,7 +37,7 @@ export function Stamp({ storm, reports, indexReceipt, onOpenDates }: Props) {
       <span class="stamp-date stamp-date-text mono">{storm.storm_date}</span>
       <div class="stamp-bar" role="img" aria-label={label}>
         {filled.map((on, i) => (
-          <span key={i} class="stamp-cell" data-on={on} />
+          <span key={i} class="stamp-cell" data-on={on} data-slider={i === marked} />
         ))}
       </div>
       <ul class="visually-hidden">

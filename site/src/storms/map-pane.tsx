@@ -2,16 +2,19 @@ import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { fetchCounty } from "../county";
 import { fetchJson } from "../data/fetch";
-import { guardSwath } from "../data/guard";
-import { DataError, type ReportsFile, type Storm } from "../data/types";
+import { guardSwath, guardWarnings } from "../data/guard";
+import { DataError, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
+import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type Load, useLoad } from "../state/load";
 import { useTheme } from "../state/theme";
 import "../styles/map.css";
+import { TimeSlider } from "../time/slider";
+import { LAYER_ROWS, LayersControl, type LayerState } from "./layers-control";
 import type { MapHandle } from "./map/create-map";
 import { boundsOf, coveringClass, nearestReport } from "./map/geo";
 import { Inspector, type Pick } from "./map/inspector";
-import { fillLayerId } from "./map/layers";
+import { type LayerName, fillLayerId, warningsNote } from "./map/layers";
 import { RulerLegend } from "./map/ruler-legend";
 import { RULER } from "../ruler";
 
@@ -21,11 +24,17 @@ const NO_BASEMAP = "No basemap file.";
 interface Props {
   storm: Storm;
   reports: Load<ReportsFile> & { retry: () => void };
+  step: number;
+  onStep: (step: number) => void;
 }
 
-export function MapPane({ storm, reports }: Props) {
+export function MapPane({ storm, reports, step, onStep }: Props) {
   const swath = useLoad(storm.files.swath, () => fetchJson(storm.files.swath, guardSwath));
   const county = useLoad("county", fetchCounty);
+  const warningsFile = storm.files.warnings;
+  const warnings = useLoad<WarningsFile | null>(warningsFile ?? "warnings:none", () =>
+    warningsFile === null ? Promise.resolve(null) : fetchJson(warningsFile, guardWarnings),
+  );
   const { resolved: theme } = useTheme();
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
@@ -33,6 +42,7 @@ export function MapPane({ storm, reports }: Props) {
   const [mapError, setMapError] = useState<DataError | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set());
+  const [layers, setLayers] = useState<LayerState>({ swath: true, reports: true, warnings: true });
   const [pick, setPick] = useState<Pick | null>(null);
   const reportsRef = useRef<ReportsFile | null>(null);
   reportsRef.current = reports.status === "ready" ? reports.data : null;
@@ -80,6 +90,7 @@ export function MapPane({ storm, reports }: Props) {
   const swathData = swath.status === "ready" ? swath.data : null;
   const reportsData = reports.status === "ready" ? reports.data : null;
   const countyData: FeatureCollection<MultiPolygon> | null = county.status === "ready" ? county.data : null;
+  const warningsData = warnings.status === "ready" ? warnings.data : null;
   useEffect(() => {
     if (!ready || !handle.current) return;
     handle.current.setData(swathData, reportsData, countyData);
@@ -96,6 +107,16 @@ export function MapPane({ storm, reports }: Props) {
     if (!ready || !handle.current) return;
     for (const m of RULER) handle.current.setClassVisible(m.threshold_mm, !hidden.has(m.threshold_mm));
   }, [ready, hidden]);
+  useEffect(() => {
+    if (!ready || !handle.current) return;
+    for (const row of LAYER_ROWS) handle.current.setLayerVisible(row.name, layers[row.name]);
+  }, [ready, layers]);
+  useEffect(() => {
+    if (ready) handle.current?.setWarnings(warningsData, storm.storm_date, step);
+  }, [ready, warningsData, storm.storm_date, step]);
+  useEffect(() => {
+    if (ready) handle.current?.setReportCutoff(step);
+  }, [ready, step]);
 
   const toggle = useCallback(
     (thresholdMm: number) => {
@@ -107,6 +128,7 @@ export function MapPane({ storm, reports }: Props) {
     },
     [hidden],
   );
+  const toggleLayer = useCallback((name: LayerName, on: boolean) => setLayers((prev) => ({ ...prev, [name]: on })), []);
   const close = useCallback(() => {
     setPick(null);
     container.current?.focus();
@@ -116,26 +138,32 @@ export function MapPane({ storm, reports }: Props) {
   // One overlay slot: the map chunk error first, then the swath, reports, and county errors in that order.
   const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : county.status === "error" ? county : null;
   const receipt = swathData?.receipt ?? null;
+  const warningsLine = warningsNote(warningsFile, warnings);
   return (
     <div class="map-pane" data-inspector={pick !== null}>
-      <div class="map-stage">
-        <div ref={container} class="map-frame" role="region" aria-label="Map of the hail swath" tabIndex={-1} />
-        {ready && !ready.basemap ? <p class="map-note">{NO_BASEMAP}</p> : null}
-        {mapError ? (
-          <div class="map-overlay">
-            <ErrorState error={mapError} onRetry={retryMap} />
-          </div>
-        ) : failed ? (
-          <div class="map-overlay">
-            <ErrorState error={failed.error} onRetry={failed.retry} />
-          </div>
-        ) : null}
-        {swath.status === "loading" && swath.showLoading ? (
-          <div class="map-overlay">
-            <LoadingState file={SWATH_FILE} />
-          </div>
-        ) : null}
-        <RulerLegend hidden={hidden} onToggle={toggle} />
+      <div class="map-main">
+        <div class="map-stage">
+          <div ref={container} class="map-frame" role="region" aria-label="Map of the hail swath" tabIndex={-1} />
+          {ready && !ready.basemap ? <p class="map-note">{NO_BASEMAP}</p> : null}
+          {mapError ? (
+            <div class="map-overlay">
+              <ErrorState error={mapError} onRetry={retryMap} />
+            </div>
+          ) : failed ? (
+            <div class="map-overlay">
+              <ErrorState error={failed.error} onRetry={failed.retry} />
+            </div>
+          ) : null}
+          {swath.status === "loading" && swath.showLoading ? (
+            <div class="map-overlay">
+              <LoadingState file={SWATH_FILE} />
+            </div>
+          ) : null}
+          <LayersControl layers={layers} warnings={{ available: warningsData !== null, note: warningsLine }} onToggle={toggleLayer} />
+          <RulerLegend hidden={hidden} onToggle={toggle} />
+        </div>
+        <TimeSlider date={storm.storm_date} step={step} onStep={onStep} />
+        <Timeline date={storm.storm_date} step={step} warnings={warningsData} note={warningsLine} reports={reportsData} onStep={onStep} />
       </div>
       {pick !== null && receipt !== null ? <Inspector pick={pick} receipt={receipt} onClose={close} /> : null}
     </div>

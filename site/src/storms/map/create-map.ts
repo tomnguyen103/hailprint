@@ -3,6 +3,7 @@ import {
   type GeoJSONSource,
   type LngLatBoundsLike,
   Map as MapLibreMap,
+  Marker,
   NavigationControl,
   type StyleSpecification,
   addProtocol,
@@ -13,22 +14,32 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { Protocol } from "pmtiles";
 import { type Bbox, HARRIS_BBOX } from "../../county";
-import type { ReportsFile, SwathFile } from "../../data/types";
+import type { ReportsFile, SwathFile, WarningsFile } from "../../data/types";
 import type { FeatureCollection, MultiPolygon, Point } from "geojson";
 import { BASEMAP_FILE, BASEMAP_SOURCE, basemapLayers, probeBasemap } from "./basemap";
 import {
   COUNTY_SOURCE,
   POINT_SOURCE,
+  REPORTS_LAYER,
   REPORTS_SOURCE,
   SWATH_SOURCE,
+  TAG_ZOOM,
+  WARNINGS_SOURCE,
+  type LayerName,
   type PaintName,
   type Theme,
+  activeWarnings,
   chromeLayers,
   fillLayerId,
   fillLayers,
+  reportsAtStep,
   themedPaint,
   token,
+  warningLayerId,
+  warningLayers,
+  warningTags,
 } from "./layers";
+import { PHENOMENA } from "../../data/types";
 import { RULER } from "../../ruler";
 
 export type { MapLibreMap };
@@ -52,6 +63,7 @@ function style(theme: Theme, basemap: boolean): StyleSpecification {
     [COUNTY_SOURCE]: { type: "geojson", data: EMPTY },
     [REPORTS_SOURCE]: { type: "geojson", data: EMPTY },
     [POINT_SOURCE]: { type: "geojson", data: EMPTY },
+    [WARNINGS_SOURCE]: { type: "geojson", data: EMPTY },
   };
   if (basemap) {
     sources[BASEMAP_SOURCE] = { type: "vector", url: `pmtiles://${BASEMAP_FILE}`, attribution: "Protomaps, OpenStreetMap" };
@@ -63,6 +75,7 @@ function style(theme: Theme, basemap: boolean): StyleSpecification {
       { id: "paper", type: "background", paint: { "background-color": token("--paper") } },
       ...(basemap ? basemapLayers(theme) : []),
       ...fillLayers(),
+      ...warningLayers(),
       ...chromeLayers(),
     ],
   };
@@ -74,6 +87,12 @@ export interface MapHandle {
   setData(swath: SwathFile | null, reports: ReportsFile | null, county: FeatureCollection<MultiPolygon> | null): void;
   setTheme(theme: Theme): void;
   setClassVisible(thresholdMm: number, visible: boolean): void;
+  /** Switch the swath, the reports, or the warnings. A hidden size class stays hidden when the swath returns. */
+  setLayerVisible(name: LayerName, visible: boolean): void;
+  /** Draw the warnings in force at the step, each with its text label. */
+  setWarnings(file: WarningsFile | null, date: string, step: number): void;
+  /** Fade the reports after this step; null draws all of them in full. */
+  setReportCutoff(step: number | null): void;
   fit(bounds: Bbox | null): void;
   /** Place the one checked point, or remove it with null. */
   setPoint(lngLat: [number, number] | null): void;
@@ -104,14 +123,38 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
     map.once("error", (e) => reject(e.error ?? new Error("map failed to load")));
   });
 
+  return makeHandle(map, basemap);
+}
+
+/** The handle over a map whose style is loaded or still loading. Layer state lives here, so every call is safe in any order. */
+export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
   const geojson = (id: string) => map.getSource(id) as GeoJSONSource | undefined;
+  const show = (id: string, on: boolean) => map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
+  const hiddenClasses = new Set<number>();
+  let swathOn = true;
+  let warningsOn = true;
+  let reportsFile: ReportsFile | null = null;
+  let cutoff: number | null = null;
+  let tags: Marker[] = [];
+
+  const applySwath = () => {
+    for (const mark of RULER) show(fillLayerId(mark.threshold_mm), swathOn && !hiddenClasses.has(mark.threshold_mm));
+    show("swath-outline", swathOn);
+  };
+  const renderReports = () => geojson(REPORTS_SOURCE)?.setData(reportsAtStep(reportsFile, cutoff));
+  const syncTags = () => {
+    const visible = warningsOn && map.getZoom() >= TAG_ZOOM;
+    for (const tag of tags) tag.getElement().hidden = !visible;
+  };
+  map.on("zoom", syncTags);
 
   return {
     map,
     basemap,
     setData(swath, reports, county) {
       geojson(SWATH_SOURCE)?.setData(swath ?? EMPTY);
-      geojson(REPORTS_SOURCE)?.setData(reports ?? EMPTY);
+      reportsFile = reports;
+      renderReports();
       geojson(COUNTY_SOURCE)?.setData(county ?? EMPTY);
     },
     setTheme(nextTheme) {
@@ -127,7 +170,40 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
       }
     },
     setClassVisible(thresholdMm, visible) {
-      map.setLayoutProperty(fillLayerId(thresholdMm), "visibility", visible ? "visible" : "none");
+      if (visible) hiddenClasses.delete(thresholdMm);
+      else hiddenClasses.add(thresholdMm);
+      applySwath();
+    },
+    setLayerVisible(name, visible) {
+      if (name === "swath") {
+        swathOn = visible;
+        applySwath();
+      } else if (name === "reports") {
+        show(REPORTS_LAYER, visible);
+      } else if (name === "warnings") {
+        warningsOn = visible;
+        for (const phenomena of PHENOMENA) show(warningLayerId(phenomena), visible);
+        syncTags();
+      } else {
+        const unreachable: never = name;
+        throw new Error(`unknown layer ${String(unreachable)}`);
+      }
+    },
+    setWarnings(file, date, step) {
+      const active = activeWarnings(file, date, step);
+      geojson(WARNINGS_SOURCE)?.setData({ type: "FeatureCollection", features: active });
+      for (const tag of tags) tag.remove();
+      tags = warningTags(active).map((tag) => {
+        const element = document.createElement("div");
+        element.className = `warning-tag warning-tag-${tag.text.toLowerCase()}`;
+        element.textContent = tag.text;
+        return new Marker({ element }).setLngLat(tag.lngLat).addTo(map);
+      });
+      syncTags();
+    },
+    setReportCutoff(step) {
+      cutoff = step;
+      renderReports();
     },
     fit(bounds) {
       map.fitBounds((bounds ?? HARRIS_BBOX) as LngLatBoundsLike, { padding: FIT_PADDING, duration: reduceMotion() ? 0 : FLY_MS });
@@ -143,6 +219,7 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
       map.flyTo({ center: lngLat, zoom, duration: reduceMotion() ? 0 : FLY_MS });
     },
     destroy() {
+      for (const tag of tags) tag.remove();
       map.remove();
     },
   };

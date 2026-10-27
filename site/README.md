@@ -32,9 +32,10 @@ every whole radius; `src/pool.test.ts` checks the browser pool against it and sk
 
 ## Basemap
 
-`scripts/basemap.sh` extracts the Harris County bbox at maxzoom 12 from the Protomaps daily
-build into `public/basemap.pmtiles` with the `pmtiles` CLI. The file is optional: the map
-draws paper and the county outline when it is absent. The file is gitignored.
+`scripts/basemap.sh` extracts the 8-county metro bbox (`hailprint.county.metro_bbox()`) at
+maxzoom 12 from the Protomaps daily build into `public/basemap.pmtiles` with the `pmtiles`
+CLI. The file is optional: the map draws paper and the county outlines when it is absent.
+The file is gitignored.
 
 ## Vercel
 

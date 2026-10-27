@@ -26,8 +26,9 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
       {
         kind: "prose",
         text:
-          "The pipeline reads three sources. MRMS MESH comes from the public S3 bucket noaa-mrms-pds as gzipped GRIB2 files. " +
-          "SPC publishes a preliminary hail CSV for each day. HCAD publishes the Harris County parcel geodatabase.",
+          "The pipeline reads four sources. MRMS MESH comes from the public S3 bucket noaa-mrms-pds as gzipped GRIB2 files. " +
+          "SPC publishes a preliminary hail CSV for each day. HCAD publishes the Harris County parcel geodatabase. " +
+          "The Iowa Environmental Mesonet publishes the NWS warning polygons.",
       },
       { kind: "heading", text: "Published files per storm date" },
       {
@@ -37,6 +38,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
           "reports.geojson: the SPC reports within 50 km of the county outline.",
           "pairs.json: the metre distance from each report to each size class, free of any radius.",
           "zip-counts.json: distinct parcels per size class and per ZIP code, where parcels ran.",
+          "warnings.geojson: NWS severe thunderstorm, tornado, and flash flood warning polygons for the 48-hour window, where warnings ran.",
         ],
       },
       { kind: "figure", id: "receipt" },

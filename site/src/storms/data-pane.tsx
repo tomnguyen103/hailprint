@@ -1,6 +1,8 @@
 import { DATA_BASE, fetchJson } from "../data/fetch";
-import { guardPairs } from "../data/guard";
-import type { Storm } from "../data/types";
+import { guardPairs, guardReports, guardWarnings } from "../data/guard";
+import type { ReportsFile, Storm, WarningsFile } from "../data/types";
+import { TimelineTables } from "../impact/timeline";
+import { ReceiptChip } from "../shell/receipt-chip";
 import { ReceiptList } from "../shell/receipt-list";
 import { ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
@@ -9,9 +11,15 @@ const FILE = "pairs.json";
 
 export function DataPane({ storm }: { storm: Storm }) {
   const pairs = useLoad(`data:${storm.files.pairs}`, () => fetchJson(storm.files.pairs, guardPairs));
+  const warningsFile = storm.files.warnings;
+  const warnings = useLoad<WarningsFile | null>(`data:${warningsFile ?? "warnings:none"}`, () =>
+    warningsFile === null ? Promise.resolve(null) : fetchJson(warningsFile, guardWarnings),
+  );
+  const reports = useLoad<ReportsFile>(`data:${storm.files.reports}`, () => fetchJson(storm.files.reports, guardReports));
   const files: [string, string | null][] = [
     ["swath.geojson", storm.files.swath],
     ["reports.geojson", storm.files.reports],
+    ["warnings.geojson", warningsFile],
     ["pairs.json", storm.files.pairs],
     ["zip-counts.json", storm.files.zip_counts],
   ];
@@ -23,9 +31,17 @@ export function DataPane({ storm }: { storm: Storm }) {
           {files.map(([name, path]) => (
             <li key={name}>
               {path ? (
-                <a class="mono" href={DATA_BASE + path} download>
-                  {name}
-                </a>
+                <>
+                  <a class="mono" href={DATA_BASE + path} download>
+                    {name}
+                  </a>
+                  {name === "warnings.geojson" && warnings.status === "ready" && warnings.data !== null ? (
+                    <>
+                      {" "}
+                      <ReceiptChip receipt={warnings.data.receipt} file={name} />
+                    </>
+                  ) : null}
+                </>
               ) : (
                 <>
                   <span class="mono">{name}</span>, none
@@ -61,6 +77,16 @@ export function DataPane({ storm }: { storm: Storm }) {
             }
           />
         ) : null}
+      </section>
+      <section class="timeline-numbers">
+        <h2>Timeline numbers</h2>
+        {warnings.status === "error" ? <ErrorState error={warnings.error} onRetry={warnings.retry} /> : null}
+        {reports.status === "error" ? <ErrorState error={reports.error} onRetry={reports.retry} /> : null}
+        <TimelineTables
+          date={storm.storm_date}
+          warnings={warnings.status === "ready" ? warnings.data : null}
+          reports={reports.status === "ready" ? reports.data : null}
+        />
       </section>
     </div>
   );

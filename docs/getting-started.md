@@ -38,6 +38,7 @@ uv run hailprint candidates --top 20        # ranked candidate days; needs `inde
 uv run hailprint candidates --missing       # candidate days with a 12Z file and no swath file, newest first
 uv run hailprint parcels 2024-05-28         # parcel count per size class; needs `ingest` for that date and the HCAD gdb
 uv run hailprint score --radius-km 5        # scores every swath file against the SPC daily CSVs
+uv run hailprint warnings 2024-05-28        # NWS warning polygons for one or more storm dates; `--missing` fills the gaps
 uv run hailprint publish                    # writes site/data/ (ZIP counts only where `parcels` ran)
 ```
 
