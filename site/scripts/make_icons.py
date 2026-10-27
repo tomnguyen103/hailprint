@@ -9,7 +9,7 @@ import math
 import sys
 from pathlib import Path
 
-# shortcut: Pillow comes in as a matplotlib dependency, add pillow to the dev group if matplotlib drops it.
+# shortcut: Pillow comes in through matplotlib, add pillow to the dev group if matplotlib drops it.
 from PIL import Image, ImageDraw
 
 # The colours copy --sheet, --hail-2, --hail-4, and --hail-6 in site/src/styles/tokens.css.
