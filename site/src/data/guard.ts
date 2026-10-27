@@ -2,8 +2,19 @@
 // and the first missing or mistyped key, so the error state can name the problem.
 // Each guard checks every key the site reads from that file, and nothing more.
 import type { FeatureCollection, MultiPolygon } from "geojson";
+import { METRO_FIPS } from "../impact/power";
 import { DATE } from "../router";
-import type { Pairs, PipelineFile, ReportsFile, StormsIndex, SwathFile, WarningsFile, ZipCounts } from "./types";
+import { STEPS } from "../time/step";
+import type {
+  Pairs,
+  PipelineFile,
+  PowerFile,
+  ReportsFile,
+  StormsIndex,
+  SwathFile,
+  WarningsFile,
+  ZipCounts,
+} from "./types";
 import { DataError, PHENOMENA } from "./types";
 
 type Rec = Record<string, unknown>;
@@ -279,6 +290,57 @@ export function guardWarnings(value: unknown): WarningsFile {
   });
   guardMultiPolygons(file, value);
   return value as WarningsFile;
+}
+
+/** The window start: 12:00 UTC on the storm date, as `power.schema.json` pins it. */
+const WINDOW_START = /^\d{4}-\d{2}-\d{2}T12:00:00Z$/;
+
+/** A customers-out value: a whole count, or null where the source has no row. Never NaN, never a string. */
+function outValue(file: string, value: unknown, path: string): void {
+  if (value === null) return;
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new DataError(file, `${path} is not a count or null`);
+  }
+}
+
+export function guardPower(value: unknown): PowerFile {
+  const file = "power.json";
+  const root = rec(file, value, "power");
+  guardReceipt(file, root["receipt"]);
+  const window = rec(file, root["window"], "window");
+  if (!WINDOW_START.test(str(file, window["start"], "window.start"))) {
+    throw new DataError(file, "window.start is not 12:00 UTC");
+  }
+  if (window["step_minutes"] !== 15) throw new DataError(file, "window.step_minutes is not 15");
+  if (window["steps"] !== STEPS) throw new DataError(file, `window.steps is not ${STEPS}`);
+  if (root["source"] !== "eaglei" && root["source"] !== "odin") {
+    throw new DataError(file, "source is not eaglei or odin");
+  }
+  if (root["source"] === "eaglei") {
+    if (root["utilities"] !== null) throw new DataError(file, "utilities is not null");
+  } else if (list(file, root["utilities"], "utilities").length === 0) {
+    throw new DataError(file, "utilities is empty");
+  } else {
+    (root["utilities"] as unknown[]).forEach((item, i) => str(file, item, `utilities[${i}]`));
+  }
+  const counties = list(file, root["counties"], "counties");
+  if (counties.length !== METRO_FIPS.length) {
+    throw new DataError(file, `counties has ${counties.length} entries, not ${METRO_FIPS.length}`);
+  }
+  counties.forEach((item, i) => {
+    const at = `counties[${i}]`;
+    const county = rec(file, item, at);
+    if (county["fips"] !== METRO_FIPS[i]) throw new DataError(file, `${at}.fips is not ${METRO_FIPS[i]}`);
+    str(file, county["name"], `${at}.name`);
+    const customers = num(file, county["customers"], `${at}.customers`);
+    if (!Number.isInteger(customers) || customers < 1) {
+      throw new DataError(file, `${at}.customers is not a count of 1 or more`);
+    }
+    const out = list(file, county["out"], `${at}.out`);
+    if (out.length !== STEPS) throw new DataError(file, `${at}.out has ${out.length} values, not ${STEPS}`);
+    for (let step = 0; step < out.length; step++) outValue(file, out[step], `${at}.out[${step}]`);
+  });
+  return value as PowerFile;
 }
 
 /** The committed county outline: a FeatureCollection with no receipt. */

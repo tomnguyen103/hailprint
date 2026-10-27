@@ -48,15 +48,21 @@
   font-size: 0.85rem;
 }
 
-/* Layers control: top right of the map, under the frame on a narrow screen */
+/* Controls: top right of the map, under the frame on a narrow screen */
 
-.layers {
+.map-controls {
   position: absolute;
   top: 12px;
   right: 12px;
   z-index: 2;
-  box-sizing: border-box;
+  display: grid;
+  gap: 8px;
   width: 14rem;
+}
+
+.layers,
+.power-fill {
+  box-sizing: border-box;
   min-width: 0;
   margin: 0;
   padding: 0 12px;
@@ -64,6 +70,90 @@
   border-radius: var(--radius-pane);
   background: var(--sheet);
   color: var(--ink);
+}
+
+.power-fill legend {
+  padding: 0 4px;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+/* Legends: bottom left of the map; the power key sits above the hail key */
+
+.map-legends {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.power-legend {
+  padding: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+  background: var(--sheet);
+  font-size: 0.85rem;
+}
+
+.power-legend-title {
+  margin: 0 0 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.power-legend ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.power-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.power-legend-note {
+  max-width: 22ch;
+  margin: 8px 0 0;
+  color: var(--ink-muted);
+}
+
+.power-swatch {
+  flex: none;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+}
+
+.power-swatch-none {
+  background: var(--sheet);
+}
+
+/* A missing step: the same 45 degree hatch the map draws, never the colour of a zero */
+.power-swatch-gap {
+  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--ink-muted) 3px 4px);
+}
+
+/* County labels: map markers with a sheet ground, so the text meets 4.5:1 on every fill */
+
+.county-tag {
+  padding: 0 4px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--sheet);
+  color: var(--ink);
+  font: 500 12px/1.4 var(--mono);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
 .layer-row {
@@ -166,10 +256,6 @@
 /* Legend */
 
 .ruler-legend {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
-  z-index: 2;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -314,15 +400,30 @@
     bottom: auto;
   }
 
-  /* Under the frame, the controls no longer cover the swath */
-  .layers {
+  /* Under the frame, the controls and legends no longer cover the swath */
+  .map-controls,
+  .map-legends {
     position: static;
     width: auto;
+    margin-top: 8px;
+  }
+
+  .map-legends {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .layers,
+  .power-fill {
     display: flex;
     flex-wrap: wrap;
     gap: 0 16px;
-    margin-top: 8px;
     padding: 0 8px;
+  }
+
+  .power-legend-note {
+    max-width: none;
   }
 
   .warning-key {
@@ -337,10 +438,8 @@
   }
 
   .ruler-legend {
-    position: static;
     flex-direction: row;
     flex-wrap: wrap;
-    margin-top: 8px;
     padding: 4px;
   }
 

@@ -1,8 +1,9 @@
 import { useState } from "preact/hooks";
 import "../styles/storms.css";
 import { fetchJson } from "../data/fetch";
-import { guardReports } from "../data/guard";
-import type { Receipt, Storm, StormsIndex } from "../data/types";
+import { guardPower, guardReports } from "../data/guard";
+import type { PowerFile, Receipt, Storm, StormsIndex } from "../data/types";
+import { harrisPeak } from "../impact/power";
 import { TABS, TAB_LABELS, href, type Tab } from "../router";
 import { SubTabs } from "../shell/sub-tabs";
 import { useLoad } from "../state/load";
@@ -22,7 +23,12 @@ interface Props {
 
 export function Workspace({ index, storm, tab }: Props) {
   const [datesOpen, setDatesOpen] = useState(false);
-  const { step, setStep } = useStep(storm.storm_date);
+  const powerFile = storm.files.power;
+  const power = useLoad<PowerFile | null>(powerFile ?? "power:none", () =>
+    powerFile === null ? Promise.resolve(null) : fetchJson(powerFile, guardPower),
+  );
+  // The map opens at the Harris power peak when the file is valid; a failed file leaves step 48.
+  const { step, setStep } = useStep(storm.storm_date, harrisPeak(power.status === "ready" ? power.data : null));
   const reports = useLoad(storm.files.reports, () => fetchJson(storm.files.reports, guardReports));
   const indexReceipt: Receipt = {
     storm_date: storm.storm_date,
@@ -33,7 +39,7 @@ export function Workspace({ index, storm, tab }: Props) {
   };
 
   let pane;
-  if (tab === "map") pane = <MapPane storm={storm} reports={reports} step={step} onStep={setStep} />;
+  if (tab === "map") pane = <MapPane storm={storm} reports={reports} power={power} step={step} onStep={setStep} />;
   else if (tab === "parcels") pane = <ParcelsPane storm={storm} />;
   else if (tab === "score") pane = <ScorePane storm={storm} radiusKm={index.radius_km_default} />;
   else pane = <DataPane storm={storm} />;

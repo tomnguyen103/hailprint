@@ -2,6 +2,7 @@
 import type { Feature, FeatureCollection, MultiPolygon, Point } from "geojson";
 import type { LayerSpecification } from "maplibre-gl";
 import { PHENOMENA, type Phenomena, type ReportsFile, type WarningProps, type WarningsFile } from "../../data/types";
+import { type CountyFeature, FILLED_BINS, percentText } from "../../impact/power";
 import { WARNING_STYLES } from "../../impact/warning-styles";
 import { RULER } from "../../ruler";
 import type { Load } from "../../state/load";
@@ -14,7 +15,16 @@ export const COUNTY_SOURCE = "county";
 export const REPORTS_SOURCE = "reports";
 export const POINT_SOURCE = "point";
 export const WARNINGS_SOURCE = "warnings";
+export const POWER_SOURCE = "power";
+export const POWER_FILL = "power-fill";
+export const POWER_GAP = "power-gap";
+export const POWER_OUTLINE = "power-outline";
+/** The id of the 45 degree hatch image that marks a county step with no source row. */
+export const POWER_HATCH = "power-hatch";
+export const POWER_LAYER_IDS = [POWER_FILL, POWER_GAP, POWER_OUTLINE] as const;
 export const FILL_OPACITY = 0.85;
+/** The county fill lets the basemap show through. */
+export const POWER_OPACITY = 0.75;
 /** A report after the slider step draws at this opacity. */
 export const REPORT_FADED = 0.3;
 /** The warning labels show from this zoom up; below it they crowd the county. */
@@ -45,6 +55,51 @@ export function fillLayers(): LayerSpecification[] {
 }
 
 export const REPORTS_LAYER = "report-points";
+
+type FillColor = NonNullable<Extract<LayerSpecification, { type: "fill" }>["paint"]>["fill-color"];
+
+/** The fill colour of a county: the bin name picks its `--out-N` token. A zero or missing bin has no colour. */
+export function powerFillColor(): FillColor {
+  const match = ["match", ["get", "bin"], ...FILLED_BINS.flatMap((bin) => [bin, token(bin)]), "rgba(0,0,0,0)"];
+  return match as unknown as FillColor;
+}
+
+/** The power layers, all hidden: the fill for the five bins, the hatch for a gap, and the county outline. A zero bin draws nothing. */
+export function powerLayers(): LayerSpecification[] {
+  return [
+    {
+      id: POWER_FILL,
+      type: "fill",
+      source: POWER_SOURCE,
+      layout: { visibility: "none" },
+      filter: ["in", ["get", "bin"], ["literal", [...FILLED_BINS]]],
+      paint: { "fill-color": powerFillColor(), "fill-opacity": POWER_OPACITY },
+    },
+    {
+      id: POWER_GAP,
+      type: "fill",
+      source: POWER_SOURCE,
+      layout: { visibility: "none" },
+      filter: ["==", ["get", "bin"], "gap"],
+      paint: { "fill-pattern": POWER_HATCH },
+    },
+    {
+      id: POWER_OUTLINE,
+      type: "line",
+      source: POWER_SOURCE,
+      layout: { visibility: "none" },
+      paint: { "line-color": token("--ink-muted"), "line-width": 1 },
+    },
+  ];
+}
+
+/** The power paint that changes with the theme; the map handle applies it only while the fill shows. */
+export function powerPaint(): Record<string, Record<string, unknown>> {
+  return {
+    [POWER_FILL]: { "fill-color": powerFillColor() },
+    [POWER_OUTLINE]: { "line-color": token("--ink-muted") },
+  };
+}
 
 export function warningLayerId(phenomena: Phenomena): string {
   return `warnings-${phenomena.toLowerCase()}`;
@@ -94,7 +149,7 @@ export interface WarningTag {
  * The middle of the bounding box of the largest outer ring; null when the geometry has no ring.
  * shortcut: the box centre can sit outside a concave polygon; use a pole of inaccessibility when a label lands off its shape.
  */
-function labelPoint(geometry: MultiPolygon): [number, number] | null {
+export function labelPoint(geometry: MultiPolygon): [number, number] | null {
   let best: [number, number] | null = null;
   let bestArea = -1;
   for (const polygon of geometry.coordinates) {
@@ -117,6 +172,19 @@ export function warningTags(features: WarningFeature[]): WarningTag[] {
   return features.flatMap((f) => {
     const lngLat = labelPoint(f.geometry);
     return lngLat === null ? [] : [{ lngLat, text: f.properties.phenomena }];
+  });
+}
+
+export interface CountyTag {
+  lngLat: [number, number];
+  text: string;
+}
+
+/** One label per county that has a polygon: the name and the share out, or "no data" for a gap. */
+export function countyTags(features: CountyFeature[]): CountyTag[] {
+  return features.flatMap((f) => {
+    const lngLat = labelPoint(f.geometry);
+    return lngLat === null ? [] : [{ lngLat, text: `${f.properties.name} ${percentText(f.properties.share)}` }];
   });
 }
 

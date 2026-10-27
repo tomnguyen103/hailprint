@@ -237,6 +237,68 @@ def test_share_out_is_customers_out_over_the_mcc_customers_and_null_stays_null()
     assert share[at & (day["fips"] == "48039")].isna().item()
 
 
+@pytest.mark.parametrize(
+    ("share", "bin_name"),
+    [
+        (0, "none"),
+        (0.0001, "--out-1"),
+        (0.01, "--out-2"),
+        (0.3, "--out-5"),
+        (None, "gap"),
+        (float("nan"), "gap"),
+        (0.0099, "--out-1"),
+        (0.0499, "--out-2"),
+        (0.05, "--out-3"),
+        (0.1499, "--out-3"),
+        (0.15, "--out-4"),
+        (0.2999, "--out-4"),
+        (1, "--out-5"),
+    ],
+)
+def test_share_bin_gives_the_bin_of_a_share_and_a_gap_for_null(share, bin_name):
+    assert power.share_bin(share) == bin_name
+
+
+def test_a_null_step_never_gets_the_bin_of_a_zero_step():
+    assert power.share_bin(None) != power.share_bin(0)
+
+
+# O9: the same table sits in site/src/impact/power.test.ts; both languages must give the same bin.
+PARITY = [
+    (0, 1000, "none"),
+    (1, 1000, "--out-1"),
+    (9, 1000, "--out-1"),
+    (10, 1000, "--out-2"),
+    (49, 1000, "--out-2"),
+    (50, 1000, "--out-3"),
+    (149, 1000, "--out-3"),
+    (150, 1000, "--out-4"),
+    (299, 1000, "--out-4"),
+    (300, 1000, "--out-5"),
+    (1000, 1000, "--out-5"),
+    (None, 1000, "gap"),
+    (251_830, 1_827_686, "--out-3"),
+    (1_660_703, 1_827_686, "--out-5"),
+]
+
+
+@pytest.mark.parametrize(("out", "customers", "bin_name"), PARITY)
+def test_the_python_bin_matches_the_parity_table_shared_with_the_site(out, customers, bin_name):
+    share = None if out is None else out / customers
+
+    assert power.share_bin(share) == bin_name
+
+
+def test_each_edge_holds_to_1e_9():
+    for i, edge in enumerate(power.BIN_EDGES):
+        assert power.share_bin(edge - 1e-9) == f"--out-{i + 1}"
+        assert power.share_bin(edge + 1e-9) == f"--out-{i + 2}"
+
+
+def test_the_bin_edges_are_one_percent_five_fifteen_and_thirty():
+    assert power.BIN_EDGES == (0.01, 0.05, 0.15, 0.30)
+
+
 def test_the_day_file_name_holds_the_storm_date():
     assert power.day_file_name(STORM) == "power-2024-05-28.parquet"
 

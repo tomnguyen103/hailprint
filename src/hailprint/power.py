@@ -2,6 +2,8 @@
 
 import http.client
 import json
+import math
+from bisect import bisect_right
 from datetime import date, timedelta
 from pathlib import Path
 from typing import IO
@@ -189,3 +191,16 @@ def share_out(frame: pd.DataFrame) -> pd.Series:
     """Return `customers_out` over the MCC 2022 customers of the county; a null stays null."""
     customers = frame["fips"].map(MCC.__getitem__)
     return pd.Series(frame["customers_out"] / customers, index=frame.index)
+
+
+# The site reads these edges from this line (site/src/impact/power.test.ts): keep it at column 0.
+BIN_EDGES = (0.01, 0.05, 0.15, 0.30)
+
+
+def share_bin(share: float | None) -> str:
+    """Return the map bin of a share out: gap for null, none for 0, else --out-1 to --out-5."""
+    if share is None or math.isnan(share):
+        return "gap"
+    if share == 0:
+        return "none"
+    return f"--out-{bisect_right(BIN_EDGES, share) + 1}"
