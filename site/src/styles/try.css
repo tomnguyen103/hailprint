@@ -119,3 +119,114 @@
 .point-map {
   margin-bottom: 24px;
 }
+
+/* Swipe compare: two maps in one frame, B clipped at the split, one native range as the swipe bar. */
+
+.compare-stage {
+  position: relative;
+  margin-top: 16px;
+}
+
+.compare-frame {
+  position: relative;
+}
+
+.compare-map {
+  position: absolute;
+  inset: 0;
+}
+
+.compare-error {
+  z-index: 3;
+}
+
+.compare-label {
+  position: absolute;
+  top: 12px;
+  z-index: 2;
+  padding: 4px 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+.compare-label-a {
+  left: 12px;
+}
+
+.compare-label-b {
+  right: 12px;
+}
+
+.compare-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--ink);
+  pointer-events: none;
+}
+
+/* The range spans 22 px past each edge so the 44 px thumb centre sits on the split line. */
+.compare-swipe {
+  position: absolute;
+  top: 50%;
+  left: -22px;
+  z-index: 4;
+  width: calc(100% + 44px);
+  height: 44px;
+  margin: 0;
+  transform: translateY(-50%);
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  cursor: ew-resize;
+}
+
+.compare-swipe::-webkit-slider-runnable-track {
+  height: 44px;
+  background: transparent;
+}
+
+.compare-swipe::-moz-range-track {
+  height: 44px;
+  background: transparent;
+}
+
+.compare-swipe::-webkit-slider-thumb {
+  appearance: none;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--sheet);
+  pointer-events: auto;
+}
+
+.compare-swipe::-moz-range-thumb {
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--sheet);
+  pointer-events: auto;
+}
+
+.compare-swipe:focus-visible {
+  outline: none;
+}
+
+.compare-swipe:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.compare-swipe:focus-visible::-moz-range-thumb {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

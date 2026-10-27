@@ -7,6 +7,7 @@ import { pooledRows } from "../scorecard/scorecard";
 import { PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { useAllFiles } from "../state/pairs-all";
+import { Compare } from "./compare";
 import { PointCheck } from "./point";
 import { Tune } from "./tune";
 
@@ -88,6 +89,7 @@ export function TryIt({ index, tool }: { index: StormsIndex; tool: TryTool }) {
         <h2 class="visually-hidden">{TOOL_LABELS[tool]}</h2>
         {tool === "tune" ? <Tune index={index} /> : null}
         {tool === "point" ? <PointCheck index={index} /> : null}
+        {tool === "compare" ? <Compare index={index} /> : null}
       </section>
     </>
   );
