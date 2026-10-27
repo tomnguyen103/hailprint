@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import "../styles/storms.css";
 import "../styles/method.css";
 import { METHOD_LABELS, METHOD_PAGES, href, type MethodPage } from "../router";
 import { Link } from "../shell/link";
+import { ScopeDrawer } from "../shell/scope-drawer";
 import { useIndex } from "../state/index";
 import { Blocks } from "./blocks";
 import { METHOD_CONTENT } from "./content";
@@ -14,15 +15,6 @@ export function Method({ page }: { page: MethodPage }) {
   const index = useIndex();
   const content = METHOD_CONTENT[page];
   const close = () => setPagesOpen(false);
-
-  useEffect(() => {
-    if (!pagesOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPagesOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [pagesOpen]);
 
   /** ArrowDown and ArrowUp move focus through the page links; Enter follows the link as any anchor does. */
   const onNavKey = (event: KeyboardEvent) => {
@@ -42,14 +34,7 @@ export function Method({ page }: { page: MethodPage }) {
           Pages
         </button>
       </div>
-      {pagesOpen ? <button type="button" class="scope-backdrop" aria-label="Close Method pages" onClick={close} /> : null}
-      <nav ref={nav} class="scope" aria-label="Method pages" data-open={pagesOpen} onKeyDown={onNavKey}>
-        <div class="scope-head">
-          <span class="section-label">Pages</span>
-          <button type="button" class="button button-small scope-close" onClick={close}>
-            Close
-          </button>
-        </div>
+      <ScopeDrawer label="Method pages" title="Pages" open={pagesOpen} onClose={close} navRef={nav} onKeyDown={onNavKey}>
         <ul class="scope-list">
           {METHOD_PAGES.map((p) => (
             <li key={p}>
@@ -59,7 +44,7 @@ export function Method({ page }: { page: MethodPage }) {
             </li>
           ))}
         </ul>
-      </nav>
+      </ScopeDrawer>
       <div class="workspace-main">
         <article class="reading">
           <h1 class="reading-title">{content.title}</h1>

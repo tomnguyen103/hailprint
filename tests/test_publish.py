@@ -892,6 +892,18 @@ def test_sources_of_groups_by_source_and_product_with_sorted_dates():
     ]
 
 
+def test_the_site_service_rules_match_the_source_names():
+    assert "hail" in publish.SPC_PRODUCT
+    assert publish.hcad_source("zip-counts-2024-05-28.parquet")["source"] == "hcad"
+
+
+def test_the_run_cap_of_the_pipeline_schema_matches_max_runs():
+    schema_path = files("hailprint") / "schemas" / "pipeline.schema.json"
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    assert schema["properties"]["runs"]["maxItems"] == publish.MAX_RUNS
+
+
 def test_merge_runs_replaces_the_same_run_time_sorts_newest_first_and_caps_at_fifty():
     old = [_run(f"2024-01-{day:02d}T12:00:00Z", file_count=1) for day in range(1, 31)]
     old += [_run(f"2024-02-{day:02d}T12:00:00Z", file_count=1) for day in range(1, 22)]

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import "../styles/storms.css";
 import "../styles/pipeline.css";
 import type { PipelineFile } from "../data/types";
 import { PIPELINE_LABELS, PIPELINE_VIEWS, href, type PipelineView } from "../router";
+import { ScopeDrawer } from "../shell/scope-drawer";
 import { ErrorState, LoadingState } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { usePipeline } from "../state/pipeline";
@@ -14,12 +15,12 @@ import { Sources } from "./sources";
 const FILE = "pipeline.json";
 
 // shortcut: the Pipeline services dot reads presence in the published file, upgrade to a freshness rule when a cron runs
-function services(file: PipelineFile) {
-  const has = (word: string) => file.sources.some((s) => `${s.source} ${s.product}`.toLowerCase().includes(word));
+export function services(file: PipelineFile) {
+  const has = (key: "source" | "product", word: string) => file.sources.some((s) => s[key].toLowerCase().includes(word));
   return [
     { name: "MESH archive", ok: file.archive !== null },
-    { name: "SPC reports", ok: has("hail") },
-    { name: "HCAD parcels", ok: has("hcad") },
+    { name: "SPC reports", ok: has("product", "hail") },
+    { name: "HCAD parcels", ok: has("source", "hcad") },
   ];
 }
 
@@ -28,15 +29,6 @@ export function Pipeline({ view }: { view: PipelineView }) {
   const file = usePipeline();
   const [servicesOpen, setServicesOpen] = useState(false);
   const close = () => setServicesOpen(false);
-
-  useEffect(() => {
-    if (!servicesOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setServicesOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [servicesOpen]);
 
   if (file.status === "error") return <ErrorState error={file.error} onRetry={file.retry} />;
   if (file.status === "loading") return file.showLoading ? <LoadingState file={FILE} /> : null;
@@ -55,14 +47,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
           Services
         </button>
       </div>
-      {servicesOpen ? <button type="button" class="scope-backdrop" aria-label="Close services" onClick={close} /> : null}
-      <nav class="scope" aria-label="Services" data-open={servicesOpen}>
-        <div class="scope-head">
-          <span class="section-label">Services</span>
-          <button type="button" class="button button-small scope-close" onClick={close}>
-            Close
-          </button>
-        </div>
+      <ScopeDrawer label="Services" title="Services" open={servicesOpen} onClose={close}>
         <ul class="service-list">
           {services(data).map((s) => (
             <li key={s.name} class="service">
@@ -72,7 +57,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
             </li>
           ))}
         </ul>
-      </nav>
+      </ScopeDrawer>
       <div class="workspace-main">
         <h1 class="visually-hidden">Pipeline</h1>
         <SubTabs

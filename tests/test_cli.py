@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from hailprint import __main__ as cli
-from hailprint import candidates, files, parcels, publish, swath
+from hailprint import archive, candidates, files, parcels, publish, swath
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = json.loads((FIXTURES / "score_golden.json").read_text(encoding="utf-8"))
@@ -71,6 +71,9 @@ class Env:
     def index(self) -> dict:
         return json.loads((self.site / "storms.json").read_text(encoding="utf-8"))
 
+    def pipeline(self) -> dict:
+        return json.loads((self.site / publish.PIPELINE_FILE).read_text(encoding="utf-8"))
+
     def tree(self) -> dict[str, bytes]:
         return {
             str(p.relative_to(self.site)): p.read_bytes()
@@ -87,6 +90,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "PARCELS_DIR", env.parcels)
     monkeypatch.setattr(cli, "SITE_DATA_DIR", env.site)
     monkeypatch.setattr(cli, "_utc_now", lambda: RUN_TIME)
+    monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "index" / "mesh-archive.parquet")
     monkeypatch.setattr(candidates, "CANDIDATES_PATH", tmp_path / "candidate-days.csv")
 
     def served(storm_date, cache_dir, today):
@@ -244,6 +248,54 @@ def test_a_single_date_run_replaces_its_entry_and_an_entry_without_files_drops_o
     assert [e["storm_date"] for e in env.index()["storms"]] == ["2024-05-28"]
 
 
+def test_publish_without_an_archive_index_writes_pipeline_json_with_archive_null(env):
+    env.add_day(LATER)
+
+    assert cli.main(["publish"]) == 0
+
+    doc = env.pipeline()
+    publish.validate(doc, "pipeline")
+    assert doc["archive"] is None
+    assert doc["runs"][0]["storm_dates"] == ["2024-05-28"]
+
+
+def test_publish_with_an_archive_index_counts_its_days(env):
+    env.add_day(LATER)
+    frame = pd.DataFrame(
+        {
+            "storm_date": [date(2023, 6, 23), date(2024, 5, 27), date(2024, 5, 28)],
+            "file_count": [720, 719, 720],
+            "bytes": [3, 2, 3],
+            "has_12z": [True, False, True],
+        }
+    )
+    files.write_atomic(frame, archive.INDEX_PATH)
+
+    assert cli.main(["publish"]) == 0
+
+    summary = env.pipeline()["archive"]
+    assert summary is not None
+    assert summary["days"] == len(frame)
+
+
+def test_a_single_date_run_keeps_the_sources_of_every_published_date(env):
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    env.add_zips(LATER, [("77002", 19.05, 4)])
+    cli.main(["publish"])
+
+    cli.main(["publish", "2024-05-28"])
+
+    doc = env.pipeline()
+    assert doc["runs"][0]["storm_dates"] == ["2024-05-28"]
+    by_source = {row["source"]: row["storm_dates"] for row in doc["sources"]}
+    assert by_source == {
+        "noaa-mrms-pds": ["2023-06-23", "2024-05-28"],
+        publish.spc_source(LATER)["source"]: ["2023-06-23", "2024-05-28"],
+        "hcad": ["2024-05-28"],
+    }
+
+
 def test_a_date_absent_from_the_candidate_file_gets_null_report_fields(env, tmp_path):
     env.add_day(LATER)
     (tmp_path / "candidate-days.csv").write_text(
@@ -272,6 +324,9 @@ def test_a_swath_file_without_metadata_fails_its_date_and_keeps_the_other_comple
     assert sorted(_validated(env, EARLIER)) == ["pairs.json", "reports.geojson", "swath.geojson"]
     assert not env.storm_dir(LATER).exists()
     assert [e["storm_date"] for e in env.index()["storms"]] == ["2023-06-23"]
+    doc = env.pipeline()
+    assert doc["runs"][0]["storm_dates"] == ["2023-06-23"]
+    assert all("2024-05-28" not in row["storm_dates"] for row in doc["sources"])
 
 
 def test_a_failed_validation_writes_nothing_for_that_date(env, monkeypatch, capsys):

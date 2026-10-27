@@ -1,0 +1,45 @@
+import type { ComponentChildren, RefObject } from "preact";
+import { useEffect } from "preact/hooks";
+
+/** Escape closes the drawer while it is open. */
+export function useEscape(open: boolean, onClose: () => void): void {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+}
+
+interface Props {
+  /** The nav label; the backdrop reads "Close <label>". */
+  label: string;
+  /** The head text. */
+  title: string;
+  open: boolean;
+  onClose: () => void;
+  children: ComponentChildren;
+  navRef?: RefObject<HTMLElement>;
+  onKeyDown?: (event: KeyboardEvent) => void;
+}
+
+/** The scope sidebar of the Method and Pipeline areas: a drawer below 1280 px with a backdrop, a head, and a Close button. */
+export function ScopeDrawer({ label, title, open, onClose, children, navRef, onKeyDown }: Props) {
+  useEscape(open, onClose);
+  return (
+    <>
+      {open ? <button type="button" class="scope-backdrop" aria-label={`Close ${label}`} onClick={onClose} /> : null}
+      <nav ref={navRef} class="scope" aria-label={label} data-open={open} onKeyDown={onKeyDown}>
+        <div class="scope-head">
+          <span class="section-label">{title}</span>
+          <button type="button" class="button button-small scope-close" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        {children}
+      </nav>
+    </>
+  );
+}

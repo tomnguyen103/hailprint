@@ -411,6 +411,20 @@
     display: none;
   }
 
+  /* Storms opens its sheet from the stamp; Method and Pipeline keep a horizontal rail button. */
+  .method .scope-rail,
+  .pipeline .scope-rail {
+    display: flex;
+    position: static;
+    justify-content: start;
+  }
+
+  .method .scope-rail .button,
+  .pipeline .scope-rail .button {
+    writing-mode: horizontal-tb;
+    padding: 0 10px;
+  }
+
   .stamp-date-text {
     display: none;
   }

@@ -13,3 +13,7 @@ it("floors a part day and never goes negative", () => {
   expect(ageOf("2024-05-30T13:00:00Z", now)).toBe("1 d ago");
   expect(ageOf("2024-06-01T12:00:30Z", now)).toBe("0 min ago");
 });
+
+it("names a time that does not parse as unknown", () => {
+  expect(ageOf("not a date", now)).toBe("unknown");
+});

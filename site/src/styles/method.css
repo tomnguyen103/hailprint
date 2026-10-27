@@ -133,17 +133,6 @@
 }
 
 @media (max-width: 767px) {
-  .method .scope-rail {
-    display: flex;
-    position: static;
-    justify-content: start;
-  }
-
-  .method .scope-rail .button {
-    writing-mode: horizontal-tb;
-    padding: 0 10px;
-  }
-
   .stamp-hours {
     width: 100%;
   }

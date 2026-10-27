@@ -80,28 +80,14 @@
   vertical-align: middle;
 }
 
-.table tfoot th,
-.table tfoot td {
+.pipeline .table tfoot th,
+.pipeline .table tfoot td {
   border-bottom: 0;
   font-weight: 600;
 }
 
-.table th[scope="row"] {
+.pipeline .table th[scope="row"] {
   color: var(--ink);
   font-size: inherit;
   font-weight: 400;
-}
-
-/* Below 768 px the Storms rail is hidden; Pipeline keeps a horizontal Services button. */
-@media (max-width: 767px) {
-  .pipeline .scope-rail {
-    display: flex;
-    position: static;
-    justify-content: start;
-  }
-
-  .pipeline .scope-rail .button {
-    writing-mode: horizontal-tb;
-    padding: 0 10px;
-  }
 }

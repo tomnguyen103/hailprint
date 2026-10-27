@@ -1,6 +1,6 @@
 import { Fragment } from "preact";
 import { fetchJson } from "../data/fetch";
-import { guardReports } from "../data/guard";
+import { guardPairs, guardReports } from "../data/guard";
 import type { StormsIndex } from "../data/types";
 import { pooledRows } from "../pool";
 import { RULER, diameterPx } from "../ruler";
@@ -73,17 +73,13 @@ function figure(id: FigureId, index: Index) {
 
 function Receipt({ index }: { index: StormsIndex }) {
   const storm = index.storms[0]!;
-  const receipt = {
-    storm_date: storm.storm_date,
-    sources: [],
-    confidence: index.confidence,
-    run_time: index.run_time,
-    package_version: index.package_version,
-  };
+  const pairs = useLoad(storm.files.pairs, () => fetchJson(storm.files.pairs, guardPairs));
+  if (pairs.status === "error") return <ErrorState error={pairs.error} onRetry={pairs.retry} />;
+  if (pairs.status === "loading") return pairs.showLoading ? <LoadingState file="pairs.json" /> : null;
   return (
     <p>
       Receipt of the newest storm date, <span class="mono">{storm.storm_date}</span>:{" "}
-      <ReceiptChip receipt={receipt} file={INDEX_FILE} />
+      <ReceiptChip receipt={pairs.data.receipt} file="pairs.json" />
     </p>
   );
 }

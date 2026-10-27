@@ -8,6 +8,8 @@ from hailprint.parcels import OWNER_FIELDS
 from hailprint.swath import FORBIDDEN_WORD
 
 OUTPUT_DIRS = [paths.OUT_DIR, paths.DERIVED_DIR, paths.SITE_DATA_DIR]
+SITE_SRC = paths.ROOT / "site" / "src"
+SITE_SUFFIXES = (".ts", ".tsx", ".css")
 # JSON has no NaN or Infinity literal; a browser JSON.parse rejects both
 NON_JSON_TOKENS = ("NaN", "Infinity")
 
@@ -41,6 +43,16 @@ def test_published_files_hold_no_non_json_token():
         text = path.read_text(encoding="utf-8")
         for token in NON_JSON_TOKENS:
             assert token not in text, (path, token)
+
+
+def test_site_source_holds_no_forbidden_word():
+    hits = [
+        path
+        for path in SITE_SRC.rglob("*")
+        if path.suffix in SITE_SUFFIXES
+        and FORBIDDEN_WORD in path.read_text(encoding="utf-8").lower()
+    ]
+    assert hits == []
 
 
 @pytest.mark.skipif(

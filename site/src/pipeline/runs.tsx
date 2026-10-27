@@ -9,16 +9,17 @@ export function Runs({ runs }: { runs: PipelineRun[] }) {
   const [selected, setSelected] = useState(0);
   const table = useRef<HTMLTableElement>(null);
   if (runs.length === 0) return <EmptyState sentence="No run is published yet." />;
-  const run = runs[Math.min(selected, runs.length - 1)]!;
+  const at = Math.min(selected, runs.length - 1);
+  const run = runs[at]!;
 
   /** ArrowDown and ArrowUp move focus between the row buttons; Enter and click press one. */
   const onKey = (event: KeyboardEvent) => {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     const buttons = Array.from(table.current?.querySelectorAll<HTMLButtonElement>(".row-pick") ?? []);
-    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    if (at === -1) return;
+    const focused = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (focused === -1) return;
     event.preventDefault();
-    const next = event.key === "ArrowDown" ? Math.min(at + 1, buttons.length - 1) : Math.max(at - 1, 0);
+    const next = event.key === "ArrowDown" ? Math.min(focused + 1, buttons.length - 1) : Math.max(focused - 1, 0);
     buttons[next]?.focus();
   };
 
@@ -40,7 +41,7 @@ export function Runs({ runs }: { runs: PipelineRun[] }) {
               {runs.map((r, i) => (
                 <tr key={r.run_time}>
                   <td>
-                    <button type="button" class="row-pick mono" aria-pressed={i === selected} onClick={() => setSelected(i)}>
+                    <button type="button" class="row-pick mono" aria-pressed={i === at} onClick={() => setSelected(i)}>
                       {r.run_time}
                     </button>
                   </td>

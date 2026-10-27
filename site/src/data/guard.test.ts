@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { guardIndex, guardOutline, guardPairs, guardPipeline, guardReports, guardSwath, guardZipCounts } from "./guard";
+import { MAX_RUNS, guardIndex, guardOutline, guardPairs, guardPipeline, guardReports, guardSwath, guardZipCounts } from "./guard";
 import { DataError } from "./types";
 
 const receipt = {
@@ -298,7 +300,25 @@ describe("guardPipeline", () => {
   });
   it("rejects a negative file count", () => {
     const runs = [{ ...run, file_count: -1 }];
-    expect(() => guardPipeline({ ...pipeline, runs })).toThrow(/^pipeline\.json: runs\[0\]\.file_count is negative/);
+    expect(() => guardPipeline({ ...pipeline, runs })).toThrow(/^pipeline\.json: runs\[0\]\.file_count is not a count/);
+  });
+  it("rejects a run_time that is not UTC to the second", () => {
+    expect(() => guardPipeline({ ...pipeline, run_time: "2026-10-26T23:02:33.123Z" })).toThrow(
+      /^pipeline\.json: run_time is not a run time/,
+    );
+    const runs = [{ ...run, run_time: "yesterday" }];
+    expect(() => guardPipeline({ ...pipeline, runs })).toThrow(/^pipeline\.json: runs\[0\]\.run_time is not a run time/);
+  });
+  it("rejects a negative or fractional archive count", () => {
+    const negative = { ...pipeline, archive: { ...pipeline.archive, days: -1 } };
+    expect(() => guardPipeline(negative)).toThrow(/^pipeline\.json: archive\.days is not a count/);
+    const fractional = { ...pipeline, archive: { ...pipeline.archive, years: [{ year: 2024, days: 1.5, days_with_12z: 1 }] } };
+    expect(() => guardPipeline(fractional)).toThrow(/^pipeline\.json: archive\.years\[0\]\.days is not a count/);
+  });
+  it("caps the runs where pipeline.schema.json does", () => {
+    const schemaPath = fileURLToPath(new URL("../../../src/hailprint/schemas/pipeline.schema.json", import.meta.url));
+    const schema = JSON.parse(readFileSync(schemaPath, "utf8")) as { properties: { runs: { maxItems: number } } };
+    expect(schema.properties.runs.maxItems).toBe(MAX_RUNS);
   });
   it("rejects a document without the archive key and accepts archive null", () => {
     expect(() => guardPipeline(without(pipeline, "archive"))).toThrow(/^pipeline\.json: archive/);

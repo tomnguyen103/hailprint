@@ -9,10 +9,13 @@ import { DataError } from "./types";
 type Rec = Record<string, unknown>;
 
 /** The run log cap; `publish.MAX_RUNS` writes the same number. */
-const MAX_RUNS = 50;
+export const MAX_RUNS = 50;
 
 /** A published file path inside `site/data/`, as `storms.json` lists it. */
 const FILE_PATH = /^storms\/\d{4}-\d{2}-\d{2}\/[a-z-]+\.(geojson|json)$/;
+
+/** A run time as `publish` writes it: UTC to the second, no fraction. */
+const RUN_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 
 function rec(file: string, value: unknown, path: string): Rec {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -38,6 +41,16 @@ function num(file: string, value: unknown, path: string): number {
 
 function numOrNull(file: string, value: unknown, path: string): void {
   if (value !== null) num(file, value, path);
+}
+
+function runTime(file: string, value: unknown, path: string): void {
+  if (!RUN_TIME.test(str(file, value, path))) throw new DataError(file, `${path} is not a run time`);
+}
+
+/** A whole number of files or days, never negative. */
+function count(file: string, value: unknown, path: string): void {
+  const n = num(file, value, path);
+  if (!Number.isInteger(n) || n < 0) throw new DataError(file, `${path} is not a count`);
 }
 
 function filePath(file: string, value: unknown, path: string): void {
@@ -88,25 +101,28 @@ function dates(file: string, value: unknown, path: string): void {
 export function guardPipeline(value: unknown): PipelineFile {
   const file = "pipeline.json";
   const root = rec(file, value, "pipeline");
-  for (const key of ["confidence", "run_time", "package_version"]) str(file, root[key], key);
+  for (const key of ["confidence", "package_version"]) str(file, root[key], key);
+  runTime(file, root["run_time"], "run_time");
   const runs = list(file, root["runs"], "runs");
   if (runs.length > MAX_RUNS) throw new DataError(file, `runs has ${runs.length} entries, more than ${MAX_RUNS}`);
   runs.forEach((item, i) => {
     const at = `runs[${i}]`;
     const run = rec(file, item, at);
-    for (const key of ["run_time", "package_version"]) str(file, run[key], `${at}.${key}`);
+    str(file, run["package_version"], `${at}.package_version`);
+    runTime(file, run["run_time"], `${at}.run_time`);
     dates(file, run["storm_dates"], `${at}.storm_dates`);
-    if (num(file, run["file_count"], `${at}.file_count`) < 0) throw new DataError(file, `${at}.file_count is negative`);
+    count(file, run["file_count"], `${at}.file_count`);
   });
   if (!("archive" in root)) throw new DataError(file, "archive is missing");
   if (root["archive"] !== null) {
     const archive = rec(file, root["archive"], "archive");
-    for (const key of ["days", "days_without_12z"]) num(file, archive[key], `archive.${key}`);
+    for (const key of ["days", "days_without_12z"]) count(file, archive[key], `archive.${key}`);
     for (const key of ["first_storm_date", "last_storm_date"]) date(file, archive[key], `archive.${key}`);
     list(file, archive["years"], "archive.years").forEach((item, i) => {
       const at = `archive.years[${i}]`;
       const year = rec(file, item, at);
-      for (const key of ["year", "days", "days_with_12z"]) num(file, year[key], `${at}.${key}`);
+      num(file, year["year"], `${at}.year`);
+      for (const key of ["days", "days_with_12z"]) count(file, year[key], `${at}.${key}`);
     });
   }
   list(file, root["sources"], "sources").forEach((item, i) => {
