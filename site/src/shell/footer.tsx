@@ -1,6 +1,5 @@
 import { Appearance } from "./appearance";
-
-export const CAVEAT = "Radar-estimated hail size. Literature skill: HSS about 0.38 at 30 mm.";
+import { CAVEAT } from "./caveat";
 
 export function Footer() {
   return (
