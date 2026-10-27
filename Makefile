@@ -12,4 +12,7 @@ test:
 ingest:
 	uv run hailprint ingest $(DATE)
 
-.PHONY: setup lint test ingest
+site:
+	cd site && npm ci && npm run check
+
+.PHONY: setup lint test ingest site

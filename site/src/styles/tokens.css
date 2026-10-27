@@ -1,0 +1,73 @@
+/* Hailprint design tokens: .scratch/portfolio-v5/design.md (locked). */
+:root {
+  --paper: #f7f6f2;
+  --sheet: #fdfcf9;
+  --sheet-muted: #efede6;
+  --rule: #e2dfd5;
+  --ink: #1f1e1b;
+  --ink-muted: #4a4840;
+  --accent: #1f5f8b;
+  --on-accent: #fdfcf9;
+  --report: #b3261e;
+  --note-bg: #f4eedc;
+  --note-ink: #5c4a12;
+  --shadow: 0 8px 24px -8px rgb(31 30 27 / 0.28);
+
+  /* hail ramp, data only, never chrome */
+  --hail-1: #dcebf2;
+  --hail-2: #a9d2e3;
+  --hail-3: #6fb0cf;
+  --hail-4: #3f86b8;
+  --hail-5: #2e5e9e;
+  --hail-6: #33397a;
+  --hail-7: #2a1748;
+
+  --serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
+  --sans: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --radius-pane: 6px;
+  --radius-control: 4px;
+  --gutter: 32px;
+  --bar-height: 64px;
+  --motion: 150ms ease-out;
+}
+
+:root[data-theme="dark"] {
+  --paper: #151513;
+  --sheet: #1c1c19;
+  --sheet-muted: #262622;
+  --rule: #3a3934;
+  --ink: #eeece6;
+  --ink-muted: #c4c1b6;
+  --accent: #8cc4e8;
+  --on-accent: #151513;
+  --report: #ff8a80;
+  --note-bg: #2b2618;
+  --note-ink: #ebd9a0;
+  --shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
+}
+
+/* no-script case: the head script did not run, so the OS scheme decides */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #151513;
+    --sheet: #1c1c19;
+    --sheet-muted: #262622;
+    --rule: #3a3934;
+    --ink: #eeece6;
+    --ink-muted: #c4c1b6;
+    --accent: #8cc4e8;
+    --on-accent: #151513;
+    --report: #ff8a80;
+    --note-bg: #2b2618;
+    --note-ink: #ebd9a0;
+    --shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
+  }
+}
+
+@media (max-width: 767px) {
+  :root {
+    --gutter: 16px;
+  }
+}
