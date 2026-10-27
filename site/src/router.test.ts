@@ -20,6 +20,7 @@ it("gives the method page, the first page when absent", () => {
   expect(match("/method")).toEqual({ kind: "method", page: "data" });
   expect(match("/method/scoring")).toEqual({ kind: "method", page: "scoring" });
   expect(match("/method/limits")).toEqual({ kind: "method", page: "limits" });
+  expect(match("/method/impacts")).toEqual({ kind: "method", page: "impacts" });
   expect(match("/method/nope")).toEqual({ kind: "not-found" });
   expect(match("/method/scoring/extra")).toEqual({ kind: "not-found" });
 });
@@ -32,6 +33,7 @@ it("gives the pipeline view, runs when absent", () => {
 
 it("builds method and pipeline paths", () => {
   expect(href({ area: "method", page: "scoring" })).toBe("/method/scoring");
+  expect(href({ area: "method", page: "impacts" })).toBe("/method/impacts");
   expect(href({ area: "pipeline" })).toBe("/pipeline");
   expect(href({ area: "pipeline", view: "archive" })).toBe("/pipeline/archive");
 });

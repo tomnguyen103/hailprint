@@ -8,6 +8,21 @@ import { useIndex } from "../state/index";
 import { Blocks } from "./blocks";
 import { METHOD_CONTENT } from "./content";
 
+/** The page tree: one link per Method page, the current page marked. */
+export function PageList({ page, onNavigate }: { page: MethodPage; onNavigate: () => void }) {
+  return (
+    <ul class="scope-list">
+      {METHOD_PAGES.map((p) => (
+        <li key={p}>
+          <Link href={href({ area: "method", page: p })} aria-current={p === page ? "page" : undefined} onClick={onNavigate}>
+            {METHOD_LABELS[p]}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** The Method area: the page tree as the scope sidebar, one reading column of blocks. */
 export function Method({ page }: { page: MethodPage }) {
   const [pagesOpen, setPagesOpen] = useState(false);
@@ -35,15 +50,7 @@ export function Method({ page }: { page: MethodPage }) {
         </button>
       </div>
       <ScopeDrawer label="Method pages" title="Pages" open={pagesOpen} onClose={close} navRef={nav} onKeyDown={onNavKey}>
-        <ul class="scope-list">
-          {METHOD_PAGES.map((p) => (
-            <li key={p}>
-              <Link href={href({ area: "method", page: p })} aria-current={p === page ? "page" : undefined} onClick={close}>
-                {METHOD_LABELS[p]}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <PageList page={page} onNavigate={close} />
       </ScopeDrawer>
       <div class="workspace-main">
         <article class="reading">

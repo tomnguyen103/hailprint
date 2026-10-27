@@ -45,6 +45,24 @@ def test_the_scan_reads_the_method_content():
     assert METHOD_CONTENT in set(source_files(SITE_SRC))
 
 
+def test_the_scan_reads_the_impacts_page():
+    text = METHOD_CONTENT.read_text(encoding="utf-8")
+
+    assert re.search(r"^  impacts: \{$", text, re.MULTILINE)
+    assert "Source: Iowa Environmental Mesonet" in text
+
+
+def test_the_scan_flags_a_causal_sentence_added_to_the_impacts_page(tmp_path):
+    (tmp_path / "method").mkdir()
+    original = METHOD_CONTENT.read_text(encoding="utf-8")
+    seeded = original.replace("No layer says hail caused it.", "The outage was caused by hail.")
+    (tmp_path / "method" / "content.ts").write_text(seeded, encoding="utf-8")
+
+    assert seeded != original
+
+    assert find_phrases(tmp_path) == ["method/content.ts: caused by hail"]
+
+
 @pytest.mark.parametrize("phrase", PHRASES)
 def test_the_scan_names_the_file_and_the_phrase(tmp_path, phrase):
     (tmp_path / "pages").mkdir()

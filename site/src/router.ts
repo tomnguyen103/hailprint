@@ -15,7 +15,7 @@ export type ScorecardView = (typeof SCORECARD_VIEWS)[number];
 export const TRY_TOOLS = ["tune", "point", "compare", "run"] as const;
 export type TryTool = (typeof TRY_TOOLS)[number];
 
-export const METHOD_PAGES = ["data", "storm-date", "size-classes", "scoring", "limits"] as const;
+export const METHOD_PAGES = ["data", "storm-date", "size-classes", "scoring", "limits", "impacts"] as const;
 export type MethodPage = (typeof METHOD_PAGES)[number];
 
 export const PIPELINE_VIEWS = ["runs", "archive", "sources"] as const;
@@ -24,7 +24,7 @@ export type PipelineView = (typeof PIPELINE_VIEWS)[number];
 export const AREA_LABELS: Record<Area, string> = { storms: "Storms", scorecard: "Scorecard", try: "Try it", method: "Method", pipeline: "Pipeline" };
 export const TAB_LABELS: Record<Tab, string> = { map: "Map", parcels: "Parcels", score: "Score", data: "Data" };
 export const METHOD_LABELS: Record<MethodPage, string> = {
-  data: "Data", "storm-date": "Storm date", "size-classes": "Size classes", scoring: "Scoring", limits: "Limits",
+  data: "Data", "storm-date": "Storm date", "size-classes": "Size classes", scoring: "Scoring", limits: "Limits", impacts: "Impacts",
 };
 export const PIPELINE_LABELS: Record<PipelineView, string> = { runs: "Runs", archive: "Archive", sources: "Sources" };
 

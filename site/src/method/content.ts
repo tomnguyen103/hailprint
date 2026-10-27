@@ -140,4 +140,30 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
       { kind: "caveat", text: CAVEAT },
     ],
   },
+  impacts: {
+    title: METHOD_LABELS.impacts,
+    blocks: [
+      {
+        kind: "prose",
+        text: "The layers show what happened in the same window as the storm. No layer says hail caused it.",
+      },
+      { kind: "heading", text: "NWS warnings" },
+      {
+        kind: "prose",
+        text: "A polygon is the area of one NWS severe thunderstorm, tornado, or flash flood warning.",
+      },
+      { kind: "prose", text: "Source: Iowa Environmental Mesonet (IEM). Credit IEM." },
+      { kind: "heading", text: "Power out" },
+      {
+        kind: "prose",
+        text: "EAGLE-I counts customers without power. ODIN snapshots cover later storm dates. One file never mixes the two.",
+      },
+      { kind: "prose", text: "Share out is customers out divided by the MCC, the 2022 modelled county customers." },
+      { kind: "prose", text: "ODIN lists CenterPoint customers only. Its share out is a lower bound." },
+      { kind: "prose", text: "Source: EAGLE-I, Oak Ridge National Laboratory (ORNL), CC BY 4.0." },
+      { kind: "prose", text: "Source: ODIN, ORNL." },
+      { kind: "heading", text: "Gaps" },
+      { kind: "prose", text: "A step with no source row is null. The strip draws a gap, never a zero." },
+    ],
+  },
 };
