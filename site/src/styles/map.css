@@ -189,9 +189,14 @@
     overflow-y: auto;
   }
 
-  /* A shorter frame keeps the whole map above the bottom bar */
-  .map-frame {
+  /* A shorter frame keeps the map above the bottom bar; the overlay covers the frame only */
+  .map-frame,
+  .map-overlay {
     height: min(50dvh, 420px);
+  }
+
+  .map-overlay {
+    bottom: auto;
   }
 
   /* Under the frame, the legend no longer covers the swath */

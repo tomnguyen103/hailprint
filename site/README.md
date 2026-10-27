@@ -11,6 +11,8 @@ npm run check    # tsc --noEmit && vitest run && vite build
 ```
 
 `make site` at the repo root runs `npm ci` and `npm run check`.
+`uv run python site/scripts/make_icons.py site/public <preview.png>` at the repo root writes `favicon.svg`,
+`favicon.ico`, and `apple-touch-icon.png` to `site/public/`, and a preview sheet to `<preview.png>`.
 
 ## Routes
 
