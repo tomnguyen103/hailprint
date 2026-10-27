@@ -432,6 +432,7 @@
 
   .sub-tabs {
     overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .sub-tabs a {
