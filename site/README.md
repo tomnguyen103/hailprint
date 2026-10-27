@@ -17,6 +17,8 @@ npm run check    # tsc --noEmit && vitest run && vite build
 `uv run hailprint publish` at the repo root writes `site/data/storms.json` and one folder per
 storm date under `site/data/storms/<date>/`. The build copies `site/data/` to `/data/`.
 Without the folder the site shows "No storm date is published yet."
+`uv run python site/scripts/pool_golden.py` writes `site/data/pooled-golden.json`, the pooled table at
+every whole radius; `src/pool.test.ts` checks the browser pool against it and skips without the file.
 
 ## Basemap
 

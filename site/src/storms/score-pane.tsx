@@ -2,8 +2,10 @@ import { useMemo, useState } from "preact/hooks";
 import { fetchJson } from "../data/fetch";
 import { guardPairs } from "../data/guard";
 import { DataError, type Storm, type TableRow } from "../data/types";
+import { scoredCount } from "../pool";
 import { rescore } from "../rescore";
 import { RULER } from "../ruler";
+import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
@@ -13,11 +15,11 @@ const FILE = "pairs.json";
 const METRICS = ["pod", "far", "csi", "hss"] as const;
 const METRIC_LABELS: Record<(typeof METRICS)[number], string> = { pod: "POD", far: "FAR", csi: "CSI", hss: "HSS" };
 
-export function ScorePane({ storm, radiusKm }: { storm: Storm; radiusKm: number }) {
+export function ScorePane({ storm, radiusKm: defaultRadiusKm }: { storm: Storm; radiusKm: number }) {
   const pairs = useLoad(storm.files.pairs, () => fetchJson(storm.files.pairs, guardPairs));
   const [selected, setSelected] = useState(RULER[0]!.threshold_mm);
+  const [radiusKm, setRadiusKm] = useState(defaultRadiusKm);
 
-  // shortcut: the radius control is absent on the Score pane, upgrade in PR F (A1) when the slider lands
   const data = pairs.status === "ready" ? pairs.data : null;
   const table = useMemo<{ rows: TableRow[] } | { error: DataError } | null>(() => {
     if (data === null) return null;
@@ -35,13 +37,15 @@ export function ScorePane({ storm, radiusKm }: { storm: Storm; radiusKm: number 
 
   const receipt = pairs.data.receipt;
   const row = table.rows.find((r) => r.threshold_mm === selected) ?? table.rows[0];
+  const scored = scoredCount(pairs.data, radiusKm);
   return (
     <div class="pane-grid">
       <section>
         <h2>Per-class table</h2>
+        <RadiusSlider value={radiusKm} max={pairs.data.radius_km_max} onChange={setRadiusKm} />
         <p class="pane-note">
-          Scoring radius <span class="mono">{radiusKm} km</span>, <span class="mono">{storm.scored_reports}</span>{" "}
-          scored reports, <span class="mono">{storm.excluded_reports}</span> excluded near the crop edge.
+          Scoring radius <span class="mono">{radiusKm} km</span>, <span class="mono">{scored}</span> scored reports,{" "}
+          <span class="mono">{pairs.data.reports.length - scored}</span> excluded near the crop edge.
         </p>
         <div class="table-scroll">
           <table class="table">
