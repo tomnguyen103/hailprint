@@ -20,6 +20,11 @@ SIZE_CLASSES_MM = (19.05, 25.4, 31.75, 38.1, 44.45, 50.8, 63.5)
 COLUMNS = ["storm_date", "threshold_mm", "threshold_in", "label", "geometry"]
 
 
+def file_name(storm_date: date) -> str:
+    """The swath file name of one storm date."""
+    return f"swaths-{storm_date}.parquet"
+
+
 def label(threshold_mm: float) -> str:
     """The label text of one size class."""
     return f"radar-estimated hail size >= {threshold_mm / 25.4:.2f} in"

@@ -5,9 +5,10 @@
 # MAX_INGEST (default 5) caps the storm dates that one night ingests.
 # Lock: data/nightly.lock, a directory. A second run finds it and exits 1. The trap removes it
 # on exit, after success and after a failed step.
-# .env at the repo root is sourced and exported when present. It holds MAX_INGEST and the
-# Vercel variables VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID. The script prints no value.
-set -eu
+# .env at the repo root is read when present, without export. It is shell: one NAME=value per
+# line. It holds MAX_INGEST and the Vercel variables VERCEL_TOKEN, VERCEL_ORG_ID,
+# VERCEL_PROJECT_ID; scripts/deploy.sh reads those itself. The script prints no value.
+set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -28,16 +29,17 @@ esac
 
 cd "$ROOT"
 if [ -f .env ]; then
-  set -a
   # shellcheck disable=SC1091
   . ./.env
-  set +a
 fi
 MAX_INGEST="${MAX_INGEST:-5}"
 
 mkdir -p data
+# shortcut: the lock holds no pid and no age, so a reboot mid-run leaves it in place;
+# upgrade to flock when the cron host has it
 if ! mkdir data/nightly.lock 2>/dev/null; then
-  echo "nightly: data/nightly.lock is present; another run holds it" >&2
+  echo "nightly: mkdir data/nightly.lock failed: another run holds it, or data/ is not writable" >&2
+  echo "nightly: when no run is live, remove it with: rmdir data/nightly.lock" >&2
   exit 1
 fi
 trap 'rmdir "$ROOT/data/nightly.lock"' EXIT
@@ -45,21 +47,33 @@ trap 'rmdir "$ROOT/data/nightly.lock"' EXIT
 log "index"
 uv run hailprint index
 log "candidates --missing --top $MAX_INGEST"
-MISSING="$(uv run hailprint candidates --missing --top "$MAX_INGEST")"
+# tr drops the CR of a Windows host; pipefail keeps the exit code of candidates
+MISSING="$(uv run hailprint candidates --missing --top "$MAX_INGEST" | tr -d '\r')"
 if [ -n "$MISSING" ]; then
-  # one storm date per word, so MISSING stays unquoted on purpose
-  # shellcheck disable=SC2086
-  log ingest $MISSING
-  # shellcheck disable=SC2086
-  uv run hailprint ingest $MISSING
+  HAS_GDB=0
   if [ -d data/raw/hcad/extracted/Parcels.gdb ]; then
-    for storm_date in $MISSING; do
-      log "parcels $storm_date"
-      uv run hailprint parcels "$storm_date"
-    done
+    HAS_GDB=1
   else
     log "parcels skipped: no HCAD gdb"
   fi
+  # one storm date per word, so MISSING stays unquoted on purpose
+  # shellcheck disable=SC2086
+  for storm_date in $MISSING; do
+    log "ingest $storm_date"
+    # a bad 12Z file fails one storm date; the night goes on to score and publish
+    # shortcut: the failed day stays a missing candidate day and takes one MAX_INGEST slot
+    # every night, upgrade to a skip list when one day fails three nights in a row
+    if ! uv run hailprint ingest "$storm_date"; then
+      log "ingest $storm_date failed; skipped"
+      continue
+    fi
+    if [ "$HAS_GDB" = 1 ]; then
+      log "parcels $storm_date"
+      # the swath file exists now, so the day leaves --missing; the rerun is by hand
+      uv run hailprint parcels "$storm_date" ||
+        log "parcels $storm_date failed; rerun by hand: uv run hailprint parcels $storm_date"
+    fi
+  done
 else
   log "no missing candidate day"
 fi

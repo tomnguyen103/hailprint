@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from hailprint import files, net, reports
+from hailprint import files, net, reports, swath
 from hailprint.paths import DERIVED_DIR, RAW_DIR
 
 # shortcut: the 1955-2025 file holds no 2026 day, so all_days fills later days from the SPC daily
@@ -169,6 +169,4 @@ def rank(days: pd.DataFrame, index: pd.DataFrame) -> pd.DataFrame:
 def missing_days(ranked: pd.DataFrame, swath_dir: Path) -> list[date]:
     """Storm dates with a 12Z file and no swath file under `swath_dir`, newest first."""
     rows = ranked.loc[ranked["has_12z"].astype(bool), "storm_date"]
-    return sorted(
-        (d for d in rows if not (swath_dir / f"swaths-{d}.parquet").exists()), reverse=True
-    )
+    return sorted((d for d in rows if not (swath_dir / swath.file_name(d)).exists()), reverse=True)

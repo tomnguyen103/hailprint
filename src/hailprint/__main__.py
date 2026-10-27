@@ -131,7 +131,7 @@ def ingest(storm_dates: list[date]) -> list[Path]:
         da = mesh.daily_max(storm_date, RAW_DIR)
         max_mesh_mm = None if bool(da.isnull().all()) else round(float(da.max()), 2)
         swaths = swath.build_swaths(da, storm_date)
-        swath.write_swaths(swaths, DERIVED_DIR / f"swaths-{storm_date}.parquet", 1, max_mesh_mm)
+        swath.write_swaths(swaths, DERIVED_DIR / swath.file_name(storm_date), 1, max_mesh_mm)
         try:
             points = reports.harris_reports(storm_date)
             report_count = str(len(points))
@@ -173,6 +173,8 @@ def rank_candidates(top: int, missing: bool = False) -> Path:
     Writes the full CSV and prints the top rows. With `missing`, prints instead the top
     missing candidate days, one storm date per line, for the nightly run.
     """
+    if top < 1:
+        raise ValueError(f"--top must be at least 1, got {top}")
     if not archive.INDEX_PATH.exists():
         raise FileNotFoundError(f"run hailprint index first: {archive.INDEX_PATH}")
     index_df = pd.read_parquet(archive.INDEX_PATH)
@@ -188,7 +190,7 @@ def rank_candidates(top: int, missing: bool = False) -> Path:
 
 def count_parcels(storm_date: date) -> Path:
     """Parcels per size class and per ZIP from the swath file and the masked HCAD read."""
-    swath_path = DERIVED_DIR / f"swaths-{storm_date}.parquet"
+    swath_path = DERIVED_DIR / swath.file_name(storm_date)
     if not swath_path.exists():
         raise FileNotFoundError(f"run hailprint ingest first: {swath_path}")
     swaths = gpd.read_parquet(swath_path)
@@ -206,7 +208,7 @@ def count_parcels(storm_date: date) -> Path:
 def _swath_files(storm_dates: list[date]) -> list[tuple[date, Path]]:
     """The swath file per storm date. An empty list selects every swath file, oldest first."""
     if storm_dates:
-        found = [(d, DERIVED_DIR / f"swaths-{d}.parquet") for d in sorted(set(storm_dates))]
+        found = [(d, DERIVED_DIR / swath.file_name(d)) for d in sorted(set(storm_dates))]
     else:
         found = []
         for path in sorted(DERIVED_DIR.glob("swaths-????-??-??.parquet")):

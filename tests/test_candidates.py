@@ -354,6 +354,16 @@ def test_candidates_missing_top_1_prints_the_newest_of_two(tmp_path, monkeypatch
     assert capsys.readouterr().out == "2026-01-05\n"
 
 
+def test_candidates_top_below_1_fails_with_the_flag_name(tmp_path, monkeypatch, capsys):
+    _missing_env(tmp_path, monkeypatch)
+
+    assert main(["candidates", "--missing", "--top", "0"]) == 1
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "--top" in captured.err
+
+
 def test_candidates_missing_prints_nothing_when_every_day_is_present(tmp_path, monkeypatch, capsys):
     _missing_env(tmp_path, monkeypatch, swath_dates=(date(2024, 5, 28), date(2026, 1, 5)))
 

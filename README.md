@@ -4,7 +4,7 @@ Hailprint draws the MRMS MESH hail swath over Harris County parcels and scores i
 
 ## Status
 
-Plan v5 PRs A to H merged on 2026-10-27. The site runs from `site/data/`, written by `hailprint publish`. The nightly run and the deploy are scripts under `scripts/`. The live upload, the cron install, and the public launch are owner steps (`docs/WEEK-08.md`).
+Plan v5, PRs A to H, is built; `docs/WEEK-08.md` holds the PR table. The site runs from `site/data/`, written by `hailprint publish`. The nightly run and the deploy are scripts under `scripts/`. The live upload, the cron install, and the public launch are owner steps (`docs/WEEK-08.md`).
 
 ## Commands
 
@@ -51,7 +51,7 @@ The data path: Git deployments are off for `main` in `vercel.json`, so a merge n
 | `docs/WEEK-07.md` | Week 7: Method and Pipeline (PR G) |
 | `docs/WEEK-08.md` | Week 8: ship preparation (PR H), the dry run, the owner runbook |
 | `docs/research/` | Research receipts behind the pick: scoring rubric and the three candidate lanes |
-| `docs/solutions/` | Learn-loop entries: Parquet metadata, EPSG:2278 feet, Windows file writes |
+| `docs/solutions/` | Learn-loop entries by category: data, geo, site, tooling |
 | `GLOSSARY.md` | The domain terms used in code, tests, commits, and chat |
 | `site/README.md` | The site commands, routes, data path, basemap step, and Vercel fields |
 

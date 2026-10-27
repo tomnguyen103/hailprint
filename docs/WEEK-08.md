@@ -8,14 +8,17 @@ Oracle: `tests/test_candidates.py` runs `candidates --missing` against a monkeyp
 
 - Six tickets, one commit each, on `feat/pr-h-ship-prep`: `candidates --missing`; the deploy script with Git deployments off for `main`; the nightly run script and the cron entry; the README, the plan v5 copy, and the README test; the site README, the glossary rows, and decision row 10; this report with the real dry run.
 - `candidates.missing_days` keeps the ranked days with a 12Z file and no `swaths-<date>.parquet` under `data/derived/swaths/`, newest first. `--missing` prints one storm date per line and omits the table; `--top` caps the list.
-- `scripts/deploy.sh` refuses without `site/data/storms.json` and during a publish (`site/data/publish.lock`). The dry run runs `npm ci` and `npm run build` in `site/` and verifies `site/dist/index.html` and `site/dist/data/storms.json`. The live path runs `vercel pull --yes --environment=production`, `vercel build --prod --yes`, the same verify on `.vercel/output/static`, and `vercel deploy --prebuilt --prod --archive=tgz --yes`. `--token` follows each call only when `VERCEL_TOKEN` is set. The script prints no value.
-- `scripts/nightly.sh` sources `.env` when present, takes `MAX_INGEST` (default 5), and holds the lock as the directory `data/nightly.lock` through `mkdir`; the EXIT trap removes it after success and after a failed step. `parcels` runs per missing candidate day only when `data/raw/hcad/extracted/Parcels.gdb` is present. `--dry-run` passes through to the deploy.
-- `scripts/hailprint.cron` holds one entry, `0 14 * * *` under `CRON_TZ=UTC`, with the path to edit and the install command in comments.
+- `scripts/deploy.sh` refuses without `site/data/storms.json` and during a publish (`site/data/publish.lock`). The dry run runs `npm ci` and `npm run build` in `site/` and verifies `site/dist/index.html` and `site/dist/data/storms.json`. The live path runs `vercel pull --yes --environment=production`, `vercel build --prod --yes`, the same verify on `.vercel/output/static`, and `vercel deploy --prebuilt --prod --archive=tgz --yes`. The live path reads `<repo>/.env` and exports `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID`; the token reaches `vercel pull` and `vercel deploy` through the environment, and `vercel build` runs with `env -u VERCEL_TOKEN`, so the npm install and the vite build never see it. A preflight refuses without `.vercel/project.json` and without both ids. The script prints no value.
+- `scripts/nightly.sh` reads `.env` when present, without export, takes `MAX_INGEST` (default 5), and holds the lock as the directory `data/nightly.lock` through `mkdir`; the EXIT trap removes it after success and after a failed step. Each missing candidate day runs `ingest` on its own; a failed `ingest` logs the day as skipped and the night goes on; a failed `parcels` logs the rerun command. `parcels` runs only when `data/raw/hcad/extracted/Parcels.gdb` is present. `--dry-run` passes through to the deploy.
+- `scripts/hailprint.cron` holds one entry, `0 14 * * *` under `CRON_TZ=UTC`, a `PATH` line for `uv`, `node`, and `vercel`, and the two paths to edit and the install command in comments.
 
 ## Run
 
-```bash
+```powershell
 & "C:\Program Files\Git\bin\bash.exe" -lc "cd /c/Users/huuth/Desktop/Hailprint && scripts/deploy.sh --dry-run; echo exit=$?"
+```
+
+```bash
 uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run pytest -q
 cd site && npm run check  # tsc --noEmit && vitest run && vite build
 node ~/.claude/skills/impeccable/scripts/detect.mjs --json site/index.html site/src
@@ -36,7 +39,7 @@ node ~/.claude/skills/impeccable/scripts/detect.mjs --json site/index.html site/
 |---|---|
 | Dry run | exit 0 on 2026-10-27; log lines `deploy: npm ci`, `deploy: npm run build`, `deploy: dry run done: site/dist verified, no vercel call`; `npm ci` added 157 packages in 3 s |
 | Built files | `site/dist/index.html` 1345 bytes; `site/dist/data/storms.json` 52511 bytes, 25 storms, equal to `site/data/storms.json` |
-| Python tests | 357 passed; ruff, format, and pyright clean, 2026-10-27 |
+| Python tests | 365 passed; ruff, format, and pyright clean, 2026-10-27 |
 | Site tests | 197 passed in 21 vitest files; `tsc --noEmit` clean; `vite build` in 329 ms |
 | Impeccable detector | exit 0, `[]` findings on `site/index.html` and `site/src`; no UI file changed in this PR |
 | First dry run | `npm ci` failed with `EPERM` on the rolldown binding: a `vite preview --port 4173` from 2026-10-26 held `site/node_modules`. The second run after that process stopped passed |
@@ -44,7 +47,7 @@ node ~/.claude/skills/impeccable/scripts/detect.mjs --json site/index.html site/
 ## Checks
 
 - `test_candidates.py`: `--missing` prints the one day without a swath file and still writes the CSV; `--top 1` prints the newest of two; nothing prints when every day is present; the table is absent; without the archive index the command exits 1; the list is empty after the swath file appears; `missing_days` is newest first.
-- `test_scripts.py`: every script parses under `bash -n`; the dry run runs `npm ci` and `npm run build` in `site/` and calls no `vercel`; the live path runs pull, build, and deploy with `--token` when `VERCEL_TOKEN` is set and without it otherwise, and the token value is absent from stdout and stderr; the script refuses without `site/data/storms.json` and during a publish; an unknown argument exits 2 with usage; a build without `data/storms.json` stops the dry run and stops the live path before `vercel deploy`; the nightly run calls every step in order and removes the lock; it skips ingest and parcels without a missing candidate day; it skips parcels without the HCAD gdb; `MAX_INGEST` from the environment and from `.env` caps the candidates call; `--dry-run` reaches the deploy; a present lock exits 1 with no call and stays; a failed `score` exits 3 and removes the lock; an unknown argument exits 2; the cron file holds one entry at `0 14 * * *` under `CRON_TZ=UTC`.
+- `test_scripts.py`: every script parses under `bash -n`; the dry run runs `npm ci` and `npm run build` in `site/` and calls no `vercel`; the live path runs pull, build, and deploy, and the token from the environment or from `.env` reaches pull and deploy only, with the value absent from stdout and stderr; without a token the three calls run on the login session; without `.vercel/project.json` the preflight exits 1 and names `VERCEL_ORG_ID`, and both ids in the environment let it pass; the script refuses without `site/data/storms.json` and during a publish; an unknown argument exits 2 with usage; a build without `data/storms.json` stops the dry run and stops the live path before `vercel deploy`; the nightly run calls every step in order, one `ingest` per day, and removes the lock; it skips ingest and parcels without a missing candidate day; it skips parcels without the HCAD gdb; a failed `ingest` skips that day and the night goes on; a failed `parcels` logs the rerun command; a failed `candidates` exits 3 after `index`; a token in `.env` reaches no `uv` step; `MAX_INGEST` from the environment and from `.env` caps the candidates call; `--dry-run` reaches the deploy; a present lock exits 1 with no call and stays; a failed `score` exits 3 and removes the lock; an unknown argument exits 2; the cron file holds one entry at `0 14 * * *` under `CRON_TZ=UTC` and a `PATH` line.
 - `test_readme.py`: the README names `hailprint <name>` for every parser command, every `docs/WEEK-*.md`, the three script paths, and no "live map".
 - `test_outputs_clean.py` and a text scan: no forbidden word and no owner field in `docs/plan-v5.md`, the glossary rows, the site README, or the decision row.
 
@@ -53,13 +56,13 @@ node ~/.claude/skills/impeccable/scripts/detect.mjs --json site/index.html site/
 - Site data path (`docs/DECISIONS.md` row 10): Git deployments off for `main` in `vercel.json`; the cron host builds with `site/data/` present and uploads with the prebuilt flow; PR branches keep data-free previews. The dashboard ignored build step is dead and goes at launch.
 - The nightly lock is a `mkdir` directory: `flock` is absent in Git Bash, and `mkdir` is atomic on every host.
 - The cron hour is 14:00 UTC: the 12Z file of yesterday's storm date lands on S3 after 12:00 UTC.
-- Log rotation and a retry on a failed step wait for the first month of runs (`shortcut:` in `scripts/hailprint.cron`).
+- Log rotation waits for the first year of runs (`shortcut:` in `scripts/hailprint.cron`). The lock holds no pid and no age, and a failed day takes one `MAX_INGEST` slot every night (`shortcut:` lines in `scripts/nightly.sh`).
 
 ## Owner steps
 
-1. On the cron host, run `vercel login` once, or write `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` to `<repo>/.env` (gitignored). The script prints no value.
+1. On the cron host, run `vercel login` and `vercel link` once, or write `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` to `<repo>/.env` (gitignored) and run `chmod 600 .env`. The script prints no value.
 2. Run `scripts/deploy.sh` by hand once and confirm the production URL `hailprint.tomnguyen.me`.
-3. Edit the path in `scripts/hailprint.cron`, then run `crontab scripts/hailprint.cron`.
+3. Edit the repo path and the `PATH` home path in `scripts/hailprint.cron`, then run `crontab scripts/hailprint.cron`. The command replaces the whole crontab of that user; merge by hand when one exists. Debian cron ignores `CRON_TZ`: set the host time zone to UTC or write the hour in local time.
 4. Remove the dashboard ignored build step in the Vercel project.
 5. Close the HCAD reply and the employer IP clause (`docs/DECISIONS.md` standing constraints). The site shows ZIP totals only until the HCAD reply.
 6. Public launch.

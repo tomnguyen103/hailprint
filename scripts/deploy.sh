@@ -3,10 +3,12 @@
 # Usage: scripts/deploy.sh [--dry-run]
 #   --dry-run   build site/dist with npm, verify the artifact, and stop before any vercel call.
 # Live path: vercel pull, vercel build --prod, verify .vercel/output/static, vercel deploy --prebuilt.
-# Preflight: site/data/storms.json must exist and site/data/publish.lock must be absent.
-# Auth: VERCEL_TOKEN, or a `vercel login` session. On a host without a .vercel link folder,
-# VERCEL_ORG_ID and VERCEL_PROJECT_ID select the project. The values live in <repo>/.env
-# (gitignored) or in the vercel login session, never in the repo. The script prints no value.
+# Preflight: site/data/storms.json must exist and site/data/publish.lock must be absent. The
+# live path also needs .vercel/project.json, or VERCEL_ORG_ID with VERCEL_PROJECT_ID.
+# Auth: VERCEL_TOKEN in the environment, or a `vercel login` session. The live path reads
+# <repo>/.env (gitignored) and exports the three Vercel names to vercel pull and vercel deploy.
+# vercel build runs offline from .vercel/ and gets no VERCEL_TOKEN, so the npm install and the
+# vite build never see it. The script prints no value.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -28,15 +30,6 @@ verify() {
       exit 1
     fi
   done
-}
-
-# vc <args>: vercel with --token only when VERCEL_TOKEN is set
-vc() {
-  if [ -n "${VERCEL_TOKEN:-}" ]; then
-    vercel "$@" --token "$VERCEL_TOKEN"
-  else
-    vercel "$@"
-  fi
 }
 
 [ "$#" -le 1 ] || usage
@@ -67,11 +60,22 @@ if [ "$DRY_RUN" = 1 ]; then
   exit 0
 fi
 
+if [ -f .env ]; then
+  # shellcheck disable=SC1091
+  . ./.env
+fi
+# an unset name stays out of the environment
+export VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID
+if [ ! -f .vercel/project.json ] && { [ -z "${VERCEL_ORG_ID:-}" ] || [ -z "${VERCEL_PROJECT_ID:-}" ]; }; then
+  echo "deploy: no .vercel/project.json and no VERCEL_ORG_ID with VERCEL_PROJECT_ID; run vercel link once, or set both names in .env" >&2
+  exit 1
+fi
+
 log "vercel pull"
-vc pull --yes --environment=production
+vercel pull --yes --environment=production
 log "vercel build"
-vc build --prod --yes
+env -u VERCEL_TOKEN vercel build --prod --yes
 verify .vercel/output/static
 log "vercel deploy"
-vc deploy --prebuilt --prod --archive=tgz --yes
+vercel deploy --prebuilt --prod --archive=tgz --yes
 log "deploy done"

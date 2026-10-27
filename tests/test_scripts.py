@@ -10,7 +10,12 @@ from tests.conftest import BASH, needs_bash
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 
-STUB = '#!/usr/bin/env bash\necho "{name}${{*:+ $*}} @ $(basename "$PWD")" >> "$STUB_LOG"\n{body}'
+# a stub logs its name, its arguments, a [token] marker when VERCEL_TOKEN reaches it, and its cwd
+STUB = (
+    "#!/usr/bin/env bash\n"
+    'echo "{name}${{*:+ $*}}${{VERCEL_TOKEN:+ [token]}} @ $(basename "$PWD")" >> "$STUB_LOG"\n'
+    "{body}"
+)
 
 # a build writes index.html; STUB_BUILD_EMPTY=1 leaves out data/storms.json
 NPM_BODY = """if [ "$1 $2" = "run build" ]; then
@@ -37,6 +42,10 @@ class Tree:
         self.site_data = self.root / "site" / "data"
         self.site_data.mkdir(parents=True)
         (self.site_data / "storms.json").write_text("{}", encoding="utf-8")
+        # a linked project: the live deploy preflight passes without the two ids
+        self.link = self.root / ".vercel" / "project.json"
+        self.link.parent.mkdir()
+        self.link.write_text("{}", encoding="utf-8")
         self.bin = tmp_path / "bin"
         self.bin.mkdir()
         self.log = tmp_path / "calls.log"
@@ -57,7 +66,14 @@ class Tree:
             "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
             "STUB_LOG": self.log.as_posix(),
         }
-        for name in ("VERCEL_TOKEN", "MAX_INGEST", "STUB_MISSING", "STUB_FAIL"):
+        for name in (
+            "VERCEL_TOKEN",
+            "VERCEL_ORG_ID",
+            "VERCEL_PROJECT_ID",
+            "MAX_INGEST",
+            "STUB_MISSING",
+            "STUB_FAIL",
+        ):
             run_env.pop(name, None)
         run_env.update(env or {})
         assert BASH is not None
@@ -94,33 +110,73 @@ def test_deploy_dry_run_builds_in_site_and_calls_no_vercel(tmp_path):
     assert "deploy:" in done.stdout
 
 
+LIVE_WITH_TOKEN = [
+    "vercel pull --yes --environment=production [token] @ tree",
+    "vercel build --prod --yes @ tree",
+    "vercel deploy --prebuilt --prod --archive=tgz --yes [token] @ tree",
+]
+LIVE_WITHOUT_TOKEN = [
+    "vercel pull --yes --environment=production @ tree",
+    "vercel build --prod --yes @ tree",
+    "vercel deploy --prebuilt --prod --archive=tgz --yes @ tree",
+]
+
+
 @needs_bash
-def test_deploy_live_runs_pull_build_deploy_with_the_token(tmp_path):
+def test_deploy_live_passes_the_token_to_pull_and_deploy_only(tmp_path):
     tree = Tree(tmp_path)
 
     done = tree.run("deploy.sh", env={"VERCEL_TOKEN": "t-test"})
 
     assert done.returncode == 0, done.stderr
-    assert tree.calls() == [
-        "vercel pull --yes --environment=production --token t-test @ tree",
-        "vercel build --prod --yes --token t-test @ tree",
-        "vercel deploy --prebuilt --prod --archive=tgz --yes --token t-test @ tree",
-    ]
+    assert tree.calls() == LIVE_WITH_TOKEN
     assert "t-test" not in done.stdout + done.stderr
 
 
 @needs_bash
-def test_deploy_live_without_a_token_omits_the_flag(tmp_path):
+def test_deploy_live_reads_the_token_from_dot_env(tmp_path):
+    tree = Tree(tmp_path)
+    (tree.root / ".env").write_text("VERCEL_TOKEN=t-test\n", encoding="utf-8")
+
+    done = tree.run("deploy.sh")
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == LIVE_WITH_TOKEN
+    assert "t-test" not in done.stdout + done.stderr
+
+
+@needs_bash
+def test_deploy_live_without_a_token_runs_on_the_login_session(tmp_path):
     tree = Tree(tmp_path)
 
     done = tree.run("deploy.sh")
 
     assert done.returncode == 0, done.stderr
-    assert tree.calls() == [
-        "vercel pull --yes --environment=production @ tree",
-        "vercel build --prod --yes @ tree",
-        "vercel deploy --prebuilt --prod --archive=tgz --yes @ tree",
-    ]
+    assert tree.calls() == LIVE_WITHOUT_TOKEN
+
+
+@needs_bash
+def test_deploy_live_refuses_without_a_link_or_both_ids(tmp_path):
+    tree = Tree(tmp_path)
+    tree.link.unlink()
+
+    done = tree.run("deploy.sh", env={"VERCEL_PROJECT_ID": "p-test"})
+
+    assert done.returncode == 1
+    assert "VERCEL_ORG_ID" in done.stderr
+    assert "vercel link" in done.stderr
+    assert tree.calls() == []
+
+
+@needs_bash
+def test_deploy_live_runs_without_a_link_when_both_ids_are_set(tmp_path):
+    tree = Tree(tmp_path)
+    tree.link.unlink()
+
+    done = tree.run("deploy.sh", env={"VERCEL_ORG_ID": "o-test", "VERCEL_PROJECT_ID": "p-test"})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == LIVE_WITHOUT_TOKEN
 
 
 @needs_bash
@@ -192,10 +248,12 @@ if [ "$2 $3" = "hailprint ${STUB_FAIL:-none}" ]; then exit 3; fi
 MISSING_TWO = "2026-01-05\n2024-06-01"
 HEAD = ["uv run hailprint index @ tree", "uv run hailprint candidates --missing --top 5 @ tree"]
 INGEST = [
-    "uv run hailprint ingest 2026-01-05 2024-06-01 @ tree",
+    "uv run hailprint ingest 2026-01-05 @ tree",
     "uv run hailprint parcels 2026-01-05 @ tree",
+    "uv run hailprint ingest 2024-06-01 @ tree",
     "uv run hailprint parcels 2024-06-01 @ tree",
 ]
+INGEST_ONLY = [INGEST[0], INGEST[2]]
 TAIL = ["uv run hailprint score @ tree", "uv run hailprint publish @ tree"]
 
 
@@ -237,8 +295,53 @@ def test_nightly_skips_parcels_without_the_hcad_gdb(tmp_path):
     done = tree.run("nightly.sh", env={"STUB_MISSING": MISSING_TWO})
 
     assert done.returncode == 0, done.stderr
-    assert tree.calls() == HEAD + INGEST[:1] + TAIL + ["deploy @ tree"]
+    assert tree.calls() == HEAD + INGEST_ONLY + TAIL + ["deploy @ tree"]
     assert "parcels skipped" in done.stdout
+
+
+@needs_bash
+def test_nightly_skips_a_failed_ingest_day_and_goes_on(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": MISSING_TWO, "STUB_FAIL": "ingest"})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == HEAD + INGEST_ONLY + TAIL + ["deploy @ tree"]
+    assert done.stdout.count("failed; skipped") == 2
+
+
+@needs_bash
+def test_nightly_logs_a_failed_parcels_run_and_goes_on(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": MISSING_TWO, "STUB_FAIL": "parcels"})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == HEAD + INGEST + TAIL + ["deploy @ tree"]
+    assert "rerun by hand: uv run hailprint parcels 2026-01-05" in done.stdout
+
+
+@needs_bash
+def test_nightly_stops_when_candidates_fails(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": MISSING_TWO, "STUB_FAIL": "candidates"})
+
+    assert done.returncode == 3
+    assert tree.calls() == HEAD
+    assert not (tree.root / "data" / "nightly.lock").exists()
+
+
+@needs_bash
+def test_nightly_keeps_the_dot_env_token_out_of_the_uv_steps(tmp_path):
+    tree = nightly_tree(tmp_path)
+    (tree.root / ".env").write_text("VERCEL_TOKEN=t-test\n", encoding="utf-8")
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": ""})
+
+    assert done.returncode == 0, done.stderr
+    assert not any("[token]" in call for call in tree.calls())
+    assert "t-test" not in done.stdout + done.stderr
 
 
 @needs_bash
@@ -317,3 +420,4 @@ def test_cron_entry_starts_the_nightly_run_at_14_utc():
     assert entries[0].startswith("0 14 * * *")
     assert "scripts/nightly.sh" in entries[0]
     assert "CRON_TZ=UTC" in lines
+    assert any(ln.startswith("PATH=") for ln in lines)
