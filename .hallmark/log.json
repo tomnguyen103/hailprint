@@ -22,7 +22,7 @@
       "command": "node ~/.claude/skills/impeccable/scripts/detect.mjs --json site/index.html site/src",
       "exit": 0
     },
-    "slop_test": "pending browser pass",
+    "slop_test": "pass",
     "notes": "One series per chart, no legend, y 0..1, x over the seven thresholds in inches, dashed literature line on HSS only. Native range for every slider and the swipe. Receipt chip on every table and metric row."
   }
 ]

@@ -42,11 +42,11 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 - `point-form.test.ts`: `parsePoint("29.76", "-95.37")` gives `[-95.37, 29.76]`; out-of-bbox, non-numeric, and empty text give null; `POINT_HINT` equals the spec literal.
 - `csv.test.ts`: the header literal, a null metric as an empty cell, LF line ends with a trailing newline, and a quoted label with a comma or a quote.
 - No forbidden word under `site/src`, `GLOSSARY.md`, or this file. Every table and metric row in Scorecard and Try it carries a receipt chip: Table view (one per row), Grid view, Curve view, Tune metric row, Check a point (one per storm date), Run it yourself (beside the CSV button).
-- Browser checks (console free of MapLibre errors on `/try/compare`, both maps destroyed on route change, the swipe reachable by Tab, Copy from the keyboard) run in the main session after this stage.
+- Browser checks ran in the main session with playwright-core 1.60 and the installed Chrome against the Vite dev server on port 5173. Results: the console on `/try/compare` holds no MapLibre error; the compare stage holds two canvases and zero after a route change to Run, so both maps are destroyed; the swipe is the seventh Tab stop after the Storm date B select (the eighth with the error overlay's Retry); Home and End move the swipe to 0 and 100 and the clip to `inset(0 0 0 0%)` and `inset(0 0 0 100%)`; Enter on Copy writes `uv run hailprint ingest 2026-08-28` to the clipboard, flips the label to Copied, and the live region announces Copied once; with no clipboard API the label reads Select and copy and the command text is selected; End on the threshold slider reads 2.50 in; a zero-scored date in Tune draws an en dash per metric with the hidden sentence `undefined, zero denominator`; the point form marks an out-of-county point `aria-invalid` with the hint; a map click fills lat 29.8360 and lon -95.4346. The only console line across every route is one `404 (Not Found)` on the first Scorecard load from the basemap HEAD probe (carried PR E item, no basemap file in dev).
 
 ## Screenshots
 
-The main session captures every row under `docs/evidence/week-06/` with the file name `<viewport>-<theme>-<route>-<state>.png`, the route slashes as underscores. Every capture checks `scrollWidth == innerWidth` and an empty console.
+The main session captured every row under `docs/evidence/week-06/` with the file name `<viewport>-<theme>-<route>-<state>.png`, the route slashes as underscores. Every capture checked `scrollWidth == innerWidth` (27 of 27 pass) and the console (empty except the one basemap probe line above).
 
 | Viewport | Theme | Route | State | File |
 |---|---|---|---|---|
@@ -78,7 +78,7 @@ The main session captures every row under `docs/evidence/week-06/` with the file
 | 1920 | dark | `/try/run` | fallback "Select and copy" | `1920-dark-try_run-fallback.png` |
 | 390 | light | `/try/run` | commands wrap | `390-light-try_run-copy.png` |
 
-Slop test on the shipped surface: no KPI card row; no eyebrow or kicker label; no gradient text; no emoji or Unicode icon; shadow only on the receipt pop; monospace only on dates, numbers, and code; motion only on the marker move, the map fit, and the fly to a point, off under reduced motion; every control names its action; every error names the file and the recovery. Verdict: pending the main session's browser pass.
+Slop test on the shipped surface: no KPI card row; no eyebrow or kicker label; no gradient text; no emoji or Unicode icon; shadow only on the receipt pop; monospace only on dates, numbers, and code; motion only on the marker move, the map fit, and the fly to a point, off under reduced motion; every control names its action; every error names the file and the recovery. Verdict: pass, on the 27 captures above.
 
 ## Decisions
 
