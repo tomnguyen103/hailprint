@@ -94,7 +94,12 @@ export function Timeline({ date, step, warnings, note, reports, onStep }: Props)
   const ticks = reportTicks(reports);
   const pick: StripClick = (event) => onStep(stepAt(event.clientX, event.currentTarget.getBoundingClientRect()));
   const end = stepTime(date, STEPS).toISOString().slice(0, 10);
-  const title = `Storm timeline for ${date}, 12:00 UTC to 12:00 UTC ${end}: ${plural(bars.length, "warning")}, ${plural(ticks.length, "report")}.`;
+  // A null file reads as unavailable, never as a count of zero.
+  const counts = [
+    warnings === null ? "warnings unavailable" : plural(bars.length, "warning"),
+    reports === null ? "reports unavailable" : plural(ticks.length, "report"),
+  ];
+  const title = `Storm timeline for ${date}, 12:00 UTC to 12:00 UTC ${end}: ${counts.join(", ")}.`;
   const cursorX = step * STEP_PX;
   return (
     <section class="timeline" aria-labelledby="timeline-heading">

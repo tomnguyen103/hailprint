@@ -182,6 +182,23 @@ describe("the empty and labelled states", () => {
     expect(svg.props["aria-labelledby"]).toBe(title!.props["id"]);
   });
 
+  const titleOf = (props: Parameters<typeof chart>[0]) => textOf(findAll(chart(props).tree, (v) => v.type === "title")[0]);
+
+  it("reads a null warnings file as unavailable and an empty file as zero", () => {
+    const absent = titleOf({ warnings: null });
+    expect(absent).toContain("warnings unavailable");
+    expect(absent).not.toContain("0 warnings");
+    expect(absent).toContain("2 reports");
+    expect(titleOf({ warnings: warnings() })).toContain("0 warnings");
+  });
+
+  it("reads a null reports file as unavailable and an empty file as zero", () => {
+    const absent = titleOf({ reports: null });
+    expect(absent).toContain("reports unavailable");
+    expect(absent).not.toContain("0 reports");
+    expect(titleOf({ reports: reports() })).toContain("0 reports");
+  });
+
   it("labels the rows with the type codes and the reports row", () => {
     const text = textOf(chart().tree);
     for (const word of ["SV", "TO", "FF", "Reports"]) expect(text).toContain(word);

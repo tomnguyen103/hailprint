@@ -71,8 +71,8 @@ def parse(text: str, storm_date: date) -> gpd.GeoDataFrame:
     A polygon is in the window when it begins before the window end and ends after the window
     start. A polygon that touches a county edge reaches that county. The rows sort by begin
     time, so the feed order never changes the file. A kept type with no geometry, a missing
-    allow-listed property, a null event_label, or a malformed value raises ValueError that
-    names the eventid. The message cuts each feed value to 40 characters.
+    allow-listed property, a null or empty event_label or product_id, or a malformed value
+    raises ValueError that names the eventid. The message cuts each feed value to 40 characters.
     """
     try:
         document = json.loads(text)
@@ -93,8 +93,11 @@ def parse(text: str, storm_date: date) -> gpd.GeoDataFrame:
         for key in ALLOWED:
             if FEED_KEY.get(key, key) not in props:
                 raise ValueError(f"warning {_show(eventid)} lacks {FEED_KEY.get(key, key)}")
-        if props["event_label"] is None:
-            raise ValueError(f"warning {_show(eventid)} has a null event_label")
+        for key in ("event_label", "product_id"):
+            if props[key] is None:
+                raise ValueError(f"warning {_show(eventid)} has a null {key}")
+            if props[key] == "":
+                raise ValueError(f"warning {_show(eventid)} has an empty {key}")
         geometry = feature.get("geometry")
         if geometry is None:
             raise ValueError(f"warning {_show(eventid)} has no geometry")

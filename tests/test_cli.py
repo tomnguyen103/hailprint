@@ -633,9 +633,32 @@ def test_warnings_exits_1_with_one_line_and_no_file_when_iem_answers_5xx_three_t
     assert cli.main(["warnings", "2024-05-28"]) == 1
 
     assert len(calls) == 3
-    (line,) = capsys.readouterr().err.splitlines()
+    line, summary = capsys.readouterr().err.splitlines()
     assert "2024-05-28" in line and "503" in line
+    assert summary == "warnings failed for: 2024-05-28"
     assert not env.warnings.exists() or list(env.warnings.iterdir()) == []
+
+
+def test_a_failed_warnings_date_does_not_stop_the_later_date(env, iem, monkeypatch, capsys):
+    serve = urllib.request.urlopen  # the Iem stub
+
+    def urlopen(url, timeout=None):
+        if "begints=2023-06-23" in url:
+            raise urllib.error.HTTPError(url, 503, "Service Unavailable", {}, None)
+        return serve(url, timeout=timeout)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(cli.sbw.net.time, "sleep", lambda s: None)
+
+    assert cli.main(["warnings", "2023-06-23", "2024-05-28"]) == 1
+
+    assert _warnings_file(env, LATER).exists()
+    assert not _warnings_file(env, EARLIER).exists()
+    captured = capsys.readouterr()
+    assert captured.out == "2024-05-28: 5 warnings\n"
+    failure, summary = captured.err.splitlines()
+    assert "2023-06-23" in failure and "503" in failure
+    assert summary == "warnings failed for: 2023-06-23"
 
 
 def test_warnings_exits_1_naming_the_eventid_for_a_null_geometry_and_writes_no_file(

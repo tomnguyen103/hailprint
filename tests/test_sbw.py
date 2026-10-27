@@ -118,6 +118,26 @@ def test_parse_raises_value_error_naming_the_field_and_the_eventid_for_a_null_ev
         sbw.parse(json.dumps(document), STORM_DATE)
 
 
+@pytest.mark.parametrize(
+    ("key", "value", "message"),
+    [
+        ("product_id", None, "has a null product_id"),
+        ("product_id", "", "has an empty product_id"),
+        ("event_label", "", "has an empty event_label"),
+    ],
+)
+def test_parse_raises_value_error_naming_the_eventid_for_a_null_or_empty_label_or_product_id(
+    key, value, message
+):
+    document = feed()
+    next(f for f in document["features"] if f["properties"]["eventid"] == 101)["properties"][
+        key
+    ] = value
+
+    with pytest.raises(ValueError, match=rf"warning 101 {message}"):
+        sbw.parse(json.dumps(document), STORM_DATE)
+
+
 def test_parse_shows_a_feed_value_in_an_error_as_a_repr_cut_to_40_characters():
     document = feed()
     kept = next(f for f in document["features"] if f["properties"]["eventid"] == 101)

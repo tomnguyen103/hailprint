@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { match } from "../router";
 import { useRoute } from "../state/route";
 import { replaceStep } from "./slider";
 import { resolveStep } from "./step";
@@ -35,6 +36,41 @@ export function createWriter({ write, delayMs }: { write: (step: number) => void
   return { schedule, cancel };
 }
 
+export interface WritePorts {
+  pathname(): string;
+  replace(date: string, step: number): void;
+}
+
+const PORTS: WritePorts = { pathname: () => window.location.pathname, replace: replaceStep };
+
+/**
+ * Write the step into the path while the map tab of `date` shows. Return false and write nothing otherwise.
+ * A late write must not rewrite the URL of another tab once the user leaves the map.
+ */
+export function writeStep(date: string, step: number, ports: WritePorts): boolean {
+  const route = match(ports.pathname());
+  if (route.kind !== "storms" || route.date !== date || route.tab !== "map") return false;
+  ports.replace(date, step);
+  return true;
+}
+
+export interface StepState {
+  /** The step the user moved to and the path does not hold yet. */
+  pending: number | null;
+  /** The step the hook wrote to the path, until the route change that carries it arrives. */
+  written: number | null;
+}
+
+/**
+ * The state after the path step changes to `routeStep`.
+ * The route change that carries the hook's own write keeps a newer pending move and its timer.
+ * Any other change (Back, Forward, a link) wins over a pending move, so `cancel` is true.
+ */
+export function reconcile(state: StepState, routeStep: number): StepState & { cancel: boolean } {
+  if (state.written === routeStep) return { pending: state.pending === routeStep ? null : state.pending, written: null, cancel: false };
+  return { pending: null, written: null, cancel: true };
+}
+
 /**
  * The map step of the storm date. The path holds it, but a move shows at once and the path write trails by `WRITE_MS`.
  * Back and Forward change the path step, and that change wins over a move that has not been written.
@@ -43,31 +79,42 @@ export function useStep(date: string): { step: number; setStep: (next: number) =
   const { route } = useRoute();
   const routeStep = resolveStep(route.kind === "storms" ? route.step : null);
   const [pending, setPending] = useState<number | null>(null);
+  // The effect reads refs: a move can land between a render and its effect, and state would be stale there.
+  const pendingRef = useRef<number | null>(null);
+  const written = useRef<number | null>(null);
+  const hold = useCallback((next: number | null) => {
+    pendingRef.current = next;
+    setPending(next);
+  }, []);
   const writer = useMemo(
     () =>
       createWriter({
         delayMs: WRITE_MS,
         write: (next) => {
-          // A late write must not rewrite the URL of another tab once the user leaves the map.
-          if (window.location.pathname.startsWith(`/storms/${date}/map`)) replaceStep(date, next);
-          else setPending(null);
+          written.current = next;
+          if (!writeStep(date, next, PORTS)) {
+            written.current = null;
+            hold(null);
+          }
         },
       }),
-    [date],
+    [date, hold],
   );
 
   useEffect(() => {
-    setPending(null);
-    writer.cancel();
-  }, [routeStep, writer]);
+    const result = reconcile({ pending: pendingRef.current, written: written.current }, routeStep);
+    hold(result.pending);
+    written.current = result.written;
+    if (result.cancel) writer.cancel();
+  }, [routeStep, writer, hold]);
   useEffect(() => writer.cancel, [writer]);
 
   const setStep = useCallback(
     (next: number) => {
-      setPending(next);
+      hold(next);
       writer.schedule(next);
     },
-    [writer],
+    [writer, hold],
   );
   return { step: pending ?? routeStep, setStep };
 }

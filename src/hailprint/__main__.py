@@ -310,7 +310,8 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
 
     With `missing`, the dates are the swath dates whose window has closed and that have no
     settled warnings file. A file with zero rows settles only after `candidates.FRESH_DAYS`.
-    A failed fetch stops the run; the next `--missing` run starts again.
+    A failed date does not stop the other dates. The run prints one line per failed date,
+    then exits 1. The next `--missing` run starts again with the failed dates.
     """
     # shortcut: an explicit date runs for an open window too and writes a partial file that
     # `--missing` then skips; add a closed-window check when explicit reruns of recent days
@@ -323,12 +324,20 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
             if sbw.window(d)[1] <= now and not _warnings_settled(d, now)
         ]
     written = []
+    failed = []
     for storm_date in storm_dates:
-        frame = sbw.parse(sbw.fetch(storm_date), storm_date)
-        written.append(
-            files.write_atomic(frame, WARNINGS_DIR / sbw.file_name(storm_date), sbw.METADATA)
-        )
+        try:
+            frame = sbw.parse(sbw.fetch(storm_date), storm_date)
+            written.append(
+                files.write_atomic(frame, WARNINGS_DIR / sbw.file_name(storm_date), sbw.METADATA)
+            )
+        except (RuntimeError, ValueError) as exc:
+            print(f"{storm_date}: {exc}", file=sys.stderr)
+            failed.append(storm_date.isoformat())
+            continue
         print(f"{storm_date}: {len(frame)} warnings")
+    if failed:
+        raise ValueError(f"warnings failed for: {', '.join(failed)}")
     return written
 
 
