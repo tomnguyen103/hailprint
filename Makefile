@@ -15,4 +15,10 @@ ingest:
 site:
 	cd site && npm ci && npm run check
 
-.PHONY: setup lint test ingest site
+deploy-dry:
+	scripts/deploy.sh --dry-run
+
+nightly:
+	scripts/nightly.sh
+
+.PHONY: setup lint test ingest site deploy-dry nightly

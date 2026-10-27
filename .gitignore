@@ -23,6 +23,7 @@ __pycache__/
 # node
 node_modules/
 dist/
+.vercel/
 
 # env and editors
 .env

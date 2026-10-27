@@ -66,6 +66,11 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser("index", help="list the MESH archive and store one row per day")
     cand = commands.add_parser("candidates", help="rank Harris County hail days by report count")
     cand.add_argument("--top", type=int, default=20, help="rows to print")
+    cand.add_argument(
+        "--missing",
+        action="store_true",
+        help="print the candidate days with a 12Z file and no swath file, newest first",
+    )
     parcels_cmd = commands.add_parser(
         "parcels", help="count parcels per size class for a storm date"
     )
@@ -105,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "index":
             index()
         elif args.command == "candidates":
-            rank_candidates(args.top)
+            rank_candidates(args.top, args.missing)
         elif args.command == "parcels":
             count_parcels(args.storm_date)
         elif args.command == "score":
@@ -126,7 +131,7 @@ def ingest(storm_dates: list[date]) -> list[Path]:
         da = mesh.daily_max(storm_date, RAW_DIR)
         max_mesh_mm = None if bool(da.isnull().all()) else round(float(da.max()), 2)
         swaths = swath.build_swaths(da, storm_date)
-        swath.write_swaths(swaths, DERIVED_DIR / f"swaths-{storm_date}.parquet", 1, max_mesh_mm)
+        swath.write_swaths(swaths, DERIVED_DIR / swath.file_name(storm_date), 1, max_mesh_mm)
         try:
             points = reports.harris_reports(storm_date)
             report_count = str(len(points))
@@ -162,23 +167,30 @@ def index() -> Path:
     return path
 
 
-def rank_candidates(top: int) -> Path:
+def rank_candidates(top: int, missing: bool = False) -> Path:
     """Rank WCM days and the daily-CSV fill against the archive index.
 
-    Writes the full CSV and prints the top rows.
+    Writes the full CSV and prints the top rows. With `missing`, prints instead the top
+    missing candidate days, one storm date per line, for the nightly run.
     """
+    if top < 1:
+        raise ValueError(f"--top must be at least 1, got {top}")
     if not archive.INDEX_PATH.exists():
         raise FileNotFoundError(f"run hailprint index first: {archive.INDEX_PATH}")
     index_df = pd.read_parquet(archive.INDEX_PATH)
     ranked = candidates.rank(candidates.all_days(candidates.fetch_database(), index_df), index_df)
     path = files.write_atomic(ranked, candidates.CANDIDATES_PATH)
-    print(ranked.head(top).to_string(index=False))
+    if missing:
+        for storm_date in candidates.missing_days(ranked, DERIVED_DIR)[:top]:
+            print(storm_date)
+    else:
+        print(ranked.head(top).to_string(index=False))
     return path
 
 
 def count_parcels(storm_date: date) -> Path:
     """Parcels per size class and per ZIP from the swath file and the masked HCAD read."""
-    swath_path = DERIVED_DIR / f"swaths-{storm_date}.parquet"
+    swath_path = DERIVED_DIR / swath.file_name(storm_date)
     if not swath_path.exists():
         raise FileNotFoundError(f"run hailprint ingest first: {swath_path}")
     swaths = gpd.read_parquet(swath_path)
@@ -196,7 +208,7 @@ def count_parcels(storm_date: date) -> Path:
 def _swath_files(storm_dates: list[date]) -> list[tuple[date, Path]]:
     """The swath file per storm date. An empty list selects every swath file, oldest first."""
     if storm_dates:
-        found = [(d, DERIVED_DIR / f"swaths-{d}.parquet") for d in sorted(set(storm_dates))]
+        found = [(d, DERIVED_DIR / swath.file_name(d)) for d in sorted(set(storm_dates))]
     else:
         found = []
         for path in sorted(DERIVED_DIR.glob("swaths-????-??-??.parquet")):

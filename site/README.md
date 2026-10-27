@@ -38,7 +38,12 @@ draws paper and the county outline when it is absent. The file is gitignored.
 
 The root `vercel.json` sets the fields: install `cd site && npm ci`, build
 `cd site && npm run build`, output `site/dist`, and a rewrite of every path without a dot to
-`/index.html`. The data folder reaches the build only from a machine that holds it (PR H).
+`/index.html`. Git deployments are off for `main` (`git.deploymentEnabled` in `vercel.json`), so a
+merge never replaces production with a data-free build; PR branches keep their previews.
+`scripts/deploy.sh` on the cron host runs `vercel pull`, `vercel build --prod`, and
+`vercel deploy --prebuilt --prod --archive=tgz`. `scripts/deploy.sh --dry-run` builds `site/dist`
+and stops. The auth comes from `VERCEL_TOKEN` or a `vercel login` session, with `VERCEL_ORG_ID` and
+`VERCEL_PROJECT_ID` on a host without a link folder.
 
 ## Dev harness
 

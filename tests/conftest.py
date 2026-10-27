@@ -1,4 +1,6 @@
+import shutil
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -20,3 +22,7 @@ needs_hcad = pytest.mark.skipif(
     reason=f"needs the HCAD gdb at {HCAD_GDB} and the swath file at {SWATHS_0528}",
 )
 needs_wcm = pytest.mark.skipif(not WCM_PATH.exists(), reason=f"needs the WCM zip at {WCM_PATH}")
+# Git Bash first: the System32 bash.exe on Windows is the WSL launcher
+GIT_BASH = Path(r"C:\Program Files\Git\bin\bash.exe")
+BASH = str(GIT_BASH) if GIT_BASH.exists() else shutil.which("bash")
+needs_bash = pytest.mark.skipif(BASH is None, reason="needs bash on PATH or Git Bash")

@@ -1,0 +1,13 @@
+# Hailprint cron entry: one nightly run per day on the cron host.
+# Install after the two path edits below: crontab scripts/hailprint.cron
+# `crontab FILE` replaces the whole crontab of this user. Merge by hand when one exists.
+# 14:00 UTC: the 12Z file of yesterday's storm date lands on S3 after 12:00 UTC.
+# CRON_TZ works on cronie and systemd-cron. Debian cron ignores it: on that host, set the
+# system time zone to UTC or write the hour in local time.
+# PATH: cron starts with /usr/bin:/bin. uv installs under ~/.local/bin; node and vercel must
+# be on this PATH too. Cron expands no variable in this file, so write the home path in full.
+# VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID go in <repo>/.env, never here.
+# shortcut: no log rotation, upgrade to logrotate when the host runs past one year
+CRON_TZ=UTC
+PATH=/usr/local/bin:/usr/bin:/bin:/home/<user>/.local/bin
+0 14 * * * cd /path/to/hailprint && scripts/nightly.sh >> data/nightly.log 2>&1
