@@ -2,7 +2,7 @@ import type { ComponentChildren, RefObject } from "preact";
 import { useEffect } from "preact/hooks";
 
 /** Escape closes the drawer while it is open. */
-export function useEscape(open: boolean, onClose: () => void): void {
+function useEscape(open: boolean, onClose: () => void): void {
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {

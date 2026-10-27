@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import "../styles/storms.css";
 import { fetchJson } from "../data/fetch";
 import { guardReports } from "../data/guard";
@@ -29,15 +29,6 @@ export function Workspace({ index, storm, tab }: Props) {
     run_time: index.run_time,
     package_version: index.package_version,
   };
-
-  useEffect(() => {
-    if (!datesOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setDatesOpen(false);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [datesOpen]);
 
   let pane;
   if (tab === "map") pane = <MapPane storm={storm} reports={reports} />;

@@ -446,3 +446,30 @@ def test_an_index_that_is_not_json_stops_the_run_and_names_the_file(env, capsys)
 
     assert cli.main(["publish"]) == 1
     assert "storms.json" in capsys.readouterr().err
+
+
+def test_a_corrupt_pairs_file_of_an_earlier_run_stops_the_run_before_the_index_write(env, capsys):
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    cli.main(["publish"])
+    before = env.index()
+    (env.storm_dir(EARLIER) / "pairs.json").write_text("nope", encoding="utf-8")
+
+    assert cli.main(["publish", "2024-05-28"]) == 1
+
+    assert "not valid JSON" in capsys.readouterr().err
+    assert env.index() == before
+
+
+def test_a_deleted_zip_file_of_an_earlier_date_nulls_its_entry_and_keeps_exit_0(env):
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    env.add_zips(EARLIER, [("77002", 19.05, 4)])
+    cli.main(["publish"])
+    (env.storm_dir(EARLIER) / "zip-counts.json").unlink()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    earlier = {e["storm_date"]: e for e in env.index()["storms"]}["2023-06-23"]
+    assert earlier["files"]["zip_counts"] is None
+    assert earlier["parcel_total"] is None

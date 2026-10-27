@@ -829,6 +829,68 @@ def test_merge_entries_keeps_an_old_entry_with_files_drops_one_without_and_repla
     ]
 
 
+def _published_day(root, storm_date, *, zips):
+    """The three required files of a storm date under `root`, plus the ZIP count file on request."""
+    folder = root / "storms" / storm_date
+    folder.mkdir(parents=True)
+    for name in ("swath.geojson", "reports.geojson"):
+        (folder / name).write_text("{}", encoding="utf-8")
+    (folder / "pairs.json").write_text(publish.dumps(_pairs(), "pairs"), encoding="utf-8")
+    if zips:
+        zip_doc = publish.zip_doc(_zip_frame(("77002", 19.05, 4)), _receipt())
+        (folder / "zip-counts.json").write_text(
+            publish.dumps(zip_doc, "zip-counts"), encoding="utf-8"
+        )
+    return _entry(
+        storm_date,
+        parcel_total=4 if zips else None,
+        files=_entry(storm_date)["files"]
+        | {"zip_counts": f"storms/{storm_date}/zip-counts.json" if zips else None},
+    )
+
+
+def test_merge_entries_clears_the_zip_fields_of_an_entry_whose_zip_file_is_gone(tmp_path):
+    entry = _published_day(tmp_path, "2024-05-28", zips=True)
+    (tmp_path / "storms" / "2024-05-28" / "zip-counts.json").unlink()
+
+    [merged] = publish.merge_entries([entry], [], tmp_path)
+
+    assert merged["files"]["zip_counts"] is None
+    assert merged["parcel_total"] is None
+    assert entry["parcel_total"] == 4
+
+
+def test_index_receipts_reads_the_pairs_and_the_zip_count_receipt_of_every_entry(tmp_path):
+    entries = [
+        _published_day(tmp_path, "2024-05-28", zips=True),
+        _published_day(tmp_path, "2023-06-23", zips=False),
+    ]
+
+    receipts = publish.index_receipts(entries, tmp_path)
+
+    assert len(receipts) == 3
+    assert all(r == _receipt() for r in receipts)
+
+
+def test_read_published_names_a_file_that_is_not_json_and_one_that_breaks_its_schema(tmp_path):
+    broken = tmp_path / "pairs.json"
+    broken.write_text("nope", encoding="utf-8")
+    with pytest.raises(ValueError, match="not valid JSON"):
+        publish.read_published(broken, "pairs")
+
+    broken.write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="pairs"):
+        publish.read_published(broken, "pairs")
+
+
+def test_the_storms_schema_refuses_a_file_path_outside_the_storm_date_folder():
+    entry = _entry("2024-05-28")
+    entry["files"]["pairs"] = "../pairs.json"
+
+    with pytest.raises(ValueError, match=r"storms: \$\.storms\[0\]\.files"):
+        publish.validate(publish.storms_doc([entry], RUN_TIME), "storms")
+
+
 def _run(run_time="2024-05-29T13:00:07Z", dates=("2024-05-28",), file_count=4):
     return {
         "run_time": run_time,

@@ -81,10 +81,13 @@
             "additionalProperties": false,
             "required": ["swath", "reports", "pairs", "zip_counts"],
             "properties": {
-              "swath": { "type": "string", "minLength": 1 },
-              "reports": { "type": "string", "minLength": 1 },
-              "pairs": { "type": "string", "minLength": 1 },
-              "zip_counts": { "type": ["string", "null"], "minLength": 1 }
+              "swath": { "type": "string", "pattern": "^storms/\\d{4}-\\d{2}-\\d{2}/[a-z-]+\\.geojson$" },
+              "reports": { "type": "string", "pattern": "^storms/\\d{4}-\\d{2}-\\d{2}/[a-z-]+\\.geojson$" },
+              "pairs": { "type": "string", "pattern": "^storms/\\d{4}-\\d{2}-\\d{2}/[a-z-]+\\.json$" },
+              "zip_counts": {
+                "type": ["string", "null"],
+                "pattern": "^storms/\\d{4}-\\d{2}-\\d{2}/[a-z-]+\\.json$"
+              }
             }
           }
         }

@@ -38,6 +38,8 @@ SPC_PRODUCT = "preliminary hail reports"
 HCAD_PRODUCT = "Parcels.gdb"
 PIPELINE_FILE = "pipeline.json"
 MAX_RUNS = 50
+# The index entry file keys that carry a receipt the sources table reads, with their schema kind.
+RECEIPT_FILES = (("pairs", "pairs"), ("zip_counts", "zip-counts"))
 
 
 @cache
@@ -318,13 +320,40 @@ def storms_doc(entries: list[Doc], run_time: datetime) -> Doc:
 def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
     """The old entries with the new entries over them by storm date.
 
-    An entry stays only while its swath, reports, and pairs files exist under `data_dir`.
+    An entry stays only while its swath, reports, and pairs files exist under `data_dir`. An
+    entry whose ZIP count file is gone loses `zip_counts` and `parcel_total`.
     """
     # shortcut: an entry stays until its directory vanishes, upgrade when a prune command is needed
     merged = {e["storm_date"]: e for e in old} | {e["storm_date"]: e for e in new}
     required = ("swath", "reports", "pairs")
-    return [
+    kept = [
         e for e in merged.values() if all((data_dir / e["files"][k]).exists() for k in required)
+    ]
+    return [
+        e
+        if not e["files"]["zip_counts"] or (data_dir / e["files"]["zip_counts"]).exists()
+        else e | {"parcel_total": None, "files": e["files"] | {"zip_counts": None}}
+        for e in kept
+    ]
+
+
+def read_published(path: Path, kind: str) -> Doc:
+    """Read one published file and check it against its schema; a bad file raises ValueError."""
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ValueError(f"{path}: not valid JSON, delete it or fix it") from exc
+    validate(doc, kind)
+    return doc
+
+
+def index_receipts(entries: list[Doc], data_dir: Path) -> list[Doc]:
+    """The pairs and ZIP count receipts of every index entry, read from `data_dir`."""
+    return [
+        read_published(data_dir / e["files"][key], kind)["receipt"]
+        for e in entries
+        for key, kind in RECEIPT_FILES
+        if e["files"][key]
     ]
 
 

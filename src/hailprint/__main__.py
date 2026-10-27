@@ -1,7 +1,6 @@
 """Command line entry: ``hailprint ingest|index|candidates|parcels|score|publish``."""
 
 import argparse
-import json
 import math
 import re
 import sys
@@ -262,16 +261,6 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _read_published(path: Path, kind: str) -> dict:
-    """Read one published file and check it against its schema; a bad file stops the run."""
-    try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise ValueError(f"{path}: not valid JSON, delete it or fix it") from exc
-    publish.validate(doc, kind)
-    return doc
-
-
 def _publish_pipeline(
     old_runs: list[dict],
     storm_dates: list[str],
@@ -306,7 +295,8 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
 
     A date without an SPC daily CSV is skipped. A date that fails a check writes no file and is
     named in the final error. The index holds the dates of this run over the entries of the
-    earlier runs. A malformed storms.json or pipeline.json stops the run before any write.
+    earlier runs. A malformed storms.json or pipeline.json stops the run before any write; a
+    malformed per-date file of an earlier run stops it before the index write.
     """
     selected = _swath_files(storm_dates)
     if not candidates.CANDIDATES_PATH.exists():
@@ -314,8 +304,10 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
     facts = candidates.read_facts(candidates.CANDIDATES_PATH)
     index_path = SITE_DATA_DIR / "storms.json"
     pipeline_path = SITE_DATA_DIR / publish.PIPELINE_FILE
-    old = _read_published(index_path, "storms")["storms"] if index_path.exists() else []
-    old_runs = _read_published(pipeline_path, "pipeline")["runs"] if pipeline_path.exists() else []
+    old = publish.read_published(index_path, "storms")["storms"] if index_path.exists() else []
+    old_runs = (
+        publish.read_published(pipeline_path, "pipeline")["runs"] if pipeline_path.exists() else []
+    )
     run_time = _utc_now()
     entries, written, failed = [], [], []
     file_count = 0
@@ -362,16 +354,12 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
         raise RuntimeError(
             "no storm date was published" + (f"; failed: {', '.join(failed)}" if failed else "")
         )
-    doc = publish.storms_doc(publish.merge_entries(old, entries, SITE_DATA_DIR), run_time)
+    merged = publish.merge_entries(old, entries, SITE_DATA_DIR)
+    receipts = publish.index_receipts(merged, SITE_DATA_DIR)
+    doc = publish.storms_doc(merged, run_time)
     publish.validate(doc, "storms")
     written.append(files.write_text_atomic(publish.dumps(doc, "storms"), index_path))
     print(f"storms index: {len(doc['storms'])} entries")
-    receipts = [
-        _read_published(SITE_DATA_DIR / entry["files"][key], kind)["receipt"]
-        for entry in doc["storms"]
-        for key, kind in (("pairs", "pairs"), ("zip_counts", "zip-counts"))
-        if entry["files"][key]
-    ]
     this_run = [entry["storm_date"] for entry in entries]
     written.append(_publish_pipeline(old_runs, this_run, receipts, file_count, run_time))
     print(f"confidence: {swath.CONFIDENCE}")

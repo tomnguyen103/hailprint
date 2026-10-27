@@ -26,8 +26,8 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 | Item | Value |
 |---|---|
 | Storm dates served | 25, from the week-4 `site/data/` |
-| Site tests | 189 passed in 20 vitest files (age, content, county, coverage, csv, curve, fetch, format, geo, guard, guess-reveal, point-form, pool, prose, rescore, router, ruler, select, stamp, theme) |
-| Python tests | 310 passed; ruff, format, and pyright clean, 2026-10-27 |
+| Site tests | 195 passed in 21 vitest files (age, content, county, coverage, csv, curve, fetch, format, geo, guard, guess-reveal, pipeline, point-form, pool, prose, rescore, router, ruler, select, stamp, theme) |
+| Python tests | 322 passed; ruff, format, and pyright clean, 2026-10-27 |
 | Type check | `tsc --noEmit` clean under `strict` with `noUncheckedIndexedAccess` |
 | Impeccable detector | exit 0, `[]` findings on `site/index.html` and `site/src` |
 | Prose budget | 5 pages, 0 findings at 120 words above the fold and 25 words per sentence |
@@ -35,8 +35,11 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 
 ## Checks
 
-- `test_publish.py`: `archive_summary` counts the days per year and the days without a 12Z file; `sources_of` groups by source and product with sorted dates; `merge_runs` replaces the same `run_time`, sorts newest first, and caps at 50; the pipeline document validates and carries the confidence band, with and without an archive; the schema refuses a directory in a file name, a missing archive key, and a bad date; `dumps` refuses the forbidden word.
-- `guard.test.ts`: `guardPipeline` rejects more than 50 runs, a storm date that is not a date, a negative file count, and a document without the archive key; it accepts `archive: null`.
+- `test_publish.py`: `archive_summary` counts the days per year and the days without a 12Z file; `sources_of` groups by source and product with sorted dates; `merge_runs` replaces the same `run_time`, sorts newest first, and caps at 50; the pipeline document validates and carries the confidence band, with and without an archive; the schema refuses a directory in a file name, a missing archive key, and a bad date; `dumps` refuses the forbidden word; the run cap of `pipeline.schema.json` equals `publish.MAX_RUNS`; the SPC product holds "hail" and the HCAD source is `hcad`, the names the site service rule reads.
+- `test_publish.py`, audit round 2: `merge_entries` nulls `zip_counts` and `parcel_total` when the ZIP file of an old entry is gone; `index_receipts` reads the pairs receipt and the ZIP receipt of every entry; `read_published` names a file that is not JSON and one that breaks its schema; the storms schema refuses a file path outside the storm date folder.
+- `test_cli.py`: `publish` writes `archive: null` without an archive index and counts the days of a small index; a failed date is absent from the run and from every sources row; a one-date run keeps the sources of every published date; a corrupt `pairs.json` of an earlier run stops the run before the index write with exit 1; a deleted `zip-counts.json` of an earlier date nulls its entry and keeps exit 0.
+- `guard.test.ts`: `guardPipeline` rejects more than 50 runs, a storm date that is not a date, a `run_time` with a fraction or a word, a negative or fractional count, and a document without the archive key; it accepts `archive: null`; the run cap equals the schema `maxItems`.
+- `pipeline.test.ts`: every service reads missing on an empty file; SPC reads from the product and HCAD from the source. `age.test.ts`: a time that does not parse reads "unknown".
 - `prose.test.ts`: 120 words pass and 121 fail; 25 words pass and 26 fail; an `-ing` opener fails; the forbidden word fails in any case and in a code block.
 - `content.test.ts`: the shipped content has zero findings; the figures per page are receipt, stamp, ruler, grid plus guess, and none; the Limits page ends with the caveat line.
 - `coverage.test.ts`: one year gives one row plus the total; twelve years stay in ascending order before the total; the share is 0 without a 12Z file, 1 for a full year, and 0 for a year without days.
