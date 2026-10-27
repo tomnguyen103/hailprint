@@ -6,8 +6,9 @@
 # Lock: data/nightly.lock, a directory. A second run finds it and exits 1. The trap removes it
 # on exit, after success and after a failed step.
 # .env at the repo root is read when present, without export. It is shell: one NAME=value per
-# line. It holds MAX_INGEST and the Vercel variables VERCEL_TOKEN, VERCEL_ORG_ID,
-# VERCEL_PROJECT_ID; scripts/deploy.sh reads those itself. The script prints no value.
+# line, no export prefix, no space, LF line endings; any other line stops the run. It holds
+# MAX_INGEST and the Vercel variables VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID;
+# scripts/deploy.sh reads those itself. The script prints no value.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,10 +30,27 @@ esac
 
 cd "$ROOT"
 if [ -f .env ]; then
+  # .env is shell, so a line outside NAME=value would run as a command and could print a value;
+  # the refusal names the line number only; grep on Windows drops the CR, so tr counts it
+  if [ "$(tr -cd '\r' < .env | wc -c)" -gt 0 ]; then
+    echo "nightly: .env has CRLF line endings; write it with LF" >&2
+    exit 1
+  fi
+  bad="$(grep -nEv '^(#|$|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*$)' .env | cut -d: -f1 | head -n 1 || true)"
+  if [ -n "$bad" ]; then
+    echo "nightly: .env line $bad is not NAME=value (no export, no space)" >&2
+    exit 1
+  fi
   # shellcheck disable=SC1091
   . ./.env
 fi
 MAX_INGEST="${MAX_INGEST:-5}"
+case "$MAX_INGEST" in
+  '' | *[!0-9]* | 0)
+    echo "nightly: MAX_INGEST must be a whole number from 1, got '$MAX_INGEST'" >&2
+    exit 1
+    ;;
+esac
 
 mkdir -p data
 # shortcut: the lock holds no pid and no age, so a reboot mid-run leaves it in place;

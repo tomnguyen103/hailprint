@@ -7,8 +7,8 @@
 # live path also needs .vercel/project.json, or VERCEL_ORG_ID with VERCEL_PROJECT_ID.
 # Auth: VERCEL_TOKEN in the environment, or a `vercel login` session. The live path reads
 # <repo>/.env (gitignored) and exports the three Vercel names to vercel pull and vercel deploy.
-# vercel build runs offline from .vercel/ and gets no VERCEL_TOKEN, so the npm install and the
-# vite build never see it. The script prints no value.
+# vercel build reads .vercel/ and runs with VERCEL_TOKEN removed from its environment, so the
+# token from .env never reaches the npm install or the vite build. The script prints no value.
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -61,6 +61,17 @@ if [ "$DRY_RUN" = 1 ]; then
 fi
 
 if [ -f .env ]; then
+  # .env is shell, so a line outside NAME=value would run as a command and could print a value;
+  # the refusal names the line number only; grep on Windows drops the CR, so tr counts it
+  if [ "$(tr -cd '\r' < .env | wc -c)" -gt 0 ]; then
+    echo "deploy: .env has CRLF line endings; write it with LF" >&2
+    exit 1
+  fi
+  bad="$(grep -nEv '^(#|$|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*$)' .env | cut -d: -f1 | head -n 1 || true)"
+  if [ -n "$bad" ]; then
+    echo "deploy: .env line $bad is not NAME=value (no export, no space)" >&2
+    exit 1
+  fi
   # shellcheck disable=SC1091
   . ./.env
 fi

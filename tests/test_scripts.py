@@ -84,6 +84,10 @@ class Tree:
             text=True,
         )
 
+    def dot_env(self, text: str) -> None:
+        # LF on every host: the scripts refuse a CRLF .env
+        (self.root / ".env").write_text(text, encoding="utf-8", newline="\n")
+
     def calls(self) -> list[str]:
         return self.log.read_text(encoding="utf-8").splitlines() if self.log.exists() else []
 
@@ -147,13 +151,42 @@ def test_deploy_live_passes_the_token_to_pull_and_deploy_only(tmp_path):
 @needs_bash
 def test_deploy_live_reads_the_token_from_dot_env(tmp_path):
     tree = Tree(tmp_path)
-    (tree.root / ".env").write_text("VERCEL_TOKEN=t-test\n", encoding="utf-8")
+    tree.dot_env("VERCEL_TOKEN=t-test\n")
 
     done = tree.run("deploy.sh")
 
     assert done.returncode == 0, done.stderr
     assert tree.calls() == LIVE_WITH_TOKEN
     assert "t-test" not in done.stdout + done.stderr
+
+
+@needs_bash
+def test_deploy_live_refuses_a_dot_env_line_outside_name_value(tmp_path):
+    tree = Tree(tmp_path)
+    # a bare value would run as a command and print itself; the refusal names the line only
+    tree.dot_env("VERCEL_ORG_ID=o-test\nt-secret-value\n")
+
+    done = tree.run("deploy.sh")
+
+    assert done.returncode == 1
+    assert ".env line 2" in done.stderr
+    assert "t-secret-value" not in done.stdout + done.stderr
+    assert tree.calls() == []
+
+
+@needs_bash
+def test_deploy_live_refuses_an_export_line_and_crlf_in_dot_env(tmp_path):
+    tree = Tree(tmp_path)
+
+    tree.dot_env("export VERCEL_TOKEN=t-test\n")
+    exported = tree.run("deploy.sh")
+    (tree.root / ".env").write_bytes(b"VERCEL_TOKEN=t-test\r\n")
+    crlf = tree.run("deploy.sh")
+
+    assert exported.returncode == 1 and ".env line 1" in exported.stderr
+    assert crlf.returncode == 1 and "CRLF" in crlf.stderr
+    assert "t-test" not in exported.stderr + crlf.stderr
+    assert tree.calls() == []
 
 
 @needs_bash
@@ -346,13 +379,39 @@ def test_nightly_stops_when_candidates_fails(tmp_path):
 @needs_bash
 def test_nightly_keeps_the_dot_env_token_out_of_the_uv_steps(tmp_path):
     tree = nightly_tree(tmp_path)
-    (tree.root / ".env").write_text("VERCEL_TOKEN=t-test\n", encoding="utf-8")
+    tree.dot_env("VERCEL_TOKEN=t-test\n")
 
     done = tree.run("nightly.sh", env={"STUB_MISSING": ""})
 
     assert done.returncode == 0, done.stderr
     assert not any("[token]" in call for call in tree.calls())
     assert "t-test" not in done.stdout + done.stderr
+
+
+@needs_bash
+def test_nightly_refuses_a_bad_dot_env_before_any_step(tmp_path):
+    tree = nightly_tree(tmp_path)
+    tree.dot_env("export MAX_INGEST=2\n")
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": ""})
+
+    assert done.returncode == 1
+    assert ".env line 1" in done.stderr
+    assert tree.calls() == []
+    assert not (tree.root / "data" / "nightly.lock").exists()
+
+
+@needs_bash
+def test_nightly_refuses_a_max_ingest_that_is_not_a_count(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    word = tree.run("nightly.sh", env={"STUB_MISSING": "", "MAX_INGEST": "abc"})
+    zero = tree.run("nightly.sh", env={"STUB_MISSING": "", "MAX_INGEST": "0"})
+
+    assert word.returncode == 1 and "MAX_INGEST" in word.stderr
+    assert zero.returncode == 1 and "MAX_INGEST" in zero.stderr
+    assert tree.calls() == []
+    assert not (tree.root / "data" / "nightly.lock").exists()
 
 
 @needs_bash
@@ -367,7 +426,7 @@ def test_nightly_max_ingest_caps_the_candidates_call(tmp_path):
 @needs_bash
 def test_nightly_reads_max_ingest_from_dot_env(tmp_path):
     tree = nightly_tree(tmp_path)
-    (tree.root / ".env").write_text("MAX_INGEST=1\n", encoding="utf-8")
+    tree.dot_env("MAX_INGEST=1\n")
 
     tree.run("nightly.sh", env={"STUB_MISSING": ""})
 

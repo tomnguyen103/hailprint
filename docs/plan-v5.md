@@ -67,7 +67,9 @@ Research notes:
   Vercel.
 - The Vercel project `hailprint` links to the GitHub repo `tomnguyen103/hailprint`. A push to
   `main` starts a Vercel build. The ignored build step `test ! -f site/package.json` skips
-  the build until PR E adds `site/`. PR E sets the root directory to `site`.
+  the build until PR E adds `site/`. PR E sets the root directory to `site`. (Superseded: the
+  Root Directory stays the repo root, where `vercel.json` lives; `docs/WEEK-05.md` owner step 1
+  and `docs/DECISIONS.md` row 10.)
 - Open decision: a Git build does not have `site/data/`, because the cron job makes it. A Git
   build can replace a production deployment that has data. PR H chooses one data path.
 - Every published number carries a receipt: source, product, file name, run time, and
