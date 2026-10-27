@@ -6,8 +6,11 @@ import { guardSwath } from "../data/guard";
 import { DataError, type ReportsFile, type Storm } from "../data/types";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type Load, useLoad } from "../state/load";
+import { useRoute } from "../state/route";
 import { useTheme } from "../state/theme";
 import "../styles/map.css";
+import { TimeSlider, replaceStep } from "../time/slider";
+import { resolveStep } from "../time/step";
 import type { MapHandle } from "./map/create-map";
 import { boundsOf, coveringClass, nearestReport } from "./map/geo";
 import { Inspector, type Pick } from "./map/inspector";
@@ -27,6 +30,8 @@ export function MapPane({ storm, reports }: Props) {
   const swath = useLoad(storm.files.swath, () => fetchJson(storm.files.swath, guardSwath));
   const county = useLoad("county", fetchCounty);
   const { resolved: theme } = useTheme();
+  const { route } = useRoute();
+  const step = resolveStep(route.kind === "storms" ? route.step : null);
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
   const [ready, setReady] = useState<{ basemap: boolean } | null>(null);
@@ -118,24 +123,27 @@ export function MapPane({ storm, reports }: Props) {
   const receipt = swathData?.receipt ?? null;
   return (
     <div class="map-pane" data-inspector={pick !== null}>
-      <div class="map-stage">
-        <div ref={container} class="map-frame" role="region" aria-label="Map of the hail swath" tabIndex={-1} />
-        {ready && !ready.basemap ? <p class="map-note">{NO_BASEMAP}</p> : null}
-        {mapError ? (
-          <div class="map-overlay">
-            <ErrorState error={mapError} onRetry={retryMap} />
-          </div>
-        ) : failed ? (
-          <div class="map-overlay">
-            <ErrorState error={failed.error} onRetry={failed.retry} />
-          </div>
-        ) : null}
-        {swath.status === "loading" && swath.showLoading ? (
-          <div class="map-overlay">
-            <LoadingState file={SWATH_FILE} />
-          </div>
-        ) : null}
-        <RulerLegend hidden={hidden} onToggle={toggle} />
+      <div class="map-main">
+        <div class="map-stage">
+          <div ref={container} class="map-frame" role="region" aria-label="Map of the hail swath" tabIndex={-1} />
+          {ready && !ready.basemap ? <p class="map-note">{NO_BASEMAP}</p> : null}
+          {mapError ? (
+            <div class="map-overlay">
+              <ErrorState error={mapError} onRetry={retryMap} />
+            </div>
+          ) : failed ? (
+            <div class="map-overlay">
+              <ErrorState error={failed.error} onRetry={failed.retry} />
+            </div>
+          ) : null}
+          {swath.status === "loading" && swath.showLoading ? (
+            <div class="map-overlay">
+              <LoadingState file={SWATH_FILE} />
+            </div>
+          ) : null}
+          <RulerLegend hidden={hidden} onToggle={toggle} />
+        </div>
+        <TimeSlider date={storm.storm_date} step={step} onStep={(next) => replaceStep(storm.storm_date, next)} />
       </div>
       {pick !== null && receipt !== null ? <Inspector pick={pick} receipt={receipt} onClose={close} /> : null}
     </div>

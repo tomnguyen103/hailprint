@@ -1,0 +1,53 @@
+/* Time slider: the card under the map. Tokens only; the global rules own focus and reduced motion. */
+
+.map-main {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.time-slider {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0 16px;
+  align-items: center;
+  padding: 8px 16px 12px;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+}
+
+.button.time-play {
+  min-width: 88px;
+  height: 44px;
+}
+
+.time-range {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.time-range::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+}
+
+.time-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+}
+
+.time-readout {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 24px;
+  margin: 0;
+}
+
+.time-readout span {
+  white-space: nowrap;
+}
