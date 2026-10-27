@@ -5,9 +5,10 @@ from datetime import date
 from pathlib import Path
 
 import pandas as pd
+import pyarrow.parquet as pq
 import pytest
 
-from hailprint import power
+from hailprint import files, odin, power
 from tests.conftest import EAGLEI_2024, needs_eaglei
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -238,6 +239,172 @@ def test_share_out_is_customers_out_over_the_mcc_customers_and_null_stays_null()
 
 def test_the_day_file_name_holds_the_storm_date():
     assert power.day_file_name(STORM) == "power-2024-05-28.parquet"
+
+
+CENTERPOINT = "CENTERPOINT ENERGY"
+HARRIS = "48201"
+LIBERTY = "48291"
+
+
+def _write_eaglei(directory: Path, year: int, *rows: tuple[str, str, int | None]) -> Path:
+    return files.write_atomic(_rows(*rows), directory / power.file_name(year), power.METADATA)
+
+
+def _write_odin(directory: Path, day: str, *rows: tuple[str, str, str, int]) -> Path:
+    """An ODIN day file from (slot, fips, utility, customers_out) rows."""
+    frame = pd.DataFrame(
+        {
+            "slot_utc": pd.to_datetime([slot for slot, *_ in rows], utc=True).as_unit("us"),
+            "fips": [fips for _, fips, _, _ in rows],
+            "utility": [utility for _, _, utility, _ in rows],
+            "customers_out": [out for _, _, _, out in rows],
+        }
+    )
+    path = directory / odin.file_name(date.fromisoformat(day))
+    return files.write_atomic(frame, path, odin.METADATA)
+
+
+def _at(stamp: str) -> pd.Timestamp:
+    return pd.Timestamp(stamp, tz="UTC")
+
+
+def test_a_window_in_a_year_with_an_eaglei_file_reads_eaglei_and_sets_the_eaglei_metadata(tmp_path):
+    _write_eaglei(tmp_path / "e", 2024, (HARRIS, "2024-05-28 20:00", 251_830))
+    _write_odin(tmp_path / "o", "2024-05-28", ("2024-05-28 20:00", HARRIS, CENTERPOINT, 5))
+
+    frame, metadata = power.build(STORM, tmp_path / "e", tmp_path / "o")
+
+    assert metadata == {"source": "eaglei", "product": "customers-out"}
+    assert _harris(frame).dropna().tolist() == [251_830]
+
+
+def test_a_window_without_an_eaglei_file_reads_the_odin_day_files_and_lists_the_utilities(tmp_path):
+    _write_odin(
+        tmp_path / "o",
+        "2024-05-28",
+        ("2024-05-28 14:00", HARRIS, CENTERPOINT, 714),
+        ("2024-05-28 14:15", HARRIS, odin.NO_INCIDENT, 0),
+    )
+
+    frame, metadata = power.build(STORM, tmp_path / "e", tmp_path / "o")
+
+    assert metadata == {
+        "source": "odin",
+        "product": "odin-real-time-outages-county",
+        "utilities": '["CENTERPOINT ENERGY"]',
+    }
+    assert list(frame.columns) == ["fips", "step_utc", "customers_out"]
+    assert len(frame) == 8 * 192
+    assert frame["customers_out"].dtype == "Int64"
+    harris = _harris(frame)
+    assert harris.loc[_at("2024-05-28 14:00")] == 714
+    assert harris.loc[_at("2024-05-28 14:15")] == 0
+    assert harris.notna().sum() == 2
+
+
+def test_a_county_with_no_incident_in_the_window_is_null_at_all_192_steps(tmp_path):
+    _write_odin(
+        tmp_path / "o",
+        "2024-05-28",
+        ("2024-05-28 14:00", HARRIS, CENTERPOINT, 714),
+        ("2024-05-28 14:00", LIBERTY, odin.NO_INCIDENT, 0),
+        ("2024-05-28 14:15", LIBERTY, odin.NO_INCIDENT, 0),
+    )
+
+    frame, _ = power.build(STORM, tmp_path / "e", tmp_path / "o")
+
+    liberty = frame.loc[frame["fips"] == LIBERTY, "customers_out"]
+    assert len(liberty) == 192 and liberty.isna().all()
+
+
+def test_odin_sums_the_utilities_of_a_county_at_one_slot(tmp_path):
+    _write_odin(
+        tmp_path / "o",
+        "2024-05-28",
+        ("2024-05-28 14:00", HARRIS, CENTERPOINT, 714),
+        ("2024-05-28 14:00", HARRIS, "ENTERGY TEXAS", 6),
+    )
+
+    frame, metadata = power.build(STORM, tmp_path / "e", tmp_path / "o")
+
+    assert _harris(frame).loc[_at("2024-05-28 14:00")] == 720
+    assert metadata["utilities"] == '["CENTERPOINT ENERGY", "ENTERGY TEXAS"]'
+
+
+def test_an_odin_window_reads_the_three_utc_day_files_and_drops_a_slot_outside_it(tmp_path):
+    directory = tmp_path / "o"
+    _write_odin(
+        directory,
+        "2024-05-28",
+        ("2024-05-28 11:45", HARRIS, CENTERPOINT, 1),
+        ("2024-05-28 23:45", HARRIS, CENTERPOINT, 2),
+    )
+    _write_odin(directory, "2024-05-29", ("2024-05-29 12:00", HARRIS, CENTERPOINT, 3))
+    _write_odin(
+        directory,
+        "2024-05-30",
+        ("2024-05-30 11:45", HARRIS, CENTERPOINT, 4),
+        ("2024-05-30 12:00", HARRIS, CENTERPOINT, 5),
+    )
+
+    frame, _ = power.build(STORM, tmp_path / "e", directory)
+
+    assert _harris(frame).dropna().tolist() == [2, 3, 4]
+
+
+def test_an_absent_odin_day_file_gives_null_steps_for_that_day(tmp_path):
+    directory = tmp_path / "o"
+    _write_odin(directory, "2024-05-28", ("2024-05-28 14:00", HARRIS, CENTERPOINT, 8))
+    _write_odin(directory, "2024-05-30", ("2024-05-30 09:00", HARRIS, CENTERPOINT, 9))
+
+    frame, _ = power.build(STORM, tmp_path / "e", directory)
+
+    harris = _harris(frame)
+    middle = (harris.index >= _at("2024-05-29 00:00")) & (harris.index < _at("2024-05-30 00:00"))
+    assert middle.sum() == 96 and harris[middle].isna().all()
+    assert harris.dropna().tolist() == [8, 9]
+
+
+def test_a_window_with_no_eaglei_file_and_no_odin_slot_has_no_source(tmp_path):
+    assert power.build(STORM, tmp_path / "e", tmp_path / "o") is None
+    _write_odin(tmp_path / "o", "2024-05-30", ("2024-05-30 12:00", HARRIS, CENTERPOINT, 5))
+
+    assert power.build(STORM, tmp_path / "e", tmp_path / "o") is None
+
+
+def test_a_window_across_new_year_reads_both_eaglei_files(tmp_path):
+    storm = date(2024, 12, 31)
+    _write_eaglei(tmp_path / "e", 2024, (HARRIS, "2024-12-31 23:45", 7))
+    _write_eaglei(tmp_path / "e", 2025, (HARRIS, "2025-01-01 00:00", 9))
+
+    frame, metadata = power.build(storm, tmp_path / "e", tmp_path / "o")
+
+    assert metadata["source"] == "eaglei"
+    assert _harris(frame).dropna().tolist() == [7, 9]
+
+
+def test_one_eaglei_file_of_two_never_mixes_with_odin(tmp_path):
+    storm = date(2024, 12, 31)
+    _write_eaglei(tmp_path / "e", 2024, (HARRIS, "2024-12-31 23:45", 7))
+    _write_odin(tmp_path / "o", "2024-12-31", ("2024-12-31 14:00", HARRIS, CENTERPOINT, 3))
+
+    frame, metadata = power.build(storm, tmp_path / "e", tmp_path / "o")
+
+    assert metadata["source"] == "odin"
+    assert _harris(frame).dropna().tolist() == [3]
+
+
+def test_file_source_reads_the_source_key_of_a_power_file(tmp_path):
+    eaglei_path = files.write_atomic(
+        pd.DataFrame({"fips": [HARRIS]}), tmp_path / "a.parquet", power.METADATA
+    )
+    odin_path = files.write_atomic(
+        pd.DataFrame({"fips": [HARRIS]}), tmp_path / "b.parquet", {**odin.METADATA}
+    )
+
+    assert power.file_source(eaglei_path) == "eaglei"
+    assert power.file_source(odin_path) == "odin"
+    assert pq.read_schema(odin_path).metadata[b"source"] == b"odin"
 
 
 @needs_eaglei

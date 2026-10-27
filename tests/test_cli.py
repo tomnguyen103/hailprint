@@ -839,13 +839,69 @@ def test_two_explicit_power_runs_write_the_same_bytes_and_leave_no_tmp_file(env)
     assert list(env.power.glob("*.tmp")) == []
 
 
-def test_power_for_a_date_without_an_eaglei_year_file_exits_1_and_writes_nothing(env, capsys):
+def test_power_for_a_date_without_an_eaglei_year_file_or_an_odin_slot_exits_1_and_writes_nothing(
+    env, capsys
+):
     assert cli.main(["power", "2024-05-28"]) == 1
 
     assert capsys.readouterr().err == (
-        "2024-05-28: no EAGLE-I file for 2024, run hailprint eaglei 2024 first\n"
+        "2024-05-28: no EAGLE-I file for 2024 and no ODIN snapshot in the window, "
+        "run hailprint eaglei 2024 first\n"
     )
     assert not env.power.exists() or list(env.power.iterdir()) == []
+
+
+def _write_odin(env, day, *rows):
+    """Write the ODIN day file from (slot, fips, utility, customers_out) rows."""
+    frame = pd.DataFrame(
+        {
+            "slot_utc": pd.to_datetime([slot for slot, *_ in rows], utc=True).as_unit("us"),
+            "fips": [fips for _, fips, _, _ in rows],
+            "utility": [utility for _, _, utility, _ in rows],
+            "customers_out": [out for _, _, _, out in rows],
+        }
+    )
+    path = env.odin / odin.file_name(date.fromisoformat(day))
+    return files.write_atomic(frame, path, odin.METADATA)
+
+
+ODIN_ROWS = (
+    ("2024-05-28 14:00", "48201", "CENTERPOINT ENERGY", 714),
+    ("2024-05-28 14:00", "48291", odin.NO_INCIDENT, 0),
+)
+
+
+def test_power_for_a_date_without_an_eaglei_file_reads_the_odin_day_files(env, capsys):
+    _write_odin(env, "2024-05-28", *ODIN_ROWS)
+
+    assert cli.main(["power", "2024-05-28"]) == 0
+
+    path = _power_file(env, LATER)
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"odin", ODIN_PRODUCT)
+    assert json.loads(metadata[b"utilities"]) == ["CENTERPOINT ENERGY"]
+    frame = pd.read_parquet(path)
+    assert frame["customers_out"].notna().sum() == 1
+    assert capsys.readouterr().out == "2024-05-28: 1 of 1536 county steps have a row\n"
+
+
+def test_power_missing_replaces_an_odin_file_with_an_eaglei_file_once_eaglei_covers_it(env):
+    env.add_day(LATER)
+    _write_odin(env, "2024-05-28", *ODIN_ROWS)
+    assert cli.main(["power", "--missing"]) == 0
+    assert pq.read_schema(_power_file(env, LATER)).metadata[b"source"] == b"odin"
+    first = _power_file(env, LATER).stat().st_mtime_ns
+    assert cli.main(["power", "--missing"]) == 0
+    assert _power_file(env, LATER).stat().st_mtime_ns == first  # no EAGLE-I file yet: kept
+
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    assert cli.main(["power", "--missing"]) == 0
+
+    path = _power_file(env, LATER)
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"eaglei", b"customers-out")
+    assert b"utilities" not in metadata
+    assert pd.read_parquet(path)["customers_out"].notna().sum() == 2
 
 
 def test_power_missing_makes_a_second_run_write_nothing(env, capsys):
@@ -874,7 +930,7 @@ def test_power_missing_skips_a_date_whose_impact_window_is_not_closed(env):
     assert not _power_file(env, OPEN_WINDOW).exists()
 
 
-def test_power_missing_skips_a_date_without_an_eaglei_year_file_and_exits_0(env, capsys):
+def test_power_missing_skips_a_date_without_a_power_source_and_exits_0(env, capsys):
     env.add_day(LATER)  # 2024
     env.add_day(EARLIER)  # 2023
     _write_eaglei(env, 2023, ("48201", "2023-06-23 22:00", 11))
@@ -885,7 +941,7 @@ def test_power_missing_skips_a_date_without_an_eaglei_year_file_and_exits_0(env,
     assert not _power_file(env, LATER).exists()
     assert capsys.readouterr().out.splitlines() == [
         "2023-06-23: 1 of 1536 county steps have a row",
-        "1 date skipped without an EAGLE-I file",
+        "1 date skipped without an EAGLE-I file or an ODIN snapshot",
     ]
 
 

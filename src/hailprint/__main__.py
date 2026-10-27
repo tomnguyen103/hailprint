@@ -397,47 +397,57 @@ def eaglei_years(years: list[int]) -> list[Path]:
 
 
 def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
-    """One power file per storm date: the impact window from the EAGLE-I year files.
+    """One power file per storm date, from one source: EAGLE-I when it covers the window, else ODIN.
 
     With `missing`, the dates are the swath dates whose window has closed and that have no power
-    file. A date whose EAGLE-I year file is absent is skipped and counted. An explicit date with
-    an absent year file stops the run with exit 1.
+    file, or whose power file comes from ODIN while the EAGLE-I year files now cover the window.
+    A date with no source is skipped and counted. An explicit date with no source stops the run
+    with exit 1.
     """
     # shortcut: an EAGLE-I year file counts as covering its year, upgrade to a check of the last
     # row time if a partial year file is ever ingested
     if missing:
         now = _utc_now()
         storm_dates = [
-            d
-            for d, _ in _swath_files([])
-            if sbw.window(d)[1] <= now and not (POWER_DIR / power.day_file_name(d)).exists()
+            d for d, _ in _swath_files([]) if sbw.window(d)[1] <= now and _needs_power(d)
         ]
     written = []
     skipped = 0
     for storm_date in storm_dates:
-        year_files = {
-            year: EAGLEI_DIR / power.file_name(year) for year in power.years_of(storm_date)
-        }
-        absent = [str(year) for year, path in year_files.items() if not path.exists()]
-        if absent:
+        built = power.build(storm_date, EAGLEI_DIR, ODIN_DIR)
+        if built is None:
             if not missing:
+                absent = [
+                    str(year)
+                    for year in power.years_of(storm_date)
+                    if not (EAGLEI_DIR / power.file_name(year)).exists()
+                ]
                 raise ValueError(
-                    f"{storm_date}: no EAGLE-I file for {' and '.join(absent)}, "
-                    f"run hailprint eaglei {' '.join(absent)} first"
+                    f"{storm_date}: no EAGLE-I file for {' and '.join(absent)} and no ODIN "
+                    f"snapshot in the window, run hailprint eaglei {' '.join(absent)} first"
                 )
             skipped += 1
             continue
-        frame = power.derive(
-            pd.concat([pd.read_parquet(path) for path in year_files.values()], ignore_index=True),
-            storm_date,
-        )
+        frame, metadata = built
         path = POWER_DIR / power.day_file_name(storm_date)
-        written.append(files.write_atomic(frame, path, power.METADATA))
+        written.append(files.write_atomic(frame, path, metadata))
         known = frame["customers_out"].count()
         print(f"{storm_date}: {known} of {len(frame)} county steps have a row")
     if skipped:
-        print(f"{skipped} date{'s' if skipped > 1 else ''} skipped without an EAGLE-I file")
+        print(
+            f"{skipped} date{'s' if skipped > 1 else ''} skipped "
+            "without an EAGLE-I file or an ODIN snapshot"
+        )
     return written
+
+
+def _needs_power(storm_date: date) -> bool:
+    """True when the date has no power file, or has an ODIN file that EAGLE-I now replaces."""
+    path = POWER_DIR / power.day_file_name(storm_date)
+    if not path.exists():
+        return True
+    covered = all((EAGLEI_DIR / power.file_name(y)).exists() for y in power.years_of(storm_date))
+    return covered and power.file_source(path) == odin.METADATA["source"]
 
 
 def odin_snapshot() -> Path:

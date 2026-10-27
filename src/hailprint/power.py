@@ -3,11 +3,13 @@
 import http.client
 import json
 from datetime import date, timedelta
+from pathlib import Path
 from typing import IO
 
 import pandas as pd
+import pyarrow.parquet as pq
 
-from hailprint import county, net, sbw
+from hailprint import county, net, odin, sbw
 
 ARTICLE_ID = 24237376
 LISTING_URL = f"https://api.figshare.com/v2/articles/{ARTICLE_ID}/files?page_size=100"
@@ -127,6 +129,60 @@ def derive(frame: pd.DataFrame, storm_date: date) -> pd.DataFrame:
     by_step = rows.set_index(["fips", "time_utc"])["customers_out"]
     by_step.index = by_step.index.set_names(["fips", "step_utc"])
     return by_step.reindex(grid).reset_index()
+
+
+def derive_odin(frame: pd.DataFrame, storm_date: date) -> tuple[pd.DataFrame, list[str]]:
+    """Return the impact window from ODIN rows, and the utility names that appear in it.
+
+    `frame` holds `slot_utc`, `fips`, `utility`, and `customers_out` (the ODIN day files).
+    A step is the sum over utilities at the slot equal to the step start. A step with no
+    snapshot is null. A county with no incident in any snapshot of the window is null at every
+    step: ODIN cannot show that its utility reports to ODIN.
+    """
+    start, _ = sbw.window(storm_date)
+    steps = pd.date_range(start, periods=STEPS, freq=STEP)
+    slot = frame["slot_utc"].dt.as_unit(steps.unit)
+    rows = frame.assign(slot_utc=slot).loc[slot.isin(steps)]
+    incidents = rows.loc[rows["utility"] != odin.NO_INCIDENT]
+    totals = rows.groupby(["fips", "slot_utc"])["customers_out"].sum()
+    totals = totals[totals.index.get_level_values("fips").isin(set(incidents["fips"]))]
+    totals.index = totals.index.set_names(["fips", "step_utc"])
+    grid = pd.MultiIndex.from_product([sorted(METRO_FIPS), steps], names=["fips", "step_utc"])
+    day = totals.reindex(grid).astype("Int64").reset_index()
+    return day, sorted(set(incidents["utility"]))
+
+
+def build(
+    storm_date: date, eaglei_dir: Path, odin_dir: Path
+) -> tuple[pd.DataFrame, dict[str, str]] | None:
+    """Return the power frame of the window and the metadata of its file, or None.
+
+    A window whose every year has an EAGLE-I file reads EAGLE-I. Any other window reads the ODIN
+    day files and lists the utilities in the metadata. One file never mixes the two sources.
+    None means no source covers the window: no ODIN incident falls inside it, so every step
+    would be null.
+    """
+    paths = [eaglei_dir / file_name(year) for year in years_of(storm_date)]
+    if all(path.exists() for path in paths):
+        frames = [pd.read_parquet(path) for path in paths]
+        return derive(pd.concat(frames, ignore_index=True), storm_date), METADATA
+    start, _ = sbw.window(storm_date)
+    last = start + (STEPS - 1) * STEP
+    days = [start.date() + timedelta(days=n) for n in range((last.date() - start.date()).days + 1)]
+    day_files = [odin_dir / odin.file_name(day) for day in days]
+    frames = [pd.read_parquet(path) for path in day_files if path.exists()]
+    if not frames:
+        return None
+    day, utilities = derive_odin(pd.concat(frames, ignore_index=True), storm_date)
+    if not utilities:
+        return None
+    return day, {**odin.METADATA, "utilities": json.dumps(utilities)}
+
+
+def file_source(path: Path) -> str | None:
+    """The `source` metadata value of a power file, or None when the file has none."""
+    value = (pq.read_schema(path).metadata or {}).get(b"source")
+    return None if value is None else value.decode()
 
 
 def share_out(frame: pd.DataFrame) -> pd.Series:
