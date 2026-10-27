@@ -125,7 +125,8 @@ export interface SwathFile extends FeatureCollection<MultiPolygon, SwathProps> {
 }
 
 /** The warning types the file carries: severe thunderstorm, tornado, flash flood. */
-export type Phenomena = "SV" | "TO" | "FF";
+export const PHENOMENA = ["SV", "TO", "FF"] as const;
+export type Phenomena = (typeof PHENOMENA)[number];
 
 export interface WarningProps {
   phenomena: Phenomena;

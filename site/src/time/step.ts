@@ -2,6 +2,7 @@
 // Step 0 is 12:00 UTC on the storm date D. Step 48 is 00:00 UTC on D+1. Pure: no DOM, no clock.
 
 export const STEP_MINUTES = 15;
+export const STEPS_PER_HOUR = 60 / STEP_MINUTES;
 export const STEPS = 192;
 export const LAST_STEP = STEPS - 1;
 /** The step a link without a step opens: 00:00 UTC on D+1, until a power file names a peak. */
@@ -37,7 +38,7 @@ export function reportStep(time: string): number | null {
   if (!HHMM.test(time)) return null;
   const hour = Number(time.slice(0, 2));
   const minute = Number(time.slice(2));
-  return ((hour + 12) % 24) * 4 + Math.floor(minute / STEP_MINUTES);
+  return ((hour + 12) % 24) * STEPS_PER_HOUR + Math.floor(minute / STEP_MINUTES);
 }
 
 const FIELDS = { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "short" } as const;

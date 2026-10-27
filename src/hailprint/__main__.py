@@ -298,6 +298,9 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     With `missing`, the dates are the swath dates whose window has closed and that have no
     warnings file yet. A failed fetch stops the run; the next `--missing` run starts again.
     """
+    # shortcut: an explicit date runs for an open window too and writes a partial file that
+    # `--missing` then skips; add a closed-window check when explicit reruns of recent days
+    # become routine.
     if missing:
         now = _utc_now()
         storm_dates = [

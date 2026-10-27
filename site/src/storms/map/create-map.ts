@@ -20,6 +20,7 @@ import { BASEMAP_FILE, BASEMAP_SOURCE, basemapLayers, probeBasemap } from "./bas
 import {
   COUNTY_SOURCE,
   POINT_SOURCE,
+  REPORTS_LAYER,
   REPORTS_SOURCE,
   SWATH_SOURCE,
   TAG_ZOOM,
@@ -37,8 +38,8 @@ import {
   warningLayerId,
   warningLayers,
   warningTags,
-  PHENOMENA,
 } from "./layers";
+import { PHENOMENA } from "../../data/types";
 import { RULER } from "../../ruler";
 
 export type { MapLibreMap };
@@ -178,11 +179,14 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
         swathOn = visible;
         applySwath();
       } else if (name === "reports") {
-        show("report-points", visible);
-      } else {
+        show(REPORTS_LAYER, visible);
+      } else if (name === "warnings") {
         warningsOn = visible;
         for (const phenomena of PHENOMENA) show(warningLayerId(phenomena), visible);
         syncTags();
+      } else {
+        const unreachable: never = name;
+        throw new Error(`unknown layer ${String(unreachable)}`);
       }
     },
     setWarnings(file, date, step) {

@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { fetchCounty } from "../county";
 import { fetchJson } from "../data/fetch";
 import { guardSwath, guardWarnings } from "../data/guard";
-import { DataError, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
+import { DataError, PHENOMENA, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
 import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type Load, useLoad } from "../state/load";
@@ -15,7 +15,7 @@ import { resolveStep } from "../time/step";
 import type { MapHandle } from "./map/create-map";
 import { boundsOf, coveringClass, nearestReport } from "./map/geo";
 import { Inspector, type Pick } from "./map/inspector";
-import { type LayerName, PHENOMENA, WARNING_STYLES, LINE_PX, fillLayerId, warningsNote } from "./map/layers";
+import { type LayerName, WARNING_STYLES, LINE_PX, fillLayerId, warningsNote } from "./map/layers";
 import { RulerLegend } from "./map/ruler-legend";
 import { RULER } from "../ruler";
 

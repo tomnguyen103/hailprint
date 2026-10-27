@@ -30,6 +30,9 @@ ALLOWED = (
     "polygon_end",
     "product_id",
 )
+# The feed names the polygon times with a `utc_` prefix. The output columns drop it.
+FEED_KEY = {"polygon_begin": "utc_polygon_begin", "polygon_end": "utc_polygon_end"}
+GEOMETRY_TYPES = ("Polygon", "MultiPolygon")
 METADATA = {"source": "iem", "product": "sbw"}
 WINDOW = timedelta(hours=48)
 
@@ -71,23 +74,30 @@ def parse(text: str, storm_date: date) -> gpd.GeoDataFrame:
     metro = county.metro().geometry.union_all()
     rows = []
     for feature in document["features"]:
+        if not isinstance(feature, dict) or not isinstance(feature.get("properties") or {}, dict):
+            raise ValueError("IEM warnings feed holds a feature that is not an object")
         props = feature.get("properties") or {}
         if props.get("phenomena") not in PHENOMENA or props.get("significance") != SIGNIFICANCE:
             continue
         eventid = props.get("eventid")
         for key in ALLOWED:
-            if key not in props:
-                raise ValueError(f"warning {eventid} lacks {key}")
-        if feature.get("geometry") is None:
+            if FEED_KEY.get(key, key) not in props:
+                raise ValueError(f"warning {eventid} lacks {FEED_KEY.get(key, key)}")
+        geometry = feature.get("geometry")
+        if geometry is None:
             raise ValueError(f"warning {eventid} has no geometry")
         try:
-            row = {key: props[key] for key in ALLOWED}
+            row = {key: props[FEED_KEY.get(key, key)] for key in ALLOWED}
             row["eventid"] = int(row["eventid"])
             row["polygon_begin"] = pd.to_datetime(row["polygon_begin"], utc=True)
             row["polygon_end"] = pd.to_datetime(row["polygon_end"], utc=True)
-            row["geometry"] = shape(feature["geometry"])
+            if pd.isna(row["polygon_begin"]) or pd.isna(row["polygon_end"]):
+                raise ValueError("polygon time is empty")
+            if geometry.get("type") not in GEOMETRY_TYPES:
+                raise ValueError(f"geometry type {geometry.get('type')!r} is not a polygon")
+            row["geometry"] = shape(geometry)
             reaches = row["geometry"].intersects(metro)
-        except (ShapelyError, TypeError, ValueError, KeyError) as exc:
+        except (ShapelyError, TypeError, ValueError, KeyError, AttributeError) as exc:
             raise ValueError(f"warning {eventid} has a malformed value: {exc}") from exc
         if reaches and row["polygon_begin"] < end and row["polygon_end"] > start:
             rows.append(row)

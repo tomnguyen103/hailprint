@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { href, replace } from "../router";
 import "../styles/time.css";
-import { LAST_STEP, readout } from "./step";
+import { LAST_STEP, STEPS_PER_HOUR, readout } from "./step";
 
-const HOUR = 4;
 const PLAY_MS = 400;
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
@@ -25,9 +24,9 @@ export function keyStep(key: string, step: number): number | null {
     case "ArrowDown":
       return bound(step - 1);
     case "PageUp":
-      return bound(step + HOUR);
+      return bound(step + STEPS_PER_HOUR);
     case "PageDown":
-      return bound(step - HOUR);
+      return bound(step - STEPS_PER_HOUR);
     case "Home":
       return 0;
     case "End":
@@ -62,11 +61,11 @@ export function createPlayer(ports: PlayerPorts): { toggle(): void; stop(): void
   function toggle(): void {
     if (timer !== null) return stop();
     const at = ports.step();
-    if (ports.reduced()) return ports.move(at >= LAST_STEP ? 0 : bound(at + HOUR));
+    if (ports.reduced()) return ports.move(at >= LAST_STEP ? 0 : bound(at + STEPS_PER_HOUR));
     if (at >= LAST_STEP) ports.move(0);
     ports.playing(true);
     timer = setInterval(() => {
-      const next = bound(ports.step() + HOUR);
+      const next = bound(ports.step() + STEPS_PER_HOUR);
       ports.move(next);
       if (next === LAST_STEP) stop();
     }, PLAY_MS);

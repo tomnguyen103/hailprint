@@ -3,7 +3,7 @@ import { ReceiptChip } from "../shell/receipt-chip";
 import { CELLS, cellFor, cells } from "../stamp";
 import type { Load } from "../state/load";
 import { useRoute } from "../state/route";
-import { resolveStep } from "../time/step";
+import { STEPS_PER_HOUR, resolveStep } from "../time/step";
 import { formatInches } from "../format";
 import { objectForSize } from "./select";
 
@@ -18,7 +18,7 @@ const HOUR_LABELS = Array.from({ length: CELLS }, (_, i) => `${String((i + 12) %
 
 /** The stamp cell that holds a map step; null once the step is past the 24-cell storm window. */
 export function sliderCell(step: number): number | null {
-  return step < CELLS * 4 ? Math.floor(step / 4) : null;
+  return step < CELLS * STEPS_PER_HOUR ? Math.floor(step / STEPS_PER_HOUR) : null;
 }
 
 /** Storm date in mono, the 24-cell 12Z-to-12Z bar, the report count, and the max size. */

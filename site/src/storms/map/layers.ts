@@ -1,7 +1,7 @@
 // Layer specifications for the swath, the warnings, the county outline, and the report points.
 import type { Feature, FeatureCollection, MultiPolygon, Point } from "geojson";
 import type { LayerSpecification } from "maplibre-gl";
-import type { Phenomena, ReportsFile, WarningProps, WarningsFile } from "../../data/types";
+import { PHENOMENA, type Phenomena, type ReportsFile, type WarningProps, type WarningsFile } from "../../data/types";
 import { RULER } from "../../ruler";
 import type { Load } from "../../state/load";
 import { reportStep, stepTime } from "../../time/step";
@@ -57,7 +57,7 @@ export const WARNING_STYLES: Record<Phenomena, WarningStyle> = {
   FF: { name: "Flash flood", token: "--warn-ff", dash: [1, 2] },
 };
 
-export const PHENOMENA: readonly Phenomena[] = ["SV", "TO", "FF"];
+export const REPORTS_LAYER = "report-points";
 
 export function warningLayerId(phenomena: Phenomena): string {
   return `warnings-${phenomena.toLowerCase()}`;
@@ -154,7 +154,7 @@ export function chromeLayers(): LayerSpecification[] {
       paint: { "line-color": token("--ink"), "line-width": 1.5 },
     },
     {
-      id: "report-points",
+      id: REPORTS_LAYER,
       type: "circle",
       source: REPORTS_SOURCE,
       paint: {

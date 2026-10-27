@@ -1,6 +1,6 @@
-import type { Phenomena, ReportsFile, WarningsFile } from "../data/types";
+import { PHENOMENA, type Phenomena, type ReportsFile, type WarningsFile } from "../data/types";
 import { formatInches } from "../format";
-import { PHENOMENA, WARNING_STYLES } from "../storms/map/layers";
+import { WARNING_STYLES } from "../storms/map/layers";
 import "../styles/time.css";
 import { LAST_STEP, STEPS, STEP_MINUTES, reportStep, stepTime } from "../time/step";
 

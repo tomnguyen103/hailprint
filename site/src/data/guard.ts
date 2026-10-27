@@ -4,7 +4,7 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { DATE } from "../router";
 import type { Pairs, PipelineFile, ReportsFile, StormsIndex, SwathFile, WarningsFile, ZipCounts } from "./types";
-import { DataError } from "./types";
+import { DataError, PHENOMENA } from "./types";
 
 type Rec = Record<string, unknown>;
 
@@ -257,7 +257,7 @@ export function guardWarnings(value: unknown): WarningsFile {
     for (const key of Object.keys(props)) {
       if (!WARNING_KEYS.includes(key)) throw new DataError(file, `${at}.${key} is not an allowed property`);
     }
-    if (!["SV", "TO", "FF"].includes(str(file, props["phenomena"], `${at}.phenomena`))) {
+    if (!(PHENOMENA as readonly string[]).includes(str(file, props["phenomena"], `${at}.phenomena`))) {
       throw new DataError(file, `${at}.phenomena is not SV, TO, or FF`);
     }
     if (props["significance"] !== "W") throw new DataError(file, `${at}.significance is not W`);

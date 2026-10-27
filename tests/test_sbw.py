@@ -108,6 +108,47 @@ def test_parse_raises_value_error_naming_the_eventid_when_an_allow_listed_proper
         sbw.parse(json.dumps(document), STORM_DATE)
 
 
+def test_parse_reads_the_utc_prefixed_polygon_times_of_the_live_feed():
+    document = feed()
+    kept = next(f for f in document["features"] if f["properties"]["eventid"] == 101)
+
+    assert "polygon_begin" not in kept["properties"]
+    frame = sbw.parse(json.dumps(document), STORM_DATE)
+    row = frame[frame["eventid"] == 101].iloc[0]
+    assert row["polygon_begin"] == datetime(2024, 5, 28, 21, tzinfo=UTC)
+    assert row["polygon_end"] == datetime(2024, 5, 28, 22, tzinfo=UTC)
+
+
+def test_parse_raises_value_error_when_a_feed_time_is_empty():
+    document = feed()
+    next(f for f in document["features"] if f["properties"]["eventid"] == 101)["properties"][
+        "utc_polygon_begin"
+    ] = None
+
+    with pytest.raises(ValueError, match=r"warning 101 has a malformed value"):
+        sbw.parse(json.dumps(document), STORM_DATE)
+
+
+def test_parse_raises_value_error_for_a_kept_warning_whose_geometry_is_not_a_polygon():
+    document = feed()
+    next(f for f in document["features"] if f["properties"]["eventid"] == 101)["geometry"] = {
+        "type": "Point",
+        "coordinates": [-95.4, 29.7],
+    }
+
+    with pytest.raises(ValueError, match=r"warning 101 has a malformed value"):
+        sbw.parse(json.dumps(document), STORM_DATE)
+
+
+@pytest.mark.parametrize("member", ["text", 3, None])
+def test_parse_raises_value_error_for_a_feature_that_is_not_an_object(member):
+    document = feed()
+    document["features"].append(member)
+
+    with pytest.raises(ValueError, match="not an object"):
+        sbw.parse(json.dumps(document), STORM_DATE)
+
+
 @pytest.mark.parametrize("text", ["not json", '{"type": "FeatureCollection"}', "[]"])
 def test_parse_raises_value_error_for_a_body_that_is_not_a_feature_collection(text):
     with pytest.raises(ValueError, match="IEM warnings feed"):
@@ -146,8 +187,8 @@ def test_the_live_feed_count_after_the_filter_equals_the_parquet_row_count():
         for f in json.loads(text)["features"]
         if f["properties"]["phenomena"] in ("SV", "TO", "FF")
         and f["properties"]["significance"] == "W"
-        and f["properties"]["polygon_begin"] < end
-        and f["properties"]["polygon_end"] > start
+        and f["properties"]["utc_polygon_begin"] < end
+        and f["properties"]["utc_polygon_end"] > start
         and shape(f["geometry"]).intersects(union)
     ]
 
