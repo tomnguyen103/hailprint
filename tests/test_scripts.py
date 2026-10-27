@@ -96,6 +96,17 @@ def test_every_script_parses():
         assert done.returncode == 0, done.stderr
 
 
+def test_every_script_is_executable_in_git():
+    # the cron entry, the Makefile, and nightly.sh call the scripts directly: mode 100755
+    done = subprocess.run(
+        ["git", "ls-files", "-s", "--", "scripts/*.sh"], capture_output=True, text=True, cwd=ROOT
+    )
+    rows = done.stdout.split()
+    assert "scripts/deploy.sh" in rows and "scripts/nightly.sh" in rows
+    for line in done.stdout.splitlines():
+        assert line.startswith("100755 "), line
+
+
 # --- deploy.sh ---
 
 
