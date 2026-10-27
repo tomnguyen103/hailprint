@@ -24,6 +24,9 @@ uv run hailprint candidates --top 20        # needs `index` first
 uv run hailprint parcels 2024-05-28         # needs `ingest` for that date and the HCAD gdb
 uv run hailprint score --radius-km 5        # needs `ingest`; scores every swath file against SPC daily CSVs
 uv run hailprint publish                    # needs `ingest`; writes site/data/ (ZIP counts only where `parcels` ran)
+make site                                   # cd site && npm ci && npm run check
+cd site && npm run dev                      # Vite dev server at http://localhost:5173
+cd site && npm run check                    # tsc --noEmit && vitest run && vite build
 ```
 
 Tests that need downloaded data self-skip: `needs_raw_mesh` (the 12Z GRIB2 under
@@ -59,6 +62,13 @@ paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
 __main__.py   argparse CLI wiring the six commands and the fixed paths under data/, out/, and site/data/
 ```
+
+`site/` is the static site (Preact 10, Vite 8, TypeScript strict, MapLibre GL 6). Routes:
+`/storms/<date>/map|parcels|score|data`, `/scorecard`, `/try`, `/method`, `/pipeline`; `/` redirects
+to the newest storm date. It reads `storms.json` first, then the four per-date files, each through
+a guard in `site/src/data/guard.ts`, and re-scores `pairs.json` in `site/src/rescore.ts` with the
+same radius rule as `publish.rescore`. Every MapLibre import lives under `site/src/storms/map/`.
+`site/README.md` holds the commands, the data path, the basemap step, and the Vercel fields.
 
 Data paths hang from `paths.ROOT`, so a command writes under the repo `data/` and `out/` from any
 working directory. `data/`, `out/`, and `site/data/` are gitignored. No module holds a relative `Path("data...")`.
