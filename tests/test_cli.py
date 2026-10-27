@@ -15,7 +15,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from hailprint import __main__ as cli
-from hailprint import archive, candidates, files, parcels, publish, sbw, swath
+from hailprint import archive, candidates, files, parcels, power, publish, sbw, swath
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = json.loads((FIXTURES / "score_golden.json").read_text(encoding="utf-8"))
@@ -38,6 +38,7 @@ class Env:
         self.parcels = root / "parcels"
         self.site = root / "site"
         self.warnings = root / "warnings"
+        self.eaglei = root / "eaglei"
         self.served: dict[date, object] = {}
 
     def add_day(self, storm_date: date, *, metadata: bool = True) -> Path:
@@ -96,6 +97,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "PARCELS_DIR", env.parcels)
     monkeypatch.setattr(cli, "SITE_DATA_DIR", env.site)
     monkeypatch.setattr(cli, "WARNINGS_DIR", env.warnings)
+    monkeypatch.setattr(cli, "EAGLEI_DIR", env.eaglei)
     monkeypatch.setattr(cli, "_utc_now", lambda: RUN_TIME)
     monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "index" / "mesh-archive.parquet")
     monkeypatch.setattr(candidates, "CANDIDATES_PATH", tmp_path / "candidate-days.csv")
@@ -681,3 +683,106 @@ def test_warnings_takes_storm_dates_or_missing_and_not_both_or_neither(env, iem,
 
     assert stop.value.code == 2
     assert iem.urls == []
+
+
+EAGLEI_CSV = FIXTURES / "eaglei_5col.csv"
+FIGSHARE_LISTING = json.dumps(
+    [
+        {"id": 301, "name": "MCC.csv"},
+        {"id": 111, "name": "eaglei_outages_2024.csv"},
+        {"id": 222, "name": "eaglei_outages_2023.csv"},
+    ]
+).encode()
+
+
+class Response(io.BytesIO):
+    """A response body with the one header `net.open_stream` reads."""
+
+    def __init__(self, body: bytes, declared: int | None = None):
+        super().__init__(body)
+        self._declared = len(body) if declared is None else declared
+
+    def getheader(self, name: str) -> str | None:
+        return str(self._declared) if name == "Content-Length" else None
+
+
+class Figshare:
+    """The Figshare boundary: urlopen serves the file listing and the year CSV."""
+
+    def __init__(self):
+        self.csv = EAGLEI_CSV.read_bytes()
+        self.declared: int | None = None
+        self.urls: list[str] = []
+
+
+@pytest.fixture
+def figshare(monkeypatch):
+    figshare = Figshare()
+
+    def urlopen(url, timeout=None):
+        figshare.urls.append(url)
+        if url == power.LISTING_URL:
+            return Response(FIGSHARE_LISTING)
+        return Response(figshare.csv, figshare.declared)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    return figshare
+
+
+def _eaglei_file(env, year):
+    return env.eaglei / f"eaglei-{year}.parquet"
+
+
+def test_eaglei_writes_one_parquet_per_year_with_the_eaglei_and_customers_out_metadata(
+    env, figshare, capsys
+):
+    assert cli.main(["eaglei", "2024"]) == 0
+
+    path = _eaglei_file(env, 2024)
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"eaglei", b"customers-out")
+    assert pd.read_parquet(path)["fips"].tolist() == ["48039", "48157", "48201", "48201", "48201"]
+    assert capsys.readouterr().out == "2024: 5 metro rows\n"
+    assert figshare.urls == [power.LISTING_URL, "https://ndownloader.figshare.com/files/111"]
+
+
+def test_two_eaglei_runs_write_the_same_bytes_and_leave_no_tmp_file(env, figshare):
+    cli.main(["eaglei", "2024"])
+    first = _eaglei_file(env, 2024).read_bytes()
+
+    cli.main(["eaglei", "2024"])
+
+    assert _eaglei_file(env, 2024).read_bytes() == first
+    assert list(env.eaglei.glob("*.tmp")) == []
+
+
+def test_a_broken_eaglei_stream_exits_1_with_one_line_and_leaves_no_file(env, figshare, capsys):
+    figshare.declared = len(figshare.csv) + 100
+
+    assert cli.main(["eaglei", "2024"]) == 1
+
+    (line,) = capsys.readouterr().err.splitlines()
+    assert line.startswith("EAGLE-I 2024 stream failed")
+    assert not env.eaglei.exists() or list(env.eaglei.iterdir()) == []
+
+
+def test_a_year_without_a_figshare_file_exits_1_and_names_the_file(env, figshare, capsys):
+    assert cli.main(["eaglei", "1999"]) == 1
+
+    assert capsys.readouterr().err == "EAGLE-I 1999: no file eaglei_outages_1999.csv in Figshare\n"
+    assert figshare.urls == [power.LISTING_URL]
+
+
+def test_eaglei_stops_at_the_first_failed_year(env, figshare, capsys):
+    assert cli.main(["eaglei", "1999", "2024"]) == 1
+
+    assert not _eaglei_file(env, 2024).exists()
+
+
+@pytest.mark.parametrize("argv", [["eaglei"], ["eaglei", "24"], ["eaglei", "2024-05-28"]])
+def test_eaglei_takes_one_or_more_four_digit_years(env, figshare, argv):
+    with pytest.raises(SystemExit) as stop:
+        cli.main(argv)
+
+    assert stop.value.code == 2
+    assert figshare.urls == []

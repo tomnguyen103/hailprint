@@ -23,6 +23,11 @@ needs_hcad = pytest.mark.skipif(
     reason=f"needs the HCAD gdb at {HCAD_GDB} and the swath file at {SWATHS_0528}",
 )
 needs_wcm = pytest.mark.skipif(not WCM_PATH.exists(), reason=f"needs the WCM zip at {WCM_PATH}")
+EAGLEI_2024 = paths.DERIVED_DIR / "eaglei" / "eaglei-2024.parquet"
+needs_eaglei = pytest.mark.skipif(
+    not EAGLEI_2024.exists(),
+    reason=f"needs the EAGLE-I 2024 file at {EAGLEI_2024}: run `hailprint eaglei 2024`",
+)
 # A live check runs only when the caller opts in: HAILPRINT_NETWORK=1 uv run pytest
 needs_network = pytest.mark.skipif(
     os.environ.get("HAILPRINT_NETWORK") != "1", reason="needs the network: set HAILPRINT_NETWORK=1"

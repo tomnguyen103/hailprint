@@ -1,4 +1,7 @@
-"""Command line entry: ``hailprint ingest|index|candidates|parcels|score|warnings|publish``."""
+"""Command line entry: ``hailprint ingest|index|candidates|parcels|score|warnings|eaglei|publish``.
+
+Run ``hailprint <command> --help`` for the arguments of one command.
+"""
 
 import argparse
 import math
@@ -20,6 +23,7 @@ from hailprint import (
     parcels,
     paths,
     plot,
+    power,
     publish,
     reports,
     sbw,
@@ -34,6 +38,7 @@ PARCELS_GDB = paths.RAW_DIR / "hcad" / "extracted" / "Parcels.gdb"
 PARCELS_DIR = paths.DERIVED_DIR / "parcels"
 SCORES_DIR = paths.DERIVED_DIR / "scores"
 WARNINGS_DIR = paths.DERIVED_DIR / "warnings"
+EAGLEI_DIR = paths.DERIVED_DIR / "eaglei"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
 
@@ -45,6 +50,12 @@ def _storm_date(text: str) -> date:
         return datetime.strptime(text, "%Y-%m-%d").date()
     except ValueError as exc:
         raise argparse.ArgumentTypeError(f"not a YYYY-MM-DD date: {text!r}") from exc
+
+
+def _year(text: str) -> int:
+    if not re.fullmatch(r"\d{4}", text):
+        raise argparse.ArgumentTypeError(f"not a YYYY year: {text!r}")
+    return int(text)
 
 
 def _radius_km(text: str) -> float:
@@ -104,6 +115,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="fetch each swath date with a closed impact window and no warnings file",
     )
+    eaglei_cmd = commands.add_parser(
+        "eaglei", help="store the EAGLE-I customers out of the metro counties per year"
+    )
+    eaglei_cmd.add_argument("years", nargs="+", type=_year, help="calendar year, YYYY")
     publish_cmd = commands.add_parser(
         "publish", help="write the site data files and the storms index for storm dates"
     )
@@ -134,6 +149,8 @@ def main(argv: list[str] | None = None) -> int:
             score_days(args.storm_dates, args.radius_km)
         elif args.command == "warnings":
             warn_days(args.storm_dates, args.missing)
+        elif args.command == "eaglei":
+            eaglei_years(args.years)
         elif args.command == "publish":
             publish_days(args.storm_dates)
     except (RuntimeError, OSError, ValueError) as exc:
@@ -338,6 +355,21 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
         print(f"{storm_date}: {len(frame)} warnings")
     if failed:
         raise ValueError(f"warnings failed for: {', '.join(failed)}")
+    return written
+
+
+def eaglei_years(years: list[int]) -> list[Path]:
+    """One EAGLE-I file per year with the metro rows. The run stops at the first failed year.
+
+    A year file is written only after the whole CSV is read, so a broken stream leaves nothing.
+    """
+    written = []
+    for year in years:
+        frame = power.fetch_year(year)
+        written.append(
+            files.write_atomic(frame, EAGLEI_DIR / power.file_name(year), power.METADATA)
+        )
+        print(f"{year}: {len(frame)} metro rows")
     return written
 
 
