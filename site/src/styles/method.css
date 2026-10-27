@@ -87,6 +87,45 @@
   border-color: var(--rule);
 }
 
+/* Guess-then-reveal: class row, one native range, one button, three mono values after Reveal */
+
+.guess {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+}
+
+.guess-classes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.guess-classes .class-pick {
+  margin: 0;
+}
+
+.guess .radius-slider {
+  width: 100%;
+}
+
+.guess-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  margin: 0;
+}
+
+.guess-row dt {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.guess-row dd {
+  margin: 2px 0 0;
+  font-size: 1.25rem;
+}
+
 /* Page tree: flat list, no year groups */
 
 .method .scope-list a {

@@ -11,6 +11,7 @@ import { CELLS, cells } from "../stamp";
 import { useLoad, type Load } from "../state/load";
 import { usePairsAll } from "../state/pairs-all";
 import type { Block, FigureId } from "./content";
+import { GuessReveal } from "./guess-reveal";
 
 const NO_INDEX = "No storm date is published yet.";
 const INDEX_FILE = "storms.json";
@@ -61,13 +62,12 @@ function render(block: Block, index: Index) {
 /** The ruler needs no data; every other figure waits for the index and never blocks the prose. */
 function figure(id: FigureId, index: Index) {
   if (id === "ruler") return <Ruler />;
-  // shortcut: the guess figure renders in ticket 06, upgrade when guess-reveal.tsx lands
-  if (id === "guess") return null;
   if (index.status === "error") return <ErrorState error={index.error} onRetry={index.retry} />;
   if (index.status === "loading") return index.showLoading ? <LoadingState file={INDEX_FILE} /> : null;
   if (index.data.storms.length === 0) return <EmptyState sentence={NO_INDEX} />;
   if (id === "receipt") return <Receipt index={index.data} />;
   if (id === "stamp") return <StampFigure index={index.data} />;
+  if (id === "guess") return <GuessReveal index={index.data} />;
   return <GridFigure index={index.data} />;
 }
 
