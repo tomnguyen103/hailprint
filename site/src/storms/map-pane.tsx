@@ -3,87 +3,32 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { fetchCounty } from "../county";
 import { fetchJson } from "../data/fetch";
 import { guardSwath, guardWarnings } from "../data/guard";
-import { DataError, PHENOMENA, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
+import { DataError, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
 import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type Load, useLoad } from "../state/load";
-import { useRoute } from "../state/route";
 import { useTheme } from "../state/theme";
 import "../styles/map.css";
-import { TimeSlider, replaceStep } from "../time/slider";
-import { resolveStep } from "../time/step";
+import { TimeSlider } from "../time/slider";
+import { LAYER_ROWS, LayersControl, type LayerState } from "./layers-control";
 import type { MapHandle } from "./map/create-map";
 import { boundsOf, coveringClass, nearestReport } from "./map/geo";
 import { Inspector, type Pick } from "./map/inspector";
-import { type LayerName, WARNING_STYLES, LINE_PX, fillLayerId, warningsNote } from "./map/layers";
+import { type LayerName, fillLayerId, warningsNote } from "./map/layers";
 import { RulerLegend } from "./map/ruler-legend";
 import { RULER } from "../ruler";
 
 const SWATH_FILE = "swath.geojson";
 const NO_BASEMAP = "No basemap file.";
 
-export type LayerState = Record<LayerName, boolean>;
-
-const LAYER_ROWS: { name: LayerName; label: string }[] = [
-  { name: "swath", label: "Hail swath" },
-  { name: "reports", label: "SPC reports" },
-  { name: "warnings", label: "NWS warnings" },
-];
-
-interface ControlProps {
-  layers: LayerState;
-  warnings: { available: boolean; note: string | null };
-  onToggle: (name: LayerName, on: boolean) => void;
-}
-
-/** Three layer switches, the warning line key while warnings show, and one line when the warnings file is off. */
-export function LayersControl({ layers, warnings, onToggle }: ControlProps) {
-  return (
-    <fieldset class="layers">
-      <legend class="visually-hidden">Map layers</legend>
-      {LAYER_ROWS.map(({ name, label }) => {
-        const off = name === "warnings" && !warnings.available;
-        return (
-          <label key={name} class="layer-row">
-            <input type="checkbox" checked={layers[name] && !off} disabled={off} onChange={(event) => onToggle(name, event.currentTarget.checked)} />
-            <span>{label}</span>
-          </label>
-        );
-      })}
-      {warnings.available && layers.warnings ? (
-        <ul class="warning-key">
-          {PHENOMENA.map((phenomena) => {
-            const style = WARNING_STYLES[phenomena];
-            return (
-              <li key={phenomena}>
-                <svg width="28" height="8" viewBox="0 0 28 8" aria-hidden="true">
-                  <line
-                    class={`warning-key-${phenomena.toLowerCase()}`}
-                    x1="0"
-                    y1="4"
-                    x2="28"
-                    y2="4"
-                    stroke-dasharray={style.dash ? style.dash.map((n) => n * LINE_PX).join(" ") : undefined}
-                  />
-                </svg>
-                <span class="mono">{phenomena}</span>
-                <span>{style.name}</span>
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-      {warnings.note ? <p class="layers-note">{warnings.note}</p> : null}
-    </fieldset>
-  );
-}
-
 interface Props {
   storm: Storm;
   reports: Load<ReportsFile> & { retry: () => void };
+  step: number;
+  onStep: (step: number) => void;
 }
 
-export function MapPane({ storm, reports }: Props) {
+export function MapPane({ storm, reports, step, onStep }: Props) {
   const swath = useLoad(storm.files.swath, () => fetchJson(storm.files.swath, guardSwath));
   const county = useLoad("county", fetchCounty);
   const warningsFile = storm.files.warnings;
@@ -91,8 +36,6 @@ export function MapPane({ storm, reports }: Props) {
     warningsFile === null ? Promise.resolve(null) : fetchJson(warningsFile, guardWarnings),
   );
   const { resolved: theme } = useTheme();
-  const { route } = useRoute();
-  const step = resolveStep(route.kind === "storms" ? route.step : null);
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
   const [ready, setReady] = useState<{ basemap: boolean } | null>(null);
@@ -191,11 +134,11 @@ export function MapPane({ storm, reports }: Props) {
     container.current?.focus();
   }, []);
   const retryMap = useCallback(() => setAttempt((n) => n + 1), []);
-  const moveStep = useCallback((next: number) => replaceStep(storm.storm_date, next), [storm.storm_date]);
 
   // One overlay slot: the map chunk error first, then the swath, reports, and county errors in that order.
   const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : county.status === "error" ? county : null;
   const receipt = swathData?.receipt ?? null;
+  const warningsLine = warningsNote(warningsFile, warnings);
   return (
     <div class="map-pane" data-inspector={pick !== null}>
       <div class="map-main">
@@ -216,15 +159,11 @@ export function MapPane({ storm, reports }: Props) {
               <LoadingState file={SWATH_FILE} />
             </div>
           ) : null}
-          <LayersControl
-            layers={layers}
-            warnings={{ available: warningsData !== null, note: warningsNote(warningsFile, warnings) }}
-            onToggle={toggleLayer}
-          />
+          <LayersControl layers={layers} warnings={{ available: warningsData !== null, note: warningsLine }} onToggle={toggleLayer} />
           <RulerLegend hidden={hidden} onToggle={toggle} />
         </div>
-        <TimeSlider date={storm.storm_date} step={step} onStep={moveStep} />
-        <Timeline date={storm.storm_date} step={step} warnings={warningsData} reports={reportsData} onStep={moveStep} />
+        <TimeSlider date={storm.storm_date} step={step} onStep={onStep} />
+        <Timeline date={storm.storm_date} step={step} warnings={warningsData} note={warningsLine} reports={reportsData} onStep={onStep} />
       </div>
       {pick !== null && receipt !== null ? <Inspector pick={pick} receipt={receipt} onClose={close} /> : null}
     </div>

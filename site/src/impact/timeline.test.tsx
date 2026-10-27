@@ -2,7 +2,7 @@ import type { Feature, MultiPolygon, Point } from "geojson";
 import type { ComponentChild, VNode } from "preact";
 import { describe, expect, it } from "vitest";
 import type { Phenomena, ReportProps, ReportsFile, Receipt, WarningProps, WarningsFile } from "../data/types";
-import { Timeline, TimelineTables, reportTicks, stepAt, warningBars } from "./timeline";
+import { Timeline, TimelineTables, barKey, reportTicks, stepAt, warningBars } from "./timeline";
 
 type Node = VNode<Record<string, unknown>>;
 
@@ -55,6 +55,7 @@ function chart(props: Partial<Parameters<typeof Timeline>[0]> = {}) {
     date: DATE,
     step: 48,
     warnings: warnings(BEFORE_START, INSIDE, FLOOD),
+    note: null,
     reports: reports(report(1, "1200"), report(2, "1145")),
     onStep: (next) => calls.push(next),
     ...props,
@@ -107,6 +108,16 @@ describe("the warning bars", () => {
     const rows = new Set(bars.map((v) => v.props["y1"]));
     expect(rows.size).toBe(3);
   });
+
+  it("key two warnings of different types apart when the eventid and begin match", () => {
+    const begin = "2024-05-28T22:30:00Z";
+    const sv = warning("SV", begin, "2024-05-28T23:15:00Z", 7);
+    const to = warning("TO", begin, "2024-05-28T23:15:00Z", 7);
+    const [first, second] = warningBars(warnings(sv, to), DATE);
+    expect(barKey(first!)).not.toBe(barKey(second!));
+    const keys = findAll(chart({ warnings: warnings(sv, to) }).tree, withClass("timeline-bar")).map((v) => v.key);
+    expect(new Set(keys).size).toBe(2);
+  });
 });
 
 describe("the cursor", () => {
@@ -148,6 +159,17 @@ describe("the empty and labelled states", () => {
 
   it("shows no empty line while the warnings file is absent", () => {
     expect(textOf(chart({ warnings: null }).tree)).not.toContain("No warnings in the window");
+  });
+
+  it("shows the note in the warnings strip when the warnings are null", () => {
+    const note = "No warnings file for this storm date.";
+    const { tree } = chart({ warnings: null, note });
+    expect(findAll(tree, withClass("timeline-empty")).map((v) => textOf(v))).toEqual([note]);
+  });
+
+  it("shows no note line while the warnings load or when the file is present", () => {
+    expect(findAll(chart({ warnings: null, note: null }).tree, withClass("timeline-empty"))).toHaveLength(0);
+    expect(textOf(chart({ note: "Warnings off." }).tree)).not.toContain("Warnings off.");
   });
 
   it("names the chart with a title that the svg points at", () => {

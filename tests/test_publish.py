@@ -789,8 +789,7 @@ def _build_day(zips=None, facts=None, warnings=None):
         hcad=None if zips is None else publish.hcad_source("zip-counts-2024-05-28.parquet"),
         facts=facts,
         run_time=RUN_TIME,
-        warnings=warnings,
-        iem=None if warnings is None else IEM_SOURCE,
+        warnings=None if warnings is None else (warnings, IEM_SOURCE),
     )
 
 
@@ -896,6 +895,7 @@ def test_an_old_index_without_the_impact_keys_reads_and_merge_entries_fills_null
 def test_merge_entries_fills_the_impact_keys_of_a_new_entry_and_keeps_a_set_key(tmp_path):
     kept = _published_day(tmp_path, "2024-05-28", zips=False)
     kept["files"]["warnings"] = "storms/2024-05-28/warnings.geojson"
+    (tmp_path / "storms" / "2024-05-28" / "warnings.geojson").write_text("{}", encoding="utf-8")
     fresh = _published_day(tmp_path, "2023-06-23", zips=False)
     fresh["files"] = {k: v for k, v in fresh["files"].items() if k not in IMPACT_KEYS}
 
@@ -904,6 +904,17 @@ def test_merge_entries_fills_the_impact_keys_of_a_new_entry_and_keeps_a_set_key(
     assert merged["2024-05-28"]["files"]["warnings"] == "storms/2024-05-28/warnings.geojson"
     assert merged["2024-05-28"]["files"]["power"] is None
     assert [merged["2023-06-23"]["files"][k] for k in IMPACT_KEYS] == [None, None, None]
+
+
+def test_merge_entries_clears_the_warnings_path_of_an_entry_whose_warnings_file_is_gone(tmp_path):
+    entry = _published_day(tmp_path, "2024-05-28", zips=False)
+    entry["files"]["warnings"] = "storms/2024-05-28/warnings.geojson"
+
+    [merged] = publish.merge_entries([entry], [], tmp_path)
+
+    assert merged["files"]["warnings"] is None
+    assert entry["files"]["warnings"] == "storms/2024-05-28/warnings.geojson"
+    assert publish.index_receipts([merged], tmp_path) == [_receipt()]
 
 
 def test_build_day_with_a_warnings_frame_adds_the_warnings_file_and_its_index_path():

@@ -2,14 +2,15 @@ import type { Receipt, ReportsFile, Storm } from "../data/types";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { CELLS, cellFor, cells } from "../stamp";
 import type { Load } from "../state/load";
-import { useRoute } from "../state/route";
-import { STEPS_PER_HOUR, resolveStep } from "../time/step";
+import { STEPS_PER_HOUR } from "../time/step";
 import { formatInches } from "../format";
 import { objectForSize } from "./select";
 
 interface Props {
   storm: Storm;
   reports: Load<ReportsFile>;
+  /** The map step; null off the map tab, where no cell is marked. */
+  step: number | null;
   indexReceipt: Receipt;
   onOpenDates: () => void;
 }
@@ -22,12 +23,11 @@ export function sliderCell(step: number): number | null {
 }
 
 /** Storm date in mono, the 24-cell 12Z-to-12Z bar, the report count, and the max size. */
-export function Stamp({ storm, reports, indexReceipt, onOpenDates }: Props) {
+export function Stamp({ storm, reports, step, indexReceipt, onOpenDates }: Props) {
   const times = reports.status === "ready" ? reports.data.features.map((f) => f.properties.time) : [];
   const filled = cells(times);
   const hours = HOUR_LABELS.filter((_, i) => filled[i]);
-  const { route } = useRoute();
-  const marked = route.kind === "storms" && route.tab === "map" ? sliderCell(resolveStep(route.step)) : null;
+  const marked = step === null ? null : sliderCell(step);
   const label = `Storm window 12Z to 12Z, reports in ${hours.length} of ${CELLS} hours${marked === null ? "" : `, map time in the ${HOUR_LABELS[marked]} hour`}`;
   return (
     <div class="stamp">

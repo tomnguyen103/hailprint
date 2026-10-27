@@ -6,6 +6,7 @@ import type { Receipt, Storm, StormsIndex } from "../data/types";
 import { TABS, TAB_LABELS, href, type Tab } from "../router";
 import { SubTabs } from "../shell/sub-tabs";
 import { useLoad } from "../state/load";
+import { useStep } from "../time/use-step";
 import { DataPane } from "./data-pane";
 import { MapPane } from "./map-pane";
 import { ParcelsPane } from "./parcels-pane";
@@ -21,6 +22,7 @@ interface Props {
 
 export function Workspace({ index, storm, tab }: Props) {
   const [datesOpen, setDatesOpen] = useState(false);
+  const { step, setStep } = useStep(storm.storm_date);
   const reports = useLoad(storm.files.reports, () => fetchJson(storm.files.reports, guardReports));
   const indexReceipt: Receipt = {
     storm_date: storm.storm_date,
@@ -31,7 +33,7 @@ export function Workspace({ index, storm, tab }: Props) {
   };
 
   let pane;
-  if (tab === "map") pane = <MapPane storm={storm} reports={reports} />;
+  if (tab === "map") pane = <MapPane storm={storm} reports={reports} step={step} onStep={setStep} />;
   else if (tab === "parcels") pane = <ParcelsPane storm={storm} />;
   else if (tab === "score") pane = <ScorePane storm={storm} radiusKm={index.radius_km_default} />;
   else pane = <DataPane storm={storm} />;
@@ -46,7 +48,13 @@ export function Workspace({ index, storm, tab }: Props) {
       <ScopeSidebar storms={index.storms} current={storm} open={datesOpen} onClose={() => setDatesOpen(false)} />
       <div class="workspace-main">
         <h1 class="visually-hidden">Storms, {storm.storm_date}</h1>
-        <Stamp storm={storm} reports={reports} indexReceipt={indexReceipt} onOpenDates={() => setDatesOpen(true)} />
+        <Stamp
+          storm={storm}
+          reports={reports}
+          step={tab === "map" ? step : null}
+          indexReceipt={indexReceipt}
+          onOpenDates={() => setDatesOpen(true)}
+        />
         <SubTabs
           label="Storm panes"
           tabs={TABS.map((t) => ({ id: t, label: TAB_LABELS[t], href: href({ area: "storms", date: storm.storm_date, tab: t }) }))}

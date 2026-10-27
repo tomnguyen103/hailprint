@@ -9,6 +9,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import pyarrow.parquet as pq
 
 from hailprint import (
     archive,
@@ -292,11 +293,24 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _warnings_settled(storm_date: date, now: datetime) -> bool:
+    """True when the warnings file holds a row, or holds none for a date older than FRESH_DAYS."""
+    path = WARNINGS_DIR / sbw.file_name(storm_date)
+    if not path.exists():
+        return False
+    # a gap is never zero: an empty file of a fresh date may be a late IEM feed
+    return (
+        pq.read_metadata(path).num_rows > 0
+        or (now.date() - storm_date).days > candidates.FRESH_DAYS
+    )
+
+
 def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     """One warnings file per storm date from the IEM feed of the impact window.
 
     With `missing`, the dates are the swath dates whose window has closed and that have no
-    warnings file yet. A failed fetch stops the run; the next `--missing` run starts again.
+    settled warnings file. A file with zero rows settles only after `candidates.FRESH_DAYS`.
+    A failed fetch stops the run; the next `--missing` run starts again.
     """
     # shortcut: an explicit date runs for an open window too and writes a partial file that
     # `--missing` then skips; add a closed-window check when explicit reruns of recent days
@@ -306,7 +320,7 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
         storm_dates = [
             d
             for d, _ in _swath_files([])
-            if sbw.window(d)[1] <= now and not (WARNINGS_DIR / sbw.file_name(d)).exists()
+            if sbw.window(d)[1] <= now and not _warnings_settled(d, now)
         ]
     written = []
     for storm_date in storm_dates:
@@ -406,8 +420,11 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
                 hcad=hcad,
                 facts=facts.get(storm_date.isoformat()),
                 run_time=run_time,
-                warnings=gpd.read_parquet(warnings_path) if has_warnings else None,
-                iem=publish.warnings_source(warnings_path) if has_warnings else None,
+                warnings=(
+                    (gpd.read_parquet(warnings_path), publish.warnings_source(warnings_path))
+                    if has_warnings
+                    else None
+                ),
             )
         except ValueError as exc:
             print(f"{storm_date}: {exc}", file=sys.stderr)

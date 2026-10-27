@@ -108,6 +108,28 @@ def test_parse_raises_value_error_naming_the_eventid_when_an_allow_listed_proper
         sbw.parse(json.dumps(document), STORM_DATE)
 
 
+def test_parse_raises_value_error_naming_the_field_and_the_eventid_for_a_null_event_label():
+    document = feed()
+    next(f for f in document["features"] if f["properties"]["eventid"] == 101)["properties"][
+        "event_label"
+    ] = None
+
+    with pytest.raises(ValueError, match=r"warning 101 has a null event_label"):
+        sbw.parse(json.dumps(document), STORM_DATE)
+
+
+def test_parse_shows_a_feed_value_in_an_error_as_a_repr_cut_to_40_characters():
+    document = feed()
+    kept = next(f for f in document["features"] if f["properties"]["eventid"] == 101)
+    kept["properties"]["eventid"] = "x" * 100
+    kept["geometry"] = None
+
+    with pytest.raises(ValueError) as caught:
+        sbw.parse(json.dumps(document), STORM_DATE)
+
+    assert str(caught.value) == f"warning '{'x' * 36}... has no geometry"
+
+
 def test_parse_reads_the_utc_prefixed_polygon_times_of_the_live_feed():
     document = feed()
     kept = next(f for f in document["features"] if f["properties"]["eventid"] == 101)

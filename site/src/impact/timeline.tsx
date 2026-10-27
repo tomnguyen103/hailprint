@@ -1,8 +1,8 @@
 import { PHENOMENA, type Phenomena, type ReportsFile, type WarningsFile } from "../data/types";
 import { formatInches } from "../format";
-import { WARNING_STYLES } from "../storms/map/layers";
 import "../styles/time.css";
-import { LAST_STEP, STEPS, STEP_MINUTES, reportStep, stepTime } from "../time/step";
+import { LAST_STEP, STEPS, STEP_MS, reportStep, stepTime } from "../time/step";
+import { WARNING_STYLES } from "./warning-styles";
 
 // The chart is one SVG on the 192-step axis. Its x unit is STEP_PX per step, so x / STEP_PX is the step.
 const STEP_PX = 5;
@@ -16,7 +16,6 @@ const HEIGHT = REPORTS_Y + REPORTS_H;
 /** The bar stroke in screen px; the dash lengths scale from it. */
 const BAR_PX = 6;
 const TICK_INSET = 6;
-const STEP_MS = STEP_MINUTES * 60_000;
 const TITLE_ID = "timeline-title";
 const AXIS_STEPS = [0, STEPS / 2, STEPS];
 
@@ -50,6 +49,9 @@ export function warningBars(file: WarningsFile | null, date: string): Bar[] {
   return bars.sort((a, b) => PHENOMENA.indexOf(a.phenomena) - PHENOMENA.indexOf(b.phenomena) || a.from - b.from || a.eventid - b.eventid);
 }
 
+/** The row key of a bar. The eventid repeats across types, so the key names the type too. */
+export const barKey = (bar: Bar) => `${bar.phenomena}-${bar.eventid}-${bar.begin}`;
+
 /** One tick per report at its report step, earliest first. A report with a bad time has no tick. */
 export function reportTicks(file: ReportsFile | null): Tick[] {
   const ticks = (file?.features ?? []).flatMap(({ properties: p }): Tick[] => {
@@ -74,6 +76,8 @@ interface Props {
   date: string;
   step: number;
   warnings: WarningsFile | null;
+  /** The one line that tells why `warnings` is null; null while the file loads. */
+  note: string | null;
   reports: ReportsFile | null;
   onStep: (step: number) => void;
 }
@@ -85,7 +89,7 @@ type StripClick = (event: { clientX: number; currentTarget: { getBoundingClientR
  * A click on a strip moves the step. The slider stays the keyboard path, so the strips take no focus.
  * shortcut: bars that overlap in one row draw on top of each other; the Data pane table lists every one.
  */
-export function Timeline({ date, step, warnings, reports, onStep }: Props) {
+export function Timeline({ date, step, warnings, note, reports, onStep }: Props) {
   const bars = warningBars(warnings, date);
   const ticks = reportTicks(reports);
   const pick: StripClick = (event) => onStep(stepAt(event.clientX, event.currentTarget.getBoundingClientRect()));
@@ -126,7 +130,7 @@ export function Timeline({ date, step, warnings, reports, onStep }: Props) {
               const y = PHENOMENA.indexOf(bar.phenomena) * ROW_H + ROW_H / 2;
               return (
                 <line
-                  key={`${bar.eventid}-${bar.begin}`}
+                  key={barKey(bar)}
                   class={`timeline-bar timeline-bar-${bar.phenomena.toLowerCase()}`}
                   data-phenomena={bar.phenomena}
                   x1={bar.from * STEP_PX}
@@ -150,6 +154,7 @@ export function Timeline({ date, step, warnings, reports, onStep }: Props) {
             <line class="timeline-cursor" x1={cursorX} x2={cursorX} y1={0} y2={HEIGHT} />
           </svg>
           {warnings !== null && bars.length === 0 ? <p class="timeline-empty">No warnings in the window</p> : null}
+          {warnings === null && note !== null ? <p class="timeline-empty">{note}</p> : null}
           <div class="timeline-axis mono" aria-hidden="true">
             {AXIS_STEPS.map((at) => (
               <span key={at}>{axisLabel(date, at)}</span>
@@ -164,7 +169,7 @@ export function Timeline({ date, step, warnings, reports, onStep }: Props) {
 const UTC_MINUTE = (iso: string) => iso.slice(0, 16).replace("T", " ");
 
 /** The chart numbers as tables for screen readers and the Data pane: the same bars and ticks, step for step. */
-export function TimelineTables({ date, warnings, reports }: Omit<Props, "step" | "onStep">) {
+export function TimelineTables({ date, warnings, reports }: Omit<Props, "step" | "note" | "onStep">) {
   const bars = warningBars(warnings, date);
   const ticks = reportTicks(reports);
   return (
@@ -187,7 +192,7 @@ export function TimelineTables({ date, warnings, reports }: Omit<Props, "step" |
             </thead>
             <tbody>
               {bars.map((bar) => (
-                <tr key={`${bar.eventid}-${bar.begin}`}>
+                <tr key={barKey(bar)}>
                   <td class="mono">{bar.phenomena}</td>
                   <td class="num">{bar.eventid}</td>
                   <td class="num">{showStep(bar.from)}</td>

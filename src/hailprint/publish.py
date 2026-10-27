@@ -382,8 +382,9 @@ def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
     """The old entries with the new entries over them by storm date.
 
     An entry stays only while its swath, reports, and pairs files exist under `data_dir`. An
-    entry whose ZIP count file is gone loses `zip_counts` and `parcel_total`. An entry that
-    lacks an impact key gains it as null: this is the one migration site for an older index.
+    entry whose ZIP count file is gone loses `zip_counts` and `parcel_total`. An entry whose
+    impact file is gone loses that path, so `index_receipts` never reads a missing file. An entry
+    that lacks an impact key gains it as null: this is the one migration site for an older index.
     """
     # shortcut: an entry stays until its directory vanishes, upgrade when a prune command is needed
     merged = {e["storm_date"]: e for e in old} | {e["storm_date"]: e for e in new}
@@ -392,12 +393,18 @@ def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
         e for e in merged.values() if all((data_dir / e["files"][k]).exists() for k in required)
     ]
     filled = [e | {"files": dict.fromkeys(IMPACT_KEYS) | e["files"]} for e in kept]
-    return [
-        e
-        if not e["files"]["zip_counts"] or (data_dir / e["files"]["zip_counts"]).exists()
-        else e | {"parcel_total": None, "files": e["files"] | {"zip_counts": None}}
-        for e in filled
-    ]
+
+    def settled(e: Doc) -> Doc:
+        if e["files"]["zip_counts"] and not (data_dir / e["files"]["zip_counts"]).exists():
+            e = e | {"parcel_total": None, "files": e["files"] | {"zip_counts": None}}
+        gone = {
+            k: None
+            for k in IMPACT_KEYS
+            if e["files"][k] and not (data_dir / e["files"][k]).exists()
+        }
+        return e | {"files": e["files"] | gone}
+
+    return [settled(e) for e in filled]
 
 
 def read_published(path: Path, kind: str) -> Doc:
@@ -559,8 +566,7 @@ def build_day(
     hcad: Doc | None,
     facts: Doc | None,
     run_time: datetime,
-    warnings: gpd.GeoDataFrame | None = None,
-    iem: Doc | None = None,
+    warnings: tuple[gpd.GeoDataFrame, Doc] | None = None,
 ) -> tuple[dict[str, str], Doc]:
     """The serialised files of one storm date, by file name, and its entry for the storms index.
 
@@ -568,8 +574,9 @@ def build_day(
     must re-score to the table of `score.score_day` at the default radius, or ValueError names
     the pairs file. `facts` holds the report_count, max_size_in, and report_source of the
     candidate file, or None when the date is absent there. `zips` and `hcad` are both None
-    when the date has no parcel counts. `warnings` and `iem` are both None when the date has
-    no warnings file; an empty frame gives an empty FeatureCollection.
+    when the date has no parcel counts. `warnings` holds the warnings frame and its IEM source
+    entry, or None when the date has no warnings file; an empty frame gives an empty
+    FeatureCollection.
     """
     day = score.score_day(swaths, nearby, storm_date, score.DEFAULT_RADIUS_KM)
 
@@ -586,8 +593,9 @@ def build_day(
         zip_counts = zip_doc(zips, stamp(mrms, hcad))
         documents[ZIPS_FILE] = ("zip-counts", zip_counts)
         parcel_total = zip_counts["classes"][0]["parcel_count"] if zip_counts["classes"] else 0
-    if warnings is not None and iem is not None:
-        documents[WARNINGS_FILE] = ("warnings", warnings_doc(warnings, stamp(iem)))
+    if warnings is not None:
+        frame, iem = warnings
+        documents[WARNINGS_FILE] = ("warnings", warnings_doc(frame, stamp(iem)))
     texts = {}
     for name, (kind, doc) in documents.items():
         validate(doc, kind)

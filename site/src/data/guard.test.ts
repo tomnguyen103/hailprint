@@ -367,6 +367,47 @@ describe("guardSwath", () => {
   });
 });
 
+describe("the MultiPolygon rings", () => {
+  const RING = [
+    [-95.5, 29.7],
+    [-95.4, 29.7],
+    [-95.4, 29.8],
+    [-95.5, 29.7],
+  ];
+  const withRing = (ring: unknown) => ({
+    ...swath,
+    features: [{ ...swath.features[0], geometry: { type: "MultiPolygon", coordinates: [[ring]] } }],
+  });
+
+  it("accepts a ring of four finite positions", () => {
+    const good = withRing(RING);
+    expect(guardSwath(good)).toBe(good);
+  });
+
+  it("rejects a ring of fewer than four positions", () => {
+    expect(() => guardSwath(withRing(RING.slice(0, 3)))).toThrow(
+      /^swath\.geojson: features\[0\]\.geometry\.coordinates\[0\]\[0\] is not a ring of 4 or more finite/,
+    );
+  });
+
+  it.each([
+    ["a null position", [...RING.slice(0, 3), null]],
+    ["a non-finite number", [...RING.slice(0, 3), [-95.5, Infinity]]],
+    ["a string coordinate", [...RING.slice(0, 3), ["-95.5", 29.7]]],
+    ["a three-number position", [...RING.slice(0, 3), [-95.5, 29.7, 12]]],
+  ])("rejects a ring with %s", (_name, ring) => {
+    expect(() => guardSwath(withRing(ring))).toThrow(/geometry\.coordinates\[0\]\[0\] is not a ring/);
+  });
+
+  it("rejects a ring that is not an array, in a warnings file too", () => {
+    const feature = { ...warnings.features[0], geometry: { type: "MultiPolygon", coordinates: [[RING.slice(0, 3)]] } };
+    expect(() => guardWarnings({ ...warnings, features: [feature] })).toThrow(
+      /^warnings\.geojson: features\[0\]\.geometry\.coordinates\[0\]\[0\] is not a ring/,
+    );
+    expect(() => guardSwath(withRing("ring"))).toThrow(/coordinates\[0\]\[0\] is not an array/);
+  });
+});
+
 describe("guardPipeline", () => {
   it("rejects more than 50 runs", () => {
     const runs = Array.from({ length: 51 }, () => run);

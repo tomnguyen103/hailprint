@@ -228,13 +228,25 @@ export function guardSwath(value: unknown): SwathFile {
   return value as SwathFile;
 }
 
-/** Every feature geometry is a MultiPolygon. */
+function isPosition(value: unknown): boolean {
+  return Array.isArray(value) && value.length === 2 && value.every((n) => typeof n === "number" && Number.isFinite(n));
+}
+
+/** Every feature geometry is a MultiPolygon whose rings each hold 4 or more finite [x, y] positions. */
 function guardMultiPolygons(file: string, value: unknown): void {
   list(file, rec(file, value, "collection")["features"], "features").forEach((item, i) => {
-    const geometry = rec(file, rec(file, item, `features[${i}]`)["geometry"], `features[${i}].geometry`);
-    if (geometry["type"] !== "MultiPolygon") {
-      throw new DataError(file, `features[${i}].geometry.type is not MultiPolygon`);
-    }
+    const at = `features[${i}].geometry`;
+    const geometry = rec(file, rec(file, item, `features[${i}]`)["geometry"], at);
+    if (geometry["type"] !== "MultiPolygon") throw new DataError(file, `${at}.type is not MultiPolygon`);
+    list(file, geometry["coordinates"], `${at}.coordinates`).forEach((polygon, p) => {
+      list(file, polygon, `${at}.coordinates[${p}]`).forEach((ring, r) => {
+        const path = `${at}.coordinates[${p}][${r}]`;
+        const positions = list(file, ring, path);
+        if (positions.length < 4 || !positions.every(isPosition)) {
+          throw new DataError(file, `${path} is not a ring of 4 or more finite [x, y] positions`);
+        }
+      });
+    });
   });
 }
 

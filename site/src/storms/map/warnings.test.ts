@@ -5,16 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DataError, type ReportsFile, type WarningsFile } from "../../data/types";
 import { RULER } from "../../ruler";
 import type { Load } from "../../state/load";
-import { LayersControl } from "../map-pane";
+import { LayersControl } from "../layers-control";
 import { sliderCell } from "../stamp";
 import { makeHandle } from "./create-map";
 import { activeWarnings, warningLayers, warningTags, warningsNote } from "./layers";
-
-// map-pane.tsx reads window.matchMedia when it loads; this node environment has no window.
-vi.hoisted(() => {
-  const media = { matches: false, addEventListener() {} };
-  (globalThis as { window?: unknown }).window = { matchMedia: () => media };
-});
 
 const stub = vi.hoisted(() => {
   type Entry = { element: { hidden: boolean; textContent: string }; lngLat: number[] | null; removed: boolean };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_STEP, LAST_STEP, STEPS, parseStep, readout, reportStep, resolveStep, stepTime } from "./step";
+import { DEFAULT_STEP, LAST_STEP, STEPS, STEP_MS, parseStep, readout, reportStep, resolveStep, stepTime } from "./step";
 
 describe("the impact window", () => {
   it("holds 192 steps of 15 minutes, 12:00 UTC on D to 12:00 UTC on D+2", () => {
@@ -12,6 +12,11 @@ describe("the impact window", () => {
 
   it("defaults to step 48, 00:00 UTC on D+1", () => {
     expect(DEFAULT_STEP).toBe(48);
+  });
+
+  it("exports the step length as 15 minutes in milliseconds", () => {
+    expect(STEP_MS).toBe(900_000);
+    expect(stepTime("2024-05-28", 1).getTime() - stepTime("2024-05-28", 0).getTime()).toBe(STEP_MS);
   });
 });
 

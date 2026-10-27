@@ -15,7 +15,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from hailprint import __main__ as cli
-from hailprint import archive, candidates, files, parcels, publish, swath
+from hailprint import archive, candidates, files, parcels, publish, sbw, swath
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = json.loads((FIXTURES / "score_golden.json").read_text(encoding="utf-8"))
@@ -592,6 +592,19 @@ def test_warnings_missing_skips_a_date_whose_impact_window_is_not_closed(env, ie
 
     assert [u.split("begints=")[1][:17] for u in iem.urls] == ["2024-05-28T12:00Z"]
     assert not _warnings_file(env, OPEN_WINDOW).exists()
+
+
+def test_warnings_missing_fetches_an_empty_file_again_only_for_a_fresh_date(env, iem):
+    fresh = date(2024, 5, 30)  # window closed at RUN_TIME, 2 days old: inside FRESH_DAYS
+    env.add_day(LATER)  # 4 days old: past FRESH_DAYS
+    shutil.copy(env.swaths / f"swaths-{LATER}.parquet", env.swaths / f"swaths-{fresh}.parquet")
+    empty = sbw.parse(json.dumps({"type": "FeatureCollection", "features": []}), LATER)
+    for storm_date in (LATER, fresh):
+        files.write_atomic(empty, _warnings_file(env, storm_date), sbw.METADATA)
+
+    assert cli.main(["warnings", "--missing"]) == 0
+
+    assert [u.split("begints=")[1][:17] for u in iem.urls] == ["2024-05-30T12:00Z"]
 
 
 def test_an_explicit_warnings_rerun_writes_the_same_bytes(env, iem):

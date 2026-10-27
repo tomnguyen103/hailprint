@@ -8,7 +8,7 @@ export const LAST_STEP = STEPS - 1;
 /** The step a link without a step opens: 00:00 UTC on D+1, until a power file names a peak. */
 export const DEFAULT_STEP = 48;
 
-const STEP_MS = STEP_MINUTES * 60_000;
+export const STEP_MS = STEP_MINUTES * 60_000;
 const WHOLE_STEP = /^(0|[1-9]\d*)$/;
 const HHMM = /^([01]\d|2[0-3])[0-5]\d$/;
 

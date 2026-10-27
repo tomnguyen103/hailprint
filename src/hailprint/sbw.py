@@ -56,13 +56,23 @@ def fetch(storm_date: date) -> str:
         raise RuntimeError(f"IEM warnings fetch failed for {storm_date}: {exc}") from exc
 
 
+def _show(value: object) -> str:
+    """A feed value for an error message: its repr cut to 40 characters."""
+    return _clip(repr(value))
+
+
+def _clip(text: str) -> str:
+    return text if len(text) <= 40 else text[:37] + "..."
+
+
 def parse(text: str, storm_date: date) -> gpd.GeoDataFrame:
     """Keep the SV, TO, and FF warnings (significance W) of the window that reach a metro county.
 
     A polygon is in the window when it begins before the window end and ends after the window
     start. A polygon that touches a county edge reaches that county. The rows sort by begin
     time, so the feed order never changes the file. A kept type with no geometry, a missing
-    allow-listed property, or a malformed value raises ValueError that names the eventid.
+    allow-listed property, a null event_label, or a malformed value raises ValueError that
+    names the eventid. The message cuts each feed value to 40 characters.
     """
     try:
         document = json.loads(text)
@@ -82,10 +92,12 @@ def parse(text: str, storm_date: date) -> gpd.GeoDataFrame:
         eventid = props.get("eventid")
         for key in ALLOWED:
             if FEED_KEY.get(key, key) not in props:
-                raise ValueError(f"warning {eventid} lacks {FEED_KEY.get(key, key)}")
+                raise ValueError(f"warning {_show(eventid)} lacks {FEED_KEY.get(key, key)}")
+        if props["event_label"] is None:
+            raise ValueError(f"warning {_show(eventid)} has a null event_label")
         geometry = feature.get("geometry")
         if geometry is None:
-            raise ValueError(f"warning {eventid} has no geometry")
+            raise ValueError(f"warning {_show(eventid)} has no geometry")
         try:
             row = {key: props[FEED_KEY.get(key, key)] for key in ALLOWED}
             row["eventid"] = int(row["eventid"])
@@ -94,11 +106,13 @@ def parse(text: str, storm_date: date) -> gpd.GeoDataFrame:
             if pd.isna(row["polygon_begin"]) or pd.isna(row["polygon_end"]):
                 raise ValueError("polygon time is empty")
             if geometry.get("type") not in GEOMETRY_TYPES:
-                raise ValueError(f"geometry type {geometry.get('type')!r} is not a polygon")
+                raise ValueError(f"geometry type {_show(geometry.get('type'))} is not a polygon")
             row["geometry"] = shape(geometry)
             reaches = row["geometry"].intersects(metro)
         except (ShapelyError, TypeError, ValueError, KeyError, AttributeError) as exc:
-            raise ValueError(f"warning {eventid} has a malformed value: {exc}") from exc
+            raise ValueError(
+                f"warning {_show(eventid)} has a malformed value: {_clip(str(exc))}"
+            ) from exc
         if reaches and row["polygon_begin"] < end and row["polygon_end"] > start:
             rows.append(row)
     frame = pd.DataFrame(rows, columns=[*ALLOWED, "geometry"])
