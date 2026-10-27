@@ -50,7 +50,7 @@ uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run 
 
 ## Screenshots
 
-The main session captures every row under `docs/evidence/week-07/` with the file name `<viewport>-<theme>-<route>-<state>.png`, the route slashes as underscores. Every capture checks `scrollWidth == innerWidth` and the console.
+The main session captures every row under `docs/reports/evidence/week-07/` with the file name `<viewport>-<theme>-<route>-<state>.png`, the route slashes as underscores. Every capture checks `scrollWidth == innerWidth` and the console.
 
 | Viewport | Theme | Route | State | File |
 |---|---|---|---|---|

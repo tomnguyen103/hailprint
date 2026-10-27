@@ -37,7 +37,7 @@ uv run hailprint parcels 2024-05-28
 - Harris filter: `st == "TX"` and FIPS 201 in any of `f1..f4`.
 - Parcel read: pyogrio filters by the swath mask at the driver, so the 1.5 M-row GDB never loads in full. The parcel count is the number of distinct `hcad_num` per class. Owner fields are never requested.
 - Downloads of several dates run in a thread pool of 8. One `RuntimeError` names every missing key after the pool drains.
-- The `spike` command is removed. Week-1 evidence stays in `docs/WEEK-01.md` and `docs/evidence/`.
+- The `spike` command is removed. Week-1 evidence stays in `docs/reports/week-01.md` and `docs/reports/evidence/`.
 
 ## Ponytail debt
 

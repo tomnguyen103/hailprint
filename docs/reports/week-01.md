@@ -11,7 +11,7 @@ Oracle: 10 of 10 SPC Harris County reports fall inside the 19.05 mm swath buffer
 | Storm date | 2024-05-28 |
 | SPC hail reports in Harris County | 10 |
 | Max MESH in bbox | 52.8 mm |
-| PNG | `out/spike-2024-05-28.png` (copy committed at `docs/evidence/spike-2024-05-28.png`) |
+| PNG | `out/spike-2024-05-28.png` (copy committed at `docs/reports/evidence/spike-2024-05-28.png`) |
 | Swath file | `data/derived/swaths/swaths-2024-05-28.parquet` |
 | Test command | `make test` (`uv run pytest -q`) |
 | Test result | 23 passed (lint and format clean), 2026-10-24 |
@@ -42,7 +42,7 @@ Output wording: "radar-estimated hail size" with a confidence band. The band is 
 - [x] Domain check (RDAP + DNS, 2026-10-24): `hailprint.com`, `.org`, `.io`, `.app`, `.dev` have no registration record. Register before the name is public.
 - [ ] **Tom: read the employer IP assignment clause before the first commit of pipeline code reaches the remote.** The kickoff asked for a PR, so the branch is on the private remote; nothing is merged until you confirm.
 
-## Week 2 proposal (approved 2026-10-25, see WEEK-02.md)
+## Week 2 proposal (approved 2026-10-25, see week-02.md)
 
 1. M1 ingest: `hailprint ingest <date>` writes the daily-max swaths for one date with the window aligned to the SPC 12Z-12Z day.
 2. Archive index: list `noaa-mrms-pds` for MESH_Max_1440min from 2020-10-01 to today and store one row per day (date, file count, bytes) as a small Parquet index.

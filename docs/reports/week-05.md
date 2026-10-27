@@ -43,7 +43,7 @@ The `create-map` chunk exceeds the Vite 500 kB warning. The chunk is lazy: the s
 - `county.test.ts`: the committed `county.geojson` has more than 100 vertices, every vertex lies inside `HARRIS_BBOX`, and every vertex is at least `PAD_DEG` (0.05) from each bbox edge, which matches `hailprint.county.bbox()`.
 - `geo.test.ts`: `nearestReport` and `coveringClass` on hand-built fixtures with known distances.
 - Map smoke in Chrome on 2024-05-28: a click inside the quarter class reads `quarter, 1.00 in` with the nearest report `6 NE Jersey Village, 1.50 in, 13.7 km`; a click in the corner reads "below 0.75 in"; a legend toggle sets `aria-pressed` and hides the fill; the `swath-error` scenario shows `swath.geojson: HTTP 500 (harness)` with Retry while the legend and the stamp stay; the date switch to 2024-12-28 keeps one canvas and moves the receipt chip date; the dark theme re-paints the county line; no console error.
-- Every published file reaches the browser through a guard; a guard failure names the file and the field. No `innerHTML` in `site/src`. No forbidden word in `site/` or under `docs/evidence/week-05/`.
+- Every published file reaches the browser through a guard; a guard failure names the file and the field. No `innerHTML` in `site/src`. No forbidden word in `site/` or under `docs/reports/evidence/week-05/`.
 - `.hallmark/log.json` holds the one entry for this surface with the detector exit code.
 
 ### Evidence notes
@@ -56,7 +56,7 @@ Preview on port 4173, playwright, 1440x900.
 - US-E4.4: two date clicks within 200 ms. The URL, the stamp, and the chip all show the last date. The page holds one canvas.
 ## Screenshots
 
-A playwright-core script drives the installed Chrome against `vite preview` of the production build and saves every row under `docs/evidence/week-05/`. The file name is `<viewport>-<theme>-<route>-<state>.png` with the route slashes as underscores. Three extra captures at 1920 and 390 wide carry the `audit` state for the audit loop. Every capture measured `scrollWidth == innerWidth` and logged no console error. The empty-parcels row comes from a preview copy of `storms.json` with `files.zip_counts` set to null for 2021-03-17; the published file is unchanged.
+A playwright-core script drives the installed Chrome against `vite preview` of the production build and saves every row under `docs/reports/evidence/week-05/`. The file name is `<viewport>-<theme>-<route>-<state>.png` with the route slashes as underscores. Three extra captures at 1920 and 390 wide carry the `audit` state for the audit loop. Every capture measured `scrollWidth == innerWidth` and logged no console error. The empty-parcels row comes from a preview copy of `storms.json` with `files.zip_counts` set to null for 2021-03-17; the published file is unchanged.
 
 | Viewport | Theme | Route | State | What it shows |
 |---|---|---|---|---|

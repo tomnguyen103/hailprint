@@ -5,7 +5,7 @@ give the facts in sections 3 and 4; each row names its probe. Where this draft a
 ---
 title: Hailprint plan v6 (draft for review)
 status: draft for review
-supersedes: none (extends docs/plan-v5.md; PRs A to H stand)
+supersedes: none (extends docs/plans/plan-v5.md; PRs A to H stand)
 mode: one autonomous run, PRs I to N, after the owner answers section 13
 date: 2026-10-27
 ---

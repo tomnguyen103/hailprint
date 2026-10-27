@@ -4,7 +4,20 @@ Hailprint draws the MRMS MESH hail swath over Harris County parcels and scores i
 
 ## Status
 
-Plan v5, PRs A to H, is built; `docs/WEEK-08.md` holds the PR table. The site runs from `site/data/`, written by `hailprint publish`. The nightly run and the deploy are scripts under `scripts/`. The live upload, the cron install, and the public launch are owner steps (`docs/WEEK-08.md`).
+Plan v5, PRs A to H, is built; `docs/reports/week-08.md` holds the PR table. The site runs from `site/data/`, written by `hailprint publish`. The nightly run and the deploy are scripts under `scripts/`. The live upload, the cron install, and the public launch are owner steps (`docs/reports/week-08.md`).
+
+Plan v6 (`docs/plans/plan-v6.md`) is the next programme, PRs I to N. It adds NWS warnings, power outages, and internet signals to the Storms map, with a 48-hour time slider over eight metro counties. It waits for owner review.
+
+## Repository layout
+
+| Path | Contents |
+|---|---|
+| `src/hailprint/` | The Python pipeline: one module per step, wired by the `hailprint` CLI |
+| `tests/` | The pytest suite and its committed fixtures |
+| `site/` | The static site: Preact, Vite, TypeScript, MapLibre GL |
+| `scripts/` | The nightly run, the deploy, and the cron entry |
+| `docs/` | Plans, decisions, weekly reports, research, and learn-loop entries |
+| `GLOSSARY.md` | The domain terms used in code, tests, commits, and chat |
 
 ## Commands
 
@@ -35,23 +48,42 @@ The data path: Git deployments are off for `main` in `vercel.json`, so a merge n
 
 ## Documents
 
+Decisions:
+
 | File | Purpose |
 |---|---|
-| `docs/plan-v5.md` | The plan of record for PRs A to H: audit findings, site architecture, viewer actions, the autonomous programme |
-| `docs/plan-v4.md` | The approved week-1 plan: pitch, evidence, scope, scorecard design, architecture, data licences, risks, schedule, budget, sources |
-| `docs/plan-v4.html` | The same plan as a standalone page |
 | `docs/DECISIONS.md` | The adopted answers and the standing constraints |
-| `docs/KICKOFF.md` | The prompt that starts week 1 in this folder |
-| `docs/WEEK-01.md` | Week 1: the spike, one 12Z file per storm date |
-| `docs/WEEK-02.md` | Week 2: aligned ingest, archive index, candidate days, parcel counts |
-| `docs/WEEK-03.md` | Week 3: the verification scorer (PR C) |
-| `docs/WEEK-04.md` | Week 4: the published files for the site (PR D) |
-| `docs/WEEK-05.md` | Week 5: site shell and the Storms workspace (PR E) |
-| `docs/WEEK-06.md` | Week 6: Scorecard and Try it (PR F) |
-| `docs/WEEK-07.md` | Week 7: Method and Pipeline (PR G) |
-| `docs/WEEK-08.md` | Week 8: ship preparation (PR H), the dry run, the owner runbook |
+
+Plans (`docs/plans/`), newest first:
+
+| File | Purpose |
+|---|---|
+| `docs/plans/plan-v6.md` | The draft plan for PRs I to N: warnings, power, and internet layers on one time-slider map |
+| `docs/plans/plan-v5.md` | The plan of record for PRs A to H: audit findings, site architecture, viewer actions, the autonomous programme |
+| `docs/plans/plan-v4.md` | The approved week-1 plan: pitch, evidence, scope, scorecard design, architecture, data licences, risks, schedule, budget, sources |
+| `docs/plans/plan-v4.html` | The same plan as a standalone page |
+| `docs/plans/kickoff.md` | The prompt that starts week 1 in this folder |
+
+Weekly reports (`docs/reports/`), with screenshots under `docs/reports/evidence/`:
+
+| File | Purpose |
+|---|---|
+| `docs/reports/week-01.md` | Week 1: the spike, one 12Z file per storm date |
+| `docs/reports/week-02.md` | Week 2: aligned ingest, archive index, candidate days, parcel counts |
+| `docs/reports/week-03.md` | Week 3: the verification scorer (PR C) |
+| `docs/reports/week-04.md` | Week 4: the published files for the site (PR D) |
+| `docs/reports/week-05.md` | Week 5: site shell and the Storms workspace (PR E) |
+| `docs/reports/week-06.md` | Week 6: Scorecard and Try it (PR F) |
+| `docs/reports/week-07.md` | Week 7: Method and Pipeline (PR G) |
+| `docs/reports/week-08.md` | Week 8: ship preparation (PR H), the dry run, the owner runbook |
+
+Reference:
+
+| Path | Purpose |
+|---|---|
 | `docs/research/` | Research receipts behind the pick: scoring rubric and the three candidate lanes |
 | `docs/solutions/` | Learn-loop entries by category: data, geo, site, tooling |
+| `docs/drafts/` | Outgoing message drafts, such as the HCAD GIS reuse-terms email |
 | `GLOSSARY.md` | The domain terms used in code, tests, commits, and chat |
 | `site/README.md` | The site commands, routes, data path, basemap step, and Vercel fields |
 

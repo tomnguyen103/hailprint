@@ -8,7 +8,7 @@ You are starting the Hailprint project in this folder. Hailprint is an open hail
 
 1. `README.md`
 2. `docs/DECISIONS.md`
-3. `docs/plan-v4.md` (sections 5, 6, 7, 8, 9, 11 carry the build contract; the rest is context)
+3. `docs/plans/plan-v4.md` (sections 5, 6, 7, 8, 9, 11 carry the build contract; the rest is context)
 4. `docs/research/lane-b-hail.md` (data-source facts: bucket names, file sizes, formats, licences)
 
 This session delivers the week-1 spike. Follow your standard workflow for feature work. Exit check for the week: one PNG that shows a MESH hail-swath contour over the Harris County outline for one real storm day.
@@ -20,7 +20,7 @@ Week-1 tasks:
 3. Decode. Open the GRIB2 with `cfgrib` and `xarray`. Confirm units are millimetres and the grid is 0.01 degrees. Crop to the Harris County bounding box. Take the daily maximum across the 48 files.
 4. Contour. Threshold at 19.05, 25.4, 31.75, 38.1, 44.45, 50.8, and 63.5 mm (0.75 to 2.5 inch). Polygonize with `rasterio.features`, dissolve with `shapely`, and write one GeoParquet file.
 5. Plot. Draw the swath polygons over the Harris County outline (TIGER county shapefile or the HCAD boundary) and save `out/spike-<date>.png`.
-6. Admin tasks, each as a checklist item in `docs/WEEK-01.md` with its status: download the HCAD parcel shapefile and record the owner fields that must be stripped at load; draft the HCAD GIS reuse-terms email for Tom to send; run a USPTO TESS search and a domain check for "Hailprint" and record the result; remind Tom to read the employer IP assignment clause before the first commit of pipeline code.
+6. Admin tasks, each as a checklist item in `docs/reports/week-01.md` with its status: download the HCAD parcel shapefile and record the owner fields that must be stripped at load; draft the HCAD GIS reuse-terms email for Tom to send; run a USPTO TESS search and a domain check for "Hailprint" and record the result; remind Tom to read the employer IP assignment clause before the first commit of pipeline code.
 
 Rules that bind every line of code and text:
 

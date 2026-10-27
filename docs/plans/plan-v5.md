@@ -1,9 +1,9 @@
-Copied from the planning scratch on 2026-10-27; the plan of record for PRs A to H. The text below is the approved draft of 2026-10-26. The owner approved item 5 after that draft, and the run built PRs A to H (`docs/WEEK-08.md`). The deploy moved to the prebuilt flow (`scripts/deploy.sh`, `docs/DECISIONS.md` row 10). Where this copy and `docs/DECISIONS.md` differ, DECISIONS wins.
+Copied from the planning scratch on 2026-10-27; the plan of record for PRs A to H. The text below is the approved draft of 2026-10-26. The owner approved item 5 after that draft, and the run built PRs A to H (`docs/reports/week-08.md`). The deploy moved to the prebuilt flow (`scripts/deploy.sh`, `docs/DECISIONS.md` row 10). Where this copy and `docs/DECISIONS.md` differ, DECISIONS wins.
 
 ---
 title: Hailprint plan v5 (draft for review)
 status: approved on 2026-10-26; built as PRs A to H (see the note above).
-supersedes: docs/plan-v4.md (all work after week 2; weeks 1 and 2 stand)
+supersedes: docs/plans/plan-v4.md (all work after week 2; weeks 1 and 2 stand)
 mode: one autonomous run, PRs A to H, no weekly cadence
 date: 2026-10-26
 ---
@@ -68,7 +68,7 @@ Research notes:
 - The Vercel project `hailprint` links to the GitHub repo `tomnguyen103/hailprint`. A push to
   `main` starts a Vercel build. The ignored build step `test ! -f site/package.json` skips
   the build until PR E adds `site/`. PR E sets the root directory to `site`. (Superseded: the
-  Root Directory stays the repo root, where `vercel.json` lives; `docs/WEEK-05.md` owner step 1
+  Root Directory stays the repo root, where `vercel.json` lives; `docs/reports/week-05.md` owner step 1
   and `docs/DECISIONS.md` row 10.)
 - Open decision: a Git build does not have `site/data/`, because the cron job makes it. A Git
   build can replace a production deployment that has data. PR H chooses one data path.
@@ -196,4 +196,4 @@ other screens (Scorecard, Try it, Method, Pipeline, mobile) are still to do.
 4. Approve the design direction in `design.md` and the Stitch screens.
 5. Approve the autonomous programme (PRs A to H) and the owner-only steps.
 
-Status: the owner approved items 1 to 5 on 2026-10-26. The run built PRs A to H (`docs/WEEK-08.md`).
+Status: the owner approved items 1 to 5 on 2026-10-26. The run built PRs A to H (`docs/reports/week-08.md`).

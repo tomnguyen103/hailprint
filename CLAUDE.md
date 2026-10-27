@@ -122,8 +122,9 @@ Conventions that span modules:
 
 ## Documents
 
-- `docs/plan-v4.md` approved plan; `docs/DECISIONS.md` adopted answers and standing constraints.
-- `docs/WEEK-NN.md` per-week evidence reports; `docs/KICKOFF.md` the week-1 prompt.
+- `docs/plans/plan-vN.md` plans, newest first (v6 draft, v5 plan of record, v4 week-1 plan); `docs/DECISIONS.md` adopted
+  answers and standing constraints.
+- `docs/reports/week-NN.md` per-week evidence reports; `docs/plans/kickoff.md` the week-1 prompt.
 - `docs/solutions/<category>/` learn-loop entries. Read before debugging; the Parquet metadata,
   EPSG:2278 feet, and Windows file-write lessons live there.
 - `.scratch/<feature>/` holds specs and tickets for pipeline runs (gitignored).

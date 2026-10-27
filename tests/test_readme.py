@@ -16,8 +16,10 @@ def test_readme_names_every_cli_command():
 
 
 def test_readme_names_every_week_report():
-    for path in (paths.ROOT / "docs").glob("WEEK-*.md"):
-        assert path.name in README, path.name
+    reports = sorted((paths.ROOT / "docs" / "reports").glob("week-*.md"))
+    assert reports
+    for path in reports:
+        assert f"docs/reports/{path.name}" in README, path.name
 
 
 def test_readme_names_the_three_scripts():
