@@ -3,7 +3,8 @@ import "../styles/storms.css";
 import { fetchJson } from "../data/fetch";
 import { guardReports } from "../data/guard";
 import type { Receipt, Storm, StormsIndex } from "../data/types";
-import { TAB_LABELS, type Tab } from "../router";
+import { TABS, TAB_LABELS, href, type Tab } from "../router";
+import { SubTabs } from "../shell/sub-tabs";
 import { useLoad } from "../state/load";
 import { DataPane } from "./data-pane";
 import { MapPane } from "./map-pane";
@@ -11,7 +12,6 @@ import { ParcelsPane } from "./parcels-pane";
 import { ScopeSidebar } from "./scope-sidebar";
 import { ScorePane } from "./score-pane";
 import { Stamp } from "./stamp";
-import { SubTabs } from "./sub-tabs";
 
 interface Props {
   index: StormsIndex;
@@ -56,8 +56,12 @@ export function Workspace({ index, storm, tab }: Props) {
       <div class="workspace-main">
         <h1 class="visually-hidden">Storms, {storm.storm_date}</h1>
         <Stamp storm={storm} reports={reports} indexReceipt={indexReceipt} onOpenDates={() => setDatesOpen(true)} />
-        <SubTabs date={storm.storm_date} tab={tab} />
-        <section class="pane" role="tabpanel" id={`pane-${tab}`} aria-labelledby={`tab-${tab}`}>
+        <SubTabs
+          label="Storm panes"
+          tabs={TABS.map((t) => ({ id: t, label: TAB_LABELS[t], href: href({ area: "storms", date: storm.storm_date, tab: t }) }))}
+          selected={tab}
+        />
+        <section class="pane" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
           <h2 class="visually-hidden">{TAB_LABELS[tab]}</h2>
           {pane}
         </section>

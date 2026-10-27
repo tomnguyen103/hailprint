@@ -1,11 +1,17 @@
 import type { JSX } from "preact";
-import { TABS, TAB_LABELS, type Tab, href, navigate } from "../router";
-import { Link } from "../shell/link";
+import { navigate } from "../router";
+import { Link } from "./link";
 
-/** Four sub-tabs as a tablist. Arrow keys move focus; Enter or Space navigates. */
-export function SubTabs({ date, tab }: { date: string; tab: Tab }) {
+export interface SubTab {
+  id: string;
+  label: string;
+  href: string;
+}
+
+/** A tablist of links. The selected tab owns the panel `panel-<id>`; arrows, Home, End move focus and Space follows the link. */
+export function SubTabs({ label, tabs, selected }: { label: string; tabs: SubTab[]; selected: string }) {
   const onKey = (event: JSX.TargetedKeyboardEvent<HTMLAnchorElement>, index: number) => {
-    const last = TABS.length - 1;
+    const last = tabs.length - 1;
     let next: number | null = null;
     if (event.key === "ArrowRight") next = index === last ? 0 : index + 1;
     else if (event.key === "ArrowLeft") next = index === 0 ? last : index - 1;
@@ -13,7 +19,7 @@ export function SubTabs({ date, tab }: { date: string; tab: Tab }) {
     else if (event.key === "End") next = last;
     else if (event.key === " ") {
       event.preventDefault();
-      navigate(href({ area: "storms", date, tab: TABS[index]! }));
+      navigate(tabs[index]!.href);
       return;
     }
     if (next === null) return;
@@ -21,20 +27,21 @@ export function SubTabs({ date, tab }: { date: string; tab: Tab }) {
     const list = event.currentTarget.parentElement;
     (list?.children[next] as HTMLElement | undefined)?.focus();
   };
+
   return (
-    <div class="sub-tabs" role="tablist" aria-label="Storm panes">
-      {TABS.map((t, i) => (
+    <div class="sub-tabs" role="tablist" aria-label={label}>
+      {tabs.map((t, i) => (
         <Link
-          key={t}
+          key={t.id}
           role="tab"
-          id={`tab-${t}`}
-          aria-selected={t === tab}
-          aria-controls={t === tab ? `pane-${t}` : undefined}
-          tabIndex={t === tab ? 0 : -1}
-          href={href({ area: "storms", date, tab: t })}
+          id={`tab-${t.id}`}
+          aria-selected={t.id === selected}
+          aria-controls={t.id === selected ? `panel-${t.id}` : undefined}
+          tabIndex={t.id === selected ? 0 : -1}
+          href={t.href}
           onKeyDown={(event) => onKey(event, i)}
         >
-          {TAB_LABELS[t]}
+          {t.label}
         </Link>
       ))}
     </div>
