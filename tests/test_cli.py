@@ -3,6 +3,7 @@
 import io
 import json
 import shutil
+import threading
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
@@ -15,7 +16,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from hailprint import __main__ as cli
-from hailprint import archive, candidates, files, parcels, power, publish, sbw, swath
+from hailprint import archive, candidates, files, odin, parcels, power, publish, sbw, swath
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = json.loads((FIXTURES / "score_golden.json").read_text(encoding="utf-8"))
@@ -40,6 +41,7 @@ class Env:
         self.warnings = root / "warnings"
         self.eaglei = root / "eaglei"
         self.power = root / "power"
+        self.odin = root / "odin"
         self.served: dict[date, object] = {}
 
     def add_day(self, storm_date: date, *, metadata: bool = True) -> Path:
@@ -100,6 +102,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "WARNINGS_DIR", env.warnings)
     monkeypatch.setattr(cli, "EAGLEI_DIR", env.eaglei)
     monkeypatch.setattr(cli, "POWER_DIR", env.power)
+    monkeypatch.setattr(cli, "ODIN_DIR", env.odin)
     monkeypatch.setattr(cli, "_utc_now", lambda: RUN_TIME)
     monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "index" / "mesh-archive.parquet")
     monkeypatch.setattr(candidates, "CANDIDATES_PATH", tmp_path / "candidate-days.csv")
@@ -907,3 +910,203 @@ def test_power_takes_storm_dates_or_missing_and_not_both_or_neither(env, argv):
         cli.main(argv)
 
     assert stop.value.code == 2
+
+
+ODIN_LIVE = FIXTURES / "odin_grouped.json"
+ODIN_MIXED = FIXTURES / "odin_mixed.json"
+ODIN_PRODUCT = b"odin-real-time-outages-county"
+
+
+class OdinFeed:
+    """A stub ODIN endpoint: the answer body, the fetch time, and the URLs asked."""
+
+    def __init__(self, monkeypatch):
+        self.body = ODIN_LIVE.read_bytes()
+        self.urls: list[str] = []
+        self.monkeypatch = monkeypatch
+        self.at(2024, 5, 28, 14, 7)
+
+    def at(self, year, month, day, hour, minute, second=0):
+        moment = datetime(year, month, day, hour, minute, second, tzinfo=UTC)
+        self.monkeypatch.setattr(cli, "_utc_now", lambda: moment)
+
+
+@pytest.fixture
+def odin_feed(env, monkeypatch):
+    feed = OdinFeed(monkeypatch)
+
+    @contextmanager
+    def urlopen(url, timeout=None):
+        feed.urls.append(url)
+        yield io.BytesIO(feed.body)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    return feed
+
+
+def _odin_file(env, day="2024-05-28"):
+    return env.odin / f"odin-{day}.parquet"
+
+
+def test_odin_writes_the_day_file_with_the_14_00_slot_and_the_odin_metadata(env, odin_feed, capsys):
+    """O8: a fetch at 14:07 UTC gives the 14:00 slot."""
+    assert cli.main(["odin"]) == 0
+
+    path = _odin_file(env)
+    frame = pd.read_parquet(path)
+    assert set(frame["slot_utc"]) == {pd.Timestamp("2024-05-28 14:00", tz="UTC")}
+    assert len(frame) == 8
+    assert frame.loc[frame["fips"] == "48201", "customers_out"].tolist() == [714]
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"odin", ODIN_PRODUCT)
+    assert b"confidence" in metadata
+    assert capsys.readouterr().out == "2024-05-28 14:00 UTC: 8 rows\n"
+    assert len(odin_feed.urls) == 1
+    assert list(env.odin.glob("*.tmp")) == []
+
+
+def test_odin_at_23_59_59_utc_stays_in_its_utc_day(env, odin_feed):
+    odin_feed.at(2024, 5, 28, 23, 59, 59)
+
+    assert cli.main(["odin"]) == 0
+
+    frame = pd.read_parquet(_odin_file(env))
+    assert set(frame["slot_utc"]) == {pd.Timestamp("2024-05-28 23:45", tz="UTC")}
+    assert [p.name for p in env.odin.iterdir()] == ["odin-2024-05-28.parquet"]
+
+
+def test_a_run_after_midnight_utc_starts_the_next_day_file(env, odin_feed):
+    cli.main(["odin"])
+    odin_feed.at(2024, 5, 29, 0, 3)
+
+    assert cli.main(["odin"]) == 0
+
+    assert sorted(p.name for p in env.odin.iterdir()) == [
+        "odin-2024-05-28.parquet",
+        "odin-2024-05-29.parquet",
+    ]
+
+
+def test_two_odin_runs_in_one_slot_leave_one_row_per_fips_and_utility(env, odin_feed):
+    cli.main(["odin"])
+    odin_feed.body = ODIN_MIXED.read_bytes()
+    odin_feed.at(2024, 5, 28, 14, 12)
+
+    assert cli.main(["odin"]) == 0
+
+    frame = pd.read_parquet(_odin_file(env))
+    assert not frame.duplicated(["slot_utc", "fips", "utility"]).any()
+    assert len(frame) == 9
+    assert frame.loc[frame["fips"] == "48201", "customers_out"].sum() == 720  # the second answer
+    assert list(env.odin.glob("*.tmp")) == []
+
+
+def test_a_later_slot_adds_its_rows_to_the_day_file(env, odin_feed):
+    cli.main(["odin"])
+    first = pd.read_parquet(_odin_file(env))
+    odin_feed.at(2024, 5, 28, 14, 22)
+
+    assert cli.main(["odin"]) == 0
+
+    frame = pd.read_parquet(_odin_file(env))
+    assert frame["slot_utc"].nunique() == 2
+    assert frame.iloc[: len(first)].reset_index(drop=True).equals(first)
+
+
+@pytest.mark.parametrize("body", [b"{", b"", b'{"total": 1}', b"[]"])
+def test_odin_with_a_bad_body_exits_1_with_one_line_and_writes_no_file(
+    env, odin_feed, capsys, body
+):
+    odin_feed.body = body
+
+    assert cli.main(["odin"]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("ODIN") and len(err.splitlines()) == 1
+    assert not env.odin.exists() or list(env.odin.iterdir()) == []
+
+
+def test_a_failed_odin_fetch_leaves_the_old_day_file_and_exits_1(
+    env, odin_feed, monkeypatch, capsys
+):
+    cli.main(["odin"])
+    before = _odin_file(env).read_bytes()
+    calls = []
+
+    def urlopen(url, timeout=None):
+        calls.append(url)
+        raise urllib.error.HTTPError(url, 503, "Service Unavailable", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(odin.net.time, "sleep", lambda s: None)
+    odin_feed.at(2024, 5, 28, 14, 22)
+    capsys.readouterr()
+
+    assert cli.main(["odin"]) == 1
+
+    assert len(calls) == 3
+    err = capsys.readouterr().err
+    assert "ODIN fetch failed" in err and "503" in err
+    assert _odin_file(env).read_bytes() == before
+    assert list(env.odin.glob("*.tmp")) == []
+
+
+def test_a_day_file_that_cannot_be_read_stops_the_run_and_keeps_its_bytes(env, odin_feed, capsys):
+    env.odin.mkdir()
+    _odin_file(env).write_bytes(b"not a parquet file")
+
+    assert cli.main(["odin"]) == 1
+
+    assert _odin_file(env).read_bytes() == b"not a parquet file"
+    assert capsys.readouterr().err != ""
+
+
+def test_a_reader_thread_that_opens_the_day_file_during_a_write_sees_the_old_file_whole(
+    env, odin_feed, monkeypatch
+):
+    """The rename is the only moment the target changes: the reader gets the old or the new file.
+
+    A free-running reader would block the rename on Windows, so the reader runs at the moment
+    just before the rename, when the temp file is complete and the target is still the old file.
+    """
+    cli.main(["odin"])
+    path = _odin_file(env)
+    old = pd.read_parquet(path)
+    seen: dict[str, pd.DataFrame] = {}
+    real_replace = Path.replace
+
+    def replace(self, target):
+        reader = threading.Thread(target=lambda: seen.update(during=pd.read_parquet(path)))
+        reader.start()
+        reader.join()
+        result = real_replace(self, target)
+        seen["after"] = pd.read_parquet(path)
+        return result
+
+    monkeypatch.setattr(Path, "replace", replace)
+    odin_feed.at(2024, 5, 28, 14, 22)
+
+    assert cli.main(["odin"]) == 0
+
+    pd.testing.assert_frame_equal(seen["during"], old)
+    assert len(seen["after"]) == 2 * len(old)
+    assert seen["after"].iloc[: len(old)].reset_index(drop=True).equals(old)
+
+
+def test_odin_takes_no_arguments(env, odin_feed):
+    with pytest.raises(SystemExit) as stop:
+        cli.main(["odin", "2024-05-28"])
+
+    assert stop.value.code == 2
+    assert odin_feed.urls == []
+
+
+def test_the_odin_command_takes_no_lock_and_writes_only_the_odin_directory(env, odin_feed):
+    env.site.mkdir(parents=True)
+    (env.site / "publish.lock").write_text("1", encoding="utf-8")
+
+    assert cli.main(["odin"]) == 0
+
+    assert sorted(p.name for p in env.site.iterdir()) == ["publish.lock"]
+    assert [p.name for p in env.odin.iterdir()] == ["odin-2024-05-28.parquet"]
+    assert not env.swaths.exists() and not env.power.exists()

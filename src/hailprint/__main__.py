@@ -1,7 +1,7 @@
 """Command line entry for the hailprint commands.
 
 The commands are ``ingest``, ``index``, ``candidates``, ``parcels``, ``score``, ``warnings``,
-``eaglei``, ``power``, and ``publish``.
+``eaglei``, ``power``, ``odin``, and ``publish``.
 Run ``hailprint <command> --help`` for the arguments of one command.
 """
 
@@ -22,6 +22,7 @@ from hailprint import (
     county,
     files,
     mesh,
+    odin,
     parcels,
     paths,
     plot,
@@ -42,6 +43,7 @@ SCORES_DIR = paths.DERIVED_DIR / "scores"
 WARNINGS_DIR = paths.DERIVED_DIR / "warnings"
 EAGLEI_DIR = paths.DERIVED_DIR / "eaglei"
 POWER_DIR = paths.DERIVED_DIR / "power"
+ODIN_DIR = paths.DERIVED_DIR / "odin"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
 
@@ -133,6 +135,9 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="build each swath date with a closed window, an EAGLE-I file, and no power file",
     )
+    commands.add_parser(
+        "odin", help="store one ODIN snapshot of the customers out of the metro counties"
+    )
     publish_cmd = commands.add_parser(
         "publish", help="write the site data files and the storms index for storm dates"
     )
@@ -167,6 +172,8 @@ def main(argv: list[str] | None = None) -> int:
             eaglei_years(args.years)
         elif args.command == "power":
             power_days(args.storm_dates, args.missing)
+        elif args.command == "odin":
+            odin_snapshot()
         elif args.command == "publish":
             publish_days(args.storm_dates)
     except (RuntimeError, OSError, ValueError) as exc:
@@ -430,6 +437,24 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
         print(f"{storm_date}: {known} of {len(frame)} county steps have a row")
     if skipped:
         print(f"{skipped} date{'s' if skipped > 1 else ''} skipped without an EAGLE-I file")
+    return written
+
+
+def odin_snapshot() -> Path:
+    """Add one ODIN snapshot to the file of its UTC day, keyed by the 15-minute slot.
+
+    A failed fetch, a bad answer, or an unreadable day file writes nothing and exits 1.
+    A rerun in one slot replaces the rows of that slot.
+    """
+    slot = odin.slot_of(_utc_now())
+    fresh = odin.snapshot(odin.fetch(), slot)
+    path = ODIN_DIR / odin.file_name(slot.date())
+    try:
+        existing = pd.read_parquet(path) if path.exists() else None
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"{path}: not a readable ODIN day file: {exc}") from exc
+    written = files.write_atomic(odin.merge(existing, fresh), path, odin.METADATA)
+    print(f"{slot:%Y-%m-%d %H:%M} UTC: {len(fresh)} rows")
     return written
 
 
