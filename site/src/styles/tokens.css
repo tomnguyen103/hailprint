@@ -1,4 +1,4 @@
-/* Hailprint design tokens: .scratch/portfolio-v5/design.md (locked). */
+/* Hailprint design tokens: design.md (locked). */
 :root {
   --paper: #f7f6f2;
   --sheet: #fdfcf9;
@@ -21,6 +21,21 @@
   --hail-5: #2e5e9e;
   --hail-6: #33397a;
   --hail-7: #2a1748;
+
+  /* impact ramps and warning outlines: cool hues, so no step reads as a hail class */
+  --out-1: #dcefd9;
+  --out-2: #a9d9a6;
+  --out-3: #6fbf72;
+  --out-4: #34995a;
+  --out-5: #1b6b3c;
+  --net-1: #f1e3f4;
+  --net-2: #dbb5e3;
+  --net-3: #bf80cc;
+  --net-4: #9a4aa6;
+  --net-5: #6e2478;
+  --warn-sv: #8a5300;
+  --warn-to: #a3175f;
+  --warn-ff: #0a6b73;
 
   --serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
   --sans: "IBM Plex Sans", system-ui, sans-serif;
@@ -48,6 +63,19 @@
   --note-ink: #ebd9a0;
   --shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
   --ctrl-icon-filter: invert(1);
+  --out-1: #1e3322;
+  --out-2: #2c5a35;
+  --out-3: #3f8a4d;
+  --out-4: #62b872;
+  --out-5: #9be0a5;
+  --net-1: #34203a;
+  --net-2: #5a3466;
+  --net-3: #8650a0;
+  --net-4: #b87bd0;
+  --net-5: #e0b0f2;
+  --warn-sv: #f2b84b;
+  --warn-to: #ff7eb6;
+  --warn-ff: #4dd0be;
 }
 
 /* no-script case: the head script did not run, so the OS scheme decides */
@@ -66,6 +94,19 @@
     --note-ink: #ebd9a0;
     --shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
     --ctrl-icon-filter: invert(1);
+    --out-1: #1e3322;
+    --out-2: #2c5a35;
+    --out-3: #3f8a4d;
+    --out-4: #62b872;
+    --out-5: #9be0a5;
+    --net-1: #34203a;
+    --net-2: #5a3466;
+    --net-3: #8650a0;
+    --net-4: #b87bd0;
+    --net-5: #e0b0f2;
+    --warn-sv: #f2b84b;
+    --warn-to: #ff7eb6;
+    --warn-ff: #4dd0be;
   }
 }
 
