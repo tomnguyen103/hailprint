@@ -39,6 +39,7 @@ class Env:
         self.site = root / "site"
         self.warnings = root / "warnings"
         self.eaglei = root / "eaglei"
+        self.power = root / "power"
         self.served: dict[date, object] = {}
 
     def add_day(self, storm_date: date, *, metadata: bool = True) -> Path:
@@ -98,6 +99,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "SITE_DATA_DIR", env.site)
     monkeypatch.setattr(cli, "WARNINGS_DIR", env.warnings)
     monkeypatch.setattr(cli, "EAGLEI_DIR", env.eaglei)
+    monkeypatch.setattr(cli, "POWER_DIR", env.power)
     monkeypatch.setattr(cli, "_utc_now", lambda: RUN_TIME)
     monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "index" / "mesh-archive.parquet")
     monkeypatch.setattr(candidates, "CANDIDATES_PATH", tmp_path / "candidate-days.csv")
@@ -786,3 +788,122 @@ def test_eaglei_takes_one_or_more_four_digit_years(env, figshare, argv):
 
     assert stop.value.code == 2
     assert figshare.urls == []
+
+
+def _write_eaglei(env, year, *rows):
+    """Write the EAGLE-I year file of the metro counties from (fips, time, customers_out) rows."""
+    frame = pd.DataFrame(
+        {
+            "fips": [fips for fips, _, _ in rows],
+            "time_utc": pd.to_datetime([time for _, time, _ in rows], utc=True),
+            "customers_out": pd.array([out for _, _, out in rows], dtype="Int64"),
+        }
+    )
+    return files.write_atomic(frame, env.eaglei / power.file_name(year), power.METADATA)
+
+
+def _power_file(env, storm_date):
+    return env.power / power.day_file_name(storm_date)
+
+
+HARRIS_ROWS = (("48201", "2024-05-28 20:00", 251_830), ("48201", "2024-05-28 20:15", 0))
+
+
+def test_power_writes_the_192_step_window_of_each_county_with_the_eaglei_metadata(env, capsys):
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+
+    assert cli.main(["power", "2024-05-28"]) == 0
+
+    path = _power_file(env, LATER)
+    frame = pd.read_parquet(path)
+    assert list(frame.columns) == ["fips", "step_utc", "customers_out"]
+    assert len(frame) == 8 * 192
+    assert frame["customers_out"].eq(0).sum() == 1
+    assert frame["customers_out"].notna().sum() == 2
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"eaglei", b"customers-out")
+    assert capsys.readouterr().out == "2024-05-28: 2 of 1536 county steps have a row\n"
+
+
+def test_two_explicit_power_runs_write_the_same_bytes_and_leave_no_tmp_file(env):
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    cli.main(["power", "2024-05-28"])
+    first = _power_file(env, LATER).read_bytes()
+
+    cli.main(["power", "2024-05-28"])
+
+    assert _power_file(env, LATER).read_bytes() == first
+    assert list(env.power.glob("*.tmp")) == []
+
+
+def test_power_for_a_date_without_an_eaglei_year_file_exits_1_and_writes_nothing(env, capsys):
+    assert cli.main(["power", "2024-05-28"]) == 1
+
+    assert capsys.readouterr().err == (
+        "2024-05-28: no EAGLE-I file for 2024, run hailprint eaglei 2024 first\n"
+    )
+    assert not env.power.exists() or list(env.power.iterdir()) == []
+
+
+def test_power_missing_makes_a_second_run_write_nothing(env, capsys):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    assert cli.main(["power", "--missing"]) == 0
+    first = _power_file(env, LATER).stat().st_mtime_ns
+    capsys.readouterr()
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    assert _power_file(env, LATER).stat().st_mtime_ns == first
+    assert capsys.readouterr().out == ""
+
+
+def test_power_missing_skips_a_date_whose_impact_window_is_not_closed(env):
+    env.add_day(LATER)
+    shutil.copy(
+        env.swaths / f"swaths-{LATER}.parquet", env.swaths / f"swaths-{OPEN_WINDOW}.parquet"
+    )
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    assert _power_file(env, LATER).exists()
+    assert not _power_file(env, OPEN_WINDOW).exists()
+
+
+def test_power_missing_skips_a_date_without_an_eaglei_year_file_and_exits_0(env, capsys):
+    env.add_day(LATER)  # 2024
+    env.add_day(EARLIER)  # 2023
+    _write_eaglei(env, 2023, ("48201", "2023-06-23 22:00", 11))
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    assert _power_file(env, EARLIER).exists()
+    assert not _power_file(env, LATER).exists()
+    assert capsys.readouterr().out.splitlines() == [
+        "2023-06-23: 1 of 1536 county steps have a row",
+        "1 date skipped without an EAGLE-I file",
+    ]
+
+
+def test_a_window_across_new_year_needs_both_year_files(env, capsys):
+    new_year_eve = "2023-12-31"
+    _write_eaglei(env, 2023, ("48201", "2023-12-31 23:45", 7))
+
+    assert cli.main(["power", new_year_eve]) == 1
+
+    assert "run hailprint eaglei 2024 first" in capsys.readouterr().err
+    _write_eaglei(env, 2024, ("48201", "2024-01-01 00:00", 9))
+
+    assert cli.main(["power", new_year_eve]) == 0
+
+    day = pd.read_parquet(env.power / "power-2023-12-31.parquet")
+    assert day.loc[day["fips"] == "48201", "customers_out"].dropna().tolist() == [7, 9]
+
+
+@pytest.mark.parametrize("argv", [["power"], ["power", "--missing", "2024-05-28"]])
+def test_power_takes_storm_dates_or_missing_and_not_both_or_neither(env, argv):
+    with pytest.raises(SystemExit) as stop:
+        cli.main(argv)
+
+    assert stop.value.code == 2

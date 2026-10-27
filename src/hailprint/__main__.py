@@ -1,5 +1,7 @@
-"""Command line entry: ``hailprint ingest|index|candidates|parcels|score|warnings|eaglei|publish``.
+"""Command line entry for the hailprint commands.
 
+The commands are ``ingest``, ``index``, ``candidates``, ``parcels``, ``score``, ``warnings``,
+``eaglei``, ``power``, and ``publish``.
 Run ``hailprint <command> --help`` for the arguments of one command.
 """
 
@@ -39,6 +41,7 @@ PARCELS_DIR = paths.DERIVED_DIR / "parcels"
 SCORES_DIR = paths.DERIVED_DIR / "scores"
 WARNINGS_DIR = paths.DERIVED_DIR / "warnings"
 EAGLEI_DIR = paths.DERIVED_DIR / "eaglei"
+POWER_DIR = paths.DERIVED_DIR / "power"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
 
@@ -119,6 +122,17 @@ def build_parser() -> argparse.ArgumentParser:
         "eaglei", help="store the EAGLE-I customers out of the metro counties per year"
     )
     eaglei_cmd.add_argument("years", nargs="+", type=_year, help="calendar year, YYYY")
+    power_cmd = commands.add_parser(
+        "power", help="store the customers out of the metro counties per step of the impact window"
+    )
+    power_cmd.add_argument(
+        "storm_dates", nargs="*", type=_storm_date, help="SPC convective day, YYYY-MM-DD"
+    )
+    power_cmd.add_argument(
+        "--missing",
+        action="store_true",
+        help="build each swath date with a closed window, an EAGLE-I file, and no power file",
+    )
     publish_cmd = commands.add_parser(
         "publish", help="write the site data files and the storms index for storm dates"
     )
@@ -134,8 +148,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command == "warnings" and bool(args.storm_dates) == args.missing:
-        parser.error("warnings takes storm dates or --missing, not both and not neither")
+    if args.command in ("warnings", "power") and bool(args.storm_dates) == args.missing:
+        parser.error(f"{args.command} takes storm dates or --missing, not both and not neither")
     try:
         if args.command == "ingest":
             ingest(args.storm_dates)
@@ -151,6 +165,8 @@ def main(argv: list[str] | None = None) -> int:
             warn_days(args.storm_dates, args.missing)
         elif args.command == "eaglei":
             eaglei_years(args.years)
+        elif args.command == "power":
+            power_days(args.storm_dates, args.missing)
         elif args.command == "publish":
             publish_days(args.storm_dates)
     except (RuntimeError, OSError, ValueError) as exc:
@@ -370,6 +386,50 @@ def eaglei_years(years: list[int]) -> list[Path]:
             files.write_atomic(frame, EAGLEI_DIR / power.file_name(year), power.METADATA)
         )
         print(f"{year}: {len(frame)} metro rows")
+    return written
+
+
+def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
+    """One power file per storm date: the impact window from the EAGLE-I year files.
+
+    With `missing`, the dates are the swath dates whose window has closed and that have no power
+    file. A date whose EAGLE-I year file is absent is skipped and counted. An explicit date with
+    an absent year file stops the run with exit 1.
+    """
+    # shortcut: an EAGLE-I year file counts as covering its year, upgrade to a check of the last
+    # row time if a partial year file is ever ingested
+    if missing:
+        now = _utc_now()
+        storm_dates = [
+            d
+            for d, _ in _swath_files([])
+            if sbw.window(d)[1] <= now and not (POWER_DIR / power.day_file_name(d)).exists()
+        ]
+    written = []
+    skipped = 0
+    for storm_date in storm_dates:
+        year_files = {
+            year: EAGLEI_DIR / power.file_name(year) for year in power.years_of(storm_date)
+        }
+        absent = [str(year) for year, path in year_files.items() if not path.exists()]
+        if absent:
+            if not missing:
+                raise ValueError(
+                    f"{storm_date}: no EAGLE-I file for {' and '.join(absent)}, "
+                    f"run hailprint eaglei {' '.join(absent)} first"
+                )
+            skipped += 1
+            continue
+        frame = power.derive(
+            pd.concat([pd.read_parquet(path) for path in year_files.values()], ignore_index=True),
+            storm_date,
+        )
+        path = POWER_DIR / power.day_file_name(storm_date)
+        written.append(files.write_atomic(frame, path, power.METADATA))
+        known = frame["customers_out"].count()
+        print(f"{storm_date}: {known} of {len(frame)} county steps have a row")
+    if skipped:
+        print(f"{skipped} date{'s' if skipped > 1 else ''} skipped without an EAGLE-I file")
     return written
 
 

@@ -2,16 +2,32 @@
 
 import http.client
 import json
+from datetime import date, timedelta
 from typing import IO
 
 import pandas as pd
 
-from hailprint import county, net
+from hailprint import county, net, sbw
 
 ARTICLE_ID = 24237376
 LISTING_URL = f"https://api.figshare.com/v2/articles/{ARTICLE_ID}/files?page_size=100"
 DOWNLOAD_URL = "https://ndownloader.figshare.com/files/"
 METRO_FIPS = frozenset(county.METRO_NAMES)
+# The EAGLE-I MCC 2022 customers per county: the denominator of the share out.
+# shortcut: the MCC 2022 customer counts are constants in power.py, upgrade to a read of MCC.csv
+# when the scope leaves the 8 counties
+MCC = {
+    "48201": 1_827_686,  # Harris
+    "48157": 694_780,  # Fort Bend
+    "48339": 230_040,  # Montgomery
+    "48039": 144_164,  # Brazoria
+    "48167": 144_421,  # Galveston
+    "48473": 18_532,  # Waller
+    "48291": 44_189,  # Liberty
+    "48071": 26_381,  # Chambers
+}
+STEP = timedelta(minutes=15)
+STEPS = 192  # 48 hours of 15-minute steps: the impact window
 # The header drifts by year (a total_customers column in 2024, none in 2020 and 2025): read by name.
 COLUMNS = ("fips_code", "customers_out", "run_start_time")
 CHUNK_ROWS = 500_000  # rows per pandas chunk: the whole year CSV never sits in memory
@@ -20,6 +36,16 @@ METADATA = {"source": "eaglei", "product": "customers-out"}
 
 def file_name(year: int) -> str:
     return f"eaglei-{year}.parquet"
+
+
+def day_file_name(storm_date: date) -> str:
+    return f"power-{storm_date}.parquet"
+
+
+def years_of(storm_date: date) -> list[int]:
+    """The EAGLE-I years the impact window reads: two when the window crosses new year."""
+    start, _ = sbw.window(storm_date)
+    return sorted({start.year, (start + (STEPS - 1) * STEP).year})
 
 
 def _metro_rows(chunk: pd.DataFrame, year: int) -> pd.DataFrame:
@@ -81,3 +107,29 @@ def fetch_year(year: int) -> pd.DataFrame:
             return read_eaglei(stream, year)
     except (OSError, http.client.HTTPException) as exc:
         raise RuntimeError(f"EAGLE-I {year} stream failed: {exc!r}") from exc
+
+
+def derive(frame: pd.DataFrame, storm_date: date) -> pd.DataFrame:
+    """Return the impact window of the storm date: one row per metro county and 15-minute step.
+
+    `frame` holds `fips`, `time_utc`, and `customers_out` (the EAGLE-I year frames of the window).
+    A step with no source row is null, never zero. An explicit 0 row stays 0.
+    """
+    start, _ = sbw.window(storm_date)
+    steps = pd.date_range(start, periods=STEPS, freq=STEP)
+    # pandas keeps the unit of the input, so both sides take one unit before they meet
+    time_utc = frame["time_utc"].dt.as_unit(steps.unit)
+    rows = frame.assign(time_utc=time_utc).loc[time_utc.isin(steps)]
+    duplicates = int(rows.duplicated(["fips", "time_utc"]).sum())
+    if duplicates:
+        raise ValueError(f"EAGLE-I {storm_date}: duplicate county steps: {duplicates}")
+    grid = pd.MultiIndex.from_product([sorted(METRO_FIPS), steps], names=["fips", "step_utc"])
+    by_step = rows.set_index(["fips", "time_utc"])["customers_out"]
+    by_step.index = by_step.index.set_names(["fips", "step_utc"])
+    return by_step.reindex(grid).reset_index()
+
+
+def share_out(frame: pd.DataFrame) -> pd.Series:
+    """Return `customers_out` over the MCC 2022 customers of the county; a null stays null."""
+    customers = frame["fips"].map(MCC.__getitem__)
+    return pd.Series(frame["customers_out"] / customers, index=frame.index)
