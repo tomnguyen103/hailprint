@@ -18,4 +18,4 @@ Git for Windows `grep` strips the CR from each line before the match, so no patt
 
 ## Fix
 
-Count the CR bytes instead of matching a line: `tr -cd '\r' < .env | wc -c` at `scripts/deploy.sh:66` and `scripts/nightly.sh:36`. The test fixture writes `.env` through one helper with `newline="\n"`: `tests/test_scripts.py:87`. A deliberate CRLF fixture uses `write_bytes`.
+Count the CR bytes instead of matching a line: `tr -cd '\r' < .env | wc -c` at `scripts/deploy.sh:66` and `scripts/nightly.sh:36`. The test fixture writes `.env` through one helper with `newline="\n"`: `tests/test_scripts.py:89`. A deliberate CRLF fixture uses `write_bytes`.

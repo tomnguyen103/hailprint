@@ -18,4 +18,4 @@ The straight-edge mask and the densified polygon differ by thin slivers along th
 
 ## Fix
 
-Keep the straight-edge read mask and record the limit in the `shortcut:` comment at `src/hailprint/parcels.py:68`. The real-data test at `tests/test_parcels.py:167` pins the six counts. Run that test after any change to a mask, a densify step, or a CRS step.
+Keep the straight-edge read mask and record the limit in the `shortcut:` comment at `src/hailprint/parcels.py:85`. The real-data test at `tests/test_parcels.py:232` pins the six counts. Run that test after any change to a mask, a densify step, or a CRS step.

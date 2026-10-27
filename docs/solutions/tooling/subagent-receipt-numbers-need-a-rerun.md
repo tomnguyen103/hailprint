@@ -18,4 +18,4 @@ A receipt is a summary. The main session cannot tell a measured number from a co
 
 ## Fix
 
-Re-run the real-data check in the main session before a number enters a PR body or a doc. Pin the number in a test that self-skips without the data: `tests/test_parcels.py:167`. Cite the tool result, not the receipt.
+Re-run the real-data check in the main session before a number enters a PR body or a doc. Pin the number in a test that self-skips without the data: `tests/test_parcels.py:232`. Cite the tool result, not the receipt.

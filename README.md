@@ -1,95 +1,56 @@
+<div align="center">
+
 # Hailprint
 
-Hailprint draws the MRMS MESH hail swath over Harris County parcels and scores it against SPC hail reports at every whole-km radius. The site shows radar-estimated hail size with a confidence band; the published skill ceiling is an HSS of about 0.38 at 30 mm.
+An open hail-exposure map for Harris County that grades itself against NOAA storm reports.
 
-## Status
+![Python](https://img.shields.io/badge/python-3.12-4c6a8a?style=flat) ![TypeScript](https://img.shields.io/badge/typescript-7.0-4c6a8a?style=flat) ![Preact](https://img.shields.io/badge/preact-10-4c6a8a?style=flat) ![MapLibre GL](https://img.shields.io/badge/maplibre_gl-6-4c6a8a?style=flat) ![Version](https://img.shields.io/badge/version-0.1.0-4c6a8a?style=flat)
 
-Plan v5, PRs A to H, is built; `docs/reports/week-08.md` holds the PR table. The site runs from `site/data/`, written by `hailprint publish`. The nightly run and the deploy are scripts under `scripts/`. The live upload, the cron install, and the public launch are owner steps (`docs/reports/week-08.md`).
+![Screenshot](docs/assets/screenshot.png)
 
-Plan v6 (`docs/plans/plan-v6.md`) is the next programme, PRs I to N. It adds NWS warnings, power outages, and internet signals to the Storms map, with a 48-hour time slider over eight metro counties. It waits for owner review.
+</div>
 
-## Repository layout
+Hailprint draws the MRMS MESH hail swath for each storm date over Harris County, Texas. It counts the HCAD parcels inside each size class and scores the swath against SPC hail reports at every whole-km radius. Every value on the site is a radar-estimated hail size with a confidence band: the published skill ceiling is an HSS of about 0.38 at 30 mm.
 
-| Path | Contents |
-|---|---|
-| `src/hailprint/` | The Python pipeline: one module per step, wired by the `hailprint` CLI |
-| `tests/` | The pytest suite and its committed fixtures |
-| `site/` | The static site: Preact, Vite, TypeScript, MapLibre GL |
-| `scripts/` | The nightly run, the deploy, and the cron entry |
-| `docs/` | Plans, decisions, weekly reports, research, and learn-loop entries |
-| `GLOSSARY.md` | The domain terms used in code, tests, commits, and chat |
+Site: https://hailprint.vercel.app
 
-## Commands
+## Features
 
-```bash
-make setup                                  # uv sync
-make lint                                   # ruff check . && ruff format --check . && pyright
-make test                                   # uv run pytest -q
-uv run hailprint ingest 2024-05-28          # swath file and PNG for one or more storm dates
-uv run hailprint index                      # archive index from one S3 bucket listing
-uv run hailprint candidates --top 20        # ranked candidate days; needs `index` first
-uv run hailprint candidates --missing       # candidate days with a 12Z file and no swath file, newest first
-uv run hailprint parcels 2024-05-28         # parcel count per size class; needs `ingest` for that date and the HCAD gdb
-uv run hailprint score --radius-km 5        # scores every swath file against the SPC daily CSVs
-uv run hailprint publish                    # writes site/data/ (ZIP counts only where `parcels` ran)
-make site                                   # cd site && npm ci && npm run check
-cd site && npm run dev                      # Vite dev server at http://localhost:5173
-scripts/deploy.sh --dry-run                 # make deploy-dry: build site/dist and stop before vercel
-scripts/nightly.sh                          # make nightly: the nightly run, index to deploy
-```
+- **Storms**: one workspace per storm date. The map draws seven nested size classes (0.75 to 2.50 in) and the SPC report points. A map click opens an inspector with the size class at that point and the nearest report.
+- **Parcels**: the parcel count per size class and per ZIP code, from HCAD footprints with the owner fields dropped at load.
+- **Score**: the contingency table (hits, misses, false alarms, correct negatives) with POD, FAR, CSI, and HSS. A slider re-scores in the browser at any radius from 0 to 20 km.
+- **Scorecard**: the pooled table over every published storm date, as a table, a 2 by 2 grid, and a threshold curve with the literature HSS line.
+- **Try it**: tune the radius, check one point against every storm date, swipe-compare two storm dates, and copy the commands that rebuild one date.
+- **Method**: five short pages on the data, the storm date, the size classes, the scoring, and the limits.
+- **Pipeline**: the run log, the archive coverage per year, and the data sources.
+- **Receipts**: every number opens a chip with its source, product, file, run time, and confidence band.
 
-## Nightly run and deploy
+## How it works
 
-`scripts/nightly.sh` runs the nightly run in this order. `index` refreshes the archive index. `candidates --missing --top $MAX_INGEST` prints the missing candidate days. `ingest` draws a swath file for each of them. `parcels` counts parcels for each of them when the HCAD gdb is present. `score` and `publish` write the scores and `site/data/`. `scripts/deploy.sh` uploads the site.
+| Step | Command | Output |
+|---|---|---|
+| Archive index | `hailprint index` | One row per MESH archive day from one S3 bucket listing |
+| Candidate days | `hailprint candidates` | Harris County hail days from the SPC WCM database and daily CSVs, ranked |
+| Swath | `hailprint ingest` | The 12Z daily max cropped to the county, dissolved into one polygon per size class |
+| Parcels | `hailprint parcels` | Distinct parcel counts per size class and per ZIP |
+| Score | `hailprint score` | Per-report distances and the contingency table for each storm date |
+| Publish | `hailprint publish` | Validated JSON under `site/data/`, each file with a receipt |
 
-The lock is the directory `data/nightly.lock`. A second run finds it and exits 1. The trap removes it on exit. `MAX_INGEST` caps the storm dates per night; the default is 5. `scripts/hailprint.cron` holds the cron entry at 14:00 UTC; edit the repo path and the `PATH` home path, then run `crontab scripts/hailprint.cron`.
+`scripts/nightly.sh` runs the steps for new storm dates. `scripts/hailprint.cron` starts it at 14:00 UTC, and `scripts/deploy.sh` uploads the site to Vercel.
 
-The data path: Git deployments are off for `main` in `vercel.json`, so a merge never replaces production with a data-free build. The cron host holds `site/data/` and deploys with the prebuilt flow: `vercel pull`, `vercel build --prod`, `vercel deploy --prebuilt --prod --archive=tgz`. `scripts/deploy.sh --dry-run` builds `site/dist` and stops before any `vercel` call. The auth comes from `VERCEL_TOKEN`, with `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` on a host without a link folder, or from a `vercel login` session. The values live in `.env` at the repo root, which is gitignored, never in the repo. `.env` holds one `NAME=value` per line, the value from letters, digits, and `_ . / : @ + -`, no `export`, no quote, LF line endings; a comment and a blank line pass. Both scripts refuse any other line before any step and print its line number only.
+## Documentation
 
-## Documents
+- [Getting started](docs/getting-started.md): requirements, install, data sources, commands, and checks.
+- [Operations](docs/operations.md): the nightly run, the cron entry, the deploy, and the `.env` rules.
+- [Site](site/README.md): routes, data path, basemap, and dev harness.
+- [Glossary](GLOSSARY.md) and [decisions](docs/DECISIONS.md).
+- [Documentation index](docs/README.md): plans, research, and learn-loop entries.
 
-Decisions:
+Weekly reports: [01](docs/reports/week-01.md) · [02](docs/reports/week-02.md) · [03](docs/reports/week-03.md) · [04](docs/reports/week-04.md) · [05](docs/reports/week-05.md) · [06](docs/reports/week-06.md) · [07](docs/reports/week-07.md) · [08](docs/reports/week-08.md)
 
-| File | Purpose |
-|---|---|
-| `docs/DECISIONS.md` | The adopted answers and the standing constraints |
+## Ground rules
 
-Plans (`docs/plans/`), newest first:
-
-| File | Purpose |
-|---|---|
-| `docs/plans/plan-v6.md` | The draft plan for PRs I to N: warnings, power, and internet layers on one time-slider map |
-| `docs/plans/plan-v5.md` | The plan of record for PRs A to H: audit findings, site architecture, viewer actions, the autonomous programme |
-| `docs/plans/plan-v4.md` | The approved week-1 plan: pitch, evidence, scope, scorecard design, architecture, data licences, risks, schedule, budget, sources |
-| `docs/plans/plan-v4.html` | The same plan as a standalone page |
-| `docs/plans/kickoff.md` | The prompt that starts week 1 in this folder |
-
-Weekly reports (`docs/reports/`), with screenshots under `docs/reports/evidence/`:
-
-| File | Purpose |
-|---|---|
-| `docs/reports/week-01.md` | Week 1: the spike, one 12Z file per storm date |
-| `docs/reports/week-02.md` | Week 2: aligned ingest, archive index, candidate days, parcel counts |
-| `docs/reports/week-03.md` | Week 3: the verification scorer (PR C) |
-| `docs/reports/week-04.md` | Week 4: the published files for the site (PR D) |
-| `docs/reports/week-05.md` | Week 5: site shell and the Storms workspace (PR E) |
-| `docs/reports/week-06.md` | Week 6: Scorecard and Try it (PR F) |
-| `docs/reports/week-07.md` | Week 7: Method and Pipeline (PR G) |
-| `docs/reports/week-08.md` | Week 8: ship preparation (PR H), the dry run, the owner runbook |
-
-Reference:
-
-| Path | Purpose |
-|---|---|
-| `docs/research/` | Research receipts behind the pick: scoring rubric and the three candidate lanes |
-| `docs/solutions/` | Learn-loop entries by category: data, geo, site, tooling |
-| `docs/drafts/` | Outgoing message drafts, such as the HCAD GIS reuse-terms email |
-| `GLOSSARY.md` | The domain terms used in code, tests, commits, and chat |
-| `site/README.md` | The site commands, routes, data path, basemap step, and Vercel fields |
-
-## Rules that never change
-
-- Outputs say "radar-estimated hail size at this parcel" with a confidence band. They never say "damaged".
-- No homeowner names, mailing addresses, or contact data, ever. Owner fields are stripped from HCAD parcels at load time.
-- The published skill ceiling for radar hail estimates is low (Heidke skill score about 0.38 against dense ground truth). Lead with it.
-- No secrets in the repo. Credentials live in environment variables; the variable name is documented, the value is not.
+- Outputs say "radar-estimated hail size" with a confidence band. They make no claim about what the hail did to a property.
+- No homeowner names, mailing addresses, or contact data. Owner fields are stripped from HCAD parcels at load.
+- Harris County only, HCAD footprints only, in v1.
+- No secrets in the repo. The docs name each variable, never its value.

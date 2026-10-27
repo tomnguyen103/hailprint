@@ -18,4 +18,4 @@ MapLibre queues `setPaintProperty` calls on a layer that exists in the style obj
 
 ## Fix
 
-Delete the guard. `setTheme` in `site/src/storms/map/create-map.ts:103` writes every `*-color` paint key from `themedPaint()` without a readiness check. The map pane reads the theme from the one store in `site/src/state/theme.ts` and calls `setTheme` from an effect (`site/src/storms/map-pane.tsx:93`).
+Delete the guard. `setTheme` in `site/src/storms/map/create-map.ts:117` writes every `*-color` paint key from `themedPaint()` without a readiness check. The map pane reads the theme from the one store in `site/src/state/theme.ts` and calls `setTheme` from an effect (`site/src/storms/map-pane.tsx:93`).
