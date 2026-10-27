@@ -3,7 +3,6 @@
 
 export const AREAS = ["storms", "scorecard", "try", "method", "pipeline"] as const;
 export type Area = (typeof AREAS)[number];
-export type LaterArea = Extract<Area, "method" | "pipeline">;
 
 export const TABS = ["map", "parcels", "score", "data"] as const;
 export type Tab = (typeof TABS)[number];
@@ -14,45 +13,40 @@ export type ScorecardView = (typeof SCORECARD_VIEWS)[number];
 export const TRY_TOOLS = ["tune", "point", "compare", "run"] as const;
 export type TryTool = (typeof TRY_TOOLS)[number];
 
-export const AREA_LABELS: Record<Area, string> = {
-  storms: "Storms",
-  scorecard: "Scorecard",
-  try: "Try it",
-  method: "Method",
-  pipeline: "Pipeline",
-};
+export const METHOD_PAGES = ["data", "storm-date", "size-classes", "scoring", "limits"] as const;
+export type MethodPage = (typeof METHOD_PAGES)[number];
 
-export const TAB_LABELS: Record<Tab, string> = {
-  map: "Map",
-  parcels: "Parcels",
-  score: "Score",
-  data: "Data",
+export const PIPELINE_VIEWS = ["runs", "archive", "sources"] as const;
+export type PipelineView = (typeof PIPELINE_VIEWS)[number];
+
+export const AREA_LABELS: Record<Area, string> = { storms: "Storms", scorecard: "Scorecard", try: "Try it", method: "Method", pipeline: "Pipeline" };
+export const TAB_LABELS: Record<Tab, string> = { map: "Map", parcels: "Parcels", score: "Score", data: "Data" };
+export const METHOD_LABELS: Record<MethodPage, string> = {
+  data: "Data", "storm-date": "Storm date", "size-classes": "Size classes", scoring: "Scoring", limits: "Limits",
 };
+export const PIPELINE_LABELS: Record<PipelineView, string> = { runs: "Runs", archive: "Archive", sources: "Sources" };
 
 export type Route =
   | { kind: "redirect-latest" }
   | { kind: "storms"; date: string; tab: Tab }
   | { kind: "scorecard"; view: ScorecardView }
   | { kind: "try"; tool: TryTool }
-  | { kind: "area"; area: LaterArea }
+  | { kind: "method"; page: MethodPage }
+  | { kind: "pipeline"; view: PipelineView }
   | { kind: "not-found" };
 
 export type Target =
   | { area: "storms"; date: string; tab?: Tab }
   | { area: "scorecard"; view?: ScorecardView }
   | { area: "try"; tool?: TryTool }
-  | { area: LaterArea };
+  | { area: "method"; page?: MethodPage }
+  | { area: "pipeline"; view?: PipelineView };
 
 /** A storm date as the path and the index carry it. The guards share it. */
 export const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function isArea(value: string): value is Area {
-  return (AREAS as readonly string[]).includes(value);
-}
-
-function isTab(value: string): value is Tab {
-  return (TABS as readonly string[]).includes(value);
-}
+function isArea(value: string): value is Area { return (AREAS as readonly string[]).includes(value); }
+function isTab(value: string): value is Tab { return (TABS as readonly string[]).includes(value); }
 
 /** The second path part of an area with sub-pages: the first option when absent, null when unknown. */
 function subOf<T extends string>(options: readonly T[], parts: string[]): T | null {
@@ -75,8 +69,13 @@ export function match(path: string): Route {
     const tool = subOf(TRY_TOOLS, parts);
     return tool === null ? { kind: "not-found" } : { kind: "try", tool };
   }
-  if (head !== "storms") {
-    return parts.length === 1 ? { kind: "area", area: head } : { kind: "not-found" };
+  if (head === "method") {
+    const page = subOf(METHOD_PAGES, parts);
+    return page === null ? { kind: "not-found" } : { kind: "method", page };
+  }
+  if (head === "pipeline") {
+    const view = subOf(PIPELINE_VIEWS, parts);
+    return view === null ? { kind: "not-found" } : { kind: "pipeline", view };
   }
   if (date === undefined) return { kind: "redirect-latest" };
   if (!DATE.test(date) || rest.length > 0) return { kind: "not-found" };
@@ -87,7 +86,8 @@ export function href(target: Target): string {
   if (target.area === "storms") return `/storms/${target.date}/${target.tab ?? "map"}`;
   if (target.area === "scorecard") return target.view === undefined ? "/scorecard" : `/scorecard/${target.view}`;
   if (target.area === "try") return target.tool === undefined ? "/try" : `/try/${target.tool}`;
-  return `/${target.area}`;
+  if (target.area === "method") return target.page === undefined ? "/method" : `/method/${target.page}`;
+  return target.view === undefined ? "/pipeline" : `/pipeline/${target.view}`;
 }
 
 /** Push a path and tell every route listener. */

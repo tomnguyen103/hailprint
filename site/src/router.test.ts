@@ -16,9 +16,24 @@ it("falls back to map for a bad tab", () => {
   expect(match("/storms/2024-05-28/nope")).toEqual({ kind: "storms", date: "2024-05-28", tab: "map" });
 });
 
-it("gives the area for the two later areas", () => {
-  expect(match("/method")).toEqual({ kind: "area", area: "method" });
-  expect(match("/pipeline")).toEqual({ kind: "area", area: "pipeline" });
+it("gives the method page, the first page when absent", () => {
+  expect(match("/method")).toEqual({ kind: "method", page: "data" });
+  expect(match("/method/scoring")).toEqual({ kind: "method", page: "scoring" });
+  expect(match("/method/limits")).toEqual({ kind: "method", page: "limits" });
+  expect(match("/method/nope")).toEqual({ kind: "not-found" });
+  expect(match("/method/scoring/extra")).toEqual({ kind: "not-found" });
+});
+
+it("gives the pipeline view, runs when absent", () => {
+  expect(match("/pipeline")).toEqual({ kind: "pipeline", view: "runs" });
+  expect(match("/pipeline/archive")).toEqual({ kind: "pipeline", view: "archive" });
+  expect(match("/pipeline/x")).toEqual({ kind: "not-found" });
+});
+
+it("builds method and pipeline paths", () => {
+  expect(href({ area: "method", page: "scoring" })).toBe("/method/scoring");
+  expect(href({ area: "pipeline" })).toBe("/pipeline");
+  expect(href({ area: "pipeline", view: "archive" })).toBe("/pipeline/archive");
 });
 
 it("resolves Scorecard views, Table by default", () => {
