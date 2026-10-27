@@ -164,3 +164,11 @@ def rank(days: pd.DataFrame, index: pd.DataFrame) -> pd.DataFrame:
         ["report_count", "max_size_in", "storm_date"], ascending=[False, False, True]
     )
     return merged.reset_index(drop=True).loc[:, COLUMNS]
+
+
+def missing_days(ranked: pd.DataFrame, swath_dir: Path) -> list[date]:
+    """Storm dates with a 12Z file and no swath file under `swath_dir`, newest first."""
+    rows = ranked.loc[ranked["has_12z"].astype(bool), "storm_date"]
+    return sorted(
+        (d for d in rows if not (swath_dir / f"swaths-{d}.parquet").exists()), reverse=True
+    )

@@ -9,6 +9,7 @@ from email.message import Message as EmailMessage
 import pandas as pd
 import pytest
 
+from hailprint import __main__ as cli
 from hailprint import archive, candidates, net, reports
 from hailprint.__main__ import main
 from tests.conftest import needs_wcm
@@ -303,6 +304,100 @@ def test_candidates_command_writes_the_report_source_column(tmp_path, monkeypatc
     assert list(written.columns) == candidates.COLUMNS
     assert written["report_source"].tolist() == ["wcm", "spc-daily"]
     assert "spc-daily" in capsys.readouterr().out
+
+
+def _missing_env(tmp_path, monkeypatch, swath_dates=(date(2024, 5, 28),)):
+    """Three ranked days: two with a 12Z file, one without; a swath file per `swath_dates`."""
+    index = pd.DataFrame(
+        {
+            "storm_date": [date(2024, 5, 28), date(2026, 1, 5), date(2024, 6, 1)],
+            "has_12z": [True, True, False],
+        }
+    )
+    index_path = tmp_path / "mesh-archive.parquet"
+    index.to_parquet(index_path)
+    days = pd.DataFrame(
+        {
+            "storm_date": [date(2024, 5, 28), date(2026, 1, 5), date(2024, 6, 1)],
+            "report_count": [9, 3, 2],
+            "max_size_in": [1.75, 1.5, 1.0],
+            "report_source": ["wcm", "spc-daily", "wcm"],
+        }
+    )
+    swath_dir = tmp_path / "swaths"
+    swath_dir.mkdir()
+    for d in swath_dates:
+        (swath_dir / f"swaths-{d}.parquet").write_bytes(b"")
+    out_path = tmp_path / "candidate-days.csv"
+    monkeypatch.setattr(archive, "INDEX_PATH", index_path)
+    monkeypatch.setattr(candidates, "CANDIDATES_PATH", out_path)
+    monkeypatch.setattr(candidates, "fetch_database", lambda: tmp_path / "wcm.zip")
+    monkeypatch.setattr(candidates, "all_days", lambda wcm_path, index_df: days)
+    monkeypatch.setattr(cli, "DERIVED_DIR", swath_dir)
+    return out_path, swath_dir
+
+
+def test_candidates_missing_prints_the_one_day_without_a_swath_file(tmp_path, monkeypatch, capsys):
+    out_path, _ = _missing_env(tmp_path, monkeypatch)
+
+    assert main(["candidates", "--missing"]) == 0
+
+    assert capsys.readouterr().out == "2026-01-05\n"
+    assert list(pd.read_csv(out_path).columns) == candidates.COLUMNS
+
+
+def test_candidates_missing_top_1_prints_the_newest_of_two(tmp_path, monkeypatch, capsys):
+    _missing_env(tmp_path, monkeypatch, swath_dates=())
+
+    assert main(["candidates", "--missing", "--top", "1"]) == 0
+
+    assert capsys.readouterr().out == "2026-01-05\n"
+
+
+def test_candidates_missing_prints_nothing_when_every_day_is_present(tmp_path, monkeypatch, capsys):
+    _missing_env(tmp_path, monkeypatch, swath_dates=(date(2024, 5, 28), date(2026, 1, 5)))
+
+    assert main(["candidates", "--missing"]) == 0
+
+    assert capsys.readouterr().out == ""
+
+
+def test_candidates_missing_omits_the_table(tmp_path, monkeypatch, capsys):
+    _missing_env(tmp_path, monkeypatch)
+
+    main(["candidates", "--missing"])
+
+    assert "report_count" not in capsys.readouterr().out
+
+
+def test_candidates_missing_without_index_exits_1(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "missing.parquet")
+
+    assert main(["candidates", "--missing"]) == 1
+
+    assert "hailprint index" in capsys.readouterr().err
+
+
+def test_candidates_missing_is_empty_after_the_swath_file_appears(tmp_path, monkeypatch, capsys):
+    _, swath_dir = _missing_env(tmp_path, monkeypatch)
+    main(["candidates", "--missing"])
+    (swath_dir / "swaths-2026-01-05.parquet").write_bytes(b"")
+    capsys.readouterr()
+
+    assert main(["candidates", "--missing"]) == 0
+
+    assert capsys.readouterr().out == ""
+
+
+def test_missing_days_is_newest_first(tmp_path):
+    ranked = pd.DataFrame(
+        {
+            "storm_date": [date(2024, 5, 28), date(2026, 1, 5), date(2024, 6, 1)],
+            "has_12z": [True, True, False],
+        }
+    )
+
+    assert candidates.missing_days(ranked, tmp_path) == [date(2026, 1, 5), date(2024, 5, 28)]
 
 
 def test_all_days_does_not_cache_a_body_that_fails_to_parse(tmp_path, monkeypatch):
