@@ -180,12 +180,17 @@ def test_deploy_live_refuses_an_export_line_and_crlf_in_dot_env(tmp_path):
 
     tree.dot_env("export VERCEL_TOKEN=t-test\n")
     exported = tree.run("deploy.sh")
+    # a shell character in the value would run on source; the charset keeps it out
+    tree.dot_env("VERCEL_ORG_ID=o-test\nX=a;echo${IFS}t-test>&2\n")
+    shell = tree.run("deploy.sh")
     (tree.root / ".env").write_bytes(b"VERCEL_TOKEN=t-test\r\n")
     crlf = tree.run("deploy.sh")
 
     assert exported.returncode == 1 and ".env line 1" in exported.stderr
+    assert shell.returncode == 1 and ".env line 2" in shell.stderr
     assert crlf.returncode == 1 and "CRLF" in crlf.stderr
-    assert "t-test" not in exported.stderr + crlf.stderr
+    for done in (exported, shell, crlf):
+        assert "t-test" not in done.stdout + done.stderr
     assert tree.calls() == []
 
 
@@ -391,12 +396,14 @@ def test_nightly_keeps_the_dot_env_token_out_of_the_uv_steps(tmp_path):
 @needs_bash
 def test_nightly_refuses_a_bad_dot_env_before_any_step(tmp_path):
     tree = nightly_tree(tmp_path)
+
     tree.dot_env("export MAX_INGEST=2\n")
+    exported = tree.run("nightly.sh", env={"STUB_MISSING": ""})
+    (tree.root / ".env").write_bytes(b"MAX_INGEST=2\r\n")
+    crlf = tree.run("nightly.sh", env={"STUB_MISSING": ""})
 
-    done = tree.run("nightly.sh", env={"STUB_MISSING": ""})
-
-    assert done.returncode == 1
-    assert ".env line 1" in done.stderr
+    assert exported.returncode == 1 and ".env line 1" in exported.stderr
+    assert crlf.returncode == 1 and "CRLF" in crlf.stderr
     assert tree.calls() == []
     assert not (tree.root / "data" / "nightly.lock").exists()
 
@@ -410,6 +417,8 @@ def test_nightly_refuses_a_max_ingest_that_is_not_a_count(tmp_path):
 
     assert word.returncode == 1 and "MAX_INGEST" in word.stderr
     assert zero.returncode == 1 and "MAX_INGEST" in zero.stderr
+    # a shifted .env line can put a token in MAX_INGEST, so the message carries no value
+    assert "abc" not in word.stderr
     assert tree.calls() == []
     assert not (tree.root / "data" / "nightly.lock").exists()
 

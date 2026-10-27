@@ -67,9 +67,10 @@ if [ -f .env ]; then
     echo "deploy: .env has CRLF line endings; write it with LF" >&2
     exit 1
   fi
-  bad="$(grep -nEv '^(#|$|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*$)' .env | cut -d: -f1 | head -n 1 || true)"
+  # the value charset covers a Vercel token and the two ids; a shell metacharacter stays out
+  bad="$(grep -nEv '^(#|$|[A-Za-z_][A-Za-z0-9_]*=[A-Za-z0-9_./:@+-]*$)' .env | cut -d: -f1 | head -n 1 || true)"
   if [ -n "$bad" ]; then
-    echo "deploy: .env line $bad is not NAME=value (no export, no space)" >&2
+    echo "deploy: .env line $bad is not NAME=value (no export, no space, no quote, no shell character)" >&2
     exit 1
   fi
   # shellcheck disable=SC1091
