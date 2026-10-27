@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guardIndex, guardOutline, guardPairs, guardReports, guardSwath, guardZipCounts } from "./guard";
+import { guardIndex, guardOutline, guardPairs, guardPipeline, guardReports, guardSwath, guardZipCounts } from "./guard";
 import { DataError } from "./types";
 
 const receipt = {
@@ -73,6 +73,26 @@ const swath = {
       geometry: { type: "MultiPolygon", coordinates: [] },
     },
   ],
+};
+
+const run = { run_time: receipt.run_time, package_version: "0.1.0", storm_dates: ["2024-05-28"], file_count: 4 };
+
+const pipeline = {
+  confidence: receipt.confidence,
+  run_time: receipt.run_time,
+  package_version: receipt.package_version,
+  runs: [run],
+  archive: {
+    days: 3,
+    first_storm_date: "2023-06-23",
+    last_storm_date: "2024-05-28",
+    days_without_12z: 1,
+    years: [
+      { year: 2023, days: 1, days_with_12z: 1 },
+      { year: 2024, days: 2, days_with_12z: 1 },
+    ],
+  },
+  sources: [{ source: "noaa-mrms-pds", product: "MESH_Max_1440min_00.50", storm_dates: ["2024-05-28"] }],
 };
 
 /** A deep copy with the dotted `path` deleted. */
@@ -184,6 +204,35 @@ const cases: [string, string, (value: unknown) => unknown, unknown, string[]][] 
     swath,
     ["receipt", "features", "features.0.properties", "features.0.properties.threshold_mm", "features.0.properties.threshold_in", "features.0.geometry"],
   ],
+  [
+    "guardPipeline",
+    "pipeline.json",
+    guardPipeline,
+    pipeline,
+    [
+      "confidence",
+      "run_time",
+      "package_version",
+      "runs",
+      "runs.0.run_time",
+      "runs.0.package_version",
+      "runs.0.storm_dates",
+      "runs.0.file_count",
+      "archive",
+      "archive.days",
+      "archive.first_storm_date",
+      "archive.last_storm_date",
+      "archive.days_without_12z",
+      "archive.years",
+      "archive.years.0.year",
+      "archive.years.0.days",
+      "archive.years.0.days_with_12z",
+      "sources",
+      "sources.0.source",
+      "sources.0.product",
+      "sources.0.storm_dates",
+    ],
+  ],
 ];
 
 describe.each(cases)("%s", (_name, file, guard, good, paths) => {
@@ -235,6 +284,25 @@ describe("guardSwath", () => {
     expect(() => guardSwath({ ...swath, features: [feature] })).toThrow(
       /swath\.geojson: features\[0\]\.geometry\.type is not MultiPolygon/,
     );
+  });
+});
+
+describe("guardPipeline", () => {
+  it("rejects more than 50 runs", () => {
+    const runs = Array.from({ length: 51 }, () => run);
+    expect(() => guardPipeline({ ...pipeline, runs })).toThrow(/^pipeline\.json: runs has 51 entries/);
+  });
+  it("rejects a storm date that is not a date", () => {
+    const runs = [{ ...run, storm_dates: ["yesterday"] }];
+    expect(() => guardPipeline({ ...pipeline, runs })).toThrow(/^pipeline\.json: runs\[0\]\.storm_dates\[0\] is not a date/);
+  });
+  it("rejects a negative file count", () => {
+    const runs = [{ ...run, file_count: -1 }];
+    expect(() => guardPipeline({ ...pipeline, runs })).toThrow(/^pipeline\.json: runs\[0\]\.file_count is negative/);
+  });
+  it("rejects a document without the archive key and accepts archive null", () => {
+    expect(() => guardPipeline(without(pipeline, "archive"))).toThrow(/^pipeline\.json: archive/);
+    expect(guardPipeline({ ...pipeline, archive: null }).archive).toBeNull();
   });
 });
 

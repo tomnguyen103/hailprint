@@ -3,10 +3,13 @@
 // Each guard checks every key the site reads from that file, and nothing more.
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { DATE } from "../router";
-import type { Pairs, ReportsFile, StormsIndex, SwathFile, ZipCounts } from "./types";
+import type { Pairs, PipelineFile, ReportsFile, StormsIndex, SwathFile, ZipCounts } from "./types";
 import { DataError } from "./types";
 
 type Rec = Record<string, unknown>;
+
+/** The run log cap; `publish.MAX_RUNS` writes the same number. */
+const MAX_RUNS = 50;
 
 /** A published file path inside `site/data/`, as `storms.json` lists it. */
 const FILE_PATH = /^storms\/\d{4}-\d{2}-\d{2}\/[a-z-]+\.(geojson|json)$/;
@@ -72,6 +75,47 @@ export function guardIndex(value: unknown): StormsIndex {
     if (files["zip_counts"] !== null) filePath(file, files["zip_counts"], `${at}.files.zip_counts`);
   });
   return value as StormsIndex;
+}
+
+function date(file: string, value: unknown, path: string): void {
+  if (!DATE.test(str(file, value, path))) throw new DataError(file, `${path} is not a date`);
+}
+
+function dates(file: string, value: unknown, path: string): void {
+  list(file, value, path).forEach((v, j) => date(file, v, `${path}[${j}]`));
+}
+
+export function guardPipeline(value: unknown): PipelineFile {
+  const file = "pipeline.json";
+  const root = rec(file, value, "pipeline");
+  for (const key of ["confidence", "run_time", "package_version"]) str(file, root[key], key);
+  const runs = list(file, root["runs"], "runs");
+  if (runs.length > MAX_RUNS) throw new DataError(file, `runs has ${runs.length} entries, more than ${MAX_RUNS}`);
+  runs.forEach((item, i) => {
+    const at = `runs[${i}]`;
+    const run = rec(file, item, at);
+    for (const key of ["run_time", "package_version"]) str(file, run[key], `${at}.${key}`);
+    dates(file, run["storm_dates"], `${at}.storm_dates`);
+    if (num(file, run["file_count"], `${at}.file_count`) < 0) throw new DataError(file, `${at}.file_count is negative`);
+  });
+  if (!("archive" in root)) throw new DataError(file, "archive is missing");
+  if (root["archive"] !== null) {
+    const archive = rec(file, root["archive"], "archive");
+    for (const key of ["days", "days_without_12z"]) num(file, archive[key], `archive.${key}`);
+    for (const key of ["first_storm_date", "last_storm_date"]) date(file, archive[key], `archive.${key}`);
+    list(file, archive["years"], "archive.years").forEach((item, i) => {
+      const at = `archive.years[${i}]`;
+      const year = rec(file, item, at);
+      for (const key of ["year", "days", "days_with_12z"]) num(file, year[key], `${at}.${key}`);
+    });
+  }
+  list(file, root["sources"], "sources").forEach((item, i) => {
+    const at = `sources[${i}]`;
+    const source = rec(file, item, at);
+    for (const key of ["source", "product"]) str(file, source[key], `${at}.${key}`);
+    dates(file, source["storm_dates"], `${at}.storm_dates`);
+  });
+  return value as PipelineFile;
 }
 
 export function guardPairs(value: unknown): Pairs {
