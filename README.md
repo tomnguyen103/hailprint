@@ -34,6 +34,7 @@ Site: https://hailprint.tomnguyen.me
 | Swath | `hailprint ingest` | The 12Z daily max cropped to the county, dissolved into one polygon per size class |
 | Parcels | `hailprint parcels` | Distinct parcel counts per size class and per ZIP |
 | Score | `hailprint score` | Per-report distances and the contingency table for each storm date |
+| Warnings | `hailprint warnings` | NWS severe thunderstorm, tornado, and flash flood warning polygons for each storm date |
 | Publish | `hailprint publish` | Validated JSON under `site/data/`, each file with a receipt |
 
 `scripts/nightly.sh` runs the steps for new storm dates. `scripts/hailprint.cron` starts it at 14:00 UTC, and `scripts/deploy.sh` uploads the site to Vercel.
