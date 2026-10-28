@@ -14,8 +14,9 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { Protocol } from "pmtiles";
 import { type Bbox, HARRIS_BBOX } from "../../county";
-import type { PowerFile, ReportsFile, SwathFile, WarningsFile } from "../../data/types";
-import { type Fill, countyFeatures, hatchPixels, hexRgb } from "../../impact/power";
+import type { InternetFile, PowerFile, ReportsFile, SwathFile, WarningsFile } from "../../data/types";
+import { internetFeatures, isInternet } from "../../impact/internet";
+import { type Fill, countyFeatures, hatchPixels, hexRgb, percentText } from "../../impact/power";
 import type { FeatureCollection, MultiPolygon, Point } from "geojson";
 import { BASEMAP_FILE, BASEMAP_SOURCE, basemapLayers, probeBasemap } from "./basemap";
 import {
@@ -103,8 +104,8 @@ export interface MapHandle {
   setWarnings(file: WarningsFile | null, date: string, step: number): void;
   /** Keep the metro county outlines the power fill draws on; the fill redraws when they arrive. */
   setCounties(outlines: FeatureCollection<MultiPolygon> | null): void;
-  /** Draw the power fill at the step, with a label per county. Fill none or a null file hides the layers and the labels. */
-  setFill(fill: Fill, file: PowerFile | null, step: number): void;
+  /** Draw the county fill at the step, with a label per county. Fill none, a null file, or a file of the other kind hides the layers and the labels. */
+  setFill(fill: Fill, file: PowerFile | InternetFile | null, step: number): void;
   /** Fade the reports after this step; null draws all of them in full. */
   setReportCutoff(step: number | null): void;
   fit(bounds: Bbox | null): void;
@@ -152,7 +153,7 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
   let tags: Marker[] = [];
   let outlines: FeatureCollection<MultiPolygon> | null = null;
   let fill: Fill = "none";
-  let power: PowerFile | null = null;
+  let countyFile: PowerFile | InternetFile | null = null;
   let powerStep = 0;
   let powerShown = false;
   let countyMarkers: Marker[] = [];
@@ -169,8 +170,21 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
     for (const marker of countyMarkers) marker.remove();
     countyMarkers = [];
   };
+  /** The county collection and its labels for the chosen fill; null when the fill, the file, or the file kind does not match. */
+  const countyLayer = () => {
+    if (fill === "internet" && isInternet(countyFile)) {
+      const counties = internetFeatures(outlines, countyFile, powerStep);
+      return { counties, tags: countyTags(counties.features, (p) => `${p.name} ${percentText(p.drop)}`) };
+    }
+    if (fill === "power" && countyFile !== null && !isInternet(countyFile)) {
+      const counties = countyFeatures(outlines, countyFile, powerStep);
+      return { counties, tags: countyTags(counties.features, (p) => `${p.name} ${percentText(p.share)}`) };
+    }
+    return null;
+  };
   const renderPower = () => {
-    if (fill !== "power" || power === null) {
+    const layer = countyLayer();
+    if (layer === null) {
       if (powerShown) {
         for (const id of POWER_LAYER_IDS) show(id, false);
         clearCountyTags();
@@ -183,10 +197,9 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
       for (const id of POWER_LAYER_IDS) show(id, true);
       powerShown = true;
     }
-    const counties = countyFeatures(outlines, power, powerStep);
-    geojson(POWER_SOURCE)?.setData(counties);
+    geojson(POWER_SOURCE)?.setData(layer.counties);
     clearCountyTags();
-    countyMarkers = countyTags(counties.features).map((tag) => {
+    countyMarkers = layer.tags.map((tag) => {
       const element = document.createElement("div");
       element.className = "county-tag";
       element.textContent = tag.text;
@@ -264,7 +277,7 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
     },
     setFill(nextFill, file, step) {
       fill = nextFill;
-      power = file;
+      countyFile = file;
       powerStep = step;
       renderPower();
     },

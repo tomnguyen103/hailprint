@@ -13,7 +13,8 @@ export const BIN_EDGES = [0.01, 0.05, 0.15, 0.3] as const;
 
 /** A bin is a design token name, `none` for a zero share, or `gap` for a step the source did not report. */
 export type Bin = "none" | "gap" | "--out-1" | "--out-2" | "--out-3" | "--out-4" | "--out-5";
-export type Fill = "none" | "power";
+/** The county fill: one choice at a time, so the map never stacks two layers on the same outlines. */
+export type Fill = "none" | "power" | "internet";
 
 /** The five bins that draw a fill, lightest first. */
 export const FILLED_BINS: readonly Bin[] = ["--out-1", "--out-2", "--out-3", "--out-4", "--out-5"];

@@ -3,9 +3,10 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { fetchCounties, fetchCounty } from "../county";
 import { fetchJson } from "../data/fetch";
 import { guardSwath, guardWarnings } from "../data/guard";
-import { DataError, type PowerFile, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
+import { DataError, type InternetFile, type PowerFile, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
+import { internetNote } from "../impact/internet";
 import { type Fill, powerNote } from "../impact/power";
-import { PowerFillControl, PowerLegend } from "../impact/power-fill";
+import { InternetLegend, PowerFillControl, PowerLegend } from "../impact/power-fill";
 import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
 import { countyAt } from "../state/county";
@@ -29,6 +30,8 @@ interface Props {
   reports: Load<ReportsFile> & { retry: () => void };
   /** The power file load; the workspace owns it because its Harris peak sets the default step. */
   power: Load<PowerFile | null>;
+  /** The internet file load; the workspace owns it so the data pane reads the same file. */
+  internet: Load<InternetFile | null>;
   step: number;
   onStep: (step: number) => void;
   /** The picked county for the power strip; the workspace owns it so a pick never moves the step. */
@@ -36,7 +39,7 @@ interface Props {
   onCounty: (fips: string) => void;
 }
 
-export function MapPane({ storm, reports, power, step, onStep, fips, onCounty }: Props) {
+export function MapPane({ storm, reports, power, internet, step, onStep, fips, onCounty }: Props) {
   const swath = useLoad(storm.files.swath, () => fetchJson(storm.files.swath, guardSwath));
   const county = useLoad("county", fetchCounty);
   const metro = useLoad("counties", fetchCounties);
@@ -107,6 +110,7 @@ export function MapPane({ storm, reports, power, step, onStep, fips, onCounty }:
   const countyData: FeatureCollection<MultiPolygon> | null = county.status === "ready" ? county.data : null;
   const warningsData = warnings.status === "ready" ? warnings.data : null;
   const powerData = power.status === "ready" ? power.data : null;
+  const internetData = internet.status === "ready" ? internet.data : null;
   const outlines: FeatureCollection<MultiPolygon> | null = metro.status === "ready" ? metro.data : null;
   outlinesRef.current = outlines;
   useEffect(() => {
@@ -117,8 +121,8 @@ export function MapPane({ storm, reports, power, step, onStep, fips, onCounty }:
     if (ready) handle.current?.setCounties(outlines);
   }, [ready, outlines]);
   useEffect(() => {
-    if (ready) handle.current?.setFill(fill, powerData, step);
-  }, [ready, fill, powerData, step]);
+    if (ready) handle.current?.setFill(fill, fill === "internet" ? internetData : powerData, step);
+  }, [ready, fill, powerData, internetData, step]);
   useEffect(() => {
     if (!ready || !handle.current || !swathData) return;
     handle.current.fit(boundsOf(swathData));
@@ -166,6 +170,9 @@ export function MapPane({ storm, reports, power, step, onStep, fips, onCounty }:
   // A failed power file or county file hides the fill with one line; the hail map stays.
   const powerAvailable = powerData !== null && outlines !== null;
   const powerLine = powerNote(storm.files.power, power) ?? (metro.status === "error" ? `Power off. ${metro.error.message}` : null);
+  const internetAvailable = internetData !== null && outlines !== null;
+  const internetLine =
+    internetNote(storm.files.internet, internet) ?? (metro.status === "error" ? `Internet reachability off. ${metro.error.message}` : null);
   return (
     <div class="map-pane" data-inspector={pick !== null}>
       <div class="map-main">
@@ -188,10 +195,16 @@ export function MapPane({ storm, reports, power, step, onStep, fips, onCounty }:
           ) : null}
           <div class="map-controls">
             <LayersControl layers={layers} warnings={{ available: warningsData !== null, note: warningsLine }} onToggle={toggleLayer} />
-            <PowerFillControl fill={fill} available={powerAvailable} note={powerLine} onFill={setFill} />
+            <PowerFillControl
+              fill={fill}
+              power={{ available: powerAvailable, note: powerLine }}
+              internet={{ available: internetAvailable, note: internetLine }}
+              onFill={setFill}
+            />
           </div>
           <div class="map-legends">
             <PowerLegend fill={powerAvailable ? fill : "none"} source={powerData?.source ?? "eaglei"} />
+            <InternetLegend fill={internetAvailable ? fill : "none"} />
             <RulerLegend hidden={hidden} onToggle={toggle} />
           </div>
         </div>
@@ -203,12 +216,23 @@ export function MapPane({ storm, reports, power, step, onStep, fips, onCounty }:
           note={warningsLine}
           reports={reportsData}
           power={powerData}
+          internet={internetData}
+          internetNote={internetLine}
           fips={fips}
           onStep={onStep}
         />
       </div>
       {pick !== null && receipt !== null ? (
-        <Inspector pick={pick} receipt={receipt} power={powerData} step={step} fips={fips} onCounty={onCounty} onClose={close} />
+        <Inspector
+          pick={pick}
+          receipt={receipt}
+          power={powerData}
+          internet={internetData}
+          step={step}
+          fips={fips}
+          onCounty={onCounty}
+          onClose={close}
+        />
       ) : null}
     </div>
   );

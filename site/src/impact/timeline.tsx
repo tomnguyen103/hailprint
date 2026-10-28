@@ -1,7 +1,17 @@
-import { PHENOMENA, type Phenomena, type PowerCounty, type PowerFile, type ReportsFile, type WarningsFile } from "../data/types";
+import {
+  type InternetCounty,
+  type InternetFile,
+  PHENOMENA,
+  type Phenomena,
+  type PowerCounty,
+  type PowerFile,
+  type ReportsFile,
+  type WarningsFile,
+} from "../data/types";
 import { formatCount, formatInches } from "../format";
 import "../styles/time.css";
 import { LAST_STEP, STEPS, STEP_MS, reportStep, stepTime } from "../time/step";
+import { dropOf } from "./internet";
 import { ODIN_LABEL, percentText, shareOut } from "./power";
 import { WARNING_STYLES } from "./warning-styles";
 
@@ -17,6 +27,12 @@ const POWER_H = 40;
 const POWER_PAD = 4;
 /** The scale of the power row never drops below 1% of customers, so a tiny outage stays a small line. */
 const SCALE_FLOOR = 0.01;
+/** The internet row sits between the power row and the warnings row. */
+const NET_H = 40;
+const NET_PAD = 4;
+/** The internet row always spans at least this much of the baseline, so a tiny drop stays a small line. */
+const NET_SPAN_FLOOR = 0.1;
+const NO_SIGNAL = "No county signal";
 /** The bar stroke in screen px; the dash lengths scale from it. */
 const BAR_PX = 6;
 const TICK_INSET = 6;
@@ -120,17 +136,74 @@ export function powerSeries(file: PowerFile | null, fips: string): PowerSeries |
   return { county, shares, peak, peakStep, gapSteps: shares.filter((s) => s === null).length, scale: Math.max(peak ?? 0, SCALE_FLOOR) };
 }
 
+export interface InternetSeries {
+  county: InternetCounty;
+  /** Reachability over baseline per step; null where the signal has no points. */
+  ratios: (number | null)[];
+  /** The lowest ratio; null when every step is a gap. */
+  low: number | null;
+  /** The first step of the lowest ratio; null when no step is below baseline. */
+  lowStep: number | null;
+  gapSteps: number;
+  /** The ratios at the top and the bottom of the row: baseline (1) or the highest ratio, down to the lowest ratio or a 10% span. */
+  top: number;
+  bottom: number;
+}
+
+/** The picked county as ratios, with the low point, the gap count, and the row scale; null for a file or county that is absent. */
+export function internetSeries(file: InternetFile | null, fips: string): InternetSeries | null {
+  const county = file?.counties.find((c) => c.fips === fips);
+  if (county === undefined) return null;
+  const values = county.ratio.filter((r): r is number => r !== null);
+  const low = values.length === 0 ? null : Math.min(...values);
+  const top = Math.max(1, ...values);
+  const lowStep = low !== null && (dropOf(low) ?? 0) > 0 ? county.ratio.indexOf(low) : null;
+  return {
+    county,
+    ratios: county.ratio,
+    low,
+    lowStep,
+    gapSteps: county.ratio.length - values.length,
+    top,
+    bottom: Math.max(0, Math.min(low ?? 1, top - NET_SPAN_FLOOR)),
+  };
+}
+
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const showStep = (n: number) => String(Math.round(n * 10) / 10);
 const DAY = new Intl.DateTimeFormat("en-US", { day: "numeric", month: "short", timeZone: "UTC" });
 const axisLabel = (date: string, step: number) => `12Z ${DAY.format(stepTime(date, step))}`;
 const NO_DATA = percentText(null);
 
-/** The y of every row; the warnings and reports rows move down by the power row when one is drawn. */
-function layout(withPower: boolean) {
-  const warningsY = withPower ? POWER_H + GAP : 0;
+/** The y of every row, top to bottom: power, internet, warnings, reports. Each row below moves down by the rows drawn above it. */
+function layout(withPower: boolean, withInternet: boolean) {
+  const internetY = withPower ? POWER_H + GAP : 0;
+  const warningsY = withInternet ? internetY + NET_H + GAP : internetY;
   const reportsY = warningsY + WARNINGS_H + GAP;
-  return { warningsY, reportsY, height: reportsY + REPORTS_H };
+  return { internetY, warningsY, reportsY, height: reportsY + REPORTS_H };
+}
+
+/** The y of a ratio inside the internet row, which spans 0 to NET_H. */
+const netY = ({ top, bottom }: InternetSeries, ratio: number) =>
+  NET_H - NET_PAD - ((ratio - bottom) / (top - bottom)) * (NET_H - 2 * NET_PAD);
+
+/** One path per run of values, a point at the middle of each step. A run of one step is a dot. */
+function internetPaths(series: InternetSeries): string[] {
+  return runsOf(series.ratios)
+    .filter((run) => !run.gap)
+    .map((run) => {
+      const points = series.ratios
+        .slice(run.from, run.to)
+        .map((ratio, i) => `${(run.from + i + 0.5) * STEP_PX} ${netY(series, ratio ?? 1).toFixed(2)}`);
+      return `M${(points.length === 1 ? [...points, ...points] : points).join("L")}`;
+    });
+}
+
+function internetTitle({ county, low, lowStep, gapSteps }: InternetSeries): string {
+  if (low === null) return `${county.name} County: no data.`;
+  const parts = [lowStep === null ? "no drop below baseline" : `largest drop ${percentText(dropOf(low))} below baseline at step ${lowStep}`];
+  if (gapSteps > 0) parts.push(`${plural(gapSteps, "step")} without data`);
+  return `${county.name} County: ${parts.join("; ")}.`;
 }
 
 /** One path per run of values, a point at the middle of each step. A run of one step is a dot. */
@@ -162,7 +235,11 @@ interface Props {
   reports: ReportsFile | null;
   /** The power file; null draws no power row. */
   power: PowerFile | null;
-  /** The picked county; a county the file lacks draws no power row. */
+  /** The internet file; null draws no internet row, unless `internetNote` says the file is off. */
+  internet: InternetFile | null;
+  /** The one line that tells why `internet` is null or off; null while the file loads. It only turns the row on. */
+  internetNote: string | null;
+  /** The picked county; a county the file lacks draws no power or internet row. */
   fips: string;
   onStep: (step: number) => void;
 }
@@ -174,11 +251,14 @@ type StripClick = (event: { clientX: number; currentTarget: { getBoundingClientR
  * A click on a strip moves the step. The slider stays the keyboard path, so the strips take no focus.
  * shortcut: bars that overlap in one row draw on top of each other; the Data pane table lists every one.
  */
-export function Timeline({ date, step, warnings, note, reports, power, fips, onStep }: Props) {
+export function Timeline({ date, step, warnings, note, reports, power, internet, internetNote, fips, onStep }: Props) {
   const bars = warningBars(warnings, date);
   const ticks = reportTicks(reports);
   const series = powerSeries(power, fips);
-  const { warningsY, reportsY, height } = layout(series !== null);
+  const net = internetSeries(internet, fips);
+  // The internet row shows for a county with a series, and for a settled file that is off or missing; a loading file shows none.
+  const withInternet = net !== null || internetNote !== null;
+  const { internetY, warningsY, reportsY, height } = layout(series !== null, withInternet);
   const pick: StripClick = (event) => onStep(stepAt(event.clientX, event.currentTarget.getBoundingClientRect()));
   const end = stepTime(date, STEPS).toISOString().slice(0, 10);
   // A null file reads as unavailable, never as a count of zero.
@@ -186,11 +266,19 @@ export function Timeline({ date, step, warnings, note, reports, power, fips, onS
     warnings === null ? "warnings unavailable" : plural(bars.length, "warning"),
     reports === null ? "reports unavailable" : plural(ticks.length, "report"),
     ...(series === null ? [] : [`${series.county.name} power ${series.peak === null ? "unavailable" : `peak ${percentText(series.peak)}`}`]),
+    ...(!withInternet
+      ? []
+      : [
+          net === null || net.low === null
+            ? "internet reachability unavailable"
+            : `${net.county.name} internet reachability largest drop ${percentText(dropOf(net.low))}`,
+        ]),
   ];
   const title = `Storm timeline for ${date}, 12:00 UTC to 12:00 UTC ${end}: ${counts.join(", ")}.`;
   const cursorX = step * STEP_PX;
-  // The empty-state line sits over the warnings row, which the power row moves down.
+  // The empty-state lines sit over their rows, which the rows above move down.
   const emptyStyle = warningsY > 0 ? { top: `${warningsY}px` } : undefined;
+  const netEmptyStyle = internetY > 0 ? { top: `${internetY}px` } : undefined;
   return (
     <section class="timeline" aria-labelledby="timeline-heading">
       <h3 id="timeline-heading" class="timeline-heading">
@@ -200,6 +288,9 @@ export function Timeline({ date, step, warnings, note, reports, power, fips, onS
         <ul class="timeline-labels mono" aria-hidden="true">
           {series === null ? null : (
             <li style={{ height: `${POWER_H}px`, marginBottom: `${GAP}px` }}>Power</li>
+          )}
+          {!withInternet ? null : (
+            <li style={{ height: `${NET_H}px`, marginBottom: `${GAP}px` }}>Internet</li>
           )}
           {PHENOMENA.map((phenomena) => (
             <li key={phenomena} style={{ height: `${ROW_H}px` }}>
@@ -223,6 +314,11 @@ export function Timeline({ date, step, warnings, note, reports, power, fips, onS
                 <title>{powerTitle(series)}</title>
               </rect>
             )}
+            {!withInternet ? null : (
+              <rect class="timeline-strip" data-strip="internet" x={0} y={internetY} width={WIDTH} height={NET_H} onClick={pick}>
+                {net === null ? null : <title>{internetTitle(net)}</title>}
+              </rect>
+            )}
             <rect class="timeline-strip" data-strip="warnings" x={0} y={warningsY} width={WIDTH} height={WARNINGS_H} onClick={pick} />
             <rect class="timeline-strip" data-strip="reports" x={0} y={reportsY} width={WIDTH} height={REPORTS_H} onClick={pick} />
             {AXIS_STEPS.slice(1, -1).map((at) => (
@@ -243,6 +339,26 @@ export function Timeline({ date, step, warnings, note, reports, power, fips, onS
                     />
                   ))}
             {series === null ? null : powerPaths(series).map((d, i) => <path key={i} class="timeline-power-line" d={d} />)}
+            {net === null || net.low === null ? null : (
+              <g transform={`translate(0 ${internetY})`}>
+                <line class="timeline-net-base" x1={0} x2={WIDTH} y1={netY(net, 1)} y2={netY(net, 1)} />
+                {runsOf(net.ratios)
+                  .filter((run) => run.gap)
+                  .map((run) => (
+                    <rect
+                      key={run.from}
+                      class="timeline-net-gap"
+                      x={run.from * STEP_PX}
+                      y={0}
+                      width={(run.to - run.from) * STEP_PX}
+                      height={NET_H}
+                    />
+                  ))}
+                {internetPaths(net).map((d, i) => (
+                  <path key={i} class="timeline-net-line" d={d} />
+                ))}
+              </g>
+            )}
             {bars.map((bar) => {
               const style = WARNING_STYLES[bar.phenomena];
               const y = warningsY + PHENOMENA.indexOf(bar.phenomena) * ROW_H + ROW_H / 2;
@@ -281,6 +397,11 @@ export function Timeline({ date, step, warnings, note, reports, power, fips, onS
               {note}
             </p>
           ) : null}
+          {withInternet && (net === null || net.low === null) ? (
+            <p class="timeline-empty" style={netEmptyStyle}>
+              {NO_SIGNAL}
+            </p>
+          ) : null}
           <div class="timeline-axis mono" aria-hidden="true">
             {AXIS_STEPS.map((at) => (
               <span key={at}>{axisLabel(date, at)}</span>
@@ -290,6 +411,11 @@ export function Timeline({ date, step, warnings, note, reports, power, fips, onS
             <p class="timeline-power-note">
               {`Power out, ${series.county.name} County. Scale 0 to ${percentText(series.scale)}.`}
               {power?.source === "odin" ? <strong class="timeline-power-source">{ODIN_LABEL}</strong> : null}
+            </p>
+          )}
+          {net === null || net.low === null ? null : (
+            <p class="timeline-power-note">
+              {`Internet reachability, ${net.county.name} County. Scale ${net.bottom.toFixed(2)} to ${net.top.toFixed(2)} of baseline.`}
             </p>
           )}
         </div>
@@ -334,8 +460,39 @@ export function PowerTable({ date, power, fips }: { date: string; power: PowerFi
   );
 }
 
+/** The internet strip numbers for the picked county, one row per step: the same ratios the strip draws. */
+export function InternetTable({ date, internet, fips }: { date: string; internet: InternetFile; fips: string }) {
+  const series = internetSeries(internet, fips);
+  if (series === null) return <p>No internet data for this county</p>;
+  return (
+    <div class="table-scroll power-table">
+      <table class="table">
+        <caption>{`Internet reachability for ${series.county.name} County, steps from 12:00 UTC on ${date}`}</caption>
+        <thead>
+          <tr>
+            <th class="num">Step</th>
+            <th>Time (UTC)</th>
+            <th class="num">Ratio to baseline</th>
+            <th class="num">Drop below baseline</th>
+          </tr>
+        </thead>
+        <tbody>
+          {series.ratios.map((ratio, step) => (
+            <tr key={step}>
+              <td class="num">{step}</td>
+              <td class="mono">{UTC_MINUTE(stepTime(date, step).toISOString())}</td>
+              <td class="num">{ratio === null ? NO_DATA : ratio.toFixed(3)}</td>
+              <td class="num">{percentText(dropOf(ratio))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /** The chart numbers as tables for screen readers and the Data pane: the same bars and ticks, step for step. */
-export function TimelineTables({ date, warnings, reports }: Omit<Props, "step" | "note" | "power" | "fips" | "onStep">) {
+export function TimelineTables({ date, warnings, reports }: Omit<Props, "step" | "note" | "power" | "internet" | "internetNote" | "fips" | "onStep">) {
   const bars = warningBars(warnings, date);
   const ticks = reportTicks(reports);
   return (
