@@ -67,6 +67,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Slot | The quarter hour at or before the fetch time of an ODIN snapshot, in UTC (`odin.slot_of`). A rerun of a slot replaces its rows. A step reads the snapshot whose slot equals the step start. |
 | Warning polygon | One NWS storm-based warning polygon (`SV`, `TO`, or `FF`, significance `W`) from WFO HGX, with its begin and end time. `hailprint warnings` stores them per storm date. |
 | Impact layer | A map layer with a time axis. The warnings layer is the first one. |
+| Fill spec | `FillSpec` in `site/src/impact/fill-spec.ts`: the edges, bin names, labels, and bin function (`binOf`) of the county fill of one impact layer. `POWER_FILL` and `NET_FILL` are the two fill specs. |
 | Time slider | The native range under the map over the 192 steps of the impact window. The step in the path `/storms/<date>/map/<step>` is its value. |
 | Storm timeline | The chart under the time slider with strips on the 48-hour axis: power, the share out of the picked county; internet, the drop of the picked county; warnings, one bar per warning polygon; and report times, one tick per SPC report. A cursor marks the slider step, and a click on a strip moves it. |
 | EAGLE-I | The ORNL record of customers out per county, one CSV per year, every 15 minutes, in UTC. `hailprint eaglei <year>` stores the metro rows. |

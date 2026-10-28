@@ -99,6 +99,10 @@ same radius rule as `publish.rescore`. Every MapLibre import lives under `site/s
 
 The `<step>` in `/storms/<date>/map/<step>` is a number from 0 to 191. Step 0 starts at 12:00 UTC on D, and each step lasts 15 minutes.
 `site/src/time/` holds the step math and the time slider. `site/src/impact/` holds the storm timeline.
+In `site/src/impact/`, `fill-spec.ts` holds `FillSpec` and `binOf`, the one fill rule that `power.ts` and `internet.ts` share.
+`series.ts` holds the pure series math. `timeline-chart.tsx` draws the chart, `timeline-tables.tsx` draws the number tables, and `timeline.tsx` joins them.
+`site/src/data/constants.ts` holds the constants of the data layer (`METRO_FIPS`, `HARRIS_FIPS`). `site/src/data/` imports nothing above itself.
+`site/src/geometry.ts` holds `containsPoint`, the point-in-polygon test, with no MapLibre import.
 The warnings layer sits under `site/src/storms/map/`, and the layers control sits in `site/src/storms/map-pane.tsx`.
 `design.md` at the repo root is the locked design system: the tokens, the archetype of each area, and the layout rules.
 Read it before a UI change.
