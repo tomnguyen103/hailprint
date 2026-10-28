@@ -82,6 +82,8 @@ def test_parse_skips_a_null_value_and_keeps_the_epoch_of_the_others():
         _body([1]).replace(b'"values": [1]', b'"values": [-4]'),
         _body([1]).replace(b'"values": [1]', b'"values": [1' + b"0" * 400 + b"]"),
         _body([1]).replace(f'"from": {FIRST}'.encode(), b'"from": true'),
+        _body([1]).replace(b'"values": [1]', b'"values": [1e308]'),
+        _body([1]).replace(b'"values": [1]', f'"values": [{internet.MAX_COUNT + 1}]'.encode()),
     ],
 )
 def test_parse_rejects_a_response_that_is_not_the_signal_shape(body):

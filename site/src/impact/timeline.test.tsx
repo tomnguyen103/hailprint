@@ -515,6 +515,10 @@ describe("the internet strip", () => {
       const lines = findAll(tree, withClass("timeline-empty")).map(textOf);
       expect(lines).toContain(internetNote);
       expect(lines).not.toContain("No county signal");
+      expect(textOf(netStrip(tree)[0])).toContain(internetNote);
+      const [note] = findAll(tree, withClass("timeline-empty-net"));
+      expect(note!.type).toBe("p");
+      expect((note!.props["children"] as { type: string }).type).toBe("span");
     }
     const loading = chart({ internet: null, internetNote: null }).tree;
     expect(netStrip(loading)).toHaveLength(0);
@@ -539,7 +543,9 @@ describe("the internet strip", () => {
     expect(text).toContain("largest drop 20.0% below baseline at step 20");
     expect(text).toContain("1 step without data");
     expect(textOf(findAll(tree, (v) => v.type === "title")[0])).toContain("Harris internet reachability largest drop 20.0%");
-    expect(textOf(netStrip(chart({ internet: internet() }).tree)[0])).toContain("no drop below baseline");
+    const steady = chart({ internet: internet() }).tree;
+    expect(textOf(netStrip(steady)[0])).toContain("no drop below baseline");
+    expect(textOf(findAll(steady, (v) => v.type === "title")[0])).toContain("Harris internet reachability no drop below baseline");
   });
 
   it("uses no word that blames the weather or says the line failed", () => {

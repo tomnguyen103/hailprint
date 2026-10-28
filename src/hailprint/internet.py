@@ -17,6 +17,7 @@ DATASOURCE = "ping-slash24"
 METADATA = {"source": "ioda", "product": DATASOURCE}
 SIGNAL_STEP_S = 600  # IODA answers ping-slash24 every 10 minutes
 STEP_S = int(STEP.total_seconds())
+MAX_COUNT = 2**24  # the count of /24 blocks in all of IPv4; a larger value is not a signal
 BASELINE_DAYS = 7
 # A baseline needs at least half of its points: 504 of the 1008 in 7 days.
 BASELINE_MIN_POINTS = BASELINE_DAYS * 86400 // SIGNAL_STEP_S // 2
@@ -47,7 +48,7 @@ def _count(value: object) -> bool:
     if not isinstance(value, (int, float)) or isinstance(value, bool):
         return False
     try:
-        return math.isfinite(value) and value >= 0
+        return math.isfinite(value) and 0 <= value <= MAX_COUNT
     except OverflowError:  # an int too large for a float
         return False
 

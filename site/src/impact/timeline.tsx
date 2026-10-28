@@ -237,7 +237,7 @@ interface Props {
   power: PowerFile | null;
   /** The internet file; null draws no internet row, unless `internetNote` says the file is off. */
   internet: InternetFile | null;
-  /** The one line that tells why `internet` is null or off; null while the file loads. It only turns the row on. */
+  /** The one line that tells why `internet` is null or off; null while the file loads. A line turns the row on and names the strip. */
   internetNote: string | null;
   /** The picked county; a county the file lacks draws no power or internet row. */
   fips: string;
@@ -271,7 +271,9 @@ export function Timeline({ date, step, warnings, note, reports, power, internet,
       : [
           net === null || net.low === null
             ? "internet reachability unavailable"
-            : `${net.county.name} internet reachability largest drop ${percentText(dropOf(net.low))}`,
+            : net.lowStep === null
+              ? `${net.county.name} internet reachability no drop below baseline`
+              : `${net.county.name} internet reachability largest drop ${percentText(dropOf(net.low))}`,
         ]),
   ];
   const title = `Storm timeline for ${date}, 12:00 UTC to 12:00 UTC ${end}: ${counts.join(", ")}.`;
@@ -316,7 +318,7 @@ export function Timeline({ date, step, warnings, note, reports, power, internet,
             )}
             {!withInternet ? null : (
               <rect class="timeline-strip" data-strip="internet" x={0} y={internetY} width={WIDTH} height={NET_H} onClick={pick}>
-                {net === null ? null : <title>{internetTitle(net)}</title>}
+                <title>{net === null ? internetNote : internetTitle(net)}</title>
               </rect>
             )}
             <rect class="timeline-strip" data-strip="warnings" x={0} y={warningsY} width={WIDTH} height={WARNINGS_H} onClick={pick} />
@@ -398,8 +400,8 @@ export function Timeline({ date, step, warnings, note, reports, power, internet,
             </p>
           ) : null}
           {withInternet && (net === null || net.low === null) ? (
-            <p class="timeline-empty" style={netEmptyStyle}>
-              {net === null ? internetNote : NO_SIGNAL}
+            <p class="timeline-empty timeline-empty-net" style={netEmptyStyle}>
+              <span>{net === null ? internetNote : NO_SIGNAL}</span>
             </p>
           ) : null}
           <div class="timeline-axis mono" aria-hidden="true">

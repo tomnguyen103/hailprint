@@ -221,10 +221,25 @@
   display: grid;
   height: 48px;
   margin: 0;
+  padding-inline: 4px;
   place-items: center;
   color: var(--ink-muted);
   font-size: 0.85rem;
+  text-align: center;
   pointer-events: none;
+}
+
+/* The internet row is 40px tall; a long note stops at two lines with an ellipsis. */
+.timeline-empty-net {
+  height: 40px;
+}
+
+.timeline-empty-net > span {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .timeline .timeline-axis {

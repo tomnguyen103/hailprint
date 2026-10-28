@@ -151,7 +151,7 @@ def build_parser() -> argparse.ArgumentParser:
     internet_cmd.add_argument(
         "--missing",
         action="store_true",
-        help="fetch each swath date with a closed impact window and no internet file",
+        help="fetch each swath date with a closed impact window and no settled internet file",
     )
     publish_cmd = commands.add_parser(
         "publish", help="write the site data files and the storms index for storm dates"
@@ -517,11 +517,12 @@ def _internet_settled(storm_date: date, now: datetime) -> bool:
     path = INTERNET_DIR / internet.file_name(storm_date)
     if not path.exists():
         return False
+    try:
+        has_ratio = bool(pd.read_parquet(path, columns=["ratio"])["ratio"].notna().any())
+    except (OSError, ValueError, KeyError):  # an unreadable file is fetched again and rewritten
+        return False
     # a gap is never zero: an all-null file of a fresh date may be a late IODA feed
-    return (
-        bool(pd.read_parquet(path, columns=["ratio"])["ratio"].notna().any())
-        or (now.date() - storm_date).days > candidates.FRESH_DAYS
-    )
+    return has_ratio or (now.date() - storm_date).days > candidates.FRESH_DAYS
 
 
 def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:

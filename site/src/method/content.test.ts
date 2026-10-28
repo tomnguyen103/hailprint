@@ -61,7 +61,8 @@ it("states the internet baseline, the ratio, the drop, the coverage, and the pub
   expect(text).toContain("The ratio is the signal divided by the baseline.");
   expect(text).toContain("The drop is 1 minus the ratio, never below zero.");
   expect(text).toContain("from 2022-03 to 2024-05 only");
-  expect(text).toContain("have no internet file");
+  expect(text).toContain("has no internet file");
+  expect(text).toContain("reads No county signal.");
   expect(text).toContain("--with-internet");
   expect(text).toContain("internet reachability below baseline");
 });

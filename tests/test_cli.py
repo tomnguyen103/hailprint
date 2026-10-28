@@ -1150,6 +1150,17 @@ def test_internet_missing_asks_again_for_an_all_null_file_only_while_the_date_is
     assert asked == {str(int(sbw.window(fresh)[0].timestamp()) - internet.BASELINE_DAYS * 86400)}
 
 
+def test_internet_missing_fetches_again_a_date_whose_file_cannot_be_read(env, ioda):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    env.internet.mkdir(parents=True, exist_ok=True)
+    _internet_file(env, LATER).write_bytes(b"not a parquet file")
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert pd.read_parquet(_internet_file(env, LATER))["ratio"].eq(1.0).any()
+
+
 def test_internet_missing_skips_a_date_whose_impact_window_is_not_closed(env, ioda):
     env.add_day(LATER)
     shutil.copy(
