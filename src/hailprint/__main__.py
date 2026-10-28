@@ -16,6 +16,7 @@ import geopandas as gpd
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import shapely.errors
 
 from hailprint import (
     archive,
@@ -52,8 +53,16 @@ LOCK_FILE = "publish.lock"
 ODIN_LOCK_FILE = "odin.lock"
 # What a derived Parquet that cannot serve its layer raises: a bad file, a missing column or
 # metadata key, a column of the wrong type (`ArrowTypeError` is a TypeError; `.dt` raises an
-# AttributeError).
-_UNREADABLE = (OSError, ValueError, KeyError, TypeError, AttributeError, pa.ArrowException)
+# AttributeError). A geometry column with invalid WKB raises a GEOSException, a ShapelyError.
+_UNREADABLE = (
+    OSError,
+    ValueError,
+    KeyError,
+    TypeError,
+    AttributeError,
+    pa.ArrowException,
+    shapely.errors.ShapelyError,
+)
 
 
 def _storm_date(text: str) -> date:
@@ -638,7 +647,7 @@ def _impact_layer(
         doc = publish.layer_doc(kind, frame, source, storm_date, run_time)
         publish.validate(doc, kind)
         publish.dumps(doc, kind)
-    except _UNREADABLE as exc:  # the command of the layer rebuilds the file
+    except _UNREADABLE as exc:  # an explicit `<kind> <date>` run rebuilds the file
         print(f"{path.name}: unreadable, {kind} layer skipped: {exc!r}", file=sys.stderr)
         return None
     return frame, source
@@ -649,7 +658,8 @@ def publish_days(storm_dates: list[date], with_internet: bool = False) -> list[P
 
     One run at a time: a second run that finds the lock file stops with exit 1. A date without
     an SPC daily CSV is skipped. A date that fails a check writes no file and is named in the
-    final error. A bad internet file skips the internet layer of its date and fails nothing.
+    final error. A bad warnings, power, or internet file skips that layer of its date and fails
+    nothing.
     The index holds the dates of this run over the entries of the earlier runs.
     A malformed storms.json, pipeline.json, or archive index stops the run before any write. A
     malformed per-date file of an earlier run, or a pipeline document that fails its schema,
@@ -742,7 +752,7 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
                 else None,
             )
         except _UNREADABLE as exc:  # a required file fails its date; the other dates publish
-            detail = str(exc) if isinstance(exc, ValueError) else repr(exc)
+            detail = f"{type(exc).__name__}: {exc}" if isinstance(exc, ValueError) else repr(exc)
             print(f"{storm_date}: {detail}", file=sys.stderr)
             failed.append(storm_date.isoformat())
             continue

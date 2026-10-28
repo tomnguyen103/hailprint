@@ -1584,6 +1584,27 @@ def test_publish_skips_the_warnings_layer_of_a_warnings_file_without_a_column(
     assert files_entry["power"] == f"storms/{LATER}/{publish.POWER_FILE}"
 
 
+def test_publish_skips_the_warnings_layer_of_a_warnings_file_with_an_invalid_geometry(
+    env, iem, capsys
+):
+    env.add_day(LATER)
+    cli.main(["warnings", "2024-05-28"])
+    path = _warnings_file(env, LATER)
+    table = pq.read_table(path)
+    column = table.schema.get_field_index("geometry")
+    bad_wkb = pa.array([b"not a geometry"] * table.num_rows, type=pa.binary())
+    pq.write_table(table.set_column(column, "geometry", bad_wkb), path)
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    err = capsys.readouterr().err
+    assert "warnings-2024-05-28.parquet" in err and "warnings layer skipped" in err
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert not (env.storm_dir(LATER) / publish.WARNINGS_FILE).exists()
+    assert env.index()["storms"][0]["files"]["warnings"] is None
+
+
 def test_publish_fails_only_the_date_of_a_swath_file_it_cannot_read(env, capsys):
     env.add_day(LATER)
     broken = env.add_day(EARLIER)
@@ -1594,6 +1615,20 @@ def test_publish_fails_only_the_date_of_a_swath_file_it_cannot_read(env, capsys)
 
     err = capsys.readouterr().err
     assert str(EARLIER) in err and "KeyError" in err
+    assert [s["storm_date"] for s in env.index()["storms"]] == [str(LATER)]
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert not env.storm_dir(EARLIER).exists()
+
+
+def test_publish_names_the_date_and_the_error_class_of_a_truncated_swath_file(env, capsys):
+    env.add_day(LATER)
+    broken = env.add_day(EARLIER)
+    broken.write_bytes(broken.read_bytes()[: broken.stat().st_size // 2])
+
+    assert cli.main(["publish"]) == 1
+
+    err = capsys.readouterr().err
+    assert str(EARLIER) in err and "ArrowInvalid" in err
     assert [s["storm_date"] for s in env.index()["storms"]] == [str(LATER)]
     assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
     assert not env.storm_dir(EARLIER).exists()
@@ -1766,21 +1801,27 @@ def test_publish_keeps_the_old_internet_json_when_the_index_fails_validation(
     cli.main(["internet", "2024-05-28"])
     cli.main(["publish", "2024-05-28", "--with-internet"])
     index = (env.site / "storms.json").read_bytes()
-    validate = publish.validate
-    storms_checks = []
+    validate, merge_entries = publish.validate, publish.merge_entries
+    merged, rejected = [], []
+
+    def merge_then_flag(*args, **kwargs):
+        result = merge_entries(*args, **kwargs)
+        merged.append(True)
+        return result
 
     def reject_the_merged_index(doc, kind):
-        # the checks of kind storms: the old index, the entry of the date, then the merged index
-        if kind == "storms":
-            storms_checks.append(doc)
-            if len(storms_checks) == 3:
-                raise ValueError("the storms document is rejected")
+        # only the storms check after the merge is the index check; an earlier one passes
+        if kind == "storms" and merged:
+            rejected.append(doc)
+            raise ValueError("the storms document is rejected")
         validate(doc, kind)
 
+    monkeypatch.setattr(publish, "merge_entries", merge_then_flag)
     monkeypatch.setattr(publish, "validate", reject_the_merged_index)
 
     assert cli.main(["publish", "2024-05-28"]) == 1
 
+    assert rejected
     assert (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
     assert (env.site / "storms.json").read_bytes() == index
 
