@@ -1,13 +1,14 @@
 import type { Feature, MultiPolygon, Point } from "geojson";
 import type { ComponentChild, VNode } from "preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { HARRIS_FIPS } from "../data/constants";
 import type { InternetFile, Phenomena, PowerFile, ReportProps, ReportsFile, Receipt, WarningProps, WarningsFile } from "../data/types";
 import { FORBIDDEN_WORD } from "../method/prose";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { FileItem } from "../storms/data-pane";
 import { CountySection, InternetSection, countyRows } from "../storms/map/inspector";
 import { createPlayer } from "../time/slider";
-import { HARRIS_FIPS, ODIN_LABEL, percentText, shareOut } from "./power";
+import { ODIN_LABEL, percentText, shareOut } from "./power";
 import {
   InternetTable,
   PowerTable,

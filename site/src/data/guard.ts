@@ -2,9 +2,7 @@
 // and the first missing or mistyped key, so the error state can name the problem.
 // Each guard checks every key the site reads from that file, and nothing more.
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { METRO_FIPS } from "../impact/power";
-import { DATE } from "../router";
-import { STEPS } from "../time/step";
+import { DATE, METRO_FIPS, STEPS } from "./constants";
 import type {
   InternetFile,
   Pairs,

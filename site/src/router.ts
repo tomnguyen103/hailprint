@@ -1,6 +1,7 @@
 // History-API router. Pure: no Preact import, window touched only inside navigate/replace.
 // Routes carry zero query strings; href() is the one place that builds a path.
 
+import { DATE } from "./data/constants";
 import { isStep, parseStep } from "./time/step";
 
 export const AREAS = ["storms", "scorecard", "try", "method", "pipeline"] as const;
@@ -44,9 +45,6 @@ export type Target =
   | { area: "try"; tool?: TryTool }
   | { area: "method"; page?: MethodPage }
   | { area: "pipeline"; view?: PipelineView };
-
-/** A storm date as the path and the index carry it. The guards share it. */
-export const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isArea(value: string): value is Area { return (AREAS as readonly string[]).includes(value); }
 function isTab(value: string): value is Tab { return (TABS as readonly string[]).includes(value); }

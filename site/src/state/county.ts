@@ -1,5 +1,5 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { containsPoint } from "../storms/map/geo";
+import { containsPoint } from "../geometry";
 
 /**
  * The fips of the metro county that holds a map point, or null outside all of them.

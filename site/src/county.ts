@@ -1,5 +1,6 @@
 // Metro county bounds and outlines for the map. Pure: no MapLibre, no Preact.
 import type { FeatureCollection, MultiPolygon } from "geojson";
+import { HARRIS_FIPS } from "./data/constants";
 import { fetchJson } from "./data/fetch";
 import { guardOutline } from "./data/guard";
 
@@ -15,7 +16,6 @@ export const HARRIS_BBOX: Bbox = [-96.010733, 29.44752, -94.858498, 30.220606];
 export const METRO_BBOX: Bbox = [-96.242208, 28.77556588, -94.303383, 30.680284];
 
 export const COUNTIES_FILE = "/counties.geojson";
-const HARRIS_FIPS = "48201";
 
 export function contains(bbox: Bbox, [lon, lat]: [number, number]): boolean {
   return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];

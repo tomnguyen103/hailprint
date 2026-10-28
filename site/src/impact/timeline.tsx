@@ -1,3 +1,4 @@
+import { STEPS } from "../data/constants";
 import {
   type InternetCounty,
   type InternetFile,
@@ -10,7 +11,7 @@ import {
 } from "../data/types";
 import { formatCount, formatInches } from "../format";
 import "../styles/time.css";
-import { LAST_STEP, STEPS, STEP_MS, reportStep, stepTime } from "../time/step";
+import { LAST_STEP, STEP_MS, reportStep, stepTime } from "../time/step";
 import { dropOf } from "./internet";
 import { ODIN_LABEL, percentText, shareOut } from "./power";
 import { WARNING_STYLES } from "./warning-styles";

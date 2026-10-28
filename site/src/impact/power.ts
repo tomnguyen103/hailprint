@@ -1,13 +1,10 @@
 // The power county fill: share out, bins, the Harris peak, and the county features at a step.
 // Pure: no MapLibre, no Preact. The bin edges match the bin edges in src/hailprint/power.py.
 import type { Feature, FeatureCollection, MultiPolygon } from "geojson";
+import { HARRIS_FIPS } from "../data/constants";
 import type { PowerFile } from "../data/types";
 import type { Load } from "../state/load";
 import { binOf, type FillSpec } from "./fill-spec";
-
-/** The 8 metro counties in the order `power.json` lists them: Harris first. */
-export const METRO_FIPS = ["48201", "48157", "48339", "48039", "48167", "48473", "48291", "48071"] as const;
-export const HARRIS_FIPS = METRO_FIPS[0];
 
 /** The share out where each bin starts after the zero bin; `power.py` holds the same four numbers. */
 const EDGES = [0.01, 0.05, 0.15, 0.3] as const;

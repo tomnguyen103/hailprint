@@ -2,12 +2,11 @@ import type { FeatureCollection, MultiPolygon } from "geojson";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { HARRIS_FIPS, METRO_FIPS } from "../data/constants";
 import { DataError, type PowerFile } from "../data/types";
 import type { Load } from "../state/load";
 import { resolveStep } from "../time/step";
 import {
-  HARRIS_FIPS,
-  METRO_FIPS,
   ODIN_LABEL,
   POWER_FILL,
   countyFeatures,

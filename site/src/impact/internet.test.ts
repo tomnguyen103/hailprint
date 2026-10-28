@@ -1,9 +1,10 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { describe, expect, it } from "vitest";
+import { METRO_FIPS } from "../data/constants";
 import { DataError, type InternetFile, type PowerFile } from "../data/types";
 import { FORBIDDEN_WORD } from "../method/prose";
 import type { Load } from "../state/load";
-import { METRO_FIPS, percentText } from "./power";
+import { percentText } from "./power";
 import { NET_FILL, dropOf, internetFeatures, internetNote, isInternet } from "./internet";
 
 const receipt = {
