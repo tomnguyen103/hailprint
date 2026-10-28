@@ -285,7 +285,8 @@ Null and empty mean different things:
 The publish run for a date with no derived power file writes no `power.json`. The same
 holds for internet and warnings. An internet Parquet with no ratio at any step and county
 gives no `internet.json`, so the site shows "no county signal". The Parquet stays, so
-`internet --missing` does not ask IODA again. Thus 14 storm dates get `internet.json`.
+`internet --missing` stops asking IODA once the date is older than `candidates.FRESH_DAYS`.
+Thus 14 storm dates get `internet.json`.
 
 ## 6. Site architecture
 
@@ -546,7 +547,7 @@ next PR branches from fresh `main`.
 | The first publish after PR I meets an old `storms.json`. | The three keys are optional in the schema, and `merge_entries` defaults them to null (section 5.4). O10a pins it. |
 | A cron host on Windows renames over an open file. | `write_atomic` already holds the Windows rule from `docs/solutions/`. The ODIN day file has one writer. |
 | IODA never answers, or says no. | PR N stays unmerged. The other five PRs carry the feature. |
-| IODA restores county signals after 2024. | `--missing` asks again only when no file exists. A manual `internet <date>` rerun picks them up. |
+| IODA restores county signals after 2024. | `--missing` asks again only when no file exists or the file holds no ratio and the date is within `candidates.FRESH_DAYS`. A manual `internet <date>` rerun picks them up. |
 | ODIN changes its schema or goes offline. | The snapshot fails, logs one line, and the next one tries again. A storm date with snapshot gaps shows gaps. |
 | ODIN covers more utilities later. | `utilities` lists what each snapshot held; the label follows the data. |
 | The cron host misses snapshots during a storm. | Gaps, by the gap rule. The timeline shows them. |

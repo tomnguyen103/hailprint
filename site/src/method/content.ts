@@ -185,7 +185,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
         text:
           "IODA has a county signal from 2022-03 to 2024-05 only. A date outside that range has no internet file. " +
           "A date that the publish step ran without the flag has none either. The strip says so in both cases. " +
-          "A county with no signal in the window reads No county signal.",
+          "A county with no ratio at any step in the window reads No county signal.",
       },
       {
         kind: "prose",
