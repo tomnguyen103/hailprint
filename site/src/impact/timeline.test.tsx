@@ -10,7 +10,8 @@ import { CountySection, InternetSection, countyRows } from "../storms/map/inspec
 import { createPlayer } from "../time/slider";
 import { ODIN_LABEL, percentText, shareOut } from "./power";
 import { barKey, internetSeries, warningBars } from "./series";
-import { InternetTable, PowerTable, Timeline, TimelineTables } from "./timeline";
+import { TimelineView } from "./timeline";
+import { InternetTable, PowerTable, TimelineTables } from "./timeline-tables";
 
 type Node = VNode<Record<string, unknown>>;
 
@@ -57,9 +58,10 @@ const BEFORE_START = warning("SV", "2024-05-28T11:00:00Z", "2024-05-28T13:00:00Z
 const INSIDE = warning("TO", "2024-05-28T22:30:00Z", "2024-05-28T23:15:00Z", 102);
 const FLOOD = warning("FF", "2024-05-29T00:00:00Z", "2024-05-29T06:00:00Z", 103);
 
-function chart(props: Partial<Parameters<typeof Timeline>[0]> = {}) {
+function chart(props: Partial<Parameters<typeof TimelineView>[0]> = {}) {
   const calls: number[] = [];
-  const tree = Timeline({
+  const tree = TimelineView({
+    id: "timeline",
     date: DATE,
     step: 48,
     warnings: warnings(BEFORE_START, INSIDE, FLOOD),
@@ -188,6 +190,40 @@ describe("the empty and labelled states", () => {
   it("labels the rows with the type codes and the reports row", () => {
     const text = textOf(chart().tree);
     for (const word of ["SV", "TO", "FF", "Reports"]) expect(text).toContain(word);
+  });
+});
+
+describe("the ids", () => {
+  const view = (id: string) =>
+    TimelineView({
+      id,
+      date: DATE,
+      step: 48,
+      warnings: warnings(INSIDE),
+      note: null,
+      reports: reports(report(1, "1200")),
+      power: null,
+      internet: null,
+      internetNote: null,
+      fips: HARRIS_FIPS,
+      onStep: () => undefined,
+    });
+  const idsOf = (tree: ComponentChild) => findAll(tree, (v) => typeof v.props["id"] === "string").map((v) => v.props["id"]);
+
+  it.each(["a", "b", ":r1:"])("name the heading and the title from the id %s, and both labels point at them", (id) => {
+    const tree = view(id);
+    const [section] = findAll(tree, (v) => v.type === "section");
+    const [heading] = findAll(tree, withClass("timeline-heading"));
+    const [svg] = findAll(tree, (v) => v.type === "svg");
+    const [title] = findAll(tree, (v) => v.type === "title" && typeof v.props["id"] === "string");
+    expect(heading!.props["id"]).toBe(`${id}-heading`);
+    expect(title!.props["id"]).toBe(`${id}-title`);
+    expect(section!.props["aria-labelledby"]).toBe(heading!.props["id"]);
+    expect(svg!.props["aria-labelledby"]).toBe(title!.props["id"]);
+  });
+
+  it("give two timelines on one page no id in common", () => {
+    expect(idsOf(view("a")).filter((id) => idsOf(view("b")).includes(id))).toEqual([]);
   });
 });
 

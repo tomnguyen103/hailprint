@@ -1,7 +1,7 @@
 import { DATA_BASE, fetchJson } from "../data/fetch";
 import { guardPairs, guardReports, guardWarnings } from "../data/guard";
 import type { InternetFile, PowerFile, Receipt, ReportsFile, Storm, WarningsFile } from "../data/types";
-import { InternetTable, PowerTable, TimelineTables } from "../impact/timeline";
+import { InternetTable, PowerTable, TimelineTables } from "../impact/timeline-tables";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ReceiptList } from "../shell/receipt-list";
 import { ErrorState, LoadingState } from "../shell/states";
