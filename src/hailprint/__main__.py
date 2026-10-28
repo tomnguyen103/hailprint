@@ -615,7 +615,7 @@ def _internet_layer(path: Path, storm_date: date) -> tuple[pd.DataFrame, publish
             return None
         source = publish.internet_source(path)
         publish.internet_doc(frame, {"storm_date": storm_date.isoformat()})
-    except _UNREADABLE as exc:  # `internet --missing` fetches it again
+    except _UNREADABLE as exc:  # `internet <date>` rebuilds the file
         print(f"{path.name}: unreadable, internet layer skipped: {exc!r}", file=sys.stderr)
         return None
     return frame, source
