@@ -78,6 +78,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | IODA | The Georgia Tech Internet Outage Detection and Analysis service. Its `ping-slash24` signal counts the /24 address blocks in a county that answer active pings, every 10 minutes. Only 2022-03 to 2024-05 has a county signal. |
 | Baseline | The median of the IODA signal over the 7 days before the impact window starts. A county with fewer than half of the 1008 baseline points has no baseline, and no ratio. |
 | Ratio | The IODA signal of one step divided by the baseline, rounded to 3 places. The step value is the median of the signal points inside the step. A step with no point has a null ratio. |
+| Reachability | The level of the IODA signal of one county at one step, against its baseline. The site words it as "internet reachability below baseline". It states a level, never a cause, and never says the internet is down. |
 | Drop | 1 minus the ratio, never below zero. The site words it as "internet reachability below baseline". A drop states a level, never a cause. |
 | Internet file | `internet.json` of one storm date: per metro county, the baseline and the ratio at each of the 192 steps, with the signal `ping-slash24`. `publish` writes it only with `--with-internet` (`docs/DECISIONS.md` row 14). |
 | Internet layer | The county fill of the drop at the slider step, and the internet strip of the storm timeline. The fill bins are 0, under 2, 2 to 5, 5 to 10, 10 to 20, and 20 percent and up. |

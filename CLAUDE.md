@@ -70,8 +70,8 @@ score.py      swaths + nearby_reports -> per scored report, metre distance to ea
               scoring radius 5 km default, 20 km max; reports within radius + 1 km of the crop edge are excluded (scoring domain); unverifiable area = swath farther than the radius from every report;
               pool() sums counts and areas across days and recomputes the metrics; edge_m() is the signed metre distance to the crop edge
 publish.py    swaths + nearby_reports + ZIP counts -> validated JSON with a receipt under site/data/storms/<date>/ (swath.geojson, reports.geojson,
-              radius-free pairs.json with edge_m and per-class distances, zip-counts.json, warnings.geojson where a warnings file exists, power.json where a power file exists, and internet.json where an internet file holds a ratio and the run used --with-internet,
-              docs/DECISIONS.md row 14) and the storms.json index; rescore(pairs, R) recomputes
+              radius-free pairs.json with edge_m and per-class distances, zip-counts.json, warnings.geojson where a warnings file exists, power.json where a power file exists, and internet.json where an internet file holds a ratio and the run used --with-internet (docs/DECISIONS.md row 14))
+              and the storms.json index; rescore(pairs, R) recomputes
               the contingency table in Python for any whole-km radius; dumps() refuses NaN, the forbidden word, and owner fields;
               also pipeline.json (runs newest first, cap 50, merged by run_time; archive summary per year or null; one sources row per source and product)
 county.py     committed GeoJSON (package data): outline() and bbox() for Harris County; metro() and metro_bbox() for the 8 metro counties (the impact layers only)
