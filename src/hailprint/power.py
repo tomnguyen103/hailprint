@@ -98,17 +98,17 @@ def file_url(year: int) -> str:
     # shortcut: the listing reads one page of 100 files, upgrade to a paged read past 100 files
     name = f"eaglei_outages_{year}.csv"
     try:
-        for entry in json.loads(net.get(LISTING_URL)):
-            if entry["name"] == name:
-                file_id = entry["id"]
-                if not isinstance(file_id, int) or isinstance(file_id, bool):
-                    raise ValueError(f"the id of {name} is not a whole number")
-                return f"{DOWNLOAD_URL}{file_id}"
+        ids = {entry["name"]: entry["id"] for entry in json.loads(net.get(LISTING_URL))}
     except (OSError, http.client.HTTPException) as exc:
         raise RuntimeError(f"EAGLE-I {year}: the Figshare listing failed: {exc!r}") from exc
     except (ValueError, TypeError, KeyError) as exc:
         raise ValueError(f"EAGLE-I {year}: the Figshare listing is not a list of files") from exc
-    raise ValueError(f"EAGLE-I {year}: no file {name} in Figshare")
+    if name not in ids:
+        raise ValueError(f"EAGLE-I {year}: no file {name} in Figshare")
+    file_id = ids[name]
+    if not isinstance(file_id, int) or isinstance(file_id, bool) or file_id < 1:
+        raise ValueError(f"EAGLE-I {year}: the id of {name} is not a positive whole number")
+    return f"{DOWNLOAD_URL}{file_id}"
 
 
 def fetch_year(year: int) -> pd.DataFrame:

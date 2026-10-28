@@ -101,12 +101,16 @@ def snapshot(response: str | bytes, slot: datetime) -> pd.DataFrame:
     if not isinstance(results, list):
         raise ValueError("ODIN answer holds no results list")
     total = document.get("total_count")
-    if isinstance(total, int):
-        if total > len(results):
-            raise ValueError(f"ODIN answer is truncated: {len(results)} of {total} rows")
-    elif len(results) >= LIMIT:
-        # a full page with no total_count may hide more rows, so the slot stays a gap
-        raise ValueError(f"ODIN answer may be truncated: {len(results)} rows and no total_count")
+    if total is None:
+        if len(results) >= LIMIT:
+            # a full page with no total_count may hide more rows, so the slot stays a gap
+            raise ValueError(
+                f"ODIN answer may be truncated: {len(results)} rows and no total_count"
+            )
+    elif not isinstance(total, int) or isinstance(total, bool):
+        raise ValueError(f"ODIN total_count is not a whole number: {total!r}")
+    elif total > len(results):
+        raise ValueError(f"ODIN answer is truncated: {len(results)} of {total} rows")
     sums: dict[tuple[str, str], int] = {}
     for index, record in enumerate(results):
         fips, utility, count = _record(record, index)

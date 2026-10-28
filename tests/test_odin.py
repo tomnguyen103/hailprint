@@ -178,6 +178,22 @@ def test_a_full_page_with_no_total_count_fails_the_snapshot():
         odin.snapshot(body, SLOT)
 
 
+@pytest.mark.parametrize("total", ['"150"', "150.0", "true", "[]"])
+def test_a_total_count_that_is_not_a_whole_number_fails_the_snapshot(total):
+    body = f'{{"total_count": {total}, "results": []}}'
+
+    with pytest.raises(ValueError, match="total_count is not a whole number"):
+        odin.snapshot(body, SLOT)
+
+
+def test_a_null_total_count_is_read_as_no_total_count():
+    records = [_record(name=f"UTILITY {i},{i}") for i in range(odin.LIMIT - 1)]
+
+    frame = odin.snapshot(json.dumps({"total_count": None, "results": records}), SLOT)
+
+    assert len(_rows(frame)) == odin.LIMIT - 1 + len(county.METRO_NAMES) - 1
+
+
 def test_a_short_page_with_no_total_count_is_a_whole_answer():
     records = [_record(name=f"UTILITY {i},{i}") for i in range(odin.LIMIT - 1)]
 

@@ -787,7 +787,6 @@ def test_a_year_without_a_figshare_file_exits_1_and_names_the_file(env, figshare
         b'["eaglei_outages_2024.csv"]',
         b'[{"id": 111}]',
         b'[{"name": "eaglei_outages_2024.csv"}]',
-        b'[{"name": "eaglei_outages_2024.csv", "id": "1/../x"}]',
     ],
 )
 def test_a_figshare_listing_that_is_not_a_list_of_files_exits_1_with_one_line(
@@ -799,6 +798,21 @@ def test_a_figshare_listing_that_is_not_a_list_of_files_exits_1_with_one_line(
 
     (line,) = capsys.readouterr().err.splitlines()
     assert line == "EAGLE-I 2024: the Figshare listing is not a list of files"
+    assert figshare.urls == [power.LISTING_URL]
+
+
+@pytest.mark.parametrize("file_id", ['"1/../x"', "true", "0", "-5", "1.5", "null"])
+def test_a_figshare_file_id_that_is_not_a_positive_whole_number_exits_1_naming_the_file(
+    env, figshare, capsys, file_id
+):
+    figshare.listing = f'[{{"name": "eaglei_outages_2024.csv", "id": {file_id}}}]'.encode()
+
+    assert cli.main(["eaglei", "2024"]) == 1
+
+    (line,) = capsys.readouterr().err.splitlines()
+    assert line == (
+        "EAGLE-I 2024: the id of eaglei_outages_2024.csv is not a positive whole number"
+    )
     assert figshare.urls == [power.LISTING_URL]
 
 
@@ -1272,12 +1286,13 @@ def test_a_second_odin_run_stops_while_the_odin_lock_is_held(env, odin_feed, cap
     assert lock.read_text(encoding="utf-8") == "1"
 
 
-def test_an_odin_run_removes_its_lock_when_the_day_file_cannot_be_read(env, odin_feed):
+def test_an_odin_run_removes_its_lock_when_the_day_file_cannot_be_read(env, odin_feed, capsys):
     env.odin.mkdir()
     _odin_file(env).write_bytes(b"not a parquet file")
 
     assert cli.main(["odin"]) == 1
 
+    assert "not a readable ODIN day file" in capsys.readouterr().err
     assert not (env.odin / "odin.lock").exists()
 
 
