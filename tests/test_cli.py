@@ -1555,6 +1555,21 @@ def test_publish_skips_the_warnings_layer_of_a_warnings_file_without_a_column(
     assert files_entry["power"] == f"storms/{LATER}/{publish.POWER_FILE}"
 
 
+def test_publish_fails_only_the_date_of_a_swath_file_it_cannot_read(env, capsys):
+    env.add_day(LATER)
+    broken = env.add_day(EARLIER)
+    meta = {"file_count": "1", "max_mesh_mm": str(MAX_MESH_MM)}
+    files.write_atomic(gpd.read_parquet(broken).drop(columns="threshold_mm"), broken, meta)
+
+    assert cli.main(["publish"]) == 1
+
+    err = capsys.readouterr().err
+    assert str(EARLIER) in err and "KeyError" in err
+    assert [s["storm_date"] for s in env.index()["storms"]] == [str(LATER)]
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert not env.storm_dir(EARLIER).exists()
+
+
 def test_publish_writes_warnings_geojson_from_the_warnings_file_and_removes_it_when_gone(env, iem):
     env.add_day(LATER)
     cli.main(["warnings", "2024-05-28"])

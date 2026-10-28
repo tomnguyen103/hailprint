@@ -714,8 +714,9 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
                 if with_internet
                 else None,
             )
-        except ValueError as exc:
-            print(f"{storm_date}: {exc}", file=sys.stderr)
+        except _UNREADABLE as exc:  # a required file fails its date; the other dates publish
+            detail = str(exc) if isinstance(exc, ValueError) else repr(exc)
+            print(f"{storm_date}: {detail}", file=sys.stderr)
             failed.append(storm_date.isoformat())
             continue
         folder = SITE_DATA_DIR / publish.STORMS_DIR / storm_date.isoformat()
