@@ -629,6 +629,17 @@ def test_warnings_missing_fetches_an_empty_file_again_only_for_a_fresh_date(env,
     assert [u.split("begints=")[1][:17] for u in iem.urls] == ["2024-05-30T12:00Z"]
 
 
+def test_warnings_missing_fetches_again_for_a_date_with_a_corrupt_file(env, iem):
+    env.add_day(LATER)
+    env.warnings.mkdir(parents=True, exist_ok=True)
+    _warnings_file(env, LATER).write_bytes(b"junk")
+
+    assert cli.main(["warnings", "--missing"]) == 0
+
+    assert len(iem.urls) == 1
+    assert gpd.read_parquet(_warnings_file(env, LATER))["eventid"].tolist() == SBW_KEPT
+
+
 def test_an_explicit_warnings_rerun_writes_the_same_bytes(env, iem):
     cli.main(["warnings", "2024-05-28"])
     first = _warnings_file(env, LATER).read_bytes()
@@ -1059,6 +1070,24 @@ def test_power_missing_rebuilds_a_power_file_that_has_no_source_metadata(env):
     assert cli.main(["power", "--missing"]) == 0
 
     assert pq.read_schema(_power_file(env, LATER)).metadata[b"source"] == b"eaglei"
+
+
+def test_power_missing_rebuilds_a_file_whose_metadata_read_raises_a_type_error(env, monkeypatch):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    env.power.mkdir(parents=True)
+    pd.DataFrame({"fips": ["48201"]}).to_parquet(_power_file(env, LATER))
+
+    def fail(path):
+        raise pa.ArrowTypeError("Expected bytes, got a 'int' object")
+
+    monkeypatch.setattr(power, "file_source", fail)
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    path = _power_file(env, LATER)
+    assert pq.read_schema(path).metadata[b"source"] == b"eaglei"
+    assert pd.read_parquet(path)["customers_out"].notna().sum() == 2
 
 
 def test_a_window_across_new_year_needs_both_year_files(env, capsys):

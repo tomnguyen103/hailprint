@@ -360,16 +360,27 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _rows(path: Path) -> int | None:
+    """The row count of a Parquet file, or None when the file is unreadable."""
+    try:
+        return pq.read_metadata(path).num_rows
+    except _UNREADABLE:
+        return None
+
+
 def _warnings_settled(storm_date: date, now: datetime) -> bool:
-    """True when the warnings file holds a row, or holds none for a date older than FRESH_DAYS."""
+    """True when the warnings file holds a row, or holds none for a date older than FRESH_DAYS.
+
+    An unreadable file is not settled: the date is fetched again and the file is rewritten.
+    """
     path = WARNINGS_DIR / sbw.file_name(storm_date)
     if not path.exists():
         return False
+    rows = _rows(path)
+    if rows is None:
+        return False
     # a gap is never zero: an empty file of a fresh date may be a late IEM feed
-    return (
-        pq.read_metadata(path).num_rows > 0
-        or (now.date() - storm_date).days > candidates.FRESH_DAYS
-    )
+    return rows > 0 or (now.date() - storm_date).days > candidates.FRESH_DAYS
 
 
 def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
@@ -489,7 +500,7 @@ def _needs_power(storm_date: date) -> bool:
         return True
     try:
         source = power.file_source(path)
-    except (OSError, ValueError):
+    except _UNREADABLE:
         return True  # an unreadable file is rebuilt
     if source is None:
         return True  # a file with no source metadata is rebuilt
