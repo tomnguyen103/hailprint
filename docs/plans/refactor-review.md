@@ -58,7 +58,7 @@ Change:
        try:
            out = doc()
            publish.validate(out, schema)
-           publish.dumps(out)
+           publish.dumps(out, schema)
        except _UNREADABLE as error:
            print(f"publish: {path.name}: {name} layer skipped: {error}", file=sys.stderr)
            return None
@@ -149,7 +149,7 @@ await new Promise<void>((resolve, reject) => {
 });
 ```
 
-- MapLibre fires `error` for one failed tile, so one 404 tile kills the map.
+- MapLibre fires `error` for one failed tile (a 404 tile fires none), so one tile failure kills the map.
 - The reject path never calls `map.remove()`. The WebGL context leaks, and Retry mounts a second canvas.
 - There is no timeout.
 
@@ -168,9 +168,9 @@ await new Promise<void>((resolve, reject) => {
     map.remove();
     reject(error);
   };
-  // A tile or source error carries a sourceId; only a style error stops the load.
-  const onError = (e: ErrorEvent & { sourceId?: string }) => {
-    if (e.sourceId === undefined) fail(e.error ?? new Error("map failed to load"));
+  // A tile error carries a tile; any other error (style, source metadata) stops the load.
+  const onError = (e: ErrorEvent & { tile?: unknown }) => {
+    if (e.tile === undefined) fail(e.error ?? new Error("map failed to load"));
   };
   const timer = setTimeout(() => fail(new Error(`map did not load in ${LOAD_TIMEOUT_MS} ms`)), LOAD_TIMEOUT_MS);
   map.on("error", onError);
@@ -181,8 +181,7 @@ await new Promise<void>((resolve, reject) => {
 });
 ```
 
-Confirm the `sourceId` field on source errors in `node_modules/maplibre-gl/dist/maplibre-gl.d.ts` and the MapLibre docs (Context7) before the edit.
-If a style error also carries `sourceId`, the timeout still ends the wait.
+MapLibre 6.16.0 fires a tile error with `{ tile }` (`ErrorEvent(err, { tile })` in the tile manager) and skips a 404 tile. A source-metadata or style error carries no `tile`, so it stops the load. Confirm this in `node_modules/maplibre-gl/dist/maplibre-gl-dev.mjs` and the MapLibre docs (Context7) before the edit.
 
 Behavior change: a failed tile no longer shows the map error overlay. The map loads with a gap.
 
@@ -217,8 +216,9 @@ Read the theme through a ref, as `onCountyRef` does.
 
 | Test | File |
 |------|------|
-| A tile `error` with `sourceId` does not reject; `load` resolves | `site/src/storms/map/create-map.test.ts` (new, stub map with an event emitter) |
+| A tile `error` (with `tile`) does not reject; `load` resolves | `site/src/storms/map/create-map.test.ts` (new, stub map with an event emitter) |
 | A style `error` rejects and calls `remove()` once | same |
+| A source-load `error` (with `sourceId`, no `tile`) rejects and calls `remove()` once | same |
 | No `load` within the timeout rejects and calls `remove()` (fake timers) | same |
 | A child that throws renders `ErrorState`; Retry renders the child again | `site/src/shell/area-boundary.test.tsx` (new) |
 
@@ -453,4 +453,4 @@ In [map-pane.tsx:151](site/src/storms/map-pane.tsx:151), rename `visible` to `hi
 - PR 1 changes exit codes and the skip rule for bad layer files. `nightly.sh` reads the exit code, so check its handling of a skipped layer.
 - PR 3 risk: `impact.steps` returns a different dtype unit than the old inline `pd.date_range`. The equality test in `test_impact.py` catches this.
 - PR 4 risk: a moved function loses an `except` clause or a message. The rule "no test assertion changes" catches this.
-- PR 2 risk: if MapLibre style errors carry `sourceId`, the map waits for the timeout before the error state shows.
+- PR 2 risk: if a MapLibre tile error carries no `tile`, one bad tile stops the load. The tile-error test catches this.
