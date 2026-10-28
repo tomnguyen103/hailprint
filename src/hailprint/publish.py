@@ -461,30 +461,31 @@ def storms_doc(entries: list[Doc], run_time: datetime) -> Doc:
     }
 
 
-def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
+def merge_entries(
+    old: list[Doc], new: list[Doc], data_dir: Path, *, absent: frozenset[Path] = frozenset()
+) -> list[Doc]:
     """The old entries with the new entries over them by storm date.
 
     An entry stays only while its swath, reports, and pairs files exist under `data_dir`. An
     entry whose ZIP count file is gone loses `zip_counts` and `parcel_total`. An entry whose
     impact file is gone loses that path, so `index_receipts` never reads a missing file. An entry
     that lacks an impact key gains it as null: this is the one migration site for an older index.
+    A path in `absent` counts as gone. The caller removes that file after it writes the index.
     """
     # shortcut: an entry stays until its directory vanishes, upgrade when a prune command is needed
     merged = {e["storm_date"]: e for e in old} | {e["storm_date"]: e for e in new}
     required = ("swath", "reports", "pairs")
-    kept = [
-        e for e in merged.values() if all((data_dir / e["files"][k]).exists() for k in required)
-    ]
+
+    def present(path: str) -> bool:
+        return data_dir / path not in absent and (data_dir / path).exists()
+
+    kept = [e for e in merged.values() if all(present(e["files"][k]) for k in required)]
     filled = [e | {"files": dict.fromkeys(IMPACT_KEYS) | e["files"]} for e in kept]
 
     def settled(e: Doc) -> Doc:
-        if e["files"]["zip_counts"] and not (data_dir / e["files"]["zip_counts"]).exists():
+        if e["files"]["zip_counts"] and not present(e["files"]["zip_counts"]):
             e = e | {"parcel_total": None, "files": e["files"] | {"zip_counts": None}}
-        gone = {
-            k: None
-            for k in IMPACT_KEYS
-            if e["files"][k] and not (data_dir / e["files"][k]).exists()
-        }
+        gone = {k: None for k in IMPACT_KEYS if e["files"][k] and not present(e["files"][k])}
         return e | {"files": e["files"] | gone}
 
     return [settled(e) for e in filled]

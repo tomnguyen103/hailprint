@@ -643,22 +643,38 @@ def publish_days(storm_dates: list[date], with_internet: bool = False) -> list[P
     A malformed storms.json, pipeline.json, or archive index stops the run before any write. A
     malformed per-date file of an earlier run, or a pipeline document that fails its schema,
     stops the run before the index write. Without `with_internet` no date gets an internet.json
-    and a stale one is removed.
+    and a stale one is removed. The run removes every stale file after the index write, so a run
+    that fails before the write leaves the old index and the old files together.
     """
     # shortcut: internet publish gated by --with-internet, remove the gate when IODA replies
     with files.lock(SITE_DATA_DIR / LOCK_FILE):
         return _publish_days(storm_dates, with_internet)
 
 
-def _remove_internet_files() -> None:
-    """Remove every published internet.json, also of a date this run does not publish.
+def _stale_files(written: list[Path], with_internet: bool) -> set[Path]:
+    """The existing published files that this run leaves stale.
 
-    `merge_entries` then clears the index path of each removed file.
+    A stale file is a ZIP count, warnings, power, or internet file of a date that this run
+    published, when this run did not write that file. A run without `--with-internet` also makes
+    every internet file stale, also of a date that this run does not publish.
     """
-    pattern = f"*/{publish.INTERNET_FILE}"
-    for path in sorted((SITE_DATA_DIR / publish.STORMS_DIR).glob(pattern)):
-        path.unlink()
-        print(f"{path.parent.name}: removed {path.name}, this run has no --with-internet")
+    names = (publish.ZIPS_FILE, publish.WARNINGS_FILE, publish.POWER_FILE, publish.INTERNET_FILE)
+    stale = {folder / name for folder in {path.parent for path in written} for name in names}
+    if not with_internet:
+        stale |= set((SITE_DATA_DIR / publish.STORMS_DIR).glob(f"*/{publish.INTERNET_FILE}"))
+    return {path for path in stale - set(written) if path.exists()}
+
+
+def _remove_stale(paths: set[Path], with_internet: bool) -> None:
+    """Remove the stale files after the index write. A failed removal prints one line."""
+    for path in sorted(paths):
+        try:
+            path.unlink()
+        except OSError as exc:
+            print(f"{path.parent.name}/{path.name}: not removed: {exc}", file=sys.stderr)
+        else:
+            if path.name == publish.INTERNET_FILE and not with_internet:
+                print(f"{path.parent.name}: removed {path.name}, this run has no --with-internet")
 
 
 def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
@@ -722,14 +738,6 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
         folder = SITE_DATA_DIR / publish.STORMS_DIR / storm_date.isoformat()
         for name, body in texts.items():
             written.append(files.write_text_atomic(body, folder / name))
-        if publish.ZIPS_FILE not in texts:
-            (folder / publish.ZIPS_FILE).unlink(missing_ok=True)
-        if publish.WARNINGS_FILE not in texts:
-            (folder / publish.WARNINGS_FILE).unlink(missing_ok=True)
-        if publish.POWER_FILE not in texts:
-            (folder / publish.POWER_FILE).unlink(missing_ok=True)
-        if publish.INTERNET_FILE not in texts:
-            (folder / publish.INTERNET_FILE).unlink(missing_ok=True)
         entries.append(entry)
         file_count += len(texts)
         print(f"{storm_date}: published {len(texts)} files")
@@ -737,9 +745,8 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
         raise RuntimeError(
             "no storm date was published" + (f"; failed: {', '.join(failed)}" if failed else "")
         )
-    if not with_internet:
-        _remove_internet_files()
-    merged = publish.merge_entries(old, entries, SITE_DATA_DIR)
+    stale = _stale_files(written, with_internet)
+    merged = publish.merge_entries(old, entries, SITE_DATA_DIR, absent=frozenset(stale))
     receipts = publish.index_receipts(merged, SITE_DATA_DIR)
     doc = publish.storms_doc(merged, run_time)
     this_run = [entry["storm_date"] for entry in entries]
@@ -753,6 +760,7 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
     print(f"storms index: {len(doc['storms'])} entries")
     written.append(files.write_text_atomic(pipeline_text, pipeline_path))
     print(f"published {publish.PIPELINE_FILE} ({len(pipeline['runs'])} runs)")
+    _remove_stale(stale, with_internet)
     print(f"confidence: {swath.CONFIDENCE}")
     if failed:
         raise ValueError(f"publish failed for: {', '.join(failed)}")

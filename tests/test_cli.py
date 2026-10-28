@@ -1692,6 +1692,95 @@ def test_publish_without_the_flag_removes_the_internet_json_of_a_date_it_does_no
     }
 
 
+def test_publish_lists_no_removed_file_in_storms_json(env, ioda, monkeypatch, capsys):
+    for storm_date in (LATER, EARLIER):
+        env.add_day(storm_date)
+        _add_signal(ioda, storm_date)
+        cli.main(["internet", str(storm_date)])
+    zips = env.add_zips(LATER, [("77002", 19.05, 4)])
+    cli.main(["publish", "--with-internet"])
+    zips.unlink()
+    capsys.readouterr()
+    write = files.write_text_atomic
+
+    def fail_the_index_write(text, path):
+        if path.name == "storms.json":
+            raise OSError(28, "no space left on device")
+        return write(text, path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(files, "write_text_atomic", fail_the_index_write)
+        assert cli.main(["publish", "2024-05-28"]) == 1
+    listed = [path for e in env.index()["storms"] for path in e["files"].values() if path]
+    assert all((env.site / path).exists() for path in listed)
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    out = capsys.readouterr().out
+    assert f"{EARLIER}: removed internet.json, this run has no --with-internet" in out
+    assert not (env.storm_dir(LATER) / publish.ZIPS_FILE).exists()
+    assert not (env.storm_dir(EARLIER) / publish.INTERNET_FILE).exists()
+    listed = [path for e in env.index()["storms"] for path in e["files"].values() if path]
+    assert listed and all((env.site / path).exists() for path in listed)
+    after = env.tree()
+    assert cli.main(["publish", "2024-05-28"]) == 0
+    assert "removed" not in capsys.readouterr().out
+    assert env.tree() == after
+
+
+def test_publish_keeps_the_old_internet_json_when_the_index_fails_validation(
+    env, ioda, monkeypatch
+):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+    cli.main(["publish", "2024-05-28", "--with-internet"])
+    index = (env.site / "storms.json").read_bytes()
+    validate = publish.validate
+    storms_checks = []
+
+    def reject_the_merged_index(doc, kind):
+        # the checks of kind storms: the old index, the entry of the date, then the merged index
+        if kind == "storms":
+            storms_checks.append(doc)
+            if len(storms_checks) == 3:
+                raise ValueError("the storms document is rejected")
+        validate(doc, kind)
+
+    monkeypatch.setattr(publish, "validate", reject_the_merged_index)
+
+    assert cli.main(["publish", "2024-05-28"]) == 1
+
+    assert (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert (env.site / "storms.json").read_bytes() == index
+
+
+def test_publish_reports_an_unlink_failure_after_the_index_write(env, ioda, monkeypatch, capsys):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+    zips = env.add_zips(LATER, [("77002", 19.05, 4)])
+    cli.main(["publish", "2024-05-28", "--with-internet"])
+    zips.unlink()
+    capsys.readouterr()
+    unlink = Path.unlink
+
+    def fail_for_the_internet_file(self, *args, **kwargs):
+        if self.name == publish.INTERNET_FILE:
+            raise OSError(13, "file in use")
+        return unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_for_the_internet_file)
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    lines = capsys.readouterr().err.splitlines()
+    assert len(lines) == 1 and publish.INTERNET_FILE in lines[0] and "file in use" in lines[0]
+    assert not (env.storm_dir(LATER) / publish.ZIPS_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
+
+
 def _rewrite_internet(env, ioda, storm_date, change):
     """Write the internet file of a date, then write it again with `change` applied to the frame."""
     _add_signal(ioda, storm_date)
