@@ -14,17 +14,12 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
-import pyproj.exceptions
-import shapely.errors
 
 from hailprint import (
     archive,
     candidates,
     county,
     files,
-    impact,
     internet,
     mesh,
     odin,
@@ -34,6 +29,7 @@ from hailprint import (
     power,
     publish,
     reports,
+    runs,
     sbw,
     score,
     swath,
@@ -53,20 +49,6 @@ INTERNET_DIR = paths.DERIVED_DIR / "internet"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
 ODIN_LOCK_FILE = "odin.lock"
-# What a derived Parquet that cannot serve its layer raises: a bad file, a missing column or
-# metadata key, a column of the wrong type (`ArrowTypeError` is a TypeError; `.dt` raises an
-# AttributeError). A geometry column with invalid WKB raises a GEOSException, a ShapelyError.
-# A `crs` entry that pyproj cannot parse raises a CRSError, a ProjError (and a RuntimeError).
-_UNREADABLE = (
-    OSError,
-    ValueError,
-    KeyError,
-    TypeError,
-    AttributeError,
-    pa.ArrowException,
-    shapely.errors.ShapelyError,
-    pyproj.exceptions.ProjError,
-)
 
 
 def _storm_date(text: str) -> date:
@@ -373,29 +355,6 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _rows(path: Path) -> int | None:
-    """The row count of a Parquet file, or None when the file is unreadable."""
-    try:
-        return pq.read_metadata(path).num_rows
-    except _UNREADABLE:
-        return None
-
-
-def _warnings_settled(storm_date: date, now: datetime) -> bool:
-    """True when the warnings file holds a row, or holds none for a date older than FRESH_DAYS.
-
-    An unreadable file is not settled: the date is fetched again and the file is rewritten.
-    """
-    path = WARNINGS_DIR / sbw.file_name(storm_date)
-    if not path.exists():
-        return False
-    rows = _rows(path)
-    if rows is None:
-        return False
-    # a gap is never zero: an empty file of a fresh date may be a late IEM feed
-    return rows > 0 or (now.date() - storm_date).days > candidates.FRESH_DAYS
-
-
 def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     """One warnings file per storm date from the IEM feed of the impact window.
 
@@ -412,7 +371,7 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
         storm_dates = [
             d
             for d, _ in _swath_files([])
-            if impact.window(d)[1] <= now and not _warnings_settled(d, now)
+            if runs.window_closed(d, now) and not runs.warnings_settled(WARNINGS_DIR, d, now)
         ]
     written = []
     failed = []
@@ -464,7 +423,9 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     if missing:
         now = _utc_now()
         storm_dates = [
-            d for d, _ in _swath_files([]) if impact.window(d)[1] <= now and _needs_power(d)
+            d
+            for d, _ in _swath_files([])
+            if runs.window_closed(d, now) and runs.needs_power(d, POWER_DIR, EAGLEI_DIR)
         ]
     written = []
     failed = []
@@ -506,21 +467,6 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     return written
 
 
-def _needs_power(storm_date: date) -> bool:
-    """True when the date has no power file, or has an ODIN file that EAGLE-I now replaces."""
-    path = POWER_DIR / power.day_file_name(storm_date)
-    if not path.exists():
-        return True
-    try:
-        source = power.file_source(path)
-    except _UNREADABLE:
-        return True  # an unreadable file is rebuilt
-    if source is None:
-        return True  # a file with no source metadata is rebuilt
-    covered = all((EAGLEI_DIR / power.file_name(y)).exists() for y in power.years_of(storm_date))
-    return covered and source == odin.METADATA["source"]
-
-
 def odin_snapshot() -> Path:
     """Add one ODIN snapshot to the file of its UTC day, keyed by the 15-minute slot.
 
@@ -541,19 +487,6 @@ def odin_snapshot() -> Path:
     return written
 
 
-def _internet_settled(storm_date: date, now: datetime) -> bool:
-    """True when the internet file holds a ratio, or holds none for a date older than FRESH_DAYS."""
-    path = INTERNET_DIR / internet.file_name(storm_date)
-    if not path.exists():
-        return False
-    try:
-        has_ratio = bool(pd.read_parquet(path, columns=["ratio"])["ratio"].notna().any())
-    except _UNREADABLE:  # an unreadable file is fetched again and rewritten
-        return False
-    # a gap is never zero: an all-null file of a fresh date may be a late IODA feed
-    return has_ratio or (now.date() - storm_date).days > candidates.FRESH_DAYS
-
-
 def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     """One internet file per storm date from the IODA county signals of the impact window.
 
@@ -571,7 +504,7 @@ def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
         storm_dates = [
             d
             for d, _ in _swath_files([])
-            if impact.window(d)[1] <= now and not _internet_settled(d, now)
+            if runs.window_closed(d, now) and not runs.internet_settled(INTERNET_DIR, d, now)
         ]
     written = []
     failed = []
@@ -651,7 +584,7 @@ def _impact_layer(
         doc = publish.layer_doc(kind, frame, source, storm_date, run_time)
         publish.validate(doc, kind)
         publish.dumps(doc, kind)
-    except _UNREADABLE as exc:  # an explicit `<kind> <date>` run rebuilds the file
+    except runs.UNREADABLE as exc:  # an explicit `<kind> <date>` run rebuilds the file
         print(f"{path.name}: unreadable, {kind} layer skipped: {exc!r}", file=sys.stderr)
         return None
     return frame, source
@@ -755,7 +688,7 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
                 if with_internet
                 else None,
             )
-        except _UNREADABLE as exc:  # a required file fails its date; the other dates publish
+        except runs.UNREADABLE as exc:  # a required file fails its date; the other dates publish
             detail = f"{type(exc).__name__}: {exc}" if isinstance(exc, ValueError) else repr(exc)
             print(f"{storm_date}: {detail}", file=sys.stderr)
             failed.append(storm_date.isoformat())
