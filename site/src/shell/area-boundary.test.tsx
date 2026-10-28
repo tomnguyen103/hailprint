@@ -46,10 +46,6 @@ describe("AreaBoundary", () => {
     vi.useFakeTimers();
     // The node test environment has no DOM: `render` only compares its host with `document`.
     vi.stubGlobal("document", {});
-    vi.stubGlobal("window", {
-      setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
-      clearTimeout: (id: number) => clearTimeout(id),
-    });
     host = { firstChild: null, childNodes: [], namespaceURI: "http://www.w3.org/1999/xhtml" } as unknown as HTMLElement;
     logged = vi.spyOn(console, "error").mockImplementation(() => {});
     stub.shown.length = 0;
@@ -129,7 +125,7 @@ describe("AreaBoundary", () => {
     expect(seen).toEqual(["page"]);
   });
 
-  it("a new resetKey with no error renders the children once", async () => {
+  it("a new resetKey with no error renders the children again and shows no error state", async () => {
     armed = false;
     await mount("/a", h(Child, { name: "page" }));
 
