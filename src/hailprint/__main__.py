@@ -600,12 +600,15 @@ def _pipeline_doc(
     )
 
 
-def _internet_layer(path: Path, storm_date: date) -> tuple[pd.DataFrame, publish.Doc] | None:
+def _internet_layer(
+    path: Path, storm_date: date, run_time: datetime
+) -> tuple[pd.DataFrame, publish.Doc] | None:
     """The internet frame and its source entry, or None for a missing, bad, or all-null file.
 
-    A bad file is one that cannot be read, lacks the source metadata, or fails `internet_doc`
-    (a wrong column type, a county whose steps differ from the window). The dry run of
-    `internet_doc` runs here, so such a file skips only the internet layer of its date.
+    A bad file is one that cannot be read, lacks the source metadata, or fails the document
+    build (a wrong column type, a county whose steps differ from the window, a ratio below 0).
+    A dry run of `internet_doc`, `validate`, and `dumps` runs here, so such a file skips only
+    the internet layer of its date.
     """
     if not path.exists():
         return None
@@ -614,7 +617,9 @@ def _internet_layer(path: Path, storm_date: date) -> tuple[pd.DataFrame, publish
         if not bool(frame["ratio"].notna().any()):
             return None
         source = publish.internet_source(path)
-        publish.internet_doc(frame, {"storm_date": storm_date.isoformat()})
+        doc = publish.internet_doc(frame, publish.receipt(storm_date, [source], run_time))
+        publish.validate(doc, "internet")
+        publish.dumps(doc, "internet")
     except _UNREADABLE as exc:  # `internet <date>` rebuilds the file
         print(f"{path.name}: unreadable, internet layer skipped: {exc!r}", file=sys.stderr)
         return None
@@ -704,7 +709,9 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
                     if has_power
                     else None
                 ),
-                internet=_internet_layer(INTERNET_DIR / internet.file_name(storm_date), storm_date)
+                internet=_internet_layer(
+                    INTERNET_DIR / internet.file_name(storm_date), storm_date, run_time
+                )
                 if with_internet
                 else None,
             )

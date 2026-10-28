@@ -85,6 +85,14 @@ describe("the fill notes", () => {
     });
   });
 
+  it("keeps the outline error on the power line when the power file is off too", () => {
+    const failed = { status: "error", error: new DataError("power.json", "HTTP 500") } as const;
+    expect(fillNotes(files, failed, ready, outlinesFailed).power).toBe("Power off. power.json: HTTP 500 counties.geojson: HTTP 500");
+    expect(fillNotes({ ...files, power: null }, ready, ready, outlinesFailed).power).toBe(
+      "No power file for this storm date. counties.geojson: HTTP 500",
+    );
+  });
+
   it("keeps the note of an internet file that failed", () => {
     const failed = { status: "error", error: new DataError("internet.json", "HTTP 500") } as const;
     expect(fillNotes(files, ready, failed, outlinesFailed).internet).toBe("Internet reachability off. internet.json: HTTP 500");

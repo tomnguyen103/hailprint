@@ -1686,9 +1686,12 @@ def _assert_internet_skipped(env, storm_date, capsys):
         pytest.param(
             lambda f: f.assign(step_utc=f["step_utc"] + pd.Timedelta(days=9)), id="steps-off-window"
         ),
+        pytest.param(lambda f: f.assign(ratio=f["ratio"] - 5), id="negative-ratio"),
     ],
 )
-def test_publish_with_internet_skips_a_file_that_internet_doc_rejects(env, ioda, capsys, change):
+def test_publish_with_internet_skips_a_file_that_the_internet_document_rejects(
+    env, ioda, capsys, change
+):
     env.add_day(LATER)
     _rewrite_internet(env, ioda, LATER, change)
 
