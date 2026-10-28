@@ -238,6 +238,7 @@ def _county_rows(
 
 
 def _window_block(start: datetime) -> Doc:
+    """The `window` block of the power and internet documents."""
     return {
         "start": _utc_text(start),
         "step_minutes": int(impact.STEP.total_seconds() // 60),
