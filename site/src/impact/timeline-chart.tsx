@@ -73,9 +73,9 @@ function powerTitle({ county, peak, peakStep, gapSteps }: PowerSeries): string {
 
 type StripClick = (event: { clientX: number; currentTarget: { getBoundingClientRect(): { left: number; width: number } } }) => void;
 
-export type Rows = ReturnType<typeof layout>;
+type Rows = ReturnType<typeof layout>;
 
-export interface ChartInput {
+interface ChartInput {
   /** The id of the `<title>` that names the chart. */
   titleId: string;
   date: string;

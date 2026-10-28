@@ -1,4 +1,4 @@
-// Metro county bounds and outlines for the map. Pure: no MapLibre, no Preact.
+// Metro county bounds and outlines for the map. No MapLibre, no Preact. Holds the one cached counties request.
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { HARRIS_FIPS } from "./data/constants";
 import { fetchJson } from "./data/fetch";
