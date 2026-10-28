@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hailprint.invalid/schemas/internet.schema.json",
+  "title": "Internet",
+  "description": "Internet reachability per metro county as a ratio to its own 7-day baseline at 192 steps of 15 minutes in the impact window, with a receipt. A null step is a gap in the signal, never zero.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt", "window", "signal", "baseline_days", "counties"],
+  "properties": {
+    "receipt": { "$ref": "receipt.schema.json" },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "step_minutes", "steps"],
+      "properties": {
+        "start": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T12:00:00Z$" },
+        "step_minutes": { "const": 15 },
+        "steps": { "const": 192 }
+      }
+    },
+    "signal": { "const": "ping-slash24" },
+    "baseline_days": { "const": 7 },
+    "counties": {
+      "type": "array",
+      "minItems": 8,
+      "maxItems": 8,
+      "prefixItems": [
+        { "$ref": "#/$defs/county", "properties": { "fips": { "const": "48201" } } },
+        { "$ref": "#/$defs/county", "properties": { "fips": { "const": "48157" } } },
+        { "$ref": "#/$defs/county", "properties": { "fips": { "const": "48339" } } },
+        { "$ref": "#/$defs/county", "properties": { "fips": { "const": "48039" } } },
+        { "$ref": "#/$defs/county", "properties": { "fips": { "const": "48167" } } },
+        { "$ref": "#/$defs/county", "properties": { "fips": { "const": "48473" } } },
+        { "$ref": "#/$defs/county", "properties": { "fips": { "const": "48291" } } },
+        { "$ref": "#/$defs/county", "properties": { "fips": { "const": "48071" } } }
+      ]
+    }
+  },
+  "$defs": {
+    "county": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fips", "name", "baseline", "ratio"],
+      "properties": {
+        "fips": { "type": "string", "pattern": "^48\\d{3}$" },
+        "name": { "type": "string", "minLength": 1 },
+        "baseline": { "type": ["number", "null"], "minimum": 0 },
+        "ratio": {
+          "type": "array",
+          "minItems": 192,
+          "maxItems": 192,
+          "items": { "type": ["number", "null"], "minimum": 0 }
+        }
+      }
+    }
+  }
+}

@@ -17,7 +17,7 @@ Plan section 16 listed six decisions. Tom approved the plan on 2026-10-24 and ad
 | 11 | Impact scope | The impact layers (warnings, power, internet) cover the 8 metro counties: Harris, Fort Bend, Montgomery, Brazoria, Galveston, Waller, Liberty, and Chambers. Row 4 stands for hail, scoring, and parcels | Revisit row 4 as a whole for the v2 nine-county metro |
 | 12 | Power sources | EAGLE-I for storm dates up to its last published year; ODIN snapshots after the cron install. One file never mixes the two. Share out uses the MCC of 2022. Exception: `power --missing` replaces an ODIN-sourced file when an EAGLE-I year Parquet now covers its window, because EAGLE-I covers every utility | ODIN covers CenterPoint customers only; revisit when ODIN lists a second utility |
 | 13 | Gap rule | A step with no source row is null and draws as a gap. No fill, no interpolation | Revisit if EAGLE-I documents that an absent row means zero |
-| 14 | Internet layer | Publish IODA-derived ratios only after IODA answers in writing. Until then the internet publish is off by default | IODA reply |
+| 14 | Internet layer | Publish IODA-derived ratios only after IODA answers in writing. Until then `publish` writes no `internet.json` unless the run passes `--with-internet`. The nightly script passes the flag only when `.env` sets `PUBLISH_INTERNET=1` | IODA reply: remove the flag gate and the `.env` opt-in |
 | 15 | ODIN terms | Publish ODIN county totals with attribution to ORNL. ODIN states no licence, so the owner asks ORNL in writing | ORNL reply |
 
 ## Standing constraints

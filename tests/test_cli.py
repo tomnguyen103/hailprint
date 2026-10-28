@@ -1514,3 +1514,63 @@ def test_publish_writes_warnings_geojson_from_the_warnings_file_and_removes_it_w
 
     assert not (env.storm_dir(LATER) / publish.WARNINGS_FILE).exists()
     assert env.index()["storms"][0]["files"]["warnings"] is None
+
+
+def test_publish_with_internet_writes_internet_json_and_sets_the_index_entry(env, ioda):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    doc = _published(env, LATER, publish.INTERNET_FILE)
+    publish.validate(doc, "internet")
+    assert [s["source"] for s in doc["receipt"]["sources"]] == ["ioda"]
+    harris = doc["counties"][0]
+    assert (harris["fips"], harris["baseline"]) == ("48201", 1000)
+    assert harris["ratio"] == [1.0] * 192
+    entry = env.index()["storms"][0]["files"]
+    assert entry["internet"] == f"storms/{LATER}/{publish.INTERNET_FILE}"
+
+
+def test_publish_without_the_flag_leaves_internet_unpublished_when_the_file_exists(env, ioda):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
+
+
+def test_publish_with_internet_skips_a_file_that_holds_no_ratio(env, ioda):
+    env.add_day(LATER)
+    cli.main(["internet", "2024-05-28"])  # IODA holds no signal for the date
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
+
+
+def test_publish_with_internet_and_no_internet_file_writes_no_internet_json(env):
+    env.add_day(LATER)
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
+
+
+def test_publish_without_the_flag_removes_a_stale_internet_json(env, ioda):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+    cli.main(["publish", "2024-05-28", "--with-internet"])
+    assert (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None

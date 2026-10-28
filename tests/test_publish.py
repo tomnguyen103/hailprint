@@ -15,7 +15,7 @@ import shapely
 from jsonschema import Draft202012Validator
 
 from hailprint import __main__ as cli
-from hailprint import county, parcels, power, publish, reports, sbw, swath
+from hailprint import county, internet, parcels, power, publish, reports, sbw, swath
 from hailprint import files as files_module
 from hailprint.parcels import OWNER_FIELDS
 from tests.test_cli import EARLIER, LATER
@@ -784,7 +784,7 @@ def test_swath_source_gives_none_without_a_mesh_maximum_and_refuses_bare_metadat
         publish.swath_source(bare)
 
 
-def _build_day(zips=None, facts=None, warnings=None, power=None, run_time=RUN_TIME):
+def _build_day(zips=None, facts=None, warnings=None, power=None, internet=None, run_time=RUN_TIME):
     nearby = reports.nearby_reports(
         date(2024, 5, 28),
         _spc_csv(("100", "Spring", 30.08, -95.42, ""), ("175", "Katy", 29.79, -95.82, "")),
@@ -802,6 +802,7 @@ def _build_day(zips=None, facts=None, warnings=None, power=None, run_time=RUN_TI
         run_time=run_time,
         warnings=None if warnings is None else (warnings, IEM_SOURCE),
         power=power,
+        internet=internet,
     )
 
 
@@ -1530,6 +1531,217 @@ def test_power_source_refuses_bare_metadata_and_a_utilities_value_that_is_not_a_
         publish.power_source(bare)
     with pytest.raises(ValueError, match="^bad.parquet: the utilities metadata is not a JSON list"):
         publish.power_source(bad)
+
+
+# internet.json
+
+INTERNET_SOURCE = {
+    "source": "ioda",
+    "product": "ping-slash24",
+    "file": "internet-2024-05-28.parquet",
+}
+INTERNET_FIRST = int(sbw.window(POWER_STORM)[0].timestamp())  # 12:00 UTC on the storm date
+INTERNET_BASE = INTERNET_FIRST - 7 * 86400
+INTERNET_LAST = INTERNET_FIRST + 192 * 900
+FORT_BEND = 1  # position in the county order of internet.json
+
+
+def _steady(value=1000.0, drop=None):
+    """Points every 10 minutes from the baseline to the window end; `drop` maps step to value."""
+    points = {e: value for e in range(INTERNET_BASE, INTERNET_LAST, 600)}
+    for step, low in (drop or {}).items():
+        for epoch in range(INTERNET_FIRST + step * 900, INTERNET_FIRST + (step + 1) * 900, 600):
+            points[epoch] = low
+    return points
+
+
+def _internet_frame():
+    """The 2024-05-28 frame: Harris has a drop at step 4 and a gap at step 6; Chambers has none."""
+    harris = _steady(drop={4: 800.0})
+    for epoch in range(INTERNET_FIRST + 6 * 900, INTERNET_FIRST + 7 * 900, 600):
+        del harris[epoch]
+    return internet.derive(POWER_STORM, {"48201": harris, "48157": _steady()})
+
+
+def _internet_doc(frame=None, source=INTERNET_SOURCE):
+    rcpt = publish.receipt(POWER_STORM, [source], RUN_TIME)
+    return publish.internet_doc(_internet_frame() if frame is None else frame, rcpt)
+
+
+def test_internet_doc_holds_the_window_the_signal_and_8_counties_of_192_ratios():
+    doc = _internet_doc()
+
+    publish.validate(doc, "internet")
+    assert doc["window"] == {"start": "2024-05-28T12:00:00Z", "step_minutes": 15, "steps": 192}
+    assert doc["signal"] == "ping-slash24"
+    assert doc["baseline_days"] == 7
+    assert doc["receipt"]["sources"] == [INTERNET_SOURCE]
+    counties = doc["counties"]
+    assert [c["fips"] for c in counties] == list(county.METRO_NAMES)
+    assert [c["name"] for c in counties] == list(county.METRO_NAMES.values())
+    assert {len(c["ratio"]) for c in counties} == {192}
+
+
+def test_internet_doc_writes_the_ratio_the_baseline_and_a_gap_as_null():
+    counties = _internet_doc()["counties"]
+
+    harris = counties[HARRIS]
+    assert harris["baseline"] == 1000.0
+    assert [harris["ratio"][3], harris["ratio"][4], harris["ratio"][6]] == [1.0, 0.8, None]
+    assert counties[FORT_BEND]["ratio"] == [1.0] * 192
+    chambers = counties[CHAMBERS]
+    assert chambers["baseline"] is None
+    assert chambers["ratio"] == [None] * 192
+
+
+def test_internet_doc_is_the_same_for_every_row_order():
+    frame = _internet_frame()
+
+    assert _internet_doc(frame.iloc[::-1]) == _internet_doc(frame)
+
+
+def test_internet_doc_refuses_steps_that_leave_the_impact_window_and_a_county_without_rows():
+    shifted = _internet_frame().assign(step_utc=lambda f: f["step_utc"] + pd.Timedelta(minutes=15))
+    without = _internet_frame().query("fips != '48071'")
+
+    with pytest.raises(ValueError, match="^internet: 48201: the steps differ from the impact"):
+        _internet_doc(shifted)
+    with pytest.raises(ValueError, match="^internet: 48071: the steps differ from the impact"):
+        _internet_doc(without)
+
+
+def test_the_internet_schema_refuses_191_ratios_a_negative_ratio_and_a_string():
+    short = _internet_doc()
+    short["counties"][HARRIS]["ratio"].pop()
+    negative = _internet_doc()
+    negative["counties"][HARRIS]["ratio"][0] = -0.1
+    text = _internet_doc()
+    text["counties"][2]["ratio"][5] = "0.5"
+
+    with pytest.raises(ValueError, match=r"^internet: \$\.counties\[0\]\.ratio: "):
+        publish.validate(short, "internet")
+    with pytest.raises(ValueError, match=r"^internet: \$\.counties\[0\]\.ratio\[0\]: "):
+        publish.validate(negative, "internet")
+    with pytest.raises(ValueError, match=r"^internet: \$\.counties\[2\]\.ratio\[5\]: "):
+        publish.validate(text, "internet")
+
+
+def test_dumps_refuses_a_nan_ratio_in_an_internet_document():
+    nan = _internet_doc()
+    nan["counties"][2]["ratio"][5] = float("nan")
+
+    with pytest.raises(ValueError, match=r"^internet: "):
+        publish.dumps(nan, "internet")
+
+
+def test_the_internet_schema_refuses_a_wrong_fips_set_a_changed_order_and_an_extra_key():
+    outside = _internet_doc()
+    outside["counties"][CHAMBERS]["fips"] = "48453"
+    swapped = _internet_doc()
+    swapped["counties"][0], swapped["counties"][1] = swapped["counties"][1], swapped["counties"][0]
+    seven = _internet_doc()
+    seven["counties"].pop()
+    extra = _internet_doc()
+    extra["counties"][HARRIS]["customers"] = 1
+
+    for doc, path in (
+        (outside, r"\$\.counties\[7\]\.fips"),
+        (swapped, r"\$\.counties\[0\]\.fips"),
+        (seven, r"\$\.counties"),
+        (extra, r"\$\.counties\[0\]"),
+    ):
+        with pytest.raises(ValueError, match=f"^internet: {path}: "):
+            publish.validate(doc, "internet")
+
+
+def test_the_internet_schema_pins_the_window_the_signal_and_the_baseline_days():
+    steps = _internet_doc()
+    steps["window"]["steps"] = 96
+    late = _internet_doc()
+    late["window"]["start"] = "2024-05-28T13:00:00Z"
+    other = _internet_doc()
+    other["signal"] = "bgp"
+    days = _internet_doc()
+    days["baseline_days"] = 14
+
+    for doc, path in (
+        (steps, r"\$\.window\.steps"),
+        (late, r"\$\.window\.start"),
+        (other, r"\$\.signal"),
+        (days, r"\$\.baseline_days"),
+    ):
+        with pytest.raises(ValueError, match=f"^internet: {path}: "):
+            publish.validate(doc, "internet")
+
+
+def test_dumps_refuses_the_forbidden_word_in_an_internet_document():
+    doc = _internet_doc()
+    doc["counties"][HARRIS]["name"] = f"Harris {files_module.FORBIDDEN_WORD}"
+
+    with pytest.raises(
+        ValueError, match=r"^internet: forbidden word .* at \$\.counties\[0\]\.name"
+    ):
+        publish.dumps(doc, "internet")
+
+
+def test_build_day_with_an_internet_frame_adds_internet_json_and_its_index_path():
+    texts, entry = _build_day(internet=(_internet_frame(), INTERNET_SOURCE))
+
+    assert sorted(texts) == ["internet.json", "pairs.json", "reports.geojson", "swath.geojson"]
+    assert entry["files"]["internet"] == "storms/2024-05-28/internet.json"
+    doc = json.loads(texts["internet.json"])
+    publish.validate(doc, "internet")
+    assert doc["receipt"]["sources"] == [INTERNET_SOURCE]
+    assert doc["receipt"]["run_time"] == "2024-05-29T13:00:07Z"
+
+
+def test_build_day_without_an_internet_frame_writes_no_internet_json_and_a_null_key():
+    texts, entry = _build_day()
+
+    assert "internet.json" not in texts
+    assert entry["files"]["internet"] is None
+
+
+def test_internet_json_stays_under_its_size_ceiling_with_every_step_filled():
+    series = {
+        fips: _steady(value=1000.0, drop=dict.fromkeys(range(192), 123.0))
+        for fips in county.METRO_NAMES
+    }
+    full = internet.derive(POWER_STORM, series)
+
+    texts, _ = _build_day(internet=(full, INTERNET_SOURCE))
+
+    assert full["ratio"].eq(0.123).all()
+    assert len(texts["internet.json"].encode("utf-8")) < SIZE_CEILINGS["internet.json"]
+
+
+def test_two_builds_of_internet_json_differ_only_in_the_run_time():
+    layer = (_internet_frame(), INTERNET_SOURCE)
+
+    first, _ = _build_day(internet=layer)
+    again, _ = _build_day(internet=layer)
+    later, _ = _build_day(internet=layer, run_time=RUN_TIME + timedelta(minutes=5))
+
+    assert again["internet.json"] == first["internet.json"]
+    one, two = json.loads(first["internet.json"]), json.loads(later["internet.json"])
+    assert one["receipt"].pop("run_time") != two["receipt"].pop("run_time")
+    assert one == two
+
+
+def test_internet_source_reads_the_source_and_product_from_the_parquet_metadata(tmp_path):
+    path = files_module.write_atomic(
+        _internet_frame(), tmp_path / "internet-2024-05-28.parquet", internet.METADATA
+    )
+
+    assert publish.internet_source(path) == INTERNET_SOURCE
+
+
+def test_internet_source_refuses_bare_metadata(tmp_path):
+    bare = tmp_path / "bare.parquet"
+    _internet_frame().to_parquet(bare)
+
+    with pytest.raises(ValueError, match="bare.parquet: the metadata lacks source, product, conf"):
+        publish.internet_source(bare)
 
 
 # publish over the fixture days

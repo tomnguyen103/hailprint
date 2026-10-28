@@ -162,6 +162,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=_storm_date,
         help="SPC convective day, YYYY-MM-DD; none publishes every swath file",
     )
+    publish_cmd.add_argument(
+        "--with-internet",
+        action="store_true",
+        help="also publish internet.json for each date whose internet file holds a ratio",
+    )
     return parser
 
 
@@ -192,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "internet":
             internet_days(args.storm_dates, args.missing)
         elif args.command == "publish":
-            publish_days(args.storm_dates)
+            publish_days(args.storm_dates, args.with_internet)
     except (RuntimeError, OSError, ValueError) as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -577,7 +582,16 @@ def _pipeline_doc(
     )
 
 
-def publish_days(storm_dates: list[date]) -> list[Path]:
+def _internet_layer(path: Path) -> tuple[pd.DataFrame, publish.Doc] | None:
+    """The internet frame and its source entry, or None for a missing file or an all-null one."""
+    if not path.exists():
+        return None
+    frame = pd.read_parquet(path)
+    has_ratio = bool(frame["ratio"].notna().any())
+    return (frame, publish.internet_source(path)) if has_ratio else None
+
+
+def publish_days(storm_dates: list[date], with_internet: bool = False) -> list[Path]:
     """Write the site data files per storm date, then the storms index, then the pipeline file.
 
     One run at a time: a second run that finds the lock file stops with exit 1. A date without
@@ -585,13 +599,15 @@ def publish_days(storm_dates: list[date]) -> list[Path]:
     final error. The index holds the dates of this run over the entries of the earlier runs.
     A malformed storms.json, pipeline.json, or archive index stops the run before any write. A
     malformed per-date file of an earlier run, or a pipeline document that fails its schema,
-    stops the run before the index write.
+    stops the run before the index write. Without `with_internet` no date gets an internet.json
+    and a stale one is removed.
     """
+    # shortcut: internet publish gated by --with-internet, remove the gate when IODA replies
     with files.lock(SITE_DATA_DIR / LOCK_FILE):
-        return _publish_days(storm_dates)
+        return _publish_days(storm_dates, with_internet)
 
 
-def _publish_days(storm_dates: list[date]) -> list[Path]:
+def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
     selected = _swath_files(storm_dates)
     if not candidates.CANDIDATES_PATH.exists():
         raise FileNotFoundError(f"run hailprint candidates first: {candidates.CANDIDATES_PATH}")
@@ -646,6 +662,9 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
                     if has_power
                     else None
                 ),
+                internet=_internet_layer(INTERNET_DIR / internet.file_name(storm_date))
+                if with_internet
+                else None,
             )
         except ValueError as exc:
             print(f"{storm_date}: {exc}", file=sys.stderr)
@@ -660,6 +679,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
             (folder / publish.WARNINGS_FILE).unlink(missing_ok=True)
         if publish.POWER_FILE not in texts:
             (folder / publish.POWER_FILE).unlink(missing_ok=True)
+        if publish.INTERNET_FILE not in texts:
+            (folder / publish.INTERNET_FILE).unlink(missing_ok=True)
         entries.append(entry)
         file_count += len(texts)
         print(f"{storm_date}: published {len(texts)} files")
