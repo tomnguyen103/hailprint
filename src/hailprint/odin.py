@@ -20,6 +20,7 @@ ENDPOINT = (
     "https://ornl.opendatasoft.com/api/explore/v2.1/catalog/datasets/"
     "odin-real-time-outages-county/records"
 )
+LIMIT = 100  # rows per request: the query asks for this many and no more
 # One request returns one row per county and utility, so a storm with thousands of incidents
 # still fits the page. The query has no cause filter.
 URL = (
@@ -32,7 +33,7 @@ URL = (
             + ",".join(f'"{fips}"' for fips in sorted(county.METRO_NAMES))
             + ")",
             "group_by": "communitydescriptor,name",
-            "limit": 100,
+            "limit": LIMIT,
         },
         quote_via=quote,
     )
@@ -100,8 +101,12 @@ def snapshot(response: str | bytes, slot: datetime) -> pd.DataFrame:
     if not isinstance(results, list):
         raise ValueError("ODIN answer holds no results list")
     total = document.get("total_count")
-    if isinstance(total, int) and total > len(results):
-        raise ValueError(f"ODIN answer is truncated: {len(results)} of {total} rows")
+    if isinstance(total, int):
+        if total > len(results):
+            raise ValueError(f"ODIN answer is truncated: {len(results)} of {total} rows")
+    elif len(results) >= LIMIT:
+        # a full page with no total_count may hide more rows, so the slot stays a gap
+        raise ValueError(f"ODIN answer may be truncated: {len(results)} rows and no total_count")
     sums: dict[tuple[str, str], int] = {}
     for index, record in enumerate(results):
         fips, utility, count = _record(record, index)

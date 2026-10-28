@@ -716,6 +716,7 @@ class Figshare:
 
     def __init__(self):
         self.csv = EAGLEI_CSV.read_bytes()
+        self.listing = FIGSHARE_LISTING
         self.declared: int | None = None
         self.urls: list[str] = []
 
@@ -727,7 +728,7 @@ def figshare(monkeypatch):
     def urlopen(url, timeout=None):
         figshare.urls.append(url)
         if url == power.LISTING_URL:
-            return Response(FIGSHARE_LISTING)
+            return Response(figshare.listing)
         return Response(figshare.csv, figshare.declared)
 
     monkeypatch.setattr(urllib.request, "urlopen", urlopen)
@@ -776,6 +777,42 @@ def test_a_year_without_a_figshare_file_exits_1_and_names_the_file(env, figshare
 
     assert capsys.readouterr().err == "EAGLE-I 1999: no file eaglei_outages_1999.csv in Figshare\n"
     assert figshare.urls == [power.LISTING_URL]
+
+
+@pytest.mark.parametrize(
+    "listing",
+    [
+        b"{",
+        b'{"name": "eaglei_outages_2024.csv"}',
+        b'["eaglei_outages_2024.csv"]',
+        b'[{"id": 111}]',
+        b'[{"name": "eaglei_outages_2024.csv"}]',
+        b'[{"name": "eaglei_outages_2024.csv", "id": "1/../x"}]',
+    ],
+)
+def test_a_figshare_listing_that_is_not_a_list_of_files_exits_1_with_one_line(
+    env, figshare, capsys, listing
+):
+    figshare.listing = listing
+
+    assert cli.main(["eaglei", "2024"]) == 1
+
+    (line,) = capsys.readouterr().err.splitlines()
+    assert line == "EAGLE-I 2024: the Figshare listing is not a list of files"
+    assert figshare.urls == [power.LISTING_URL]
+
+
+def test_a_failed_figshare_listing_request_exits_1_with_one_line(env, monkeypatch, capsys):
+    def urlopen(url, timeout=None):
+        raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+
+    assert cli.main(["eaglei", "2024"]) == 1
+
+    (line,) = capsys.readouterr().err.splitlines()
+    assert line.startswith("EAGLE-I 2024: the Figshare listing failed")
+    assert "404" in line
 
 
 def test_eaglei_stops_at_the_first_failed_year(env, figshare, capsys):
@@ -982,6 +1019,17 @@ def test_power_missing_rebuilds_a_power_file_that_is_not_a_parquet_file(env):
     path = _power_file(env, LATER)
     assert pq.read_schema(path).metadata[b"source"] == b"eaglei"
     assert pd.read_parquet(path)["customers_out"].notna().sum() == 2
+
+
+def test_power_missing_rebuilds_a_power_file_that_has_no_source_metadata(env):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    env.power.mkdir(parents=True)
+    pd.DataFrame({"fips": ["48201"]}).to_parquet(_power_file(env, LATER))
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    assert pq.read_schema(_power_file(env, LATER)).metadata[b"source"] == b"eaglei"
 
 
 def test_a_window_across_new_year_needs_both_year_files(env, capsys):
@@ -1196,7 +1244,9 @@ def test_odin_takes_no_arguments(env, odin_feed):
     assert odin_feed.urls == []
 
 
-def test_the_odin_command_takes_no_lock_and_writes_only_the_odin_directory(env, odin_feed):
+def test_the_odin_command_ignores_the_publish_lock_and_writes_only_the_odin_directory(
+    env, odin_feed
+):
     env.site.mkdir(parents=True)
     (env.site / "publish.lock").write_text("1", encoding="utf-8")
 
@@ -1205,6 +1255,30 @@ def test_the_odin_command_takes_no_lock_and_writes_only_the_odin_directory(env, 
     assert sorted(p.name for p in env.site.iterdir()) == ["publish.lock"]
     assert [p.name for p in env.odin.iterdir()] == ["odin-2024-05-28.parquet"]
     assert not env.swaths.exists() and not env.power.exists()
+
+
+def test_a_second_odin_run_stops_while_the_odin_lock_is_held(env, odin_feed, capsys):
+    cli.main(["odin"])
+    before = _odin_file(env).read_bytes()
+    lock = env.odin / "odin.lock"
+    lock.write_text("1", encoding="utf-8")
+    odin_feed.at(2024, 5, 28, 14, 22)
+    capsys.readouterr()
+
+    assert cli.main(["odin"]) == 1
+
+    assert "another run holds it" in capsys.readouterr().err
+    assert _odin_file(env).read_bytes() == before
+    assert lock.read_text(encoding="utf-8") == "1"
+
+
+def test_an_odin_run_removes_its_lock_when_the_day_file_cannot_be_read(env, odin_feed):
+    env.odin.mkdir()
+    _odin_file(env).write_bytes(b"not a parquet file")
+
+    assert cli.main(["odin"]) == 1
+
+    assert not (env.odin / "odin.lock").exists()
 
 
 def _published(env, storm_date, name):

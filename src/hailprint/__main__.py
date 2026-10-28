@@ -46,6 +46,7 @@ POWER_DIR = paths.DERIVED_DIR / "power"
 ODIN_DIR = paths.DERIVED_DIR / "odin"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
+ODIN_LOCK_FILE = "odin.lock"
 
 
 def _storm_date(text: str) -> date:
@@ -464,6 +465,8 @@ def _needs_power(storm_date: date) -> bool:
         source = power.file_source(path)
     except (OSError, ValueError):
         return True  # an unreadable file is rebuilt
+    if source is None:
+        return True  # a file with no source metadata is rebuilt
     covered = all((EAGLEI_DIR / power.file_name(y)).exists() for y in power.years_of(storm_date))
     return covered and source == odin.METADATA["source"]
 
@@ -472,16 +475,18 @@ def odin_snapshot() -> Path:
     """Add one ODIN snapshot to the file of its UTC day, keyed by the 15-minute slot.
 
     A failed fetch, a bad answer, or an unreadable day file writes nothing and exits 1.
-    A rerun in one slot replaces the rows of that slot.
+    A rerun in one slot replaces the rows of that slot. A run that finds the ODIN lock held
+    exits 1, so two overlapping runs never merge from the same stale day file.
     """
     slot = odin.slot_of(_utc_now())
     fresh = odin.snapshot(odin.fetch(), slot)
     path = ODIN_DIR / odin.file_name(slot.date())
-    try:
-        existing = pd.read_parquet(path) if path.exists() else None
-    except (OSError, ValueError) as exc:
-        raise ValueError(f"{path}: not a readable ODIN day file: {exc}") from exc
-    written = files.write_atomic(odin.merge(existing, fresh), path, odin.METADATA)
+    with files.lock(ODIN_DIR / ODIN_LOCK_FILE):
+        try:
+            existing = pd.read_parquet(path) if path.exists() else None
+        except (OSError, ValueError) as exc:
+            raise ValueError(f"{path}: not a readable ODIN day file: {exc}") from exc
+        written = files.write_atomic(odin.merge(existing, fresh), path, odin.METADATA)
     print(f"{slot:%Y-%m-%d %H:%M} UTC: {len(fresh)} rows")
     return written
 

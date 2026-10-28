@@ -170,6 +170,22 @@ def test_a_truncated_answer_fails_the_snapshot_instead_of_summing_part_of_the_co
         odin.snapshot(_answer(_record(), total=101), SLOT)
 
 
+def test_a_full_page_with_no_total_count_fails_the_snapshot():
+    records = [_record(name=f"UTILITY {i},{i}") for i in range(odin.LIMIT)]
+    body = json.dumps({"results": records})
+
+    with pytest.raises(ValueError, match="no total_count"):
+        odin.snapshot(body, SLOT)
+
+
+def test_a_short_page_with_no_total_count_is_a_whole_answer():
+    records = [_record(name=f"UTILITY {i},{i}") for i in range(odin.LIMIT - 1)]
+
+    frame = odin.snapshot(json.dumps({"results": records}), SLOT)
+
+    assert len(_rows(frame)) == odin.LIMIT - 1 + len(county.METRO_NAMES) - 1
+
+
 def test_a_name_without_a_comma_is_the_whole_utility():
     frame = odin.snapshot(_answer(_record(name="SOLO UTILITY")), SLOT)
 
