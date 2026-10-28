@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import geopandas as gpd
 import pandas as pd
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
@@ -1603,6 +1604,7 @@ def test_publish_with_internet_skips_a_file_without_a_ratio_column(env, capsys):
 
     assert "unreadable" in capsys.readouterr().err
     assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
 
 
 def test_publish_with_internet_and_no_internet_file_writes_no_internet_json(env):
@@ -1646,3 +1648,113 @@ def test_publish_without_the_flag_removes_the_internet_json_of_a_date_it_does_no
         str(LATER): None,
         str(EARLIER): None,
     }
+
+
+def _rewrite_internet(env, ioda, storm_date, change):
+    """Write the internet file of a date, then write it again with `change` applied to the frame."""
+    _add_signal(ioda, storm_date)
+    cli.main(["internet", str(storm_date)])
+    path = _internet_file(env, storm_date)
+    files.write_atomic(change(pd.read_parquet(path)), path, internet.METADATA)
+
+
+def _fail_internet_reads(monkeypatch):
+    """Make `pd.read_parquet` raise ArrowTypeError for an internet file, as a mixed column does."""
+    read = pd.read_parquet
+
+    def fake(path, *args, **kwargs):
+        if Path(path).name.startswith("internet-"):
+            raise pa.ArrowTypeError("Expected bytes, got a 'int' object")
+        return read(path, *args, **kwargs)
+
+    monkeypatch.setattr(pd, "read_parquet", fake)
+
+
+def _assert_internet_skipped(env, storm_date, capsys):
+    assert f"internet-{storm_date}.parquet: unreadable" in capsys.readouterr().err
+    assert (env.storm_dir(storm_date) / publish.SWATH_FILE).exists()
+    assert not (env.storm_dir(storm_date) / publish.INTERNET_FILE).exists()
+    entry = {e["storm_date"]: e for e in env.index()["storms"]}[str(storm_date)]
+    assert entry["files"]["internet"] is None
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        pytest.param(lambda f: f.assign(step_utc=f["step_utc"].astype(str)), id="text-step-column"),
+        pytest.param(lambda f: f[f["fips"] == "48201"], id="counties-missing-from-the-window"),
+        pytest.param(
+            lambda f: f.assign(step_utc=f["step_utc"] + pd.Timedelta(days=9)), id="steps-off-window"
+        ),
+        pytest.param(lambda f: f.assign(ratio=f["ratio"] - 5), id="negative-ratio"),
+    ],
+)
+def test_publish_with_internet_skips_a_file_that_the_internet_document_rejects(
+    env, ioda, capsys, change
+):
+    env.add_day(LATER)
+    _rewrite_internet(env, ioda, LATER, change)
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    _assert_internet_skipped(env, LATER, capsys)
+
+
+def test_publish_with_internet_skips_a_file_that_raises_arrow_type_error_on_read(
+    env, ioda, monkeypatch, capsys
+):
+    env.add_day(LATER)
+    _rewrite_internet(env, ioda, LATER, lambda f: f)
+    _fail_internet_reads(monkeypatch)
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    _assert_internet_skipped(env, LATER, capsys)
+
+
+def test_publish_with_internet_skips_a_file_without_the_source_metadata(env, ioda, capsys):
+    env.add_day(LATER)
+    _rewrite_internet(env, ioda, LATER, lambda f: f)
+    path = _internet_file(env, LATER)
+    pd.read_parquet(path).to_parquet(path)  # plain pandas write: no source, product, confidence
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    _assert_internet_skipped(env, LATER, capsys)
+
+
+def test_publish_with_internet_removes_the_internet_json_once_the_file_goes_bad(env, ioda, capsys):
+    env.add_day(LATER)
+    _rewrite_internet(env, ioda, LATER, lambda f: f)
+    cli.main(["publish", "2024-05-28", "--with-internet"])
+    assert (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    _internet_file(env, LATER).write_bytes(b"not a parquet file")
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    _assert_internet_skipped(env, LATER, capsys)
+
+
+def test_a_bad_internet_file_does_not_stop_the_internet_layer_of_the_other_date(env, ioda, capsys):
+    for storm_date in (LATER, EARLIER):
+        env.add_day(storm_date)
+        _rewrite_internet(env, ioda, storm_date, lambda f: f)
+    _internet_file(env, EARLIER).write_bytes(b"not a parquet file")
+    capsys.readouterr()
+
+    assert cli.main(["publish", "--with-internet"]) == 0
+
+    assert (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    _assert_internet_skipped(env, EARLIER, capsys)
+
+
+def test_internet_missing_fetches_a_file_that_raises_arrow_type_error_again(env, ioda, monkeypatch):
+    env.add_day(LATER)
+    _rewrite_internet(env, ioda, LATER, lambda f: f)
+    _fail_internet_reads(monkeypatch)
+    before = len(ioda.urls)
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert len(ioda.urls) == before + 8

@@ -237,6 +237,16 @@ def test_share_out_is_customers_out_over_the_mcc_customers_and_null_stays_null()
     assert share[at & (day["fips"] == "48039")].isna().item()
 
 
+def test_share_out_stops_at_1_when_the_utility_count_passes_the_mcc_customers():
+    day = power.derive(_rows(("48473", "2024-07-08 15:30", 31_398)), date(2024, 7, 8))
+
+    share = power.share_out(day)
+
+    at = day["step_utc"] == pd.Timestamp("2024-07-08 15:30", tz="UTC")
+    assert share[at & (day["fips"] == "48473")].item() == 1.0
+    assert share.max() == 1.0
+
+
 @pytest.mark.parametrize(
     ("share", "bin_name"),
     [

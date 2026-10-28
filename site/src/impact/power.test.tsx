@@ -1,8 +1,9 @@
 import type { ComponentChild, VNode } from "preact";
 import { describe, expect, it } from "vitest";
+import { DataError } from "../data/types";
 import { FORBIDDEN_WORD } from "../method/prose";
 import { ODIN_LABEL } from "./power";
-import { InternetLegend, PowerFillControl, PowerLegend } from "./power-fill";
+import { fillNotes, InternetLegend, PowerFillControl, PowerLegend } from "./power-fill";
 
 type Node = VNode<Record<string, unknown>>;
 
@@ -69,6 +70,38 @@ describe("the fill control with the internet file", () => {
     const radios = findAll(PowerFillControl({ fill: "power", power: READY, internet, onFill: () => {} }), (v) => v.type === "input");
     expect(radios.map((r) => r.props["checked"])).toEqual([false, true, false]);
     expect(radios.map((r) => r.props["disabled"])).toEqual([false, false, true]);
+  });
+});
+
+describe("the fill notes", () => {
+  const files = { power: "power.json", internet: "internet.json" };
+  const ready = { status: "ready", data: null } as const;
+  const outlinesFailed = { status: "error", error: new DataError("counties.geojson", "HTTP 500") } as const;
+
+  it("names a failed county outline file on the power line and never on the internet line", () => {
+    expect(fillNotes(files, ready, ready, outlinesFailed)).toEqual({
+      power: "Power off. counties.geojson: HTTP 500",
+      internet: null,
+    });
+  });
+
+  it("keeps the outline error on the power line when the power file is off too", () => {
+    const failed = { status: "error", error: new DataError("power.json", "HTTP 500") } as const;
+    expect(fillNotes(files, failed, ready, outlinesFailed).power).toBe("Power off. power.json: HTTP 500 counties.geojson: HTTP 500");
+    expect(fillNotes({ ...files, power: null }, ready, ready, outlinesFailed).power).toBe(
+      "No power file for this storm date. counties.geojson: HTTP 500",
+    );
+  });
+
+  it("keeps the note of an internet file that failed", () => {
+    const failed = { status: "error", error: new DataError("internet.json", "HTTP 500") } as const;
+    expect(fillNotes(files, ready, failed, outlinesFailed).internet).toBe("Internet reachability off. internet.json: HTTP 500");
+    expect(fillNotes({ ...files, internet: null }, ready, ready, outlinesFailed).internet).toBe("No internet file for this storm date.");
+  });
+
+  it("draws no note while every file loads or is ready", () => {
+    expect(fillNotes(files, ready, ready, { status: "loading" })).toEqual({ power: null, internet: null });
+    expect(fillNotes(files, ready, ready, ready)).toEqual({ power: null, internet: null });
   });
 });
 

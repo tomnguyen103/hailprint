@@ -19,6 +19,7 @@ Plan section 16 listed six decisions. Tom approved the plan on 2026-10-24 and ad
 | 13 | Gap rule | A step with no source row is null and draws as a gap. No fill, no interpolation | Revisit if EAGLE-I documents that an absent row means zero |
 | 14 | Internet layer | Publish IODA-derived ratios only after IODA answers in writing. Until then `publish` writes no `internet.json` unless the run passes `--with-internet`. The nightly script passes the flag only when `.env` sets `PUBLISH_INTERNET=1` | IODA reply: remove the flag gate and the `.env` opt-in |
 | 15 | ODIN terms | Publish ODIN county totals with attribution to ORNL. ODIN states no licence, so the owner asks ORNL in writing | ORNL reply |
+| 16 | Share out cap | The share out is `min(1, customers_out / MCC)` in `power.share_out` and in the site `shareOut`. The MCC constants equal ORNL `MCC.csv`, and the EAGLE-I count passes them on 2024-07-08 (Waller 31,398 of 18,532). The inspector keeps the raw counts. This replaces the V5 plan rule that the site clamps the colour and not the number | A per-county denominator that tracks the utility service area |
 
 ## Standing constraints
 

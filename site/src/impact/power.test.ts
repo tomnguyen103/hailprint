@@ -132,6 +132,11 @@ describe("the share out", () => {
     expect(shareOut(null, 100)).toBeNull();
   });
 
+  it("stops at 1 when the utility count passes the MCC customers", () => {
+    expect(shareOut(31_398, 18_532)).toBe(1);
+    expect(percentText(shareOut(31_398, 18_532))).toBe("100.0%");
+  });
+
   it("writes a share as a percent and a gap as words", () => {
     expect(percentText(0.1378)).toBe("13.8%");
     expect(percentText(0)).toBe("0%");

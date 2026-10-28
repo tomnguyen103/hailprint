@@ -14,6 +14,7 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 from hailprint import (
@@ -49,6 +50,10 @@ INTERNET_DIR = paths.DERIVED_DIR / "internet"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
 ODIN_LOCK_FILE = "odin.lock"
+# What a derived Parquet that cannot serve its layer raises: a bad file, a missing column or
+# metadata key, a column of the wrong type (`ArrowTypeError` is a TypeError; `.dt` raises an
+# AttributeError).
+_UNREADABLE = (OSError, ValueError, KeyError, TypeError, AttributeError, pa.ArrowException)
 
 
 def _storm_date(text: str) -> date:
@@ -519,7 +524,7 @@ def _internet_settled(storm_date: date, now: datetime) -> bool:
         return False
     try:
         has_ratio = bool(pd.read_parquet(path, columns=["ratio"])["ratio"].notna().any())
-    except (OSError, ValueError, KeyError):  # an unreadable file is fetched again and rewritten
+    except _UNREADABLE:  # an unreadable file is fetched again and rewritten
         return False
     # a gap is never zero: an all-null file of a fresh date may be a late IODA feed
     return has_ratio or (now.date() - storm_date).days > candidates.FRESH_DAYS
@@ -595,17 +600,30 @@ def _pipeline_doc(
     )
 
 
-def _internet_layer(path: Path) -> tuple[pd.DataFrame, publish.Doc] | None:
-    """The internet frame and its source entry, or None for a missing, bad, or all-null file."""
+def _internet_layer(
+    path: Path, storm_date: date, run_time: datetime
+) -> tuple[pd.DataFrame, publish.Doc] | None:
+    """The internet frame and its source entry, or None for a missing, bad, or all-null file.
+
+    A bad file is one that cannot be read, lacks the source metadata, or fails the document
+    build (a wrong column type, a county whose steps differ from the window, a ratio below 0).
+    A dry run of `internet_doc`, `validate`, and `dumps` runs here, so such a file skips only
+    the internet layer of its date.
+    """
     if not path.exists():
         return None
     try:
         frame = pd.read_parquet(path)
-        has_ratio = bool(frame["ratio"].notna().any())
-    except (OSError, ValueError, KeyError) as exc:  # `internet --missing` fetches it again
+        if not bool(frame["ratio"].notna().any()):
+            return None
+        source = publish.internet_source(path)
+        doc = publish.internet_doc(frame, publish.receipt(storm_date, [source], run_time))
+        publish.validate(doc, "internet")
+        publish.dumps(doc, "internet")
+    except _UNREADABLE as exc:  # `internet <date>` rebuilds the file
         print(f"{path.name}: unreadable, internet layer skipped: {exc!r}", file=sys.stderr)
         return None
-    return (frame, publish.internet_source(path)) if has_ratio else None
+    return frame, source
 
 
 def publish_days(storm_dates: list[date], with_internet: bool = False) -> list[Path]:
@@ -691,7 +709,9 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
                     if has_power
                     else None
                 ),
-                internet=_internet_layer(INTERNET_DIR / internet.file_name(storm_date))
+                internet=_internet_layer(
+                    INTERNET_DIR / internet.file_name(storm_date), storm_date, run_time
+                )
                 if with_internet
                 else None,
             )

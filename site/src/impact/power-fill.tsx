@@ -1,7 +1,8 @@
 // The county fill control and its legends. All are stateless: map-pane.tsx holds the choice.
-import type { PowerFile } from "../data/types";
-import { NET_LABELS } from "./internet";
-import { BIN_LABELS, type Fill, ODIN_BOUND, ODIN_LABEL } from "./power";
+import type { InternetFile, PowerFile } from "../data/types";
+import type { Load } from "../state/load";
+import { internetNote, NET_LABELS } from "./internet";
+import { BIN_LABELS, type Fill, ODIN_BOUND, ODIN_LABEL, powerNote } from "./power";
 
 const OPTIONS: { value: Fill; label: string }[] = [
   { value: "none", label: "None" },
@@ -21,6 +22,24 @@ interface ControlProps {
   power: LayerState;
   internet: LayerState;
   onFill: (fill: Fill) => void;
+}
+
+/**
+ * The one line for each county fill that is off. A failed county outline file turns both fills off, so
+ * the power line names it once; the internet line speaks only of the internet file.
+ */
+export function fillNotes(
+  files: { power: string | null; internet: string | null },
+  power: Load<PowerFile | null>,
+  internet: Load<InternetFile | null>,
+  outlines: Load<unknown>,
+): { power: string | null; internet: string | null } {
+  const file = powerNote(files.power, power);
+  const outline = outlines.status === "error" ? outlines.error.message : null;
+  return {
+    power: outline === null ? file : `${file ?? "Power off."} ${outline}`,
+    internet: internetNote(files.internet, internet),
+  };
 }
 
 /** Three radios for the county fill, and one line for each file that is off. */
