@@ -6,17 +6,16 @@ import { DataError, type PowerFile } from "../data/types";
 import type { Load } from "../state/load";
 import { resolveStep } from "../time/step";
 import {
-  BIN_EDGES,
   HARRIS_FIPS,
   METRO_FIPS,
   ODIN_LABEL,
+  POWER_FILL,
   countyFeatures,
   harrisPeak,
   hatchPixels,
   hexRgb,
   percentText,
   powerNote,
-  shareBin,
   shareOut,
 } from "./power";
 
@@ -65,7 +64,7 @@ describe("the share bins", () => {
     [0.3, "--out-5"],
     [null, "gap"],
   ])("share %s is bin %s", (share, bin) => {
-    expect(shareBin(share)).toBe(bin);
+    expect(POWER_FILL.bin(share)).toBe(bin);
   });
 
   it.each([
@@ -79,11 +78,11 @@ describe("the share bins", () => {
     [0.3, "--out-5"],
     [1, "--out-5"],
   ])("share %s sits in the right band", (share, bin) => {
-    expect(shareBin(share)).toBe(bin);
+    expect(POWER_FILL.bin(share)).toBe(bin);
   });
 
   it("never gives a null step the bin of a zero step", () => {
-    expect(shareBin(null)).not.toBe(shareBin(0));
+    expect(POWER_FILL.bin(null)).not.toBe(POWER_FILL.bin(0));
   });
 });
 
@@ -107,21 +106,21 @@ const PARITY: [number | null, number, string][] = [
 
 describe("the TS bin and the Python bin", () => {
   it.each(PARITY)("out %s of %s customers is %s", (out, customers, bin) => {
-    expect(shareBin(shareOut(out, customers))).toBe(bin);
+    expect(POWER_FILL.bin(shareOut(out, customers))).toBe(bin);
   });
 
   it("holds each edge to 1e-9", () => {
-    BIN_EDGES.forEach((edge, i) => {
-      expect(shareBin(edge - 1e-9)).toBe(`--out-${i + 1}`);
-      expect(shareBin(edge + 1e-9)).toBe(`--out-${i + 2}`);
+    POWER_FILL.edges.forEach((edge, i) => {
+      expect(POWER_FILL.bin(edge - 1e-9)).toBe(`--out-${i + 1}`);
+      expect(POWER_FILL.bin(edge + 1e-9)).toBe(`--out-${i + 2}`);
     });
   });
 
-  it("reads the same four edges as BIN_EDGES in power.py", () => {
+  it("reads the same four edges as power.py", () => {
     const path = fileURLToPath(new URL("../../../src/hailprint/power.py", import.meta.url));
-    const found = /^BIN_EDGES = \(([^)]*)\)/m.exec(readFileSync(path, "utf8"));
+    const found = /^BIN_\w+ = \(([^)]*)\)/m.exec(readFileSync(path, "utf8"));
     expect(found).not.toBeNull();
-    expect(found![1]!.split(",").map(Number)).toEqual([...BIN_EDGES]);
+    expect(found![1]!.split(",").map(Number)).toEqual([...POWER_FILL.edges]);
   });
 });
 
@@ -228,7 +227,7 @@ describe("the county features at a step", () => {
     const file = powerFile({ "48201": series({}, null) });
     const [harris] = countyFeatures(OUTLINES, file, 60).features;
     expect(harris!.properties.bin).toBe("gap");
-    expect(harris!.properties.bin).not.toBe(shareBin(0));
+    expect(harris!.properties.bin).not.toBe(POWER_FILL.bin(0));
   });
 
   it("draws a gap for a county the file does not list", () => {

@@ -1,23 +1,25 @@
 // The power county fill: share out, bins, the Harris peak, and the county features at a step.
-// Pure: no MapLibre, no Preact. The bin edges match BIN_EDGES in src/hailprint/power.py.
+// Pure: no MapLibre, no Preact. The bin edges match the bin edges in src/hailprint/power.py.
 import type { Feature, FeatureCollection, MultiPolygon } from "geojson";
 import type { PowerFile } from "../data/types";
 import type { Load } from "../state/load";
+import { binOf, type FillSpec } from "./fill-spec";
 
 /** The 8 metro counties in the order `power.json` lists them: Harris first. */
 export const METRO_FIPS = ["48201", "48157", "48339", "48039", "48167", "48473", "48291", "48071"] as const;
 export const HARRIS_FIPS = METRO_FIPS[0];
 
 /** The share out where each bin starts after the zero bin; `power.py` holds the same four numbers. */
-export const BIN_EDGES = [0.01, 0.05, 0.15, 0.3] as const;
-
-/** A bin is a design token name, `none` for a zero share, or `gap` for a step the source did not report. */
-export type Bin = "none" | "gap" | "--out-1" | "--out-2" | "--out-3" | "--out-4" | "--out-5";
-/** The county fill: one choice at a time, so the map never stacks two layers on the same outlines. */
-export type Fill = "none" | "power" | "internet";
+const EDGES = [0.01, 0.05, 0.15, 0.3] as const;
 
 /** The five bins that draw a fill, lightest first. */
-export const FILLED_BINS: readonly Bin[] = ["--out-1", "--out-2", "--out-3", "--out-4", "--out-5"];
+type Filled = "--out-1" | "--out-2" | "--out-3" | "--out-4" | "--out-5";
+const FILLED: readonly Filled[] = ["--out-1", "--out-2", "--out-3", "--out-4", "--out-5"];
+
+/** A bin is a design token name, `none` for a zero share, or `gap` for a step the source did not report. */
+export type Bin = "none" | "gap" | Filled;
+/** The county fill: one choice at a time, so the map never stacks two layers on the same outlines. */
+export type Fill = "none" | "power" | "internet";
 
 /** The label an ODIN file carries: ODIN lists CenterPoint outages only. */
 export const ODIN_LABEL = "CenterPoint customers only";
@@ -26,13 +28,6 @@ export const ODIN_BOUND = "Lower bound: other utilities are not counted.";
 /** Customers out over the MCC customers, at most 1: a utility count can pass the modelled MCC. A null step stays null, never zero. */
 export function shareOut(out: number | null, customers: number): number | null {
   return out === null ? null : Math.min(1, out / customers);
-}
-
-export function shareBin(share: number | null): Bin {
-  if (share === null || Number.isNaN(share)) return "gap";
-  if (share === 0) return "none";
-  const below = BIN_EDGES.filter((edge) => share >= edge).length;
-  return FILLED_BINS[below]!;
 }
 
 /** A share as a percent with one decimal; a tiny share reads `<0.1%` so it never rounds to zero. */
@@ -44,12 +39,17 @@ export function percentText(share: number | null): string {
 }
 
 const edgePercent = (edge: number) => String(Math.round(edge * 100));
-const FROM = [0, ...BIN_EDGES];
+const FROM = [0, ...EDGES];
 
-/** The legend text of the five filled bins, from the same edges as the bins. */
-export const BIN_LABELS: readonly string[] = FROM.map((from, i) =>
-  i === BIN_EDGES.length ? `${edgePercent(from)}% or more` : `${edgePercent(from)} to ${edgePercent(FROM[i + 1]!)}%`,
-);
+/** The power fill spec: the edges, the five filled bins, and the legend text from the same edges. */
+export const POWER_FILL: FillSpec<Filled> = {
+  edges: EDGES,
+  bins: FILLED,
+  labels: FROM.map((from, i) =>
+    i === EDGES.length ? `${edgePercent(from)}% or more` : `${edgePercent(from)} to ${edgePercent(FROM[i + 1]!)}%`,
+  ),
+  bin: (share) => binOf(EDGES, FILLED, share),
+};
 
 /** The first step of the largest Harris value; null without a file, with no outage, or with only gaps. */
 export function harrisPeak(file: PowerFile | null): number | null {
@@ -93,7 +93,7 @@ export function countyFeatures(
     const share = county === undefined ? null : shareOut(county.out[step] ?? null, county.customers);
     return {
       type: "Feature",
-      properties: { fips, name: String(outline.properties?.["name"]), share, bin: shareBin(share) },
+      properties: { fips, name: String(outline.properties?.["name"]), share, bin: POWER_FILL.bin(share) },
       geometry: outline.geometry,
     };
   });

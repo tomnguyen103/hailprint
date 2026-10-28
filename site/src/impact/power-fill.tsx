@@ -1,8 +1,8 @@
 // The county fill control and its legends. All are stateless: map-pane.tsx holds the choice.
 import type { InternetFile, PowerFile } from "../data/types";
 import type { Load } from "../state/load";
-import { internetNote, NET_LABELS } from "./internet";
-import { BIN_LABELS, type Fill, ODIN_BOUND, ODIN_LABEL, powerNote } from "./power";
+import { internetNote, NET_FILL } from "./internet";
+import { type Fill, ODIN_BOUND, ODIN_LABEL, POWER_FILL, powerNote } from "./power";
 
 const OPTIONS: { value: Fill; label: string }[] = [
   { value: "none", label: "None" },
@@ -113,7 +113,7 @@ export function PowerLegend({ fill, source }: PowerLegendProps) {
     title: "Customers out",
     label: "Customers without power",
     family: "out",
-    bins: BIN_LABELS,
+    bins: POWER_FILL.labels,
     note: source === "odin" ? [`${ODIN_LABEL}.`, ODIN_BOUND] : undefined,
   });
 }
@@ -121,5 +121,5 @@ export function PowerLegend({ fill, source }: PowerLegendProps) {
 /** The drop-below-baseline legend; it shows only while the internet fill is chosen. */
 export function InternetLegend({ fill }: { fill: Fill }) {
   if (fill !== "internet") return null;
-  return legend({ title: "Reachability below baseline", label: "Internet reachability below baseline", family: "net", bins: NET_LABELS });
+  return legend({ title: "Reachability below baseline", label: "Internet reachability below baseline", family: "net", bins: NET_FILL.labels });
 }
