@@ -1,8 +1,11 @@
-"""The `--missing` rules: which storm dates need a fetch or a build.
+"""The `--missing` rules and the run loop: which storm dates need a fetch or a build.
 
 A settled file needs no new fetch. An absent or unreadable file is never settled.
 """
 
+import sys
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
@@ -85,3 +88,43 @@ def needs_power(storm_date: date, power_dir: Path, eaglei_dir: Path) -> bool:
         return True  # a file with no source metadata is rebuilt
     covered = all((eaglei_dir / power.file_name(y)).exists() for y in power.years_of(storm_date))
     return covered and source == odin.METADATA["source"]
+
+
+@dataclass
+class Tally:
+    """The storm dates of one run, by outcome."""
+
+    done: list[date] = field(default_factory=list)
+    skipped: list[date] = field(default_factory=list)
+    failed: list[date] = field(default_factory=list)
+
+
+class NoSource(Exception):
+    """A storm date has no source. No `errors` tuple holds it, so it leaves the loop at once."""
+
+
+def run_dates(
+    storm_dates: Iterable[date],
+    build: Callable[[date], bool],
+    *,
+    errors: tuple[type[Exception], ...],
+) -> Tally:
+    """Call `build` for each storm date and sort the dates by outcome.
+
+    `build` returns True for a done date and False for a skipped date. A member of `errors`
+    prints `<storm_date>: <message>` to stderr, puts the date in `failed`, and the loop goes on.
+    Any other error, `NoSource` included, leaves the loop.
+    """
+    # shortcut: an explicit date runs for an open window too and writes a file that `--missing`
+    # then skips (a partial file of warnings, null future steps of power and internet); add a
+    # closed-window check when explicit reruns of recent days become routine.
+    tally = Tally()
+    for storm_date in storm_dates:
+        try:
+            built = build(storm_date)
+        except errors as exc:
+            print(f"{storm_date}: {exc}", file=sys.stderr)
+            tally.failed.append(storm_date)
+            continue
+        (tally.done if built else tally.skipped).append(storm_date)
+    return tally

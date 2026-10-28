@@ -130,3 +130,67 @@ def test_an_odin_power_file_is_replaced_only_when_eaglei_covers_the_window(tmp_p
     assert runs.needs_power(STORM_DATE, tmp_path / "power", tmp_path / "eaglei") is False
     _eaglei(tmp_path / "eaglei", STORM_DATE)
     assert runs.needs_power(STORM_DATE, tmp_path / "power", tmp_path / "eaglei") is True
+
+
+DAYS = [date(2024, 5, 27), date(2024, 5, 28), date(2024, 5, 29)]
+ERRORS = (RuntimeError, ValueError, OSError)
+
+
+def test_a_build_that_returns_true_puts_every_date_in_done_in_order(capsys):
+    seen = []
+
+    def build(storm_date):
+        seen.append(storm_date)
+        return True
+
+    tally = runs.run_dates(DAYS, build, errors=ERRORS)
+
+    assert (tally.done, tally.skipped, tally.failed, seen) == (DAYS, [], [], DAYS)
+    assert capsys.readouterr().err == ""
+
+
+def test_an_empty_list_never_calls_build_and_one_date_lands_in_done():
+    def build(storm_date):
+        raise AssertionError("build must not run")
+
+    assert runs.run_dates([], build, errors=ERRORS) == runs.Tally()
+    assert runs.run_dates(DAYS[:1], lambda storm_date: True, errors=ERRORS).done == DAYS[:1]
+
+
+def test_a_skipped_date_and_a_failed_date_leave_the_third_date_running(capsys):
+    def build(storm_date):
+        if storm_date == DAYS[0]:
+            return False
+        if storm_date == DAYS[1]:
+            raise ValueError("feed is down")
+        return True
+
+    tally = runs.run_dates(DAYS, build, errors=ERRORS)
+
+    assert tally == runs.Tally(done=[DAYS[2]], skipped=[DAYS[0]], failed=[DAYS[1]])
+    assert capsys.readouterr().err == "2024-05-28: feed is down\n"
+
+
+def test_an_error_outside_the_errors_tuple_leaves_the_loop(capsys):
+    def build(storm_date):
+        raise KeyError("column")
+
+    with pytest.raises(KeyError):
+        runs.run_dates(DAYS, build, errors=ERRORS)
+    assert capsys.readouterr().err == ""
+
+
+def test_a_no_source_error_leaves_the_loop_at_once(capsys):
+    seen = []
+
+    def build(storm_date):
+        seen.append(storm_date)
+        if storm_date == DAYS[1]:
+            raise runs.NoSource("2024-05-28: no source")
+        return True
+
+    with pytest.raises(runs.NoSource, match="no source"):
+        runs.run_dates(DAYS, build, errors=ERRORS)
+
+    assert seen == DAYS[:2]
+    assert capsys.readouterr().err == ""

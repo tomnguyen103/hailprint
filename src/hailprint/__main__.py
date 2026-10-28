@@ -363,9 +363,6 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     A failed date does not stop the other dates. The run prints one line per failed date,
     then exits 1. The next `--missing` run starts again with the failed dates.
     """
-    # shortcut: an explicit date runs for an open window too and writes a partial file that
-    # `--missing` then skips; add a closed-window check when explicit reruns of recent days
-    # become routine.
     if missing:
         now = _utc_now()
         storm_dates = [
@@ -374,20 +371,18 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
             if runs.window_closed(d, now) and not runs.warnings_settled(WARNINGS_DIR, d, now)
         ]
     written = []
-    failed = []
-    for storm_date in storm_dates:
-        try:
-            frame = sbw.parse(sbw.fetch(storm_date), storm_date)
-            written.append(
-                files.write_atomic(frame, WARNINGS_DIR / sbw.file_name(storm_date), sbw.METADATA)
-            )
-        except (RuntimeError, ValueError) as exc:
-            print(f"{storm_date}: {exc}", file=sys.stderr)
-            failed.append(storm_date.isoformat())
-            continue
+
+    def build(storm_date: date) -> bool:
+        frame = sbw.parse(sbw.fetch(storm_date), storm_date)
+        written.append(
+            files.write_atomic(frame, WARNINGS_DIR / sbw.file_name(storm_date), sbw.METADATA)
+        )
         print(f"{storm_date}: {len(frame)} warnings")
-    if failed:
-        raise ValueError(f"warnings failed for: {', '.join(failed)}")
+        return True
+
+    tally = runs.run_dates(storm_dates, build, errors=(RuntimeError, ValueError))
+    if tally.failed:
+        raise ValueError(f"warnings failed for: {', '.join(d.isoformat() for d in tally.failed)}")
     return written
 
 
@@ -417,9 +412,6 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     """
     # shortcut: an EAGLE-I year file counts as covering its year, upgrade to a check of the last
     # row time if a partial year file is ever ingested
-    # shortcut: an explicit date runs for an open window too and writes a file with null future
-    # steps that `--missing` then skips; add a closed-window check when explicit reruns of
-    # recent days become routine.
     if missing:
         now = _utc_now()
         storm_dates = [
@@ -428,42 +420,41 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
             if runs.window_closed(d, now) and runs.needs_power(d, POWER_DIR, EAGLEI_DIR)
         ]
     written = []
-    failed = []
-    skipped = 0
-    for storm_date in storm_dates:
-        try:
-            built = power.build(storm_date, EAGLEI_DIR, ODIN_DIR)
-            if built is not None:
-                frame, metadata = built
-                path = POWER_DIR / power.day_file_name(storm_date)
-                written.append(files.write_atomic(frame, path, metadata))
-        except (RuntimeError, ValueError, OSError) as exc:
-            print(f"{storm_date}: {exc}", file=sys.stderr)
-            failed.append(storm_date.isoformat())
-            continue
+
+    def build(storm_date: date) -> bool:
+        built = power.build(storm_date, EAGLEI_DIR, ODIN_DIR)
         if built is None:
-            if not missing:
-                absent = [
-                    str(year)
-                    for year in power.years_of(storm_date)
-                    if not (EAGLEI_DIR / power.file_name(year)).exists()
-                ]
-                raise ValueError(
-                    f"{storm_date}: no EAGLE-I file for {' and '.join(absent)} and no ODIN "
-                    f"snapshot in the window, run hailprint eaglei {' '.join(absent)} first"
-                )
-            skipped += 1
-            continue
-        frame, _ = built
+            if missing:
+                return False
+            absent = [
+                str(year)
+                for year in power.years_of(storm_date)
+                if not (EAGLEI_DIR / power.file_name(year)).exists()
+            ]
+            raise runs.NoSource(
+                f"{storm_date}: no EAGLE-I file for {' and '.join(absent)} and no ODIN "
+                f"snapshot in the window, run hailprint eaglei {' '.join(absent)} first"
+            )
+        frame, metadata = built
+        written.append(
+            files.write_atomic(frame, POWER_DIR / power.day_file_name(storm_date), metadata)
+        )
         known = frame["customers_out"].count()
         print(f"{storm_date}: {known} of {len(frame)} county steps have a row")
+        return True
+
+    try:
+        tally = runs.run_dates(storm_dates, build, errors=(RuntimeError, ValueError, OSError))
+    except runs.NoSource as exc:
+        raise ValueError(str(exc)) from None
+    skipped = len(tally.skipped)
     if skipped:
         print(
             f"{skipped} date{'s' if skipped > 1 else ''} skipped "
             "without an EAGLE-I file or an ODIN snapshot"
         )
-    if failed:
-        raise ValueError(f"power failed for: {', '.join(failed)}")
+    if tally.failed:
+        raise ValueError(f"power failed for: {', '.join(d.isoformat() for d in tally.failed)}")
     return written
 
 
@@ -496,9 +487,6 @@ def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     writes no file and does not stop the other dates. The run prints one line per failed date,
     then exits 1. The next `--missing` run starts again with the failed dates.
     """
-    # shortcut: an explicit date runs for an open window too and writes a file with null future
-    # steps that `--missing` then skips; add a closed-window check when explicit reruns of
-    # recent days become routine.
     if missing:
         now = _utc_now()
         storm_dates = [
@@ -507,22 +495,20 @@ def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
             if runs.window_closed(d, now) and not runs.internet_settled(INTERNET_DIR, d, now)
         ]
     written = []
-    failed = []
-    for storm_date in storm_dates:
-        try:
-            frame = internet.build(storm_date)
-            written.append(
-                files.write_atomic(
-                    frame, INTERNET_DIR / internet.file_name(storm_date), internet.METADATA
-                )
+
+    def build(storm_date: date) -> bool:
+        frame = internet.build(storm_date)
+        written.append(
+            files.write_atomic(
+                frame, INTERNET_DIR / internet.file_name(storm_date), internet.METADATA
             )
-        except (RuntimeError, ValueError, OSError) as exc:
-            print(f"{storm_date}: {exc}", file=sys.stderr)
-            failed.append(storm_date.isoformat())
-            continue
+        )
         print(f"{storm_date}: {frame['ratio'].count()} of {len(frame)} county steps have a ratio")
-    if failed:
-        raise ValueError(f"internet failed for: {', '.join(failed)}")
+        return True
+
+    tally = runs.run_dates(storm_dates, build, errors=(RuntimeError, ValueError, OSError))
+    if tally.failed:
+        raise ValueError(f"internet failed for: {', '.join(d.isoformat() for d in tally.failed)}")
     return written
 
 
