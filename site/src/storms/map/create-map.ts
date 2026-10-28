@@ -1,5 +1,6 @@
 // The one module that imports MapLibre. map-pane.tsx loads it with import().
 import {
+  type ErrorEvent as MapErrorEvent,
   type GeoJSONSource,
   type LngLatBoundsLike,
   Map as MapLibreMap,
@@ -133,12 +134,38 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
     cooperativeGestures: window.matchMedia("(pointer: coarse)").matches,
   });
   map.addControl(new NavigationControl({ showCompass: false }), "top-left");
-  await new Promise<void>((resolve, reject) => {
-    map.once("load", () => resolve());
-    map.once("error", (e) => reject(e.error ?? new Error("map failed to load")));
-  });
+  await whenLoaded(map);
 
   return makeHandle(map, basemap);
+}
+
+export const LOAD_TIMEOUT_MS = 15_000;
+
+/** Resolve on `load`. A tile error leaves a gap. Any other error, or no load in time, releases the map and rejects. */
+export function whenLoaded(map: Pick<MapLibreMap, "on" | "off" | "remove">, timeoutMs = LOAD_TIMEOUT_MS): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    const settle = () => {
+      clearTimeout(timer);
+      map.off("load", onLoad);
+      map.off("error", onError);
+    };
+    const fail = (error: unknown) => {
+      settle();
+      map.remove();
+      reject(error);
+    };
+    const onLoad = () => {
+      settle();
+      resolve();
+    };
+    // Only a tile error carries `tile`; MapLibre fires one per failed tile, so it never fails the load.
+    const onError = (event: MapErrorEvent) => {
+      if (!("tile" in event)) fail(event.error ?? new Error("map failed to load"));
+    };
+    const timer = setTimeout(() => fail(new Error(`map did not load in ${timeoutMs} ms`)), timeoutMs);
+    map.on("load", onLoad);
+    map.on("error", onError);
+  });
 }
 
 /** The handle over a map whose style is loaded or still loading. Layer state lives here, so every call is safe in any order. */
