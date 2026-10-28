@@ -961,6 +961,19 @@ def test_build_day_writes_the_three_impact_keys_as_null():
     assert {k: entry["files"][k] for k in IMPACT_KEYS} == dict.fromkeys(IMPACT_KEYS)
 
 
+def test_build_day_lists_the_files_keys_in_one_order_with_and_without_the_impact_layers():
+    _, bare = _build_day()
+    _, full = _build_day(
+        warnings=_warnings_frame(),
+        power=(_power_frame(), POWER_SOURCE),
+        internet=(_internet_frame(), INTERNET_SOURCE),
+    )
+
+    keys = ["swath", "reports", "pairs", "zip_counts", "power", "internet", "warnings"]
+    assert list(bare["files"]) == list(full["files"]) == keys
+    assert [k for k, v in full["files"].items() if v is None] == ["zip_counts"]
+
+
 def test_the_storms_schema_accepts_an_impact_path_and_refuses_an_extra_or_misplaced_key():
     ok = _entry("2024-05-28")
     ok["files"] |= {
@@ -1608,6 +1621,67 @@ def test_internet_doc_refuses_steps_that_leave_the_impact_window_and_a_county_wi
         _internet_doc(shifted)
     with pytest.raises(ValueError, match="^internet: 48071: the steps differ from the impact"):
         _internet_doc(without)
+
+
+# power.json and internet.json: alignment of one county to the impact window
+
+LAYERS = ["power", "internet"]
+
+
+def _layer_frame(layer):
+    return _power_frame() if layer == "power" else _internet_frame()
+
+
+def _layer_doc(layer, frame):
+    return _power_doc(frame) if layer == "power" else _internet_doc(frame)
+
+
+def _broken(frame, fips, how):
+    """The frame with the rows of one county broken the named way; the other counties stay whole."""
+    rows = frame.index[frame["fips"] == fips]
+    out = frame.copy()
+    if how == "191":
+        return out.drop(rows[-1])
+    if how == "193":
+        extra = out.loc[[rows[-1]]].assign(step_utc=lambda f: f["step_utc"] + pd.Timedelta("15min"))
+        return pd.concat([out, extra], ignore_index=True)
+    if how == "outside":
+        out.loc[rows[-1], "step_utc"] += pd.Timedelta(hours=48)
+    else:
+        out.loc[rows[-1], "step_utc"] = out.loc[rows[0], "step_utc"]
+    return out
+
+
+@pytest.mark.parametrize("layer", LAYERS)
+@pytest.mark.parametrize("how", ["191", "193", "outside", "duplicate"])
+def test_a_document_refuses_a_county_whose_rows_do_not_fill_the_window_once(layer, how):
+    frame = _broken(_layer_frame(layer), "48201", how)
+
+    with pytest.raises(ValueError) as err:
+        _layer_doc(layer, frame)
+
+    assert str(err.value) == f"{layer}: 48201: the steps differ from the impact window"
+
+
+@pytest.mark.parametrize("layer", LAYERS)
+def test_a_document_names_the_first_failing_county_in_metro_order_and_returns_nothing(layer):
+    frame = _broken(_broken(_layer_frame(layer), "48071", "191"), "48157", "duplicate")
+
+    with pytest.raises(ValueError) as err:
+        _layer_doc(layer, frame)
+
+    assert str(err.value) == f"{layer}: 48157: the steps differ from the impact window"
+
+
+@pytest.mark.parametrize("layer", LAYERS)
+@pytest.mark.parametrize("unit", ["ns", "us", "ms"])
+def test_a_document_is_the_same_for_every_parquet_unit_of_the_steps(layer, unit):
+    frame = _layer_frame(layer)
+    in_us = frame.assign(step_utc=frame["step_utc"].dt.as_unit("us"))
+    in_unit = frame.assign(step_utc=frame["step_utc"].dt.as_unit(unit))
+
+    assert in_unit["step_utc"].dt.unit == unit
+    assert _layer_doc(layer, in_unit) == _layer_doc(layer, in_us)
 
 
 def test_the_internet_schema_refuses_191_ratios_a_negative_ratio_and_a_string():
