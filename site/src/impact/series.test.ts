@@ -170,6 +170,12 @@ describe("the Harris peak", () => {
     expect(harrisPeak(powerFile({ [HARRIS_FIPS]: series({}, null) }))).toBeNull();
   });
 
+  it("is null for a file with no Harris row and for a file with no county", () => {
+    const fortBendOnly = { ...powerFile({ "48157": series({ 5: 999 }) }), counties: powerFile().counties.slice(1) };
+    expect(harrisPeak(fortBendOnly)).toBeNull();
+    expect(harrisPeak({ ...powerFile(), counties: [] })).toBeNull();
+  });
+
   it("opens the map at the peak with a valid file and at step 48 without one", () => {
     const file = powerFile({ [HARRIS_FIPS]: series({ 77: 12 }) });
     expect(resolveStep(null, harrisPeak(file))).toBe(77);
