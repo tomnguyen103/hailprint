@@ -1,7 +1,7 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PowerFile } from "../../data/types";
+import type { InternetFile, PowerFile } from "../../data/types";
 import { makeHandle } from "./create-map";
 import { countyTags, labelPoint, powerLayers } from "./layers";
 
@@ -141,6 +141,16 @@ function powerFile(out: Record<string, (number | null)[]> = {}, source: "eaglei"
   };
 }
 
+function internetFile(ratio: Record<string, (number | null)[]> = {}): InternetFile {
+  return {
+    receipt: { ...receipt, sources: [{ source: "ioda", product: "ping-slash24", file: "internet-2024-05-28.parquet" }] },
+    window: { start: "2024-05-28T12:00:00Z", step_minutes: 15, steps: 192 },
+    signal: "ping-slash24",
+    baseline_days: 7,
+    counties: METRO.map(([fips, name]) => ({ fips, name, baseline: 100, ratio: ratio[fips] ?? Array<number | null>(192).fill(1) })),
+  };
+}
+
 const at = (step: number, value: number | null, rest: number | null = 0) =>
   Array.from({ length: 192 }, (_, i) => (i === step ? value : rest));
 
@@ -171,6 +181,8 @@ describe("the power layers", () => {
     for (let n = 1; n <= 5; n++) {
       expect(text).toContain(`--out-${n}`);
       expect(text).toContain(`light--out-${n}`);
+      expect(text).toContain(`--net-${n}`);
+      expect(text).toContain(`light--net-${n}`);
     }
     expect(text).not.toContain("none");
     expect(text).not.toContain("gap");
@@ -267,6 +279,39 @@ describe("the county fill on the map handle", () => {
     expect([...line]).toEqual([r, g, b, 255]);
   });
 
+  it("draws the internet drop bins at the step with the drop as the label", () => {
+    const { handle, layout, sources } = stubMap();
+    handle.setCounties(OUTLINES);
+    handle.setFill("internet", internetFile({ "48201": at(60, 0.8, 1), "48157": at(60, null, 1) }), 60);
+
+    for (const id of POWER_IDS) expect(layout[id]!["visibility"]).toBe("visible");
+    const features = (sources["power"]!.data as FeatureCollection).features;
+    expect(features.map((f) => (f.properties as { bin: string }).bin).slice(0, 3)).toEqual(["--net-5", "gap", "none"]);
+    expect(live().map((e) => e.element.textContent).slice(0, 3)).toEqual(["Harris 20.0%", "Fort Bend no data", "Montgomery 0%"]);
+  });
+
+  it("hides the layers when the file kind does not match the fill", () => {
+    const { handle, layout } = stubMap();
+    handle.setCounties(OUTLINES);
+    handle.setFill("internet", internetFile(), 10);
+    handle.setFill("internet", powerFile(), 10);
+    for (const id of POWER_IDS) expect(layout[id]!["visibility"]).toBe("none");
+    expect(live()).toEqual([]);
+    handle.setFill("power", internetFile(), 10);
+    for (const id of POWER_IDS) expect(layout[id]!["visibility"]).toBe("none");
+    expect(live()).toEqual([]);
+  });
+
+  it("swaps the power fill for the internet fill without a second layer", () => {
+    const { handle, layout, sources } = stubMap();
+    handle.setCounties(OUTLINES);
+    handle.setFill("power", powerFile({ "48201": at(60, 251_830) }), 60);
+    handle.setFill("internet", internetFile({ "48201": at(60, 0.9, 1) }), 60);
+    for (const id of POWER_IDS) expect(layout[id]!["visibility"]).toBe("visible");
+    expect((sources["power"]!.data as FeatureCollection).features[0]!.properties).toMatchObject({ bin: "--net-4", drop: 0.1 });
+    expect(live()).toHaveLength(8);
+  });
+
   it("touches no power layer while the fill stays off", () => {
     const { handle, layout } = stubMap(BASE_IDS);
     handle.setCounties(OUTLINES);
@@ -281,6 +326,6 @@ describe("the county labels", () => {
   it("sit at the middle of the largest ring", () => {
     const [harris] = OUTLINES.features;
     expect(labelPoint(harris!.geometry)).toEqual([-95.5, 30]);
-    expect(countyTags([]).length).toBe(0);
+    expect(countyTags([], () => "").length).toBe(0);
   });
 });

@@ -71,6 +71,7 @@ class Tree:
             "VERCEL_ORG_ID",
             "VERCEL_PROJECT_ID",
             "MAX_INGEST",
+            "PUBLISH_INTERNET",
             "STUB_MISSING",
             "STUB_FAIL",
         ):
@@ -307,6 +308,7 @@ TAIL = [
     "uv run hailprint score @ tree",
     "uv run hailprint warnings --missing @ tree",
     "uv run hailprint power --missing @ tree",
+    "uv run hailprint internet --missing @ tree",
     "uv run hailprint publish @ tree",
 ]
 
@@ -504,7 +506,54 @@ def test_nightly_runs_power_between_warnings_and_publish(tmp_path):
     calls = tree.calls()
     power = calls.index("uv run hailprint power --missing @ tree")
     assert calls[power - 1] == "uv run hailprint warnings --missing @ tree"
-    assert calls[power + 1] == "uv run hailprint publish @ tree"
+    assert calls[power + 1] == "uv run hailprint internet --missing @ tree"
+    assert calls[power + 2] == "uv run hailprint publish @ tree"
+
+
+@needs_bash
+def test_nightly_logs_a_failed_internet_run_and_publishes(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": "", "STUB_FAIL": "internet"})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == HEAD + TAIL + ["deploy @ tree"]
+    assert "internet failed; publish goes on" in done.stdout
+    assert "power failed" not in done.stdout
+
+
+@needs_bash
+def test_nightly_publishes_without_the_internet_flag_by_default(tmp_path):
+    tree = nightly_tree(tmp_path)
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": ""})
+
+    assert done.returncode == 0, done.stderr
+    assert not any("--with-internet" in call for call in tree.calls())
+
+
+@needs_bash
+def test_nightly_adds_the_internet_flag_when_dot_env_opts_in(tmp_path):
+    tree = nightly_tree(tmp_path)
+    tree.dot_env("PUBLISH_INTERNET=1\n")
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": ""})
+
+    assert done.returncode == 0, done.stderr
+    assert tree.calls() == (
+        HEAD + TAIL[:-1] + ["uv run hailprint publish --with-internet @ tree", "deploy @ tree"]
+    )
+
+
+@needs_bash
+def test_nightly_leaves_the_internet_flag_off_for_any_other_opt_in_value(tmp_path):
+    tree = nightly_tree(tmp_path)
+    tree.dot_env("PUBLISH_INTERNET=yes\n")
+
+    done = tree.run("nightly.sh", env={"STUB_MISSING": ""})
+
+    assert done.returncode == 0, done.stderr
+    assert not any("--with-internet" in call for call in tree.calls())
 
 
 @needs_bash
@@ -528,7 +577,7 @@ def test_nightly_max_ingest_limits_ingest_only_and_impact_steps_run_once(tmp_pat
     assert done.returncode == 0, done.stderr
     calls = tree.calls()
     assert "uv run hailprint candidates --missing --top 1 @ tree" in calls
-    for step in ("warnings", "power"):
+    for step in ("warnings", "power", "internet"):
         assert calls.count(f"uv run hailprint {step} --missing @ tree") == 1
         assert not any(
             call.startswith(f"uv run hailprint {step}") and "--top" in call for call in calls

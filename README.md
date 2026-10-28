@@ -10,7 +10,7 @@ An open hail-exposure map for Harris County that grades itself against NOAA stor
 
 </div>
 
-Hailprint draws the MRMS MESH hail swath for each storm date over Harris County, Texas. It counts the HCAD parcels inside each size class and scores the swath against SPC hail reports at every whole-km radius. Every value on the site is a radar-estimated hail size with a confidence band: the published skill ceiling is an HSS of about 0.38 at 30 mm.
+Hailprint draws the MRMS MESH hail swath for each storm date over Harris County, Texas. It counts the HCAD parcels inside each size class and scores the swath against SPC hail reports at every whole-km radius. Every hail size on the site is a radar-estimated hail size with a confidence band: the published skill ceiling is an HSS of about 0.38 at 30 mm. The impact layers (warnings, power, internet) show their own sources and make no claim about a cause.
 
 Site: https://hailprint.tomnguyen.me
 
@@ -38,7 +38,8 @@ Site: https://hailprint.tomnguyen.me
 | EAGLE-I | `hailprint eaglei` | One Parquet per year of county power outages, from the ORNL EAGLE-I download |
 | Power | `hailprint power` | Customers out and share out per metro county and 15-minute step, for each storm date |
 | ODIN | `hailprint odin` | One 15-minute snapshot of the open ODIN incidents, added to the file of the UTC day |
-| Publish | `hailprint publish` | Validated JSON under `site/data/`, each file with a receipt |
+| Internet | `hailprint internet` | Internet reachability per metro county and 15-minute step, from the IODA signal, for each storm date |
+| Publish | `hailprint publish` | Validated JSON under `site/data/`, each file with a receipt; `--with-internet` adds `internet.json` |
 
 `scripts/nightly.sh` runs the steps for new storm dates. `scripts/hailprint.cron` starts it at 14:00 UTC and runs `hailprint odin` every 15 minutes. `scripts/deploy.sh` uploads the site to Vercel.
 

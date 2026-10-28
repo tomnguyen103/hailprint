@@ -159,6 +159,23 @@ export interface PowerFile {
   counties: PowerCounty[];
 }
 
+/** One metro county in `internet.json`: the ratio to the 7-day baseline at each of the 192 steps, null where the signal has no point. */
+export interface InternetCounty {
+  fips: string;
+  name: string;
+  baseline: number | null;
+  ratio: (number | null)[];
+}
+
+/** `internet.json`: IODA ping reachability per metro county over the impact window. */
+export interface InternetFile {
+  receipt: Receipt;
+  window: { start: string; step_minutes: 15; steps: 192 };
+  signal: "ping-slash24";
+  baseline_days: 7;
+  counties: InternetCounty[];
+}
+
 /** One `publish` run in the run log, newest first in `pipeline.json`. */
 export interface PipelineRun {
   run_time: string;

@@ -7,6 +7,7 @@ import {
   JSON_PATH,
   MAX_RUNS,
   guardIndex,
+  guardInternet,
   guardOutline,
   guardPairs,
   guardPipeline,
@@ -589,5 +590,109 @@ describe("guardPower", () => {
     const promise = fetchJson("storms/2024-05-28/power.json", guardPower);
     await expect(promise).rejects.toBeInstanceOf(DataError);
     await expect(promise).rejects.toThrow(/^power\.json: HTTP 404/);
+  });
+});
+
+describe("guardInternet", () => {
+  afterEach(() => setFetch(null));
+
+  const METRO: [string, string][] = [
+    ["48201", "Harris"],
+    ["48157", "Fort Bend"],
+    ["48339", "Montgomery"],
+    ["48039", "Brazoria"],
+    ["48167", "Galveston"],
+    ["48473", "Waller"],
+    ["48291", "Liberty"],
+    ["48071", "Chambers"],
+  ];
+  const internet = {
+    receipt,
+    window: { start: "2024-05-28T12:00:00Z", step_minutes: 15, steps: 192 },
+    signal: "ping-slash24",
+    baseline_days: 7,
+    counties: METRO.map(([fips, name]) => ({
+      fips,
+      name,
+      baseline: 96.5,
+      ratio: Array.from({ length: 192 }, (_, i) => (i % 5 === 0 ? null : 1 - (i % 7) / 100)),
+    })),
+  };
+  const withCounty = (patch: Record<string, unknown>, at = 0) => ({
+    ...internet,
+    counties: internet.counties.map((c, i) => (i === at ? { ...c, ...patch } : c)),
+  });
+
+  it("accepts a valid file with gaps, a null baseline, and a ratio above 1", () => {
+    expect(guardInternet(internet)).toBe(internet);
+    const quiet = withCounty({ baseline: null, ratio: Array<number | null>(192).fill(null) }, 2);
+    expect(guardInternet(quiet)).toBe(quiet);
+    const above = withCounty({ ratio: Array<number>(192).fill(1.3) });
+    expect(guardInternet(above)).toBe(above);
+  });
+
+  it("throws on 191 values, 193 values, and a value that is not a ratio", () => {
+    const ratio = internet.counties[0]!.ratio;
+    expect(() => guardInternet(withCounty({ ratio: ratio.slice(1) }))).toThrow(/^internet\.json: counties\[0\]\.ratio has 191 values/);
+    expect(() => guardInternet(withCounty({ ratio: [...ratio, 1] }))).toThrow(/^internet\.json: counties\[0\]\.ratio has 193 values/);
+    expect(() => guardInternet(withCounty({ ratio: ratio.map((v, i) => (i === 7 ? -0.1 : v)) }))).toThrow(
+      /^internet\.json: counties\[0\]\.ratio\[7\] is not a ratio or null/,
+    );
+  });
+
+  it("throws on NaN, Infinity, a string, and undefined, never reading them as a gap", () => {
+    const ratio = internet.counties[1]!.ratio;
+    for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, "0.9", undefined]) {
+      expect(() => guardInternet(withCounty({ ratio: ratio.map((v, i) => (i === 3 ? bad : v)) }, 1))).toThrow(
+        /^internet\.json: counties\[1\]\.ratio\[3\] is not a ratio or null/,
+      );
+    }
+  });
+
+  it("throws on a baseline that is negative, a string, or missing", () => {
+    expect(() => guardInternet(withCounty({ baseline: -1 }))).toThrow(/^internet\.json: counties\[0\]\.baseline is below 0/);
+    expect(() => guardInternet(withCounty({ baseline: "96" }))).toThrow(/^internet\.json: counties\[0\]\.baseline is not a number/);
+    expect(() => guardInternet(withCounty({ baseline: undefined }))).toThrow(/counties\[0\]\.baseline is not a number/);
+  });
+
+  it("throws on a wrong FIPS set, a wrong order, and a wrong county count", () => {
+    expect(() => guardInternet(withCounty({ fips: "48999" }))).toThrow(/^internet\.json: counties\[0\]\.fips is not 48201/);
+    const swapped = { ...internet, counties: [internet.counties[1], internet.counties[0], ...internet.counties.slice(2)] };
+    expect(() => guardInternet(swapped)).toThrow(/^internet\.json: counties\[0\]\.fips is not 48201/);
+    expect(() => guardInternet({ ...internet, counties: internet.counties.slice(1) })).toThrow(
+      /^internet\.json: counties has 7 entries/,
+    );
+  });
+
+  it("throws on a missing name", () => {
+    expect(() => guardInternet(withCounty({ name: undefined }))).toThrow(/^internet\.json: counties\[0\]\.name is not a string/);
+  });
+
+  it("throws on a signal other than ping-slash24 and on a baseline length other than 7 days", () => {
+    expect(() => guardInternet({ ...internet, signal: "bgp" })).toThrow(/^internet\.json: signal is not ping-slash24/);
+    expect(() => guardInternet({ ...internet, baseline_days: 14 })).toThrow(/^internet\.json: baseline_days is not 7/);
+  });
+
+  it("throws on a window that is not 192 steps of 15 minutes from 12:00 UTC", () => {
+    expect(() => guardInternet({ ...internet, window: { ...internet.window, steps: 96 } })).toThrow(
+      /^internet\.json: window\.steps is not 192/,
+    );
+    expect(() => guardInternet({ ...internet, window: { ...internet.window, step_minutes: 5 } })).toThrow(
+      /window\.step_minutes is not 15/,
+    );
+    expect(() => guardInternet({ ...internet, window: { ...internet.window, start: "2024-05-28T00:00:00Z" } })).toThrow(
+      /window\.start is not 12:00 UTC/,
+    );
+  });
+
+  it("throws when the receipt is missing", () => {
+    expect(() => guardInternet(without(internet, "receipt"))).toThrow(/^internet\.json: receipt is not an object/);
+  });
+
+  it("answers a 404 with a DataError and no other throw", async () => {
+    setFetch(async () => new Response("nope", { status: 404 }));
+    const promise = fetchJson("storms/2024-05-28/internet.json", guardInternet);
+    await expect(promise).rejects.toBeInstanceOf(DataError);
+    await expect(promise).rejects.toThrow(/^internet\.json: HTTP 404/);
   });
 });

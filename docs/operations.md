@@ -10,8 +10,9 @@ This guide covers the nightly run, the cron entry, the deploy, and the `.env` fi
 2. `candidates --missing --top $MAX_INGEST` prints the missing candidate days.
 3. `ingest` draws a swath file for each missing candidate day.
 4. `parcels` counts parcels for each of them when the HCAD gdb is present.
-5. `score` and `publish` write the scores and `site/data/`.
-6. `scripts/deploy.sh` uploads the site.
+5. `score`, `warnings --missing`, `power --missing`, and `internet --missing` write the scores and the impact layers. A failed layer step never blocks the publish.
+6. `publish` writes `site/data/`. It adds `internet.json` only when `.env` sets `PUBLISH_INTERNET=1` (`docs/DECISIONS.md` row 14).
+7. `scripts/deploy.sh` uploads the site.
 
 The lock is the directory `data/nightly.lock`. A second run finds it and exits 1. A trap removes the lock on exit.
 

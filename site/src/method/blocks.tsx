@@ -2,6 +2,7 @@ import { Fragment } from "preact";
 import { fetchJson } from "../data/fetch";
 import { guardPairs, guardReports } from "../data/guard";
 import type { StormsIndex } from "../data/types";
+import { InternetLegend, PowerLegend } from "../impact/power-fill";
 import { pooledRows } from "../pool";
 import { RULER, diameterPx } from "../ruler";
 import { ContingencyGrid } from "../shell/contingency-grid";
@@ -12,6 +13,7 @@ import { useLoad, type Load } from "../state/load";
 import { useAllFiles, usePairsAll } from "../state/pairs-all";
 import type { Block, FigureId } from "./content";
 import { GuessReveal } from "./guess-reveal";
+import "../styles/map.css";
 
 const NO_INDEX = "No storm date is published yet.";
 const INDEX_FILE = "storms.json";
@@ -59,9 +61,10 @@ function render(block: Block, index: Index) {
   }
 }
 
-/** The ruler needs no data; every other figure waits for the index and never blocks the prose. */
+/** The ruler and the fill bins need no data; every other figure waits for the index and never blocks the prose. */
 function figure(id: FigureId, index: Index) {
   if (id === "ruler") return <Ruler />;
+  if (id === "bins") return <Bins />;
   if (index.status === "error") return <ErrorState error={index.error} onRetry={index.retry} />;
   if (index.status === "loading") return index.showLoading ? <LoadingState file={INDEX_FILE} /> : null;
   if (index.data.storms.length === 0) return <EmptyState sentence={NO_INDEX} />;
@@ -105,6 +108,16 @@ function StampFigure({ index }: { index: StormsIndex }) {
         <span>00Z</span>
         <span>12Z D+1</span>
       </div>
+    </div>
+  );
+}
+
+/** The two fill legends as the map draws them: the colour of each bin beside its label. */
+function Bins() {
+  return (
+    <div class="bins-figure">
+      {PowerLegend({ fill: "power", source: "eaglei" })}
+      {InternetLegend({ fill: "internet" })}
     </div>
   );
 }

@@ -1,13 +1,26 @@
 import type { Feature, MultiPolygon, Point } from "geojson";
 import type { ComponentChild, VNode } from "preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Phenomena, PowerFile, ReportProps, ReportsFile, Receipt, WarningProps, WarningsFile } from "../data/types";
+import type { InternetFile, Phenomena, PowerFile, ReportProps, ReportsFile, Receipt, WarningProps, WarningsFile } from "../data/types";
+import { FORBIDDEN_WORD } from "../method/prose";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { FileItem } from "../storms/data-pane";
-import { CountySection, countyRows } from "../storms/map/inspector";
+import { CountySection, InternetSection, countyRows } from "../storms/map/inspector";
 import { createPlayer } from "../time/slider";
 import { HARRIS_FIPS, ODIN_LABEL, percentText, shareOut } from "./power";
-import { PowerTable, Timeline, TimelineTables, barKey, powerSeries, reportTicks, runsOf, stepAt, warningBars } from "./timeline";
+import {
+  InternetTable,
+  PowerTable,
+  Timeline,
+  TimelineTables,
+  barKey,
+  internetSeries,
+  powerSeries,
+  reportTicks,
+  runsOf,
+  stepAt,
+  warningBars,
+} from "./timeline";
 
 type Node = VNode<Record<string, unknown>>;
 
@@ -63,6 +76,8 @@ function chart(props: Partial<Parameters<typeof Timeline>[0]> = {}) {
     note: null,
     reports: reports(report(1, "1200"), report(2, "1145")),
     power: null,
+    internet: null,
+    internetNote: null,
     fips: HARRIS_FIPS,
     onStep: (next) => calls.push(next),
     ...props,
@@ -408,6 +423,234 @@ describe("the Data pane power table", () => {
     expect(textOf(PowerTable({ date: DATE, power: power("odin"), fips: HARRIS_FIPS }))).toContain(ODIN_LABEL);
     expect(textOf(table())).not.toContain(ODIN_LABEL);
     expect(textOf(PowerTable({ date: DATE, power: file, fips: "99999" }))).toContain("No power data for this county");
+  });
+});
+
+// Reachability over baseline: 1 is the baseline, 0.8 is a drop of 20% below it.
+function internet(harris = series({}, 1), fortBend = series({}, 1)): InternetFile {
+  return {
+    receipt: RECEIPT,
+    window: { start: "2024-05-28T12:00:00Z", step_minutes: 15, steps: 192 },
+    signal: "ping-slash24",
+    baseline_days: 7,
+    counties: [
+      { fips: "48201", name: "Harris", baseline: 1000, ratio: harris },
+      { fips: "48157", name: "Fort Bend", baseline: 400, ratio: fortBend },
+    ],
+  };
+}
+
+const netLines = (tree: ComponentChild) => findAll(tree, withClass("timeline-net-line"));
+const netGaps = (tree: ComponentChild) => findAll(tree, withClass("timeline-net-gap"));
+const netBase = (tree: ComponentChild) => findAll(tree, withClass("timeline-net-base"));
+const netStrip = (tree: ComponentChild) => findAll(tree, (v) => v.props["data-strip"] === "internet");
+const BANNED = new RegExp(`\\bdown\\b|${FORBIDDEN_WORD}|caused|because`, "i");
+
+describe("the internet strip", () => {
+  it("draws one line through every step and a dotted baseline, and no gap when the county has no null", () => {
+    const { tree } = chart({ internet: internet(series({ 20: 0.8 }, 1)) });
+    expect(netLines(tree)).toHaveLength(1);
+    expect(pointsOf(netLines(tree)[0]!)).toHaveLength(192);
+    expect(netGaps(tree)).toHaveLength(0);
+    expect(netBase(tree)).toHaveLength(1);
+  });
+
+  it("draws a lower ratio lower on the row", () => {
+    const [line] = netLines(chart({ internet: internet(series({ 20: 0.8 }, 1)) }).tree);
+    const points = pointsOf(line!);
+    expect(points[20]![1]).toBeGreaterThan(points[0]![1]);
+    expect(points[0]![1]).toBe(points[100]![1]);
+  });
+
+  it("breaks the line at a null step and draws the gap as a gap", () => {
+    const { tree, unit } = chart({ internet: internet(series({ 12: null, 20: 0.8 }, 1)) });
+    expect(netLines(tree)).toHaveLength(2);
+    const steps = netLines(tree)
+      .flatMap(pointsOf)
+      .map(([x]) => x / unit - 0.5);
+    expect(steps).toHaveLength(191);
+    expect(steps).not.toContain(12);
+    const [gap] = netGaps(tree);
+    expect([Number(gap!.props["x"]) / unit, Number(gap!.props["width"]) / unit]).toEqual([12, 1]);
+  });
+
+  it("names the scale from the lowest ratio to the baseline, with a floor of a 10% span", () => {
+    expect(textOf(chart({ internet: internet(series({ 20: 0.8 }, 1)) }).tree)).toContain("Internet reachability, Harris County. Scale 0.80 to 1.00 of baseline.");
+    expect(textOf(chart({ internet: internet() }).tree)).toContain("Scale 0.90 to 1.00 of baseline.");
+  });
+
+  it("follows the picked county", () => {
+    const file = internet(series({}, 1), series({ 30: 0.5 }, 1));
+    expect(textOf(chart({ internet: file, fips: HARRIS_FIPS }).tree)).toContain("Harris County");
+    const fortBend = chart({ internet: file, fips: FORT_BEND });
+    expect(textOf(fortBend.tree)).toContain("Fort Bend County");
+    expect(textOf(fortBend.tree)).toContain("Scale 0.50 to 1.00 of baseline.");
+  });
+
+  it("reports the clicked step from the internet strip", () => {
+    const { tree, calls } = chart({ internet: internet() });
+    const [strip] = netStrip(tree);
+    (strip!.props["onClick"] as (e: unknown) => void)({
+      clientX: 580,
+      currentTarget: { getBoundingClientRect: () => ({ left: 100, width: 960 }) },
+    });
+    expect(calls).toEqual([96]);
+  });
+
+  it("says No county signal for a county with no data at any step and draws no line", () => {
+    const { tree } = chart({ internet: internet(series({}, null)) });
+    expect(netStrip(tree)).toHaveLength(1);
+    expect(netLines(tree)).toHaveLength(0);
+    expect(netGaps(tree)).toHaveLength(0);
+    expect(findAll(tree, withClass("timeline-empty")).map(textOf)).toContain("No county signal");
+    expect(textOf(findAll(tree, (v) => v.type === "title")[0])).toContain("internet reachability unavailable");
+    expect(textOf(netStrip(tree)[0])).toContain("no data");
+  });
+
+  it("shows the note, not No county signal, for a date with no file or a failed file, and draws no row while the file loads", () => {
+    for (const internetNote of ["No internet file for this storm date.", "Internet reachability off. internet.json: HTTP 500"]) {
+      const { tree } = chart({ internet: null, internetNote });
+      expect(netStrip(tree)).toHaveLength(1);
+      expect(netLines(tree)).toHaveLength(0);
+      const lines = findAll(tree, withClass("timeline-empty")).map(textOf);
+      expect(lines).toContain(internetNote);
+      expect(lines).not.toContain("No county signal");
+      expect(textOf(netStrip(tree)[0])).toContain(internetNote);
+      const [note] = findAll(tree, withClass("timeline-empty-net"));
+      expect(note!.type).toBe("p");
+      expect((note!.props["children"] as { type: string }).type).toBe("span");
+    }
+    const loading = chart({ internet: null, internetNote: null }).tree;
+    expect(netStrip(loading)).toHaveLength(0);
+    expect(textOf(loading)).not.toContain("No county signal");
+  });
+
+  it("puts the internet row under the power row and moves the warnings and reports rows down", () => {
+    const y = (tree: ComponentChild, strip: string) => Number(findAll(tree, (v) => v.props["data-strip"] === strip)[0]!.props["y"]);
+    const without = chart({ power: power(), internet: null }).tree;
+    const withNet = chart({ power: power(), internet: internet() }).tree;
+    expect(y(withNet, "power")).toBe(0);
+    expect(y(withNet, "internet")).toBe(48);
+    expect(y(withNet, "warnings") - y(without, "warnings")).toBe(48);
+    expect(y(withNet, "reports") - y(without, "reports")).toBe(48);
+    expect(y(chart({ internet: internet() }).tree, "internet")).toBe(0);
+  });
+
+  it("names the strip with the largest drop and the steps without data", () => {
+    const { tree } = chart({ internet: internet(series({ 12: null, 20: 0.8 }, 1)) });
+    const text = textOf(netStrip(tree)[0]);
+    expect(text).toContain("Harris County");
+    expect(text).toContain("largest drop 20.0% below baseline at step 20");
+    expect(text).toContain("1 step without data");
+    expect(textOf(findAll(tree, (v) => v.type === "title")[0])).toContain("Harris internet reachability largest drop 20.0%");
+    const steady = chart({ internet: internet() }).tree;
+    expect(textOf(netStrip(steady)[0])).toContain("no drop below baseline");
+    expect(textOf(findAll(steady, (v) => v.type === "title")[0])).toContain("Harris internet reachability no drop below baseline");
+  });
+
+  it("uses no word that blames the weather or says the line failed", () => {
+    for (const file of [internet(series({ 20: 0.8 }, 1)), internet(series({}, null)), null]) {
+      expect(textOf(chart({ internet: file, internetNote: file === null ? "No internet file for this storm date." : null }).tree)).not.toMatch(BANNED);
+    }
+  });
+});
+
+describe("the internet series", () => {
+  it("returns the ratios, the lowest ratio and its step, the gap count, and the row scale", () => {
+    const result = internetSeries(internet(series({ 3: null, 20: 0.8 }, 1)), HARRIS_FIPS)!;
+    expect(result.county.name).toBe("Harris");
+    expect(result.ratios[20]).toBe(0.8);
+    expect(result.ratios[3]).toBeNull();
+    expect(result).toMatchObject({ low: 0.8, lowStep: 20, gapSteps: 1, top: 1, bottom: 0.8 });
+  });
+
+  it("reports no low step at or above the baseline and widens the top for a ratio above it", () => {
+    expect(internetSeries(internet(), HARRIS_FIPS)).toMatchObject({ low: 1, lowStep: null, top: 1 });
+    expect(internetSeries(internet(series({ 5: 1.25 }, 1)), HARRIS_FIPS)).toMatchObject({ low: 1, lowStep: null, top: 1.25 });
+  });
+
+  it("keeps the baseline inside the row when every ratio is above it", () => {
+    const above = internetSeries(internet(series({ 5: 1.25, 6: 1.1 }, 1.05)), HARRIS_FIPS)!;
+    expect(above.low).toBe(1.05);
+    expect(above.bottom).toBe(1);
+    expect(above.top).toBe(1.25);
+    const tree = chart({ internet: internet(series({ 5: 1.25, 6: 1.1 }, 1.05)) }).tree;
+    const base = findAll(tree, withClass("timeline-net-base"))[0]!;
+    expect(Number(base.props["y1"])).toBeLessThanOrEqual(36);
+  });
+
+  it("holds a 10% span for a drop smaller than that", () => {
+    const tiny = internetSeries(internet(series({ 4: 0.98 }, 1)), HARRIS_FIPS)!;
+    expect(tiny.lowStep).toBe(4);
+    expect(tiny.top - tiny.bottom).toBeCloseTo(0.1, 10);
+  });
+
+  it("returns a null low for a county with no data and null for an unknown county or file", () => {
+    expect(internetSeries(internet(series({}, null)), HARRIS_FIPS)).toMatchObject({ low: null, lowStep: null, gapSteps: 192 });
+    expect(internetSeries(internet(), "99999")).toBeNull();
+    expect(internetSeries(null, HARRIS_FIPS)).toBeNull();
+  });
+});
+
+describe("the Data pane internet table", () => {
+  const file = internet(series({ 12: null, 20: 0.8, 21: 0.9 }, 1));
+  const table = () => InternetTable({ date: DATE, internet: file, fips: HARRIS_FIPS });
+
+  it("lists every step with the ratio and the drop, and says no data for a null step", () => {
+    const rows = rowsOf(table());
+    expect(rows).toHaveLength(192);
+    expect(rows[20]).toEqual(["20", "2024-05-28 17:00", "0.800", "20.0%"]);
+    expect(rows[21]).toEqual(["21", "2024-05-28 17:15", "0.900", "10.0%"]);
+    expect(rows[12]).toEqual(["12", "2024-05-28 15:00", "no data", "no data"]);
+    expect(rows[0]).toEqual(["0", "2024-05-28 12:00", "1.000", "0%"]);
+  });
+
+  it("shows the same numbers as the strip", () => {
+    const { tree, unit } = chart({ internet: file });
+    const rows = rowsOf(table());
+    const onStrip = netLines(tree)
+      .flatMap(pointsOf)
+      .map(([x, y]) => ({ step: x / unit - 0.5, y }));
+    expect(onStrip.map((p) => p.step)).toEqual(rows.filter((row) => row[3] !== "no data").map((row) => Number(row[0])));
+    const bottom = onStrip.reduce((a, b) => (b.y > a.y ? b : a));
+    expect(rows[bottom.step]![2]).toBe("0.800");
+  });
+
+  it("names the county and says so for a county the file lacks", () => {
+    expect(textOf(table())).toContain("Internet reachability for Harris County");
+    expect(textOf(table())).not.toMatch(BANNED);
+    expect(textOf(InternetTable({ date: DATE, internet: file, fips: "99999" }))).toContain("No internet data for this county");
+  });
+});
+
+describe("the inspector internet section", () => {
+  const file = internet(series({ 20: 0.8 }, 1), series({ 20: null }, 0.95));
+  const section = (over: Partial<Parameters<typeof InternetSection>[0]> = {}) => InternetSection({ file, step: 20, fips: HARRIS_FIPS, ...over });
+  const detail = (tree: ComponentChild) => textOf(findAll(tree, (v) => v.type === "dl"));
+
+  it("shows the picked county with the drop below baseline, the ratio, and the receipt chip", () => {
+    const tree = section();
+    expect(detail(tree)).toContain("Harris County");
+    expect(detail(tree)).toContain("20.0%");
+    expect(detail(tree)).toContain("0.800");
+    const [chip] = findAll(tree, (v) => v.type === ReceiptChip);
+    expect(chip!.props["file"]).toBe("internet.json");
+    expect(chip!.props["receipt"]).toBe(RECEIPT);
+  });
+
+  it("reads a null step as no data and never as 0%", () => {
+    expect(detail(section({ fips: FORT_BEND }))).toContain("no data");
+    expect(detail(section({ fips: FORT_BEND }))).not.toContain("0%");
+  });
+
+  it("reads a ratio of 1 as 0% and a step with a lower ratio as its drop", () => {
+    expect(detail(section({ step: 0 }))).toContain("0%");
+    expect(detail(section({ step: 0, fips: FORT_BEND }))).toContain("5.0%");
+  });
+
+  it("says none for a county the file lacks and uses no word that blames the weather", () => {
+    expect(detail(section({ fips: "99999" }))).toContain("none");
+    expect(textOf(section())).not.toMatch(BANNED);
   });
 });
 

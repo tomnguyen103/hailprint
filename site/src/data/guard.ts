@@ -6,6 +6,7 @@ import { METRO_FIPS } from "../impact/power";
 import { DATE } from "../router";
 import { STEPS } from "../time/step";
 import type {
+  InternetFile,
   Pairs,
   PipelineFile,
   PowerFile,
@@ -303,16 +304,21 @@ function outValue(file: string, value: unknown, path: string): void {
   }
 }
 
-export function guardPower(value: unknown): PowerFile {
-  const file = "power.json";
-  const root = rec(file, value, "power");
-  guardReceipt(file, root["receipt"]);
+/** The impact window every layer file shares: 192 steps of 15 minutes from 12:00 UTC on the storm date. */
+function guardWindow(file: string, root: Rec): void {
   const window = rec(file, root["window"], "window");
   if (!WINDOW_START.test(str(file, window["start"], "window.start"))) {
     throw new DataError(file, "window.start is not 12:00 UTC");
   }
   if (window["step_minutes"] !== 15) throw new DataError(file, "window.step_minutes is not 15");
   if (window["steps"] !== STEPS) throw new DataError(file, `window.steps is not ${STEPS}`);
+}
+
+export function guardPower(value: unknown): PowerFile {
+  const file = "power.json";
+  const root = rec(file, value, "power");
+  guardReceipt(file, root["receipt"]);
+  guardWindow(file, root);
   if (root["source"] !== "eaglei" && root["source"] !== "odin") {
     throw new DataError(file, "source is not eaglei or odin");
   }
@@ -341,6 +347,41 @@ export function guardPower(value: unknown): PowerFile {
     for (let step = 0; step < out.length; step++) outValue(file, out[step], `${at}.out[${step}]`);
   });
   return value as PowerFile;
+}
+
+/** A ratio to the baseline: a finite number of 0 or more, or null where the signal has no point. */
+function ratioValue(file: string, value: unknown, path: string): void {
+  if (value === null) return;
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new DataError(file, `${path} is not a ratio or null`);
+  }
+}
+
+export function guardInternet(value: unknown): InternetFile {
+  const file = "internet.json";
+  const root = rec(file, value, "internet");
+  guardReceipt(file, root["receipt"]);
+  guardWindow(file, root);
+  if (root["signal"] !== "ping-slash24") throw new DataError(file, "signal is not ping-slash24");
+  if (root["baseline_days"] !== 7) throw new DataError(file, "baseline_days is not 7");
+  const counties = list(file, root["counties"], "counties");
+  if (counties.length !== METRO_FIPS.length) {
+    throw new DataError(file, `counties has ${counties.length} entries, not ${METRO_FIPS.length}`);
+  }
+  counties.forEach((item, i) => {
+    const at = `counties[${i}]`;
+    const county = rec(file, item, at);
+    if (county["fips"] !== METRO_FIPS[i]) throw new DataError(file, `${at}.fips is not ${METRO_FIPS[i]}`);
+    str(file, county["name"], `${at}.name`);
+    numOrNull(file, county["baseline"], `${at}.baseline`);
+    if (typeof county["baseline"] === "number" && !(county["baseline"] >= 0)) {
+      throw new DataError(file, `${at}.baseline is below 0`);
+    }
+    const ratio = list(file, county["ratio"], `${at}.ratio`);
+    if (ratio.length !== STEPS) throw new DataError(file, `${at}.ratio has ${ratio.length} values, not ${STEPS}`);
+    for (let step = 0; step < ratio.length; step++) ratioValue(file, ratio[step], `${at}.ratio[${step}]`);
+  });
+  return value as InternetFile;
 }
 
 /** The committed county outline: a FeatureCollection with no receipt. */

@@ -160,7 +160,7 @@ from `MCC.csv`. A unit test checks them against that table.
 | `hailprint odin` | the ODIN records endpoint, grouped by county and utility and filtered to the 8 FIPS (V14) | `data/derived/odin/odin-<YYYY-MM-DD>.parquet`, one file per UTC day | One snapshot: `fips`, `utility`, `customers_out` per county and utility, all causes. The fetch time, floored to the quarter hour, stamps each row. `utility` is the text of `name` before the comma: `CENTERPOINT ENERGY,8901` gives `CENTERPOINT ENERGY`. A county with no open incident gets one row with 0 when the fetch succeeds. A failed fetch writes nothing, so that step is a gap. Each run reads the day file, adds its rows, and writes it back through `write_atomic`. |
 | `hailprint warnings <date>...` or `--missing` | IEM for the impact window, `wfo=HGX` | `data/derived/warnings/warnings-<date>.parquet` | Keeps `SV`, `TO`, `FF` with significance `W` that intersect a metro outline. A window with no such warning writes a file with no rows: "checked, none". |
 | `hailprint power <date>...` or `--missing` | the EAGLE-I year Parquets, else the ODIN day Parquets | `data/derived/power/power-<date>.parquet` | Long format: `fips`, `step_utc`, `customers_out` (nullable). `source` metadata is `eaglei` or `odin`. No file when no source covers the window. |
-| `hailprint internet <date>...` or `--missing` | IODA for each county code, the window plus 7 days before it | `data/derived/internet/internet-<date>.parquet` | Long format: `fips`, `step_utc`, `value`, `baseline`, `ratio` (nullable). An empty IODA answer writes a file with null ratios, so `--missing` does not ask again each night. `publish` writes no `internet.json` for such a file (section 5.4). |
+| `hailprint internet <date>...` or `--missing` | IODA for each county code, the window plus 7 days before it | `data/derived/internet/internet-<date>.parquet` | Long format: `fips`, `step_utc`, `value`, `baseline`, `ratio` (nullable). An empty IODA answer writes a file with null ratios, so `--missing` stops asking once the date is older than `candidates.FRESH_DAYS`. `publish` writes no `internet.json` for such a file (section 5.4). |
 
 `--missing` means: a storm date with a swath file, a closed impact window (12Z D+2 has
 passed), and no derived file of that kind. For `power` it also means an ODIN-sourced
@@ -285,7 +285,8 @@ Null and empty mean different things:
 The publish run for a date with no derived power file writes no `power.json`. The same
 holds for internet and warnings. An internet Parquet with no ratio at any step and county
 gives no `internet.json`, so the site shows "no county signal". The Parquet stays, so
-`internet --missing` does not ask IODA again. Thus 14 storm dates get `internet.json`.
+`internet --missing` stops asking IODA once the date is older than `candidates.FRESH_DAYS`.
+Thus 14 storm dates get `internet.json`.
 
 ## 6. Site architecture
 
@@ -469,7 +470,7 @@ new year arrives`.
 | 11 | Impact layer scope | Warnings, power, and internet cover the 8 metro counties. Hail, scoring, and parcels stay Harris only (row 4 stands for them). | Revisit row 4 as a whole for the v2 nine-county metro |
 | 12 | Power sources | EAGLE-I for storm dates up to its last published year; ODIN snapshots after the cron install. One file never mixes them. Share out uses MCC 2022. | ODIN covers CenterPoint only (V12) |
 | 13 | Gap rule | A step with no source row is null and draws as a gap. No fill, no interpolation. | Revisit if EAGLE-I documents that an absent row means zero |
-| 14 | Internet layer | Publish IODA-derived ratios only after IODA answers in writing. Until then PR N stays unmerged. | IODA reply |
+| 14 | Internet layer | Publish IODA-derived ratios only after IODA answers in writing. Until then `publish` writes no `internet.json` unless the run passes `--with-internet`. | IODA reply |
 | 15 | ODIN terms | Publish ODIN county totals with attribution; ask ORNL in writing. | ORNL reply |
 
 ## 10. Testing and oracles
@@ -545,8 +546,8 @@ next PR branches from fresh `main`.
 | An absent EAGLE-I row means zero after all. | DECISIONS row 13 says null. A changed rule needs one function and a re-run of `power`; no schema change. |
 | The first publish after PR I meets an old `storms.json`. | The three keys are optional in the schema, and `merge_entries` defaults them to null (section 5.4). O10a pins it. |
 | A cron host on Windows renames over an open file. | `write_atomic` already holds the Windows rule from `docs/solutions/`. The ODIN day file has one writer. |
-| IODA never answers, or says no. | PR N stays unmerged. The other five PRs carry the feature. |
-| IODA restores county signals after 2024. | `--missing` asks again only when no file exists. A manual `internet <date>` rerun picks them up. |
+| IODA never answers, or says no. | The default publish ships no IODA data, and the owner never sets `PUBLISH_INTERNET=1`. The other five PRs carry the feature. |
+| IODA restores county signals after 2024. | `--missing` asks again only when no file exists or the file holds no ratio and the date is within `candidates.FRESH_DAYS`. A manual `internet <date>` rerun picks them up. |
 | ODIN changes its schema or goes offline. | The snapshot fails, logs one line, and the next one tries again. A storm date with snapshot gaps shows gaps. |
 | ODIN covers more utilities later. | `utilities` lists what each snapshot held; the label follows the data. |
 | The cron host misses snapshots during a storm. | Gaps, by the gap rule. The timeline shows them. |
@@ -573,6 +574,23 @@ next PR branches from fresh `main`.
    holds ODIN data until ORNL answers.
 5. **Cron.** Approve the 15-minute ODIN cron line on the cron host?
 6. **Programme.** Approve PRs I to N and the owner steps in section 11.3?
+
+### Adopted answers
+
+The autonomous run adopts every recommendation above.
+
+1. Scope: the impact layers cover the 8 metro counties (row 11).
+2. Gap rule: an absent step is a gap, never a zero (row 13).
+3. Internet layer: PR N is built and merged behind `publish --with-internet`. The nightly run
+   passes the flag only when `.env` sets `PUBLISH_INTERNET=1` (row 14). This replaces "hold the
+   merge until IODA answers": the default publish ships no IODA data, so the merge is safe, and
+   the owner opts in when IODA replies.
+4. ODIN: county totals are published with attribution, and the ORNL email stays open (row 15).
+5. Cron: the 15-minute ODIN line sits in `scripts/hailprint.cron`. The owner installs it.
+6. Programme: PRs I to N are built. The owner steps in section 11.3 stay with the owner.
+7. Internet strip text: a date with no `internet.json`, or a failed file, shows the reason in the strip
+   (`No internet file for this storm date.` or the failed-file note). `No county signal` stays for a county
+   with no ratio at any step. This replaces the ticket 23 line that read `No county signal` for both cases.
 
 ## 14. Email drafts
 

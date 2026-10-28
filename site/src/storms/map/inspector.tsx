@@ -1,7 +1,8 @@
 import type { Feature, Point } from "geojson";
 import { useEffect, useRef } from "preact/hooks";
-import type { PowerFile, Receipt, ReportProps } from "../../data/types";
+import type { InternetFile, PowerFile, Receipt, ReportProps } from "../../data/types";
 import { BELOW_FIRST_CLASS, formatCount } from "../../format";
+import { dropOf } from "../../impact/internet";
 import { ODIN_LABEL, percentText, shareOut } from "../../impact/power";
 import { objectName } from "../../ruler";
 import { ReceiptChip } from "../../shell/receipt-chip";
@@ -73,10 +74,40 @@ export function CountySection({ file, step, fips, onPick }: CountyProps) {
   );
 }
 
+interface InternetProps {
+  file: InternetFile;
+  step: number;
+  fips: string;
+}
+
+/** The picked county's internet reachability at the slider step, as the drop below its baseline. */
+export function InternetSection({ file, step, fips }: InternetProps) {
+  const county = file.counties.find((c) => c.fips === fips);
+  const ratio = county?.ratio[step] ?? null;
+  return (
+    <section class="inspector-county" aria-labelledby="inspector-internet-title">
+      <h3 id="inspector-internet-title">Internet reachability</h3>
+      <dl class="receipt-list">
+        <dt>County</dt>
+        <dd>{county === undefined ? "none" : `${county.name} County`}</dd>
+        <dt>Below baseline</dt>
+        <dd class="mono">{percentText(dropOf(ratio))}</dd>
+        <dt>Ratio to baseline</dt>
+        <dd class="mono">{ratio === null ? percentText(null) : ratio.toFixed(3)}</dd>
+        <dt>Receipt</dt>
+        <dd>
+          <ReceiptChip receipt={file.receipt} file="internet.json" />
+        </dd>
+      </dl>
+    </section>
+  );
+}
+
 interface Props {
   pick: Pick;
   receipt: Receipt;
   power: PowerFile | null;
+  internet: InternetFile | null;
   step: number;
   fips: string;
   onCounty: (fips: string) => void;
@@ -84,7 +115,7 @@ interface Props {
 }
 
 /** The point inspector. Escape and Close call `onClose`; the caller returns focus. */
-export function Inspector({ pick, receipt, power, step, fips, onCounty, onClose }: Props) {
+export function Inspector({ pick, receipt, power, internet, step, fips, onCounty, onClose }: Props) {
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
     panel.current?.focus();
@@ -130,6 +161,7 @@ export function Inspector({ pick, receipt, power, step, fips, onCounty, onClose 
         </dd>
       </dl>
       {power === null ? null : <CountySection file={power} step={step} fips={fips} onPick={onCounty} />}
+      {internet === null ? null : <InternetSection file={internet} step={step} fips={fips} />}
     </div>
   );
 }

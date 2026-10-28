@@ -1,7 +1,7 @@
 import { DATA_BASE, fetchJson } from "../data/fetch";
 import { guardPairs, guardReports, guardWarnings } from "../data/guard";
-import type { PowerFile, Receipt, ReportsFile, Storm, WarningsFile } from "../data/types";
-import { PowerTable, TimelineTables } from "../impact/timeline";
+import type { InternetFile, PowerFile, Receipt, ReportsFile, Storm, WarningsFile } from "../data/types";
+import { InternetTable, PowerTable, TimelineTables } from "../impact/timeline";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ReceiptList } from "../shell/receipt-list";
 import { ErrorState, LoadingState } from "../shell/states";
@@ -37,10 +37,12 @@ interface Props {
   storm: Storm;
   /** The power file load from the workspace, which also feeds the map. */
   power: Load<PowerFile | null> & { retry: () => void };
+  /** The internet file load from the workspace, which also feeds the map. */
+  internet: Load<InternetFile | null> & { retry: () => void };
   fips: string;
 }
 
-export function DataPane({ storm, power, fips }: Props) {
+export function DataPane({ storm, power, internet, fips }: Props) {
   const pairs = useLoad(`data:${storm.files.pairs}`, () => fetchJson(storm.files.pairs, guardPairs));
   const warningsFile = storm.files.warnings;
   const warnings = useLoad<WarningsFile | null>(`data:${warningsFile ?? "warnings:none"}`, () =>
@@ -49,11 +51,13 @@ export function DataPane({ storm, power, fips }: Props) {
   const reports = useLoad<ReportsFile>(`data:${storm.files.reports}`, () => fetchJson(storm.files.reports, guardReports));
   const warningsReceipt = warnings.status === "ready" && warnings.data !== null ? warnings.data.receipt : null;
   const powerData = power.status === "ready" ? power.data : null;
+  const internetData = internet.status === "ready" ? internet.data : null;
   const files: [string, string | null, Receipt | null][] = [
     ["swath.geojson", storm.files.swath, null],
     ["reports.geojson", storm.files.reports, null],
     ["warnings.geojson", warningsFile, warningsReceipt],
     ["power.json", storm.files.power, powerData?.receipt ?? null],
+    ["internet.json", storm.files.internet, internetData?.receipt ?? null],
     ["pairs.json", storm.files.pairs, null],
     ["zip-counts.json", storm.files.zip_counts, null],
   ];
@@ -107,6 +111,8 @@ export function DataPane({ storm, power, fips }: Props) {
         />
         {power.status === "error" ? <ErrorState error={power.error} onRetry={power.retry} /> : null}
         {powerData === null ? null : <PowerTable date={storm.storm_date} power={powerData} fips={fips} />}
+        {internet.status === "error" ? <ErrorState error={internet.error} onRetry={internet.retry} /> : null}
+        {internetData === null ? null : <InternetTable date={storm.storm_date} internet={internetData} fips={fips} />}
       </section>
     </div>
   );

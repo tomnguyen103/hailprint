@@ -171,6 +171,36 @@
   stroke-dasharray: 4 3;
 }
 
+/* Internet strip: a line for the ratio to baseline over a dotted baseline at 1; a step with no data breaks the line */
+
+.timeline-net-line,
+.timeline-net-base,
+.timeline-net-gap {
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.timeline-net-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.timeline-net-base {
+  stroke: var(--ink-muted);
+  stroke-width: 1px;
+  stroke-dasharray: 2 3;
+}
+
+.timeline-net-gap {
+  fill: color-mix(in srgb, var(--ink-muted) 12%, transparent);
+  stroke: var(--ink-muted);
+  stroke-width: 1px;
+  stroke-dasharray: 4 3;
+}
+
 .timeline .timeline-power-note {
   margin: 4px 0 0;
   color: var(--ink-muted);
@@ -191,10 +221,25 @@
   display: grid;
   height: 48px;
   margin: 0;
+  padding-inline: 4px;
   place-items: center;
   color: var(--ink-muted);
   font-size: 0.85rem;
+  text-align: center;
   pointer-events: none;
+}
+
+/* The internet row is 40px tall; a long note stops at two lines with an ellipsis. */
+.timeline-empty-net {
+  height: 40px;
+}
+
+.timeline-empty-net > span {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .timeline .timeline-axis {

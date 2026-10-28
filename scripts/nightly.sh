@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Nightly run: index, missing candidate days, ingest, parcels, score, warnings, power, publish, deploy.
+# Nightly run: index, missing candidate days, ingest, parcels, score, warnings, power, internet, publish, deploy.
 # Usage: scripts/nightly.sh [--dry-run]
 #   --dry-run   passes through to scripts/deploy.sh: build site/dist and stop before vercel.
 # MAX_INGEST (default 5) caps the storm dates that one night ingests.
@@ -8,8 +8,10 @@
 # .env at the repo root is read when present, without export. It is shell: one NAME=value per
 # line, the value from letters, digits, and _ . / : @ + -, no export prefix, no space, no quote,
 # LF line endings; a comment and a blank line pass; any other line stops the run. It holds
-# MAX_INGEST and the Vercel variables VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID;
-# scripts/deploy.sh reads those itself. The script prints no value.
+# MAX_INGEST, PUBLISH_INTERNET, and the Vercel variables VERCEL_TOKEN, VERCEL_ORG_ID,
+# VERCEL_PROJECT_ID; scripts/deploy.sh reads those itself. PUBLISH_INTERNET=1 adds
+# --with-internet to the publish step; any other value leaves the internet layer unpublished.
+# The script prints no value.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -106,8 +108,17 @@ uv run hailprint warnings --missing || log "warnings failed; publish goes on"
 log "power --missing"
 # power is an add-on layer too: a failed step leaves the hail publish alone; the next night retries
 uv run hailprint power --missing || log "power failed; publish goes on"
+log "internet --missing"
+# the fetch is derived data only; a failed step leaves the hail publish alone and the next night retries
+uv run hailprint internet --missing || log "internet failed; publish goes on"
 log "publish"
-uv run hailprint publish
+# docs/DECISIONS.md row 14: internet.json publishes only when .env sets PUBLISH_INTERNET=1,
+# remove the gate when IODA answers in writing
+if [ "${PUBLISH_INTERNET:-}" = 1 ]; then
+  uv run hailprint publish --with-internet
+else
+  uv run hailprint publish
+fi
 log "deploy ${1:-}"
 "$ROOT/scripts/deploy.sh" ${1:+"$1"}
 log "done"

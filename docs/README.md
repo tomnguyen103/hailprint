@@ -64,6 +64,7 @@ Learn-loop entries: one problem, its root cause, and the fix.
 | [solutions/tooling/coderabbit-reports-a-check-run-not-a-status.md](solutions/tooling/coderabbit-reports-a-check-run-not-a-status.md) | CodeRabbit posts a check run, so a poll of the commit status finds nothing |
 | [solutions/tooling/git-bash-grep-drops-cr.md](solutions/tooling/git-bash-grep-drops-cr.md) | A CRLF guard passes on Git Bash when it reads through grep |
 | [solutions/tooling/new-layer-needs-a-publish-command-test.md](solutions/tooling/new-layer-needs-a-publish-command-test.md) | A new impact layer needs a publish command test, not only a build_day test |
+| [solutions/tooling/site-test-files-hold-no-banned-literal.md](solutions/tooling/site-test-files-hold-no-banned-literal.md) | Site test files must not hold a banned literal, because the Python source scans read them |
 | [solutions/tooling/powershell-5-json-and-jq-quoting.md](solutions/tooling/powershell-5-json-and-jq-quoting.md) | PowerShell 5.1 unrolls a JSON array and strips the quotes of a `--jq` program |
 | [solutions/tooling/powershell-bash-is-wsl-use-git-bash.md](solutions/tooling/powershell-bash-is-wsl-use-git-bash.md) | `bash` in PowerShell is WSL, so a script needs the Git Bash path |
 | [solutions/tooling/subagent-receipt-numbers-need-a-rerun.md](solutions/tooling/subagent-receipt-numbers-need-a-rerun.md) | A subagent receipt with real-data numbers needs an independent re-run |

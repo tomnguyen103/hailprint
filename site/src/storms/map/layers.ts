@@ -2,7 +2,8 @@
 import type { Feature, FeatureCollection, MultiPolygon, Point } from "geojson";
 import type { LayerSpecification } from "maplibre-gl";
 import { PHENOMENA, type Phenomena, type ReportsFile, type WarningProps, type WarningsFile } from "../../data/types";
-import { type CountyFeature, FILLED_BINS, percentText } from "../../impact/power";
+import { NET_FILLED } from "../../impact/internet";
+import { FILLED_BINS } from "../../impact/power";
 import { WARNING_STYLES } from "../../impact/warning-styles";
 import { RULER } from "../../ruler";
 import type { Load } from "../../state/load";
@@ -15,6 +16,7 @@ export const COUNTY_SOURCE = "county";
 export const REPORTS_SOURCE = "reports";
 export const POINT_SOURCE = "point";
 export const WARNINGS_SOURCE = "warnings";
+/** The county fill layers below draw the power fill or the internet fill, one at a time. */
 export const POWER_SOURCE = "power";
 export const POWER_FILL = "power-fill";
 export const POWER_GAP = "power-gap";
@@ -58,9 +60,12 @@ export const REPORTS_LAYER = "report-points";
 
 type FillColor = NonNullable<Extract<LayerSpecification, { type: "fill" }>["paint"]>["fill-color"];
 
-/** The fill colour of a county: the bin name picks its `--out-N` token. A zero or missing bin has no colour. */
+/** The bins that draw a county fill: the power ramp and the internet ramp. Their token names differ, so one layer serves both. */
+const COUNTY_BINS: readonly string[] = [...FILLED_BINS, ...NET_FILLED];
+
+/** The fill colour of a county: the bin name picks its `--out-N` or `--net-N` token. A zero or missing bin has no colour. */
 export function powerFillColor(): FillColor {
-  const match = ["match", ["get", "bin"], ...FILLED_BINS.flatMap((bin) => [bin, token(bin)]), "rgba(0,0,0,0)"];
+  const match = ["match", ["get", "bin"], ...COUNTY_BINS.flatMap((bin) => [bin, token(bin)]), "rgba(0,0,0,0)"];
   return match as unknown as FillColor;
 }
 
@@ -72,7 +77,7 @@ export function powerLayers(): LayerSpecification[] {
       type: "fill",
       source: POWER_SOURCE,
       layout: { visibility: "none" },
-      filter: ["in", ["get", "bin"], ["literal", [...FILLED_BINS]]],
+      filter: ["in", ["get", "bin"], ["literal", [...COUNTY_BINS]]],
       paint: { "fill-color": powerFillColor(), "fill-opacity": POWER_OPACITY },
     },
     {
@@ -180,11 +185,11 @@ export interface CountyTag {
   text: string;
 }
 
-/** One label per county that has a polygon: the name and the share out, or "no data" for a gap. */
-export function countyTags(features: CountyFeature[]): CountyTag[] {
+/** One label per county that has a polygon; `text` gives the label from the county's properties, such as the name and a percent. */
+export function countyTags<P>(features: Feature<MultiPolygon, P>[], text: (props: P) => string): CountyTag[] {
   return features.flatMap((f) => {
     const lngLat = labelPoint(f.geometry);
-    return lngLat === null ? [] : [{ lngLat, text: `${f.properties.name} ${percentText(f.properties.share)}` }];
+    return lngLat === null ? [] : [{ lngLat, text: text(f.properties) }];
   });
 }
 

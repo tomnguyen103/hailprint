@@ -1,7 +1,7 @@
 """Command line entry for the hailprint commands.
 
 The commands are ``ingest``, ``index``, ``candidates``, ``parcels``, ``score``, ``warnings``,
-``eaglei``, ``power``, ``odin``, and ``publish``.
+``eaglei``, ``power``, ``odin``, ``internet``, and ``publish``.
 Run ``hailprint <command> --help`` for the arguments of one command.
 """
 
@@ -21,6 +21,7 @@ from hailprint import (
     candidates,
     county,
     files,
+    internet,
     mesh,
     odin,
     parcels,
@@ -44,6 +45,7 @@ WARNINGS_DIR = paths.DERIVED_DIR / "warnings"
 EAGLEI_DIR = paths.DERIVED_DIR / "eaglei"
 POWER_DIR = paths.DERIVED_DIR / "power"
 ODIN_DIR = paths.DERIVED_DIR / "odin"
+INTERNET_DIR = paths.DERIVED_DIR / "internet"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
 ODIN_LOCK_FILE = "odin.lock"
@@ -139,6 +141,18 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser(
         "odin", help="store one ODIN snapshot of the customers out of the metro counties"
     )
+    internet_cmd = commands.add_parser(
+        "internet",
+        help="store the IODA internet reachability of the metro counties per step of the window",
+    )
+    internet_cmd.add_argument(
+        "storm_dates", nargs="*", type=_storm_date, help="SPC convective day, YYYY-MM-DD"
+    )
+    internet_cmd.add_argument(
+        "--missing",
+        action="store_true",
+        help="fetch each swath date with a closed impact window and no settled internet file",
+    )
     publish_cmd = commands.add_parser(
         "publish", help="write the site data files and the storms index for storm dates"
     )
@@ -148,13 +162,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=_storm_date,
         help="SPC convective day, YYYY-MM-DD; none publishes every swath file",
     )
+    publish_cmd.add_argument(
+        "--with-internet",
+        action="store_true",
+        help="also publish internet.json for each date whose internet file holds a ratio",
+    )
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command in ("warnings", "power") and bool(args.storm_dates) == args.missing:
+    if args.command in ("warnings", "power", "internet") and bool(args.storm_dates) == args.missing:
         parser.error(f"{args.command} takes storm dates or --missing, not both and not neither")
     try:
         if args.command == "ingest":
@@ -175,8 +194,10 @@ def main(argv: list[str] | None = None) -> int:
             power_days(args.storm_dates, args.missing)
         elif args.command == "odin":
             odin_snapshot()
+        elif args.command == "internet":
+            internet_days(args.storm_dates, args.missing)
         elif args.command == "publish":
-            publish_days(args.storm_dates)
+            publish_days(args.storm_dates, args.with_internet)
     except (RuntimeError, OSError, ValueError) as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -491,6 +512,58 @@ def odin_snapshot() -> Path:
     return written
 
 
+def _internet_settled(storm_date: date, now: datetime) -> bool:
+    """True when the internet file holds a ratio, or holds none for a date older than FRESH_DAYS."""
+    path = INTERNET_DIR / internet.file_name(storm_date)
+    if not path.exists():
+        return False
+    try:
+        has_ratio = bool(pd.read_parquet(path, columns=["ratio"])["ratio"].notna().any())
+    except (OSError, ValueError, KeyError):  # an unreadable file is fetched again and rewritten
+        return False
+    # a gap is never zero: an all-null file of a fresh date may be a late IODA feed
+    return has_ratio or (now.date() - storm_date).days > candidates.FRESH_DAYS
+
+
+def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
+    """One internet file per storm date from the IODA county signals of the impact window.
+
+    With `missing`, the dates are the swath dates whose window has closed and that have no
+    settled internet file. A file with no ratio at all settles only after `candidates.FRESH_DAYS`,
+    so a date with no IODA signal costs no request on a later run once it is old. A failed date
+    writes no file and does not stop the other dates. The run prints one line per failed date,
+    then exits 1. The next `--missing` run starts again with the failed dates.
+    """
+    # shortcut: an explicit date runs for an open window too and writes a file with null future
+    # steps that `--missing` then skips; add a closed-window check when explicit reruns of
+    # recent days become routine.
+    if missing:
+        now = _utc_now()
+        storm_dates = [
+            d
+            for d, _ in _swath_files([])
+            if sbw.window(d)[1] <= now and not _internet_settled(d, now)
+        ]
+    written = []
+    failed = []
+    for storm_date in storm_dates:
+        try:
+            frame = internet.build(storm_date)
+            written.append(
+                files.write_atomic(
+                    frame, INTERNET_DIR / internet.file_name(storm_date), internet.METADATA
+                )
+            )
+        except (RuntimeError, ValueError, OSError) as exc:
+            print(f"{storm_date}: {exc}", file=sys.stderr)
+            failed.append(storm_date.isoformat())
+            continue
+        print(f"{storm_date}: {frame['ratio'].count()} of {len(frame)} county steps have a ratio")
+    if failed:
+        raise ValueError(f"internet failed for: {', '.join(failed)}")
+    return written
+
+
 def _archive_summary() -> dict | None:
     """The archive coverage from the archive index, or None without an index."""
     if not archive.INDEX_PATH.exists():
@@ -522,21 +595,48 @@ def _pipeline_doc(
     )
 
 
-def publish_days(storm_dates: list[date]) -> list[Path]:
+def _internet_layer(path: Path) -> tuple[pd.DataFrame, publish.Doc] | None:
+    """The internet frame and its source entry, or None for a missing, bad, or all-null file."""
+    if not path.exists():
+        return None
+    try:
+        frame = pd.read_parquet(path)
+        has_ratio = bool(frame["ratio"].notna().any())
+    except (OSError, ValueError, KeyError) as exc:  # `internet --missing` fetches it again
+        print(f"{path.name}: unreadable, internet layer skipped: {exc!r}", file=sys.stderr)
+        return None
+    return (frame, publish.internet_source(path)) if has_ratio else None
+
+
+def publish_days(storm_dates: list[date], with_internet: bool = False) -> list[Path]:
     """Write the site data files per storm date, then the storms index, then the pipeline file.
 
     One run at a time: a second run that finds the lock file stops with exit 1. A date without
     an SPC daily CSV is skipped. A date that fails a check writes no file and is named in the
-    final error. The index holds the dates of this run over the entries of the earlier runs.
+    final error. A bad internet file skips the internet layer of its date and fails nothing.
+    The index holds the dates of this run over the entries of the earlier runs.
     A malformed storms.json, pipeline.json, or archive index stops the run before any write. A
     malformed per-date file of an earlier run, or a pipeline document that fails its schema,
-    stops the run before the index write.
+    stops the run before the index write. Without `with_internet` no date gets an internet.json
+    and a stale one is removed.
     """
+    # shortcut: internet publish gated by --with-internet, remove the gate when IODA replies
     with files.lock(SITE_DATA_DIR / LOCK_FILE):
-        return _publish_days(storm_dates)
+        return _publish_days(storm_dates, with_internet)
 
 
-def _publish_days(storm_dates: list[date]) -> list[Path]:
+def _remove_internet_files() -> None:
+    """Remove every published internet.json, also of a date this run does not publish.
+
+    `merge_entries` then clears the index path of each removed file.
+    """
+    pattern = f"*/{publish.INTERNET_FILE}"
+    for path in sorted((SITE_DATA_DIR / publish.STORMS_DIR).glob(pattern)):
+        path.unlink()
+        print(f"{path.parent.name}: removed {path.name}, this run has no --with-internet")
+
+
+def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
     selected = _swath_files(storm_dates)
     if not candidates.CANDIDATES_PATH.exists():
         raise FileNotFoundError(f"run hailprint candidates first: {candidates.CANDIDATES_PATH}")
@@ -591,6 +691,9 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
                     if has_power
                     else None
                 ),
+                internet=_internet_layer(INTERNET_DIR / internet.file_name(storm_date))
+                if with_internet
+                else None,
             )
         except ValueError as exc:
             print(f"{storm_date}: {exc}", file=sys.stderr)
@@ -605,6 +708,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
             (folder / publish.WARNINGS_FILE).unlink(missing_ok=True)
         if publish.POWER_FILE not in texts:
             (folder / publish.POWER_FILE).unlink(missing_ok=True)
+        if publish.INTERNET_FILE not in texts:
+            (folder / publish.INTERNET_FILE).unlink(missing_ok=True)
         entries.append(entry)
         file_count += len(texts)
         print(f"{storm_date}: published {len(texts)} files")
@@ -612,6 +717,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
         raise RuntimeError(
             "no storm date was published" + (f"; failed: {', '.join(failed)}" if failed else "")
         )
+    if not with_internet:
+        _remove_internet_files()
     merged = publish.merge_entries(old, entries, SITE_DATA_DIR)
     receipts = publish.index_receipts(merged, SITE_DATA_DIR)
     doc = publish.storms_doc(merged, run_time)

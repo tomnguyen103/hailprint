@@ -9,6 +9,7 @@ import urllib.request
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import geopandas as gpd
 import pandas as pd
@@ -16,7 +17,18 @@ import pyarrow.parquet as pq
 import pytest
 
 from hailprint import __main__ as cli
-from hailprint import archive, candidates, files, odin, parcels, power, publish, sbw, swath
+from hailprint import (
+    archive,
+    candidates,
+    files,
+    internet,
+    odin,
+    parcels,
+    power,
+    publish,
+    sbw,
+    swath,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = json.loads((FIXTURES / "score_golden.json").read_text(encoding="utf-8"))
@@ -42,6 +54,7 @@ class Env:
         self.eaglei = root / "eaglei"
         self.power = root / "power"
         self.odin = root / "odin"
+        self.internet = root / "internet"
         self.served: dict[date, object] = {}
 
     def add_day(self, storm_date: date, *, metadata: bool = True) -> Path:
@@ -103,6 +116,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "EAGLEI_DIR", env.eaglei)
     monkeypatch.setattr(cli, "POWER_DIR", env.power)
     monkeypatch.setattr(cli, "ODIN_DIR", env.odin)
+    monkeypatch.setattr(cli, "INTERNET_DIR", env.internet)
     monkeypatch.setattr(cli, "_utc_now", lambda: RUN_TIME)
     monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "index" / "mesh-archive.parquet")
     monkeypatch.setattr(candidates, "CANDIDATES_PATH", tmp_path / "candidate-days.csv")
@@ -1069,6 +1083,158 @@ def test_power_takes_storm_dates_or_missing_and_not_both_or_neither(env, argv):
     assert stop.value.code == 2
 
 
+def _internet_file(env, storm_date):
+    return env.internet / f"internet-{storm_date}.parquet"
+
+
+def _add_signal(ioda, storm_date, value=1000):
+    """Serve a steady Harris signal from 7 days before the window to its end."""
+    start, end = sbw.window(storm_date)
+    first = int(start.timestamp()) - internet.BASELINE_DAYS * 86400
+    ioda.add("48201", first, int(end.timestamp()), value)
+
+
+def test_internet_writes_one_parquet_per_date_with_the_ioda_metadata(env, ioda, capsys):
+    _add_signal(ioda, LATER)
+
+    assert cli.main(["internet", "2024-05-28"]) == 0
+
+    path = _internet_file(env, LATER)
+    day = pd.read_parquet(path)
+    assert list(day.columns) == ["fips", "step_utc", "value", "baseline", "ratio"]
+    assert day.loc[day["fips"] == "48201", "ratio"].eq(1.0).all()
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"ioda", b"ping-slash24")
+    assert capsys.readouterr().out == "2024-05-28: 192 of 1536 county steps have a ratio\n"
+    assert len(ioda.urls) == 8
+
+
+def test_internet_missing_makes_no_second_request_for_a_date_that_has_a_file(env, ioda):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+
+    assert cli.main(["internet", "--missing"]) == 0
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert len(ioda.urls) == 8
+    assert _internet_file(env, LATER).exists()
+
+
+def test_internet_keeps_a_file_with_no_ratio_and_missing_skips_it(env, ioda, capsys):
+    env.add_day(LATER)  # IODA holds no signal for the date
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert pd.read_parquet(_internet_file(env, LATER))["ratio"].isna().all()
+    assert capsys.readouterr().out == "2024-05-28: 0 of 1536 county steps have a ratio\n"
+    asked = len(ioda.urls)
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert len(ioda.urls) == asked
+    assert capsys.readouterr().out == ""
+
+
+def test_internet_missing_asks_again_for_an_all_null_file_only_while_the_date_is_fresh(env, ioda):
+    fresh = date(2024, 5, 30)  # window closed at RUN_TIME, 2 days old: inside FRESH_DAYS
+    env.add_day(LATER)  # 4 days old: past FRESH_DAYS
+    shutil.copy(env.swaths / f"swaths-{LATER}.parquet", env.swaths / f"swaths-{fresh}.parquet")
+    for storm_date in (LATER, fresh):
+        files.write_atomic(
+            internet.derive(storm_date, {}), _internet_file(env, storm_date), internet.METADATA
+        )
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    asked = {parse_qs(urlsplit(u).query)["from"][0] for u in ioda.urls}
+    assert asked == {str(int(sbw.window(fresh)[0].timestamp()) - internet.BASELINE_DAYS * 86400)}
+
+
+def test_internet_missing_fetches_again_a_date_whose_file_cannot_be_read(env, ioda):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    env.internet.mkdir(parents=True, exist_ok=True)
+    _internet_file(env, LATER).write_bytes(b"not a parquet file")
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert pd.read_parquet(_internet_file(env, LATER))["ratio"].eq(1.0).any()
+
+
+def test_internet_missing_skips_a_date_whose_impact_window_is_not_closed(env, ioda):
+    env.add_day(LATER)
+    shutil.copy(
+        env.swaths / f"swaths-{LATER}.parquet", env.swaths / f"swaths-{OPEN_WINDOW}.parquet"
+    )
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert _internet_file(env, LATER).exists()
+    assert not _internet_file(env, OPEN_WINDOW).exists()
+
+
+def test_an_explicit_internet_rerun_writes_the_same_bytes(env, ioda):
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+    first = _internet_file(env, LATER).read_bytes()
+
+    cli.main(["internet", "2024-05-28"])
+
+    assert _internet_file(env, LATER).read_bytes() == first
+    assert list(env.internet.glob("*.tmp")) == []
+
+
+def test_internet_exits_1_with_one_line_and_no_file_when_ioda_times_out(env, ioda, capsys):
+    ioda.error = TimeoutError("timed out")
+
+    assert cli.main(["internet", "2024-05-28"]) == 1
+
+    assert len(ioda.urls) == 3  # one county, 3 tries, then the date fails
+    line, summary = capsys.readouterr().err.splitlines()
+    assert line.startswith("2024-05-28: IODA 48039") and "timed out" in line
+    assert summary == "internet failed for: 2024-05-28"
+    assert not env.internet.exists() or list(env.internet.iterdir()) == []
+
+
+def test_internet_exits_1_when_ioda_answers_5xx_three_times(env, ioda, capsys):
+    ioda.error = urllib.error.HTTPError("https://ioda", 503, "Service Unavailable", {}, None)
+
+    assert cli.main(["internet", "2024-05-28"]) == 1
+
+    assert "503" in capsys.readouterr().err
+    assert not env.internet.exists() or list(env.internet.iterdir()) == []
+
+
+def test_a_failed_internet_date_does_not_stop_the_later_date(env, ioda, monkeypatch, capsys):
+    _add_signal(ioda, LATER)
+    answer = urllib.request.urlopen  # the Ioda stub
+    earlier_from = int(sbw.window(EARLIER)[0].timestamp()) - internet.BASELINE_DAYS * 86400
+
+    def urlopen(url, timeout=None):
+        if f"from={earlier_from}&" in url:
+            raise TimeoutError("timed out")
+        return answer(url, timeout=timeout)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+
+    assert cli.main(["internet", "2023-06-23", "2024-05-28"]) == 1
+
+    assert _internet_file(env, LATER).exists()
+    assert not _internet_file(env, EARLIER).exists()
+    captured = capsys.readouterr()
+    assert captured.out == "2024-05-28: 192 of 1536 county steps have a ratio\n"
+    assert captured.err.splitlines()[-1] == "internet failed for: 2023-06-23"
+
+
+@pytest.mark.parametrize("argv", [["internet"], ["internet", "--missing", "2024-05-28"]])
+def test_internet_takes_storm_dates_or_missing_and_not_both_or_neither(env, ioda, argv):
+    with pytest.raises(SystemExit) as stop:
+        cli.main(argv)
+
+    assert stop.value.code == 2
+    assert ioda.urls == []
+
+
 ODIN_LIVE = FIXTURES / "odin_grouped.json"
 ODIN_MIXED = FIXTURES / "odin_mixed.json"
 ODIN_PRODUCT = b"odin-real-time-outages-county"
@@ -1375,3 +1541,108 @@ def test_publish_writes_warnings_geojson_from_the_warnings_file_and_removes_it_w
 
     assert not (env.storm_dir(LATER) / publish.WARNINGS_FILE).exists()
     assert env.index()["storms"][0]["files"]["warnings"] is None
+
+
+def test_publish_with_internet_writes_internet_json_and_sets_the_index_entry(env, ioda):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    doc = _published(env, LATER, publish.INTERNET_FILE)
+    publish.validate(doc, "internet")
+    assert [s["source"] for s in doc["receipt"]["sources"]] == ["ioda"]
+    harris = doc["counties"][0]
+    assert (harris["fips"], harris["baseline"]) == ("48201", 1000)
+    assert harris["ratio"] == [1.0] * 192
+    entry = env.index()["storms"][0]["files"]
+    assert entry["internet"] == f"storms/{LATER}/{publish.INTERNET_FILE}"
+
+
+def test_publish_without_the_flag_leaves_internet_unpublished_when_the_file_exists(env, ioda):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
+
+
+def test_publish_with_internet_skips_a_file_that_holds_no_ratio(env, ioda):
+    env.add_day(LATER)
+    cli.main(["internet", "2024-05-28"])  # IODA holds no signal for the date
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
+
+
+def test_publish_with_internet_skips_an_unreadable_file_and_publishes_the_date(env, capsys):
+    env.add_day(LATER)
+    env.internet.mkdir(parents=True)
+    _internet_file(env, LATER).write_bytes(b"not a parquet file")
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    assert "internet-2024-05-28.parquet: unreadable" in capsys.readouterr().err
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
+
+
+def test_publish_with_internet_skips_a_file_without_a_ratio_column(env, capsys):
+    env.add_day(LATER)
+    env.internet.mkdir(parents=True)
+    pd.DataFrame({"fips": ["48201"]}).to_parquet(_internet_file(env, LATER))
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    assert "unreadable" in capsys.readouterr().err
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+
+
+def test_publish_with_internet_and_no_internet_file_writes_no_internet_json(env):
+    env.add_day(LATER)
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
+
+
+def test_publish_without_the_flag_removes_a_stale_internet_json(env, ioda):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+    cli.main(["publish", "2024-05-28", "--with-internet"])
+    assert (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
+
+
+def test_publish_without_the_flag_removes_the_internet_json_of_a_date_it_does_not_publish(
+    env, ioda, capsys
+):
+    for storm_date in (LATER, EARLIER):
+        env.add_day(storm_date)
+        _add_signal(ioda, storm_date)
+        cli.main(["internet", str(storm_date)])
+    cli.main(["publish", "--with-internet"])
+    assert (env.storm_dir(EARLIER) / publish.INTERNET_FILE).exists()
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert f"{EARLIER}: removed internet.json" in capsys.readouterr().out
+    assert not (env.storm_dir(EARLIER) / publish.INTERNET_FILE).exists()
+    assert {e["storm_date"]: e["files"]["internet"] for e in env.index()["storms"]} == {
+        str(LATER): None,
+        str(EARLIER): None,
+    }

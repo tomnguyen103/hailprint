@@ -68,6 +68,13 @@
   font-size: 0.8rem;
 }
 
+.bins-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px;
+}
+
 .ruler-list {
   display: grid;
   gap: 6px;

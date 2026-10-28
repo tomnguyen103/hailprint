@@ -4,7 +4,7 @@ import type { MethodPage } from "../router";
 import { METHOD_LABELS } from "../router";
 import { CAVEAT } from "../shell/caveat";
 
-export type FigureId = "receipt" | "stamp" | "ruler" | "grid" | "guess";
+export type FigureId = "receipt" | "stamp" | "ruler" | "grid" | "guess" | "bins";
 
 export type Block =
   | { kind: "heading"; text: string }
@@ -26,11 +26,19 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
       {
         kind: "prose",
         text:
-          "The pipeline reads six sources. MRMS MESH comes from the S3 bucket noaa-mrms-pds as gzipped GRIB2 files. " +
+          "The pipeline reads seven sources. MRMS MESH comes from the S3 bucket noaa-mrms-pds as gzipped GRIB2 files. " +
           "SPC publishes a daily preliminary hail CSV. HCAD publishes the Harris County parcel geodatabase. " +
           "The Iowa Environmental Mesonet publishes the NWS warning polygons. " +
-          "ORNL publishes the EAGLE-I and ODIN power outages.",
+          "ORNL publishes the EAGLE-I and ODIN power outages. " +
+          "IODA publishes the county internet reachability signal.",
       },
+      {
+        kind: "prose",
+        text:
+          "Every published file carries a receipt: the source, the product, the file, the run time, the package version, and the confidence band. " +
+          "Every hail size on the site is a radar-estimated hail size.",
+      },
+      { kind: "figure", id: "receipt" },
       { kind: "heading", text: "Published files per storm date" },
       {
         kind: "list",
@@ -41,14 +49,8 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
           "zip-counts.json: distinct parcels per size class and per ZIP, where parcels ran.",
           "warnings.geojson: NWS warning polygons for the 48-hour window, where warnings ran.",
           "power.json: customers out per metro county and step, where power ran.",
+          "internet.json: reachability ratio per metro county and step, where internet ran and publish used --with-internet.",
         ],
-      },
-      { kind: "figure", id: "receipt" },
-      {
-        kind: "prose",
-        text:
-          "Every published file carries a receipt: the source, the product, the file, the run time, the package version, and the confidence band. " +
-          "Every hail size on the site is a radar-estimated hail size.",
       },
     ],
   },
@@ -149,6 +151,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
         kind: "prose",
         text: "The layers show what happened in the same window as the storm. No layer says hail caused it.",
       },
+      { kind: "figure", id: "bins" },
       { kind: "heading", text: "NWS warnings" },
       {
         kind: "prose",
@@ -164,6 +167,31 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
       { kind: "prose", text: "ODIN lists CenterPoint customers only. Its share out is a lower bound." },
       { kind: "prose", text: "Source: EAGLE-I, Oak Ridge National Laboratory (ORNL), CC BY 4.0." },
       { kind: "prose", text: "Source: ODIN, ORNL." },
+      { kind: "heading", text: "Internet reachability" },
+      {
+        kind: "prose",
+        text: "IODA counts the /24 address blocks in a county that answer active pings. The layer shows internet reachability below baseline.",
+      },
+      {
+        kind: "prose",
+        text: "The baseline is the median of the 7 days before the window starts. A county with fewer than half the baseline points has no baseline and no ratio.",
+      },
+      {
+        kind: "prose",
+        text: "The ratio is the signal divided by the baseline. The drop is 1 minus the ratio, never below zero. A drop says nothing about why.",
+      },
+      {
+        kind: "prose",
+        text:
+          "IODA has a county signal from 2022-03 to 2024-05 only. A date outside that range has no internet file. " +
+          "A date that the publish step ran without the flag has none either. The strip says so in both cases. " +
+          "A county with no ratio at any step in the window reads No county signal.",
+      },
+      {
+        kind: "prose",
+        text: "The publish step adds internet.json only with the --with-internet flag. A default publish leaves the layer out.",
+      },
+      { kind: "prose", text: "Source: IODA, Georgia Tech. All Rights Reserved." },
       { kind: "heading", text: "Gaps" },
       { kind: "prose", text: "A step with no source row is null. The strip draws a gap, never a zero." },
     ],

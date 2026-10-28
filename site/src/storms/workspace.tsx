@@ -1,8 +1,8 @@
 import { useState } from "preact/hooks";
 import "../styles/storms.css";
 import { fetchJson } from "../data/fetch";
-import { guardPower, guardReports } from "../data/guard";
-import type { PowerFile, Receipt, Storm, StormsIndex } from "../data/types";
+import { guardInternet, guardPower, guardReports } from "../data/guard";
+import type { InternetFile, PowerFile, Receipt, Storm, StormsIndex } from "../data/types";
 import { HARRIS_FIPS, harrisPeak } from "../impact/power";
 import { TABS, TAB_LABELS, href, type Tab } from "../router";
 import { SubTabs } from "../shell/sub-tabs";
@@ -29,6 +29,10 @@ export function Workspace({ index, storm, tab }: Props) {
   const power = useLoad<PowerFile | null>(powerFile ?? "power:none", () =>
     powerFile === null ? Promise.resolve(null) : fetchJson(powerFile, guardPower),
   );
+  const internetFile = storm.files.internet;
+  const internet = useLoad<InternetFile | null>(internetFile ?? "internet:none", () =>
+    internetFile === null ? Promise.resolve(null) : fetchJson(internetFile, guardInternet),
+  );
   // The map opens at the Harris power peak when the file is valid; a failed file leaves step 48.
   const { step, setStep } = useStep(storm.storm_date, harrisPeak(power.status === "ready" ? power.data : null));
   const reports = useLoad(storm.files.reports, () => fetchJson(storm.files.reports, guardReports));
@@ -42,11 +46,13 @@ export function Workspace({ index, storm, tab }: Props) {
 
   let pane;
   if (tab === "map") {
-    pane = <MapPane storm={storm} reports={reports} power={power} step={step} onStep={setStep} fips={fips} onCounty={setFips} />;
+    pane = (
+      <MapPane storm={storm} reports={reports} power={power} internet={internet} step={step} onStep={setStep} fips={fips} onCounty={setFips} />
+    );
   }
   else if (tab === "parcels") pane = <ParcelsPane storm={storm} />;
   else if (tab === "score") pane = <ScorePane storm={storm} radiusKm={index.radius_km_default} />;
-  else pane = <DataPane storm={storm} power={power} fips={fips} />;
+  else pane = <DataPane storm={storm} power={power} internet={internet} fips={fips} />;
 
   return (
     <div class="workspace">

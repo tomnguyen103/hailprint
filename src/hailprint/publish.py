@@ -19,7 +19,7 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 from shapely.geometry.polygon import orient
 
-from hailprint import county, power, sbw, score, swath
+from hailprint import county, internet, power, sbw, score, swath
 from hailprint.files import FORBIDDEN_WORD, METADATA
 from hailprint.parcels import OWNER_FIELDS
 
@@ -36,6 +36,7 @@ REPORTS_FILE = "reports.geojson"
 PAIRS_FILE = "pairs.json"
 WARNINGS_FILE = "warnings.geojson"
 POWER_FILE = "power.json"
+INTERNET_FILE = "internet.json"
 ZIPS_FILE = "zip-counts.json"
 METADATA_KEYS = tuple(METADATA)
 SPC_PRODUCT = "preliminary hail reports"
@@ -259,6 +260,46 @@ def power_doc(frame: pd.DataFrame, rcpt: Doc, utilities: list[str] | None = None
         },
         "source": rcpt["sources"][0]["source"],
         "utilities": None if utilities is None else list(utilities),
+        "counties": counties,
+    }
+
+
+def internet_doc(frame: pd.DataFrame, rcpt: Doc) -> Doc:
+    """The internet reachability ratios of the 8 metro counties over the 192 impact-window steps.
+
+    `frame` holds `fips`, `step_utc`, `baseline`, and `ratio` (the output of `internet.derive`).
+    A county step with no ratio is null, never zero. A county with no baseline has a null
+    `baseline`. The window comes from the storm date of the receipt. A county whose steps differ
+    from the window raises ValueError that names the county.
+    """
+    start, _ = sbw.window(date.fromisoformat(rcpt["storm_date"]))
+    steps = pd.date_range(start, periods=power.STEPS, freq=power.STEP)
+    counties = []
+    for fips, name in county.METRO_NAMES.items():
+        rows = frame.loc[frame["fips"] == fips]
+        # the Parquet unit varies, so both sides take the unit of the window before they meet
+        got = rows["step_utc"].dt.as_unit(steps.unit)
+        if len(rows) != power.STEPS or not got.isin(steps).all() or not got.is_unique:
+            raise ValueError(f"internet: {fips}: the steps differ from the impact window")
+        series = rows.assign(step_utc=got).set_index("step_utc")["ratio"].reindex(steps)
+        baseline = rows["baseline"].iloc[0]
+        counties.append(
+            {
+                "fips": fips,
+                "name": name,
+                "baseline": None if pd.isna(baseline) else float(baseline),
+                "ratio": [None if pd.isna(value) else round(float(value), 3) for value in series],
+            }
+        )
+    return {
+        "receipt": rcpt,
+        "window": {
+            "start": _utc_text(start),
+            "step_minutes": int(power.STEP.total_seconds() // 60),
+            "steps": power.STEPS,
+        },
+        "signal": internet.DATASOURCE,
+        "baseline_days": internet.BASELINE_DAYS,
         "counties": counties,
     }
 
@@ -582,6 +623,14 @@ def power_source(path: Path) -> Doc:
     return {**entry, "utilities": utilities}
 
 
+def internet_source(path: Path) -> Doc:
+    """The IODA source entry from the metadata of an internet file.
+
+    A file without the source, product, or confidence key raises ValueError that names the file.
+    """
+    return swath_source(path)[0]
+
+
 def spc_source(storm_date: date) -> Doc:
     """The source entry of the SPC daily CSV of one storm date."""
     return {
@@ -629,6 +678,7 @@ def build_day(
     run_time: datetime,
     warnings: tuple[gpd.GeoDataFrame, Doc] | None = None,
     power: tuple[pd.DataFrame, Doc] | None = None,
+    internet: tuple[pd.DataFrame, Doc] | None = None,
 ) -> tuple[dict[str, str], Doc]:
     """The serialised files of one storm date, by file name, and its entry for the storms index.
 
@@ -640,7 +690,8 @@ def build_day(
     entry, or None when the date has no warnings file; an empty frame gives an empty
     FeatureCollection. `power` holds the power frame and its source entry (the output of
     `power_source`), or None when the date has no power file; the `utilities` key of the entry
-    goes to the document and not to the receipt.
+    goes to the document and not to the receipt. `internet` holds the internet frame and its IODA
+    source entry (the output of `internet_source`), or None when the date has no internet layer.
     """
     day = score.score_day(swaths, nearby, storm_date, score.DEFAULT_RADIUS_KM)
 
@@ -667,6 +718,9 @@ def build_day(
             "power",
             power_doc(outages, stamp(origin), layer.get("utilities")),
         )
+    if internet is not None:
+        reach, ioda = internet
+        documents[INTERNET_FILE] = ("internet", internet_doc(reach, stamp(ioda)))
     texts = {}
     for name, (kind, doc) in documents.items():
         validate(doc, kind)
@@ -695,6 +749,7 @@ def build_day(
             "zip_counts": f"{folder}/{ZIPS_FILE}" if ZIPS_FILE in texts else None,
             **dict.fromkeys(IMPACT_KEYS),
             "power": f"{folder}/{POWER_FILE}" if POWER_FILE in texts else None,
+            "internet": f"{folder}/{INTERNET_FILE}" if INTERNET_FILE in texts else None,
             "warnings": f"{folder}/{WARNINGS_FILE}" if WARNINGS_FILE in texts else None,
         },
     }
