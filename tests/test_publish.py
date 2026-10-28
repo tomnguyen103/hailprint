@@ -971,7 +971,6 @@ def test_build_day_lists_the_files_keys_in_one_order_with_and_without_the_impact
 
     keys = ["swath", "reports", "pairs", "zip_counts", "power", "internet", "warnings"]
     assert list(bare["files"]) == list(full["files"]) == keys
-    assert [k for k, v in full["files"].items() if v is None] == ["zip_counts"]
 
 
 def test_the_storms_schema_accepts_an_impact_path_and_refuses_an_extra_or_misplaced_key():

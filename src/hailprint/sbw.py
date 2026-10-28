@@ -1,7 +1,4 @@
-"""IEM storm-based warnings for one impact window, kept as allow-listed GeoParquet rows.
-
-The impact window runs from 12:00 UTC on the storm date to 12:00 UTC two days later.
-"""
+"""IEM storm-based warnings for one impact window, kept as allow-listed GeoParquet rows."""
 
 import http.client
 import json

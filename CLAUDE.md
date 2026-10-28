@@ -57,7 +57,7 @@ archive.py    one bucket listing -> one row per archive day (storm_date, file_co
 candidates.py SPC WCM hail database -> Harris County days (FIPS 201); all_days adds the days after the WCM end from SPC daily CSVs -> ranked, joined with the index
 parcels.py    HCAD Parcels.gdb -> allow-listed columns only, layer CRS -> one sjoin -> distinct hcad_num per size class and per ZIP
 impact.py     the impact window and its grid: window(storm_date) is 12:00 UTC on D up to 12:00 UTC on D+2; steps(storm_date) is the 192 start times of 15 minutes; WINDOW, STEP, STEPS,
-              and METRO_FIPS (the 8 metro county codes); a leaf module that sbw, power, internet, and publish import
+              and METRO_FIPS (the 8 metro county codes); the module imports only `county` and `pandas`; sbw, power, internet, publish, and __main__ import it
 sbw.py        IEM storm-based warnings (WFO HGX; SV, TO, FF; significance W) for the impact window of a storm date -> allow-listed properties only ->
               GeoParquet at data/derived/warnings/warnings-<date>.parquet
 power.py      EAGLE-I year stream (fetch_year, read_eaglei) -> metro rows at data/derived/eaglei/eaglei-<year>.parquet; build() reads those years for a storm date, else the ODIN day files ->

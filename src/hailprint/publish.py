@@ -232,7 +232,7 @@ def _county_rows(
     rows = frame.loc[frame["fips"] == fips]
     # the Parquet unit varies, so both sides take the unit of the window before they meet
     got = rows["step_utc"].dt.as_unit(steps.unit)
-    if len(rows) != impact.STEPS or not got.isin(steps).all() or not got.is_unique:
+    if len(rows) != len(steps) or not got.isin(steps).all() or not got.is_unique:
         raise ValueError(f"{layer}: {fips}: the steps differ from the impact window")
     return rows.assign(step_utc=got).set_index("step_utc")
 

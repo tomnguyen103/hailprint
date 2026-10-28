@@ -1,7 +1,6 @@
 """The impact window: 12:00 UTC on the storm date up to 12:00 UTC two days later.
 
-The window holds 192 steps of 15 minutes. The warnings, power, and internet layers and the
-publish step share this one definition.
+The window holds 192 steps of 15 minutes.
 """
 
 from datetime import UTC, date, datetime, timedelta
@@ -12,7 +11,7 @@ from hailprint import county
 
 WINDOW = timedelta(hours=48)
 STEP = timedelta(minutes=15)
-STEPS = 192  # 48 hours of 15-minute steps
+STEPS = 192
 METRO_FIPS = frozenset(county.METRO_NAMES)
 
 assert STEP * STEPS == WINDOW
