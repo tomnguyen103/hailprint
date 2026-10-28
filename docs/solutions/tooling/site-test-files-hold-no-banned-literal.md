@@ -14,7 +14,7 @@ Keeping the literal and adding the test file to an allow-list. The scans have no
 
 ## Root cause
 
-`source_files` in `tests/test_wording.py:16` walks every `.ts`, `.tsx`, `.css`, `.json`, `.md`, and `.svg` file under `site/src`, including `*.test.ts` and `*.test.tsx`. `tests/test_outputs_clean.py:80` does the same for the forbidden word. A negative assertion needs the banned text, so the assertion trips the scan.
+`source_files` in `tests/test_wording.py:16` walks every `.ts`, `.tsx`, `.css`, `.html`, `.json`, `.md`, and `.svg` file under `site/src`, including `*.test.ts` and `*.test.tsx`. `tests/test_outputs_clean.py:80` scans only `.ts`, `.tsx`, and `.css` files for the forbidden word. A negative assertion needs the banned text, so the assertion trips the scan.
 
 ## Fix
 

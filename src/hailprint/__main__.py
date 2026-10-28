@@ -596,11 +596,15 @@ def _pipeline_doc(
 
 
 def _internet_layer(path: Path) -> tuple[pd.DataFrame, publish.Doc] | None:
-    """The internet frame and its source entry, or None for a missing file or an all-null one."""
+    """The internet frame and its source entry, or None for a missing, bad, or all-null file."""
     if not path.exists():
         return None
-    frame = pd.read_parquet(path)
-    has_ratio = bool(frame["ratio"].notna().any())
+    try:
+        frame = pd.read_parquet(path)
+        has_ratio = bool(frame["ratio"].notna().any())
+    except (OSError, ValueError, KeyError) as exc:  # `internet --missing` fetches it again
+        print(f"{path.name}: unreadable, internet layer skipped: {exc!r}", file=sys.stderr)
+        return None
     return (frame, publish.internet_source(path)) if has_ratio else None
 
 

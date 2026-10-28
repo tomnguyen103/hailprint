@@ -1581,6 +1581,30 @@ def test_publish_with_internet_skips_a_file_that_holds_no_ratio(env, ioda):
     assert env.index()["storms"][0]["files"]["internet"] is None
 
 
+def test_publish_with_internet_skips_an_unreadable_file_and_publishes_the_date(env, capsys):
+    env.add_day(LATER)
+    env.internet.mkdir(parents=True)
+    _internet_file(env, LATER).write_bytes(b"not a parquet file")
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    assert "internet-2024-05-28.parquet: unreadable" in capsys.readouterr().err
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
+
+
+def test_publish_with_internet_skips_a_file_without_a_ratio_column(env, capsys):
+    env.add_day(LATER)
+    env.internet.mkdir(parents=True)
+    pd.DataFrame({"fips": ["48201"]}).to_parquet(_internet_file(env, LATER))
+
+    assert cli.main(["publish", "2024-05-28", "--with-internet"]) == 0
+
+    assert "unreadable" in capsys.readouterr().err
+    assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+
+
 def test_publish_with_internet_and_no_internet_file_writes_no_internet_json(env):
     env.add_day(LATER)
 
