@@ -10,6 +10,7 @@ import {
   guardOutline,
   guardPairs,
   guardPipeline,
+  guardPower,
   guardReports,
   guardSwath,
   guardWarnings,
@@ -494,5 +495,99 @@ describe("guardWarnings", () => {
     const promise = fetchJson("storms/2024-05-28/warnings.geojson", guardWarnings);
     await expect(promise).rejects.toBeInstanceOf(DataError);
     await expect(promise).rejects.toThrow(/^warnings\.geojson: HTTP 404/);
+  });
+});
+
+describe("guardPower", () => {
+  afterEach(() => setFetch(null));
+
+  const METRO: [string, string, number][] = [
+    ["48201", "Harris", 1_827_686],
+    ["48157", "Fort Bend", 694_780],
+    ["48339", "Montgomery", 230_040],
+    ["48039", "Brazoria", 144_164],
+    ["48167", "Galveston", 144_421],
+    ["48473", "Waller", 18_532],
+    ["48291", "Liberty", 44_189],
+    ["48071", "Chambers", 26_381],
+  ];
+  const power = {
+    receipt,
+    window: { start: "2024-05-28T12:00:00Z", step_minutes: 15, steps: 192 },
+    source: "eaglei",
+    utilities: null,
+    counties: METRO.map(([fips, name, customers]) => ({
+      fips,
+      name,
+      customers,
+      out: Array.from({ length: 192 }, (_, i) => (i % 5 === 0 ? null : i)),
+    })),
+  };
+  const withCounty = (patch: Record<string, unknown>, at = 0) => ({
+    ...power,
+    counties: power.counties.map((c, i) => (i === at ? { ...c, ...patch } : c)),
+  });
+
+  it("accepts a valid EAGLE-I file with gaps and an ODIN file with utilities", () => {
+    expect(guardPower(power)).toBe(power);
+    const odin = { ...power, source: "odin", utilities: ["CenterPoint"] };
+    expect(guardPower(odin)).toBe(odin);
+  });
+
+  it("throws on 191 values, 193 values, and a value that is not a count", () => {
+    const out = power.counties[0]!.out;
+    expect(() => guardPower(withCounty({ out: out.slice(1) }))).toThrow(/^power\.json: counties\[0\]\.out has 191 values/);
+    expect(() => guardPower(withCounty({ out: [...out, 1] }))).toThrow(/^power\.json: counties\[0\]\.out has 193 values/);
+    expect(() => guardPower(withCounty({ out: out.map((v, i) => (i === 7 ? -1 : v)) }))).toThrow(
+      /^power\.json: counties\[0\]\.out\[7\] is not a count or null/,
+    );
+    expect(() => guardPower(withCounty({ out: out.map((v, i) => (i === 7 ? 1.5 : v)) }))).toThrow(/out\[7\] is not a count or null/);
+  });
+
+  it("throws on NaN, a string, and undefined, never reading them as a gap", () => {
+    const out = power.counties[1]!.out;
+    for (const bad of [Number.NaN, "7", undefined]) {
+      expect(() => guardPower(withCounty({ out: out.map((v, i) => (i === 3 ? bad : v)) }, 1))).toThrow(
+        /^power\.json: counties\[1\]\.out\[3\] is not a count or null/,
+      );
+    }
+  });
+
+  it("throws on a wrong FIPS set, a wrong order, and a wrong county count", () => {
+    expect(() => guardPower(withCounty({ fips: "48999" }))).toThrow(/^power\.json: counties\[0\]\.fips is not 48201/);
+    const swapped = { ...power, counties: [power.counties[1], power.counties[0], ...power.counties.slice(2)] };
+    expect(() => guardPower(swapped)).toThrow(/^power\.json: counties\[0\]\.fips is not 48201/);
+    expect(() => guardPower({ ...power, counties: power.counties.slice(1) })).toThrow(/^power\.json: counties has 7 entries/);
+  });
+
+  it("throws on a customers value below 1 and on a missing name", () => {
+    expect(() => guardPower(withCounty({ customers: 0 }))).toThrow(/^power\.json: counties\[0\]\.customers is not a count of 1 or more/);
+    expect(() => guardPower(withCounty({ name: undefined }))).toThrow(/^power\.json: counties\[0\]\.name is not a string/);
+  });
+
+  it("throws on a source outside eaglei and odin, and on a utilities list that does not match", () => {
+    expect(() => guardPower({ ...power, source: "iem" })).toThrow(/^power\.json: source is not eaglei or odin/);
+    expect(() => guardPower({ ...power, utilities: ["CenterPoint"] })).toThrow(/^power\.json: utilities is not null/);
+    expect(() => guardPower({ ...power, source: "odin", utilities: null })).toThrow(/^power\.json: utilities is not an array/);
+    expect(() => guardPower({ ...power, source: "odin", utilities: [] })).toThrow(/^power\.json: utilities is empty/);
+  });
+
+  it("throws on a window that is not 192 steps of 15 minutes from 12:00 UTC", () => {
+    expect(() => guardPower({ ...power, window: { ...power.window, steps: 96 } })).toThrow(/^power\.json: window\.steps is not 192/);
+    expect(() => guardPower({ ...power, window: { ...power.window, step_minutes: 5 } })).toThrow(/window\.step_minutes is not 15/);
+    expect(() => guardPower({ ...power, window: { ...power.window, start: "2024-05-28T00:00:00Z" } })).toThrow(
+      /window\.start is not 12:00 UTC/,
+    );
+  });
+
+  it("throws when the receipt is missing", () => {
+    expect(() => guardPower(without(power, "receipt"))).toThrow(/^power\.json: receipt is not an object/);
+  });
+
+  it("answers a 404 with a DataError and no other throw", async () => {
+    setFetch(async () => new Response("nope", { status: 404 }));
+    const promise = fetchJson("storms/2024-05-28/power.json", guardPower);
+    await expect(promise).rejects.toBeInstanceOf(DataError);
+    await expect(promise).rejects.toThrow(/^power\.json: HTTP 404/);
   });
 });

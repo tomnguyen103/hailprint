@@ -1,4 +1,9 @@
-"""Command line entry: ``hailprint ingest|index|candidates|parcels|score|warnings|publish``."""
+"""Command line entry for the hailprint commands.
+
+The commands are ``ingest``, ``index``, ``candidates``, ``parcels``, ``score``, ``warnings``,
+``eaglei``, ``power``, ``odin``, and ``publish``.
+Run ``hailprint <command> --help`` for the arguments of one command.
+"""
 
 import argparse
 import math
@@ -17,9 +22,11 @@ from hailprint import (
     county,
     files,
     mesh,
+    odin,
     parcels,
     paths,
     plot,
+    power,
     publish,
     reports,
     sbw,
@@ -34,8 +41,12 @@ PARCELS_GDB = paths.RAW_DIR / "hcad" / "extracted" / "Parcels.gdb"
 PARCELS_DIR = paths.DERIVED_DIR / "parcels"
 SCORES_DIR = paths.DERIVED_DIR / "scores"
 WARNINGS_DIR = paths.DERIVED_DIR / "warnings"
+EAGLEI_DIR = paths.DERIVED_DIR / "eaglei"
+POWER_DIR = paths.DERIVED_DIR / "power"
+ODIN_DIR = paths.DERIVED_DIR / "odin"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
+ODIN_LOCK_FILE = "odin.lock"
 
 
 def _storm_date(text: str) -> date:
@@ -45,6 +56,12 @@ def _storm_date(text: str) -> date:
         return datetime.strptime(text, "%Y-%m-%d").date()
     except ValueError as exc:
         raise argparse.ArgumentTypeError(f"not a YYYY-MM-DD date: {text!r}") from exc
+
+
+def _year(text: str) -> int:
+    if not re.fullmatch(r"\d{4}", text):
+        raise argparse.ArgumentTypeError(f"not a YYYY year: {text!r}")
+    return int(text)
 
 
 def _radius_km(text: str) -> float:
@@ -104,6 +121,24 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="fetch each swath date with a closed impact window and no warnings file",
     )
+    eaglei_cmd = commands.add_parser(
+        "eaglei", help="store the EAGLE-I customers out of the metro counties per year"
+    )
+    eaglei_cmd.add_argument("years", nargs="+", type=_year, help="calendar year, YYYY")
+    power_cmd = commands.add_parser(
+        "power", help="store the customers out of the metro counties per step of the impact window"
+    )
+    power_cmd.add_argument(
+        "storm_dates", nargs="*", type=_storm_date, help="SPC convective day, YYYY-MM-DD"
+    )
+    power_cmd.add_argument(
+        "--missing",
+        action="store_true",
+        help="build each swath date with a closed window, an EAGLE-I file, and no power file",
+    )
+    commands.add_parser(
+        "odin", help="store one ODIN snapshot of the customers out of the metro counties"
+    )
     publish_cmd = commands.add_parser(
         "publish", help="write the site data files and the storms index for storm dates"
     )
@@ -119,8 +154,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command == "warnings" and bool(args.storm_dates) == args.missing:
-        parser.error("warnings takes storm dates or --missing, not both and not neither")
+    if args.command in ("warnings", "power") and bool(args.storm_dates) == args.missing:
+        parser.error(f"{args.command} takes storm dates or --missing, not both and not neither")
     try:
         if args.command == "ingest":
             ingest(args.storm_dates)
@@ -134,6 +169,12 @@ def main(argv: list[str] | None = None) -> int:
             score_days(args.storm_dates, args.radius_km)
         elif args.command == "warnings":
             warn_days(args.storm_dates, args.missing)
+        elif args.command == "eaglei":
+            eaglei_years(args.years)
+        elif args.command == "power":
+            power_days(args.storm_dates, args.missing)
+        elif args.command == "odin":
+            odin_snapshot()
         elif args.command == "publish":
             publish_days(args.storm_dates)
     except (RuntimeError, OSError, ValueError) as exc:
@@ -341,6 +382,115 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     return written
 
 
+def eaglei_years(years: list[int]) -> list[Path]:
+    """One EAGLE-I file per year with the metro rows. The run stops at the first failed year.
+
+    A year file is written only after the whole CSV is read, so a broken stream leaves nothing.
+    """
+    written = []
+    for year in years:
+        frame = power.fetch_year(year)
+        written.append(
+            files.write_atomic(frame, EAGLEI_DIR / power.file_name(year), power.METADATA)
+        )
+        print(f"{year}: {len(frame)} metro rows")
+    return written
+
+
+def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
+    """One power file per storm date, from one source: EAGLE-I when it covers the window, else ODIN.
+
+    With `missing`, the dates are the swath dates whose window has closed and that have no power
+    file, or whose power file comes from ODIN while the EAGLE-I year files now cover the window.
+    A date with no source is skipped and counted. An explicit date with no source stops the run
+    with exit 1. A failed date does not stop the other dates. The run prints one line per failed
+    date, then exits 1.
+    """
+    # shortcut: an EAGLE-I year file counts as covering its year, upgrade to a check of the last
+    # row time if a partial year file is ever ingested
+    # shortcut: an explicit date runs for an open window too and writes a file with null future
+    # steps that `--missing` then skips; add a closed-window check when explicit reruns of
+    # recent days become routine.
+    if missing:
+        now = _utc_now()
+        storm_dates = [
+            d for d, _ in _swath_files([]) if sbw.window(d)[1] <= now and _needs_power(d)
+        ]
+    written = []
+    failed = []
+    skipped = 0
+    for storm_date in storm_dates:
+        try:
+            built = power.build(storm_date, EAGLEI_DIR, ODIN_DIR)
+            if built is not None:
+                frame, metadata = built
+                path = POWER_DIR / power.day_file_name(storm_date)
+                written.append(files.write_atomic(frame, path, metadata))
+        except (RuntimeError, ValueError, OSError) as exc:
+            print(f"{storm_date}: {exc}", file=sys.stderr)
+            failed.append(storm_date.isoformat())
+            continue
+        if built is None:
+            if not missing:
+                absent = [
+                    str(year)
+                    for year in power.years_of(storm_date)
+                    if not (EAGLEI_DIR / power.file_name(year)).exists()
+                ]
+                raise ValueError(
+                    f"{storm_date}: no EAGLE-I file for {' and '.join(absent)} and no ODIN "
+                    f"snapshot in the window, run hailprint eaglei {' '.join(absent)} first"
+                )
+            skipped += 1
+            continue
+        frame, _ = built
+        known = frame["customers_out"].count()
+        print(f"{storm_date}: {known} of {len(frame)} county steps have a row")
+    if skipped:
+        print(
+            f"{skipped} date{'s' if skipped > 1 else ''} skipped "
+            "without an EAGLE-I file or an ODIN snapshot"
+        )
+    if failed:
+        raise ValueError(f"power failed for: {', '.join(failed)}")
+    return written
+
+
+def _needs_power(storm_date: date) -> bool:
+    """True when the date has no power file, or has an ODIN file that EAGLE-I now replaces."""
+    path = POWER_DIR / power.day_file_name(storm_date)
+    if not path.exists():
+        return True
+    try:
+        source = power.file_source(path)
+    except (OSError, ValueError):
+        return True  # an unreadable file is rebuilt
+    if source is None:
+        return True  # a file with no source metadata is rebuilt
+    covered = all((EAGLEI_DIR / power.file_name(y)).exists() for y in power.years_of(storm_date))
+    return covered and source == odin.METADATA["source"]
+
+
+def odin_snapshot() -> Path:
+    """Add one ODIN snapshot to the file of its UTC day, keyed by the 15-minute slot.
+
+    A failed fetch, a bad answer, or an unreadable day file writes nothing and exits 1.
+    A rerun in one slot replaces the rows of that slot. A run that finds the ODIN lock held
+    exits 1, so two overlapping runs never merge from the same stale day file.
+    """
+    slot = odin.slot_of(_utc_now())
+    fresh = odin.snapshot(odin.fetch(), slot)
+    path = ODIN_DIR / odin.file_name(slot.date())
+    with files.lock(ODIN_DIR / ODIN_LOCK_FILE):
+        try:
+            existing = pd.read_parquet(path) if path.exists() else None
+        except (OSError, ValueError) as exc:
+            raise ValueError(f"{path}: not a readable ODIN day file: {exc}") from exc
+        written = files.write_atomic(odin.merge(existing, fresh), path, odin.METADATA)
+    print(f"{slot:%Y-%m-%d %H:%M} UTC: {len(fresh)} rows")
+    return written
+
+
 def _archive_summary() -> dict | None:
     """The archive coverage from the archive index, or None without an index."""
     if not archive.INDEX_PATH.exists():
@@ -416,6 +566,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
         hcad = publish.hcad_source(zips_path.name) if has_zips else None
         warnings_path = WARNINGS_DIR / sbw.file_name(storm_date)
         has_warnings = warnings_path.exists()
+        power_path = POWER_DIR / power.day_file_name(storm_date)
+        has_power = power_path.exists()
         try:
             mrms, max_mesh_mm = publish.swath_source(swath_path)
             texts, entry = publish.build_day(
@@ -434,6 +586,11 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
                     if has_warnings
                     else None
                 ),
+                power=(
+                    (pd.read_parquet(power_path), publish.power_source(power_path))
+                    if has_power
+                    else None
+                ),
             )
         except ValueError as exc:
             print(f"{storm_date}: {exc}", file=sys.stderr)
@@ -446,6 +603,8 @@ def _publish_days(storm_dates: list[date]) -> list[Path]:
             (folder / publish.ZIPS_FILE).unlink(missing_ok=True)
         if publish.WARNINGS_FILE not in texts:
             (folder / publish.WARNINGS_FILE).unlink(missing_ok=True)
+        if publish.POWER_FILE not in texts:
+            (folder / publish.POWER_FILE).unlink(missing_ok=True)
         entries.append(entry)
         file_count += len(texts)
         print(f"{storm_date}: published {len(texts)} files")

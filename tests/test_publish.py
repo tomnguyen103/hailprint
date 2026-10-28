@@ -15,12 +15,13 @@ import shapely
 from jsonschema import Draft202012Validator
 
 from hailprint import __main__ as cli
+from hailprint import county, parcels, power, publish, reports, sbw, swath
 from hailprint import files as files_module
-from hailprint import parcels, publish, reports, sbw, swath
 from hailprint.parcels import OWNER_FIELDS
 from tests.test_cli import EARLIER, LATER
 from tests.test_cli import env as cli_env  # noqa: F401  (pytest fixture)
 from tests.test_outputs_clean import SIZE_CEILINGS
+from tests.test_power import _rows as power_rows
 
 RUN_TIME = datetime(2024, 5, 29, 13, 0, 7, 987654, tzinfo=UTC)
 SOURCES = [
@@ -30,7 +31,17 @@ SOURCES = [
         "file": "swaths-2024-05-28.parquet",
     }
 ]
-SCHEMAS = ["receipt", "swath", "reports", "pairs", "zip-counts", "storms", "pipeline", "warnings"]
+SCHEMAS = [
+    "receipt",
+    "swath",
+    "reports",
+    "pairs",
+    "zip-counts",
+    "storms",
+    "pipeline",
+    "warnings",
+    "power",
+]
 IMPACT_KEYS = ("power", "internet", "warnings")
 
 
@@ -773,7 +784,7 @@ def test_swath_source_gives_none_without_a_mesh_maximum_and_refuses_bare_metadat
         publish.swath_source(bare)
 
 
-def _build_day(zips=None, facts=None, warnings=None):
+def _build_day(zips=None, facts=None, warnings=None, power=None, run_time=RUN_TIME):
     nearby = reports.nearby_reports(
         date(2024, 5, 28),
         _spc_csv(("100", "Spring", 30.08, -95.42, ""), ("175", "Katy", 29.79, -95.82, "")),
@@ -788,8 +799,9 @@ def _build_day(zips=None, facts=None, warnings=None):
         zips=zips,
         hcad=None if zips is None else publish.hcad_source("zip-counts-2024-05-28.parquet"),
         facts=facts,
-        run_time=RUN_TIME,
+        run_time=run_time,
         warnings=None if warnings is None else (warnings, IEM_SOURCE),
+        power=power,
     )
 
 
@@ -1270,6 +1282,254 @@ def test_dumps_names_the_json_path_of_an_owner_field_in_a_key():
         publish.dumps({"zips": [{"zip": "77002", field.upper(): 1}]}, "zip-counts")
 
     assert str(err.value) == f"zip-counts: owner field {field!r} at $.zips[0].{field.upper()}"
+
+
+# power.json
+
+POWER_SOURCE = {"source": "eaglei", "product": "customers-out", "file": "power-2024-05-28.parquet"}
+POWER_STORM = date(2024, 5, 28)
+HARRIS, CHAMBERS, BRAZORIA = 0, 7, 3  # positions in the county order of power.json
+
+
+def _power_frame():
+    """The power frame of 2024-05-28: Harris has a count, a zero, and a gap; Brazoria has no row."""
+    return power.derive(
+        power_rows(
+            ("48201", "2024-05-28 13:00", 5),
+            ("48201", "2024-05-28 13:15", 0),
+            ("48201", "2024-05-28 20:00", 251_830),
+            ("48071", "2024-05-28 20:00", 0),
+        ),
+        POWER_STORM,
+    )
+
+
+def _power_doc(frame=None, utilities=None, source=POWER_SOURCE):
+    rcpt = publish.receipt(POWER_STORM, [source], RUN_TIME)
+    return publish.power_doc(_power_frame() if frame is None else frame, rcpt, utilities)
+
+
+def test_power_doc_holds_the_window_the_source_and_8_counties_of_192_values():
+    doc = _power_doc()
+
+    publish.validate(doc, "power")
+    assert doc["window"] == {"start": "2024-05-28T12:00:00Z", "step_minutes": 15, "steps": 192}
+    assert doc["source"] == "eaglei"
+    assert doc["utilities"] is None
+    assert doc["receipt"]["sources"] == [POWER_SOURCE]
+    counties = doc["counties"]
+    assert [c["fips"] for c in counties] == list(county.METRO_NAMES)
+    assert [c["name"] for c in counties] == list(county.METRO_NAMES.values())
+    assert [c["customers"] for c in counties] == [power.MCC[f] for f in county.METRO_NAMES]
+    assert {len(c["out"]) for c in counties} == {192}
+
+
+def test_power_doc_keeps_an_explicit_zero_and_writes_a_gap_as_null():
+    counties = _power_doc()["counties"]
+
+    harris = counties[HARRIS]["out"]
+    assert [harris[4], harris[5], harris[6], harris[32]] == [5, 0, None, 251_830]
+    assert all(type(v) is int for v in (harris[4], harris[5], harris[32]))
+    chambers = counties[CHAMBERS]["out"]
+    assert [chambers[31], chambers[32]] == [None, 0]
+    assert counties[BRAZORIA]["out"] == [None] * 192
+
+
+def test_power_doc_is_the_same_for_every_row_order():
+    frame = _power_frame()
+
+    assert _power_doc(frame.iloc[::-1]) == _power_doc(frame)
+
+
+def test_power_doc_of_an_odin_file_lists_its_utilities():
+    odin = {**POWER_SOURCE, "source": "odin"}
+
+    doc = _power_doc(utilities=["CENTERPOINT ENERGY"], source=odin)
+
+    publish.validate(doc, "power")
+    assert doc["source"] == "odin"
+    assert doc["utilities"] == ["CENTERPOINT ENERGY"]
+
+
+def test_power_doc_refuses_steps_that_leave_the_impact_window_and_a_county_without_rows():
+    shifted = _power_frame().assign(step_utc=lambda f: f["step_utc"] + pd.Timedelta(minutes=15))
+    without = _power_frame().query("fips != '48071'")
+
+    with pytest.raises(ValueError, match="^power: 48201: the steps differ from the impact window"):
+        _power_doc(shifted)
+    with pytest.raises(ValueError, match="^power: 48071: the steps differ from the impact window"):
+        _power_doc(without)
+
+
+def test_the_power_schema_refuses_191_values_and_a_nan_value():
+    short = _power_doc()
+    short["counties"][HARRIS]["out"].pop()
+    nan = _power_doc()
+    nan["counties"][2]["out"][5] = float("nan")
+
+    with pytest.raises(ValueError, match=r"^power: \$\.counties\[0\]\.out: "):
+        publish.validate(short, "power")
+    with pytest.raises(ValueError, match=r"^power: \$\.counties\[2\]\.out\[5\]: "):
+        publish.validate(nan, "power")
+    with pytest.raises(ValueError, match=r"^power: "):
+        publish.dumps(nan, "power")
+
+
+@pytest.mark.parametrize("bad", [-1, 1.5, "7"])
+def test_the_power_schema_refuses_a_value_that_is_not_a_whole_count_or_null(bad):
+    doc = _power_doc()
+    doc["counties"][HARRIS]["out"][0] = bad
+
+    with pytest.raises(ValueError, match=r"^power: \$\.counties\[0\]\.out\[0\]: "):
+        publish.validate(doc, "power")
+
+
+def test_the_power_schema_refuses_a_wrong_fips_set_a_county_count_and_a_changed_order():
+    outside = _power_doc()
+    outside["counties"][CHAMBERS]["fips"] = "48453"
+    duplicate = _power_doc()
+    duplicate["counties"][CHAMBERS] = dict(duplicate["counties"][HARRIS])
+    swapped = _power_doc()
+    swapped["counties"][0], swapped["counties"][1] = swapped["counties"][1], swapped["counties"][0]
+    seven = _power_doc()
+    seven["counties"].pop()
+    nine = _power_doc()
+    nine["counties"].append(dict(nine["counties"][HARRIS]))
+
+    for doc, path in (
+        (outside, r"\$\.counties\[7\]\.fips"),
+        (duplicate, r"\$\.counties\[7\]\.fips"),
+        (swapped, r"\$\.counties\[0\]\.fips"),
+        (seven, r"\$\.counties"),
+        (nine, r"\$\.counties"),
+    ):
+        with pytest.raises(ValueError, match=f"^power: {path}: "):
+            publish.validate(doc, "power")
+
+
+def test_the_power_schema_pins_the_window_and_the_source():
+    doc = _power_doc()
+    doc["window"]["steps"] = 96
+    late = _power_doc()
+    late["window"]["start"] = "2024-05-28T13:00:00Z"
+    other = _power_doc()
+    other["source"] = "outage-feed"
+
+    with pytest.raises(ValueError, match=r"^power: \$\.window\.steps: "):
+        publish.validate(doc, "power")
+    with pytest.raises(ValueError, match=r"^power: \$\.window\.start: "):
+        publish.validate(late, "power")
+    with pytest.raises(ValueError, match=r"^power: \$\.source: "):
+        publish.validate(other, "power")
+
+
+@pytest.mark.parametrize(
+    ("source", "utilities"),
+    [("eaglei", ["CENTERPOINT ENERGY"]), ("odin", None), ("odin", [])],
+)
+def test_the_power_schema_pairs_each_source_with_its_utilities(source, utilities):
+    doc = _power_doc()
+    doc["source"] = source
+    doc["utilities"] = utilities
+
+    with pytest.raises(ValueError, match=r"^power: "):
+        publish.validate(doc, "power")
+
+
+def test_dumps_refuses_the_forbidden_word_in_a_power_document():
+    doc = _power_doc()
+    doc["counties"][HARRIS]["name"] = f"Harris {files_module.FORBIDDEN_WORD}"
+
+    with pytest.raises(ValueError, match=r"^power: forbidden word .* at \$\.counties\[0\]\.name"):
+        publish.dumps(doc, "power")
+
+
+def test_build_day_with_a_power_frame_adds_power_json_and_its_index_path():
+    texts, entry = _build_day(power=(_power_frame(), POWER_SOURCE))
+
+    assert sorted(texts) == ["pairs.json", "power.json", "reports.geojson", "swath.geojson"]
+    assert entry["files"]["power"] == "storms/2024-05-28/power.json"
+    doc = json.loads(texts["power.json"])
+    publish.validate(doc, "power")
+    assert doc["receipt"]["sources"] == [POWER_SOURCE]
+    assert doc["receipt"]["run_time"] == "2024-05-29T13:00:07Z"
+
+
+def test_build_day_without_a_power_frame_writes_no_power_json_and_a_null_key():
+    texts, entry = _build_day()
+
+    assert "power.json" not in texts
+    assert entry["files"]["power"] is None
+
+
+def test_build_day_puts_the_utilities_of_an_odin_layer_in_power_json_and_not_in_the_receipt():
+    layer = {**POWER_SOURCE, "source": "odin", "utilities": ["CENTERPOINT ENERGY"]}
+
+    texts, _ = _build_day(power=(_power_frame(), layer))
+
+    doc = json.loads(texts["power.json"])
+    assert doc["utilities"] == ["CENTERPOINT ENERGY"]
+    assert doc["receipt"]["sources"] == [{**POWER_SOURCE, "source": "odin"}]
+
+
+def test_power_json_stays_under_its_size_ceiling_with_every_step_filled():
+    frame = _power_frame()
+    full = frame.assign(customers_out=pd.array([1_827_686] * len(frame), dtype="Int64"))
+
+    texts, _ = _build_day(power=(full, POWER_SOURCE))
+
+    assert len(texts["power.json"].encode("utf-8")) < SIZE_CEILINGS["power.json"]
+
+
+def test_two_builds_of_power_json_differ_only_in_the_run_time():
+    layer = (_power_frame(), POWER_SOURCE)
+
+    first, _ = _build_day(power=layer)
+    again, _ = _build_day(power=layer)
+    later, _ = _build_day(power=layer, run_time=RUN_TIME + timedelta(minutes=5))
+
+    assert again["power.json"] == first["power.json"]
+    one, two = json.loads(first["power.json"]), json.loads(later["power.json"])
+    assert one["receipt"].pop("run_time") != two["receipt"].pop("run_time")
+    assert one == two
+
+
+def test_power_source_reads_the_source_and_product_from_the_parquet_metadata(tmp_path):
+    path = files_module.write_atomic(
+        _power_frame(), tmp_path / "power-2024-05-28.parquet", power.METADATA
+    )
+
+    assert publish.power_source(path) == POWER_SOURCE
+
+
+def test_power_source_reads_the_utilities_of_an_odin_file(tmp_path):
+    metadata = {
+        "source": "odin",
+        "product": "customers-out",
+        "utilities": json.dumps(["CENTERPOINT ENERGY"]),
+    }
+    path = files_module.write_atomic(
+        _power_frame(), tmp_path / "power-2024-05-28.parquet", metadata
+    )
+
+    assert publish.power_source(path) == {
+        **POWER_SOURCE,
+        "source": "odin",
+        "utilities": ["CENTERPOINT ENERGY"],
+    }
+
+
+def test_power_source_refuses_bare_metadata_and_a_utilities_value_that_is_not_a_list(tmp_path):
+    bare = tmp_path / "bare.parquet"
+    _power_frame().to_parquet(bare)
+    bad = files_module.write_atomic(
+        _power_frame(), tmp_path / "bad.parquet", {**power.METADATA, "utilities": "CENTERPOINT"}
+    )
+
+    with pytest.raises(ValueError, match="bare.parquet: the metadata lacks source, product, conf"):
+        publish.power_source(bare)
+    with pytest.raises(ValueError, match="^bad.parquet: the utilities metadata is not a JSON list"):
+        publish.power_source(bad)
 
 
 # publish over the fixture days

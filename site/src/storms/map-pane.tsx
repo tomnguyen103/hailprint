@@ -1,11 +1,14 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import { fetchCounty } from "../county";
+import { fetchCounties, fetchCounty } from "../county";
 import { fetchJson } from "../data/fetch";
 import { guardSwath, guardWarnings } from "../data/guard";
-import { DataError, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
+import { DataError, type PowerFile, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
+import { type Fill, powerNote } from "../impact/power";
+import { PowerFillControl, PowerLegend } from "../impact/power-fill";
 import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
+import { countyAt } from "../state/county";
 import { type Load, useLoad } from "../state/load";
 import { useTheme } from "../state/theme";
 import "../styles/map.css";
@@ -24,13 +27,19 @@ const NO_BASEMAP = "No basemap file.";
 interface Props {
   storm: Storm;
   reports: Load<ReportsFile> & { retry: () => void };
+  /** The power file load; the workspace owns it because its Harris peak sets the default step. */
+  power: Load<PowerFile | null>;
   step: number;
   onStep: (step: number) => void;
+  /** The picked county for the power strip; the workspace owns it so a pick never moves the step. */
+  fips: string;
+  onCounty: (fips: string) => void;
 }
 
-export function MapPane({ storm, reports, step, onStep }: Props) {
+export function MapPane({ storm, reports, power, step, onStep, fips, onCounty }: Props) {
   const swath = useLoad(storm.files.swath, () => fetchJson(storm.files.swath, guardSwath));
   const county = useLoad("county", fetchCounty);
+  const metro = useLoad("counties", fetchCounties);
   const warningsFile = storm.files.warnings;
   const warnings = useLoad<WarningsFile | null>(warningsFile ?? "warnings:none", () =>
     warningsFile === null ? Promise.resolve(null) : fetchJson(warningsFile, guardWarnings),
@@ -43,9 +52,13 @@ export function MapPane({ storm, reports, step, onStep }: Props) {
   const [attempt, setAttempt] = useState(0);
   const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set());
   const [layers, setLayers] = useState<LayerState>({ swath: true, reports: true, warnings: true });
+  const [fill, setFill] = useState<Fill>("none");
   const [pick, setPick] = useState<Pick | null>(null);
   const reportsRef = useRef<ReportsFile | null>(null);
   reportsRef.current = reports.status === "ready" ? reports.data : null;
+  const outlinesRef = useRef<FeatureCollection<MultiPolygon> | null>(null);
+  const onCountyRef = useRef(onCounty);
+  onCountyRef.current = onCounty;
 
   // Create the map once; MapLibre arrives in its own chunk. Retry runs the import again.
   useEffect(() => {
@@ -67,6 +80,8 @@ export function MapPane({ storm, reports, step, onStep }: Props) {
           const layers = RULER.map((m) => fillLayerId(m.threshold_mm));
           const hits = next.map.queryRenderedFeatures(event.point, { layers }) as unknown as { properties: { threshold_mm: number } }[];
           const lngLat: [number, number] = [event.lngLat.lng, event.lngLat.lat];
+          const clicked = countyAt(lngLat, outlinesRef.current);
+          if (clicked !== null) onCountyRef.current(clicked);
           setPick({
             lngLat,
             coveringMm: coveringClass(hits),
@@ -91,10 +106,19 @@ export function MapPane({ storm, reports, step, onStep }: Props) {
   const reportsData = reports.status === "ready" ? reports.data : null;
   const countyData: FeatureCollection<MultiPolygon> | null = county.status === "ready" ? county.data : null;
   const warningsData = warnings.status === "ready" ? warnings.data : null;
+  const powerData = power.status === "ready" ? power.data : null;
+  const outlines: FeatureCollection<MultiPolygon> | null = metro.status === "ready" ? metro.data : null;
+  outlinesRef.current = outlines;
   useEffect(() => {
     if (!ready || !handle.current) return;
     handle.current.setData(swathData, reportsData, countyData);
   }, [ready, swathData, reportsData, countyData]);
+  useEffect(() => {
+    if (ready) handle.current?.setCounties(outlines);
+  }, [ready, outlines]);
+  useEffect(() => {
+    if (ready) handle.current?.setFill(fill, powerData, step);
+  }, [ready, fill, powerData, step]);
   useEffect(() => {
     if (!ready || !handle.current || !swathData) return;
     handle.current.fit(boundsOf(swathData));
@@ -139,6 +163,9 @@ export function MapPane({ storm, reports, step, onStep }: Props) {
   const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : county.status === "error" ? county : null;
   const receipt = swathData?.receipt ?? null;
   const warningsLine = warningsNote(warningsFile, warnings);
+  // A failed power file or county file hides the fill with one line; the hail map stays.
+  const powerAvailable = powerData !== null && outlines !== null;
+  const powerLine = powerNote(storm.files.power, power) ?? (metro.status === "error" ? `Power off. ${metro.error.message}` : null);
   return (
     <div class="map-pane" data-inspector={pick !== null}>
       <div class="map-main">
@@ -159,13 +186,30 @@ export function MapPane({ storm, reports, step, onStep }: Props) {
               <LoadingState file={SWATH_FILE} />
             </div>
           ) : null}
-          <LayersControl layers={layers} warnings={{ available: warningsData !== null, note: warningsLine }} onToggle={toggleLayer} />
-          <RulerLegend hidden={hidden} onToggle={toggle} />
+          <div class="map-controls">
+            <LayersControl layers={layers} warnings={{ available: warningsData !== null, note: warningsLine }} onToggle={toggleLayer} />
+            <PowerFillControl fill={fill} available={powerAvailable} note={powerLine} onFill={setFill} />
+          </div>
+          <div class="map-legends">
+            <PowerLegend fill={powerAvailable ? fill : "none"} source={powerData?.source ?? "eaglei"} />
+            <RulerLegend hidden={hidden} onToggle={toggle} />
+          </div>
         </div>
         <TimeSlider date={storm.storm_date} step={step} onStep={onStep} />
-        <Timeline date={storm.storm_date} step={step} warnings={warningsData} note={warningsLine} reports={reportsData} onStep={onStep} />
+        <Timeline
+          date={storm.storm_date}
+          step={step}
+          warnings={warningsData}
+          note={warningsLine}
+          reports={reportsData}
+          power={powerData}
+          fips={fips}
+          onStep={onStep}
+        />
       </div>
-      {pick !== null && receipt !== null ? <Inspector pick={pick} receipt={receipt} onClose={close} /> : null}
+      {pick !== null && receipt !== null ? (
+        <Inspector pick={pick} receipt={receipt} power={powerData} step={step} fips={fips} onCounty={onCounty} onClose={close} />
+      ) : null}
     </div>
   );
 }

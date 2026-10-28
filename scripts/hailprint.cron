@@ -1,4 +1,4 @@
-# Hailprint cron entry: one nightly run per day on the cron host.
+# Hailprint cron entries: one nightly run per day, and one ODIN snapshot every 15 minutes.
 # Install after the two path edits below: crontab scripts/hailprint.cron
 # `crontab FILE` replaces the whole crontab of this user. Merge by hand when one exists.
 # 14:00 UTC: the 12Z file of yesterday's storm date lands on S3 after 12:00 UTC.
@@ -7,7 +7,13 @@
 # PATH: cron starts with /usr/bin:/bin. uv installs under ~/.local/bin; node and vercel must
 # be on this PATH too. Cron expands no variable in this file, so write the home path in full.
 # VERCEL_TOKEN, VERCEL_ORG_ID, and VERCEL_PROJECT_ID go in <repo>/.env, never here.
+# The ODIN line takes one snapshot of the open outages per quarter hour. It writes only
+# data/derived/odin/ and holds only the lock data/derived/odin/odin.lock. A run that overlaps
+# another ODIN run exits 1, and that slot stays a gap. A crash can leave the lock file in
+# place: delete it, or every later run exits 1. ODIN keeps no history, so power data starts
+# at the install.
 # shortcut: no log rotation, upgrade to logrotate when the host runs past one year
 CRON_TZ=UTC
 PATH=/usr/local/bin:/usr/bin:/bin:/home/<user>/.local/bin
 0 14 * * * cd /path/to/hailprint && scripts/nightly.sh >> data/nightly.log 2>&1
+*/15 * * * * cd /path/to/hailprint && uv run hailprint odin >> data/odin.log 2>&1

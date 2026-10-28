@@ -35,9 +35,12 @@ Site: https://hailprint.tomnguyen.me
 | Parcels | `hailprint parcels` | Distinct parcel counts per size class and per ZIP |
 | Score | `hailprint score` | Per-report distances and the contingency table for each storm date |
 | Warnings | `hailprint warnings` | NWS severe thunderstorm, tornado, and flash flood warning polygons for each storm date |
+| EAGLE-I | `hailprint eaglei` | One Parquet per year of county power outages, from the ORNL EAGLE-I download |
+| Power | `hailprint power` | Customers out and share out per metro county and 15-minute step, for each storm date |
+| ODIN | `hailprint odin` | One 15-minute snapshot of the open ODIN incidents, added to the file of the UTC day |
 | Publish | `hailprint publish` | Validated JSON under `site/data/`, each file with a receipt |
 
-`scripts/nightly.sh` runs the steps for new storm dates. `scripts/hailprint.cron` starts it at 14:00 UTC, and `scripts/deploy.sh` uploads the site to Vercel.
+`scripts/nightly.sh` runs the steps for new storm dates. `scripts/hailprint.cron` starts it at 14:00 UTC and runs `hailprint odin` every 15 minutes. `scripts/deploy.sh` uploads the site to Vercel.
 
 ## Documentation
 

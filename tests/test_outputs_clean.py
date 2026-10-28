@@ -1,9 +1,12 @@
 """Every written output stays free of owner fields and the forbidden word."""
 
+import json
+
+import pandas as pd
 import pyarrow.parquet as pq
 import pytest
 
-from hailprint import paths
+from hailprint import files, odin, paths, power
 from hailprint.parcels import OWNER_FIELDS
 from hailprint.swath import FORBIDDEN_WORD
 
@@ -16,13 +19,17 @@ NON_JSON_TOKENS = ("NaN", "Infinity")
 SIZE_CEILINGS = {"warnings.geojson": 400_000, "power.json": 60_000, "internet.json": 80_000}
 
 
-def _files():
-    return [p for d in OUTPUT_DIRS if d.exists() for p in d.rglob("*") if p.is_file()]
+PROVENANCE_KEYS = (b"source", b"product", b"confidence")
 
 
-@pytest.mark.skipif(not any(d.exists() for d in OUTPUT_DIRS), reason="no outputs written yet")
-def test_outputs_contain_no_owner_field_or_forbidden_word():
-    for path in _files():
+def output_files(dirs):
+    return [p for d in dirs if d.exists() for p in sorted(d.rglob("*")) if p.is_file()]
+
+
+def scan(dirs):
+    """One `<path>: <hit>` row per output file that holds the forbidden word or an owner field."""
+    hits = []
+    for path in output_files(dirs):
         if path.suffix == ".parquet":
             schema = pq.read_schema(path)
             meta = schema.metadata or {}
@@ -34,9 +41,25 @@ def test_outputs_contain_no_owner_field_or_forbidden_word():
         else:
             text = path.read_bytes().decode(errors="ignore")
         lowered = text.lower()
-        assert FORBIDDEN_WORD not in lowered, path
-        for field in OWNER_FIELDS:
-            assert field.lower() not in lowered, (path, field)
+        if FORBIDDEN_WORD in lowered:
+            hits.append(f"{path}: {FORBIDDEN_WORD}")
+        hits += [f"{path}: {field}" for field in OWNER_FIELDS if field.lower() in lowered]
+    return hits
+
+
+def missing_keys(root):
+    """One `(path, key)` row per Parquet under the root that lacks a provenance key."""
+    return [
+        (path, key)
+        for path in sorted(root.rglob("*.parquet"))
+        for key in PROVENANCE_KEYS
+        if key not in (pq.read_schema(path).metadata or {})
+    ]
+
+
+@pytest.mark.skipif(not any(d.exists() for d in OUTPUT_DIRS), reason="no outputs written yet")
+def test_outputs_contain_no_owner_field_or_forbidden_word():
+    assert scan(OUTPUT_DIRS) == []
 
 
 @pytest.mark.skipif(not paths.SITE_DATA_DIR.exists(), reason="no published files yet")
@@ -68,7 +91,52 @@ def test_site_source_holds_no_forbidden_word():
     not list(paths.DERIVED_DIR.rglob("*.parquet")), reason="no derived Parquet written yet"
 )
 def test_every_derived_parquet_carries_the_provenance_keys():
-    for path in paths.DERIVED_DIR.rglob("*.parquet"):
-        meta = pq.read_schema(path).metadata or {}
-        for key in (b"source", b"product", b"confidence"):
-            assert key in meta, (path, key)
+    assert missing_keys(paths.DERIVED_DIR) == []
+
+
+def write_power_files(root):
+    """Write one file of each power kind through `write_atomic` with its real metadata."""
+    frame = pd.DataFrame({"fips": ["48201"], "customers_out": pd.array([None], dtype="Int64")})
+    odin_meta = {**odin.METADATA, "utilities": json.dumps(["CENTERPOINT ENERGY"])}
+    kinds = {
+        "eaglei/eaglei-2025.parquet": power.METADATA,
+        "odin/odin-2026-10-27.parquet": odin.METADATA,
+        "power/power-2025-05-20.parquet": power.METADATA,
+        "power/power-2026-10-26.parquet": odin_meta,
+    }
+    for name, metadata in kinds.items():
+        files.write_atomic(frame, root / name, metadata)
+    return root
+
+
+def test_the_scan_reads_the_eaglei_odin_and_power_files(tmp_path):
+    root = write_power_files(tmp_path)
+
+    found = {p.relative_to(root).as_posix() for p in output_files([root])}
+
+    assert found == {
+        "eaglei/eaglei-2025.parquet",
+        "odin/odin-2026-10-27.parquet",
+        "power/power-2025-05-20.parquet",
+        "power/power-2026-10-26.parquet",
+    }
+    assert scan([root]) == []
+    assert missing_keys(root) == []
+
+
+def test_the_scan_flags_the_forbidden_word_in_a_power_file_metadata(tmp_path):
+    root = write_power_files(tmp_path)
+    bad = root / "power" / "power-2026-10-26.parquet"
+    table = pq.read_table(bad)
+    note = {b"note": f"a {FORBIDDEN_WORD} count".encode()}
+    pq.write_table(table.replace_schema_metadata({**table.schema.metadata, **note}), bad)
+
+    assert scan([root]) == [f"{bad}: {FORBIDDEN_WORD}"]
+
+
+def test_the_scan_flags_a_power_file_without_the_provenance_keys(tmp_path):
+    root = write_power_files(tmp_path)
+    bare = root / "odin" / "odin-2026-10-27.parquet"
+    pq.write_table(pq.read_table(bare).replace_schema_metadata({b"source": b"odin"}), bare)
+
+    assert missing_keys(root) == [(bare, b"product"), (bare, b"confidence")]

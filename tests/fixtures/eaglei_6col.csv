@@ -1,0 +1,8 @@
+fips_code,county,state,customers_out,run_start_time,total_customers
+48201,Harris,Texas,452,2024-05-16 22:45:00,1344930
+48201,Harris,Texas,277975,2024-05-16 23:45:00,1344930
+48201,Harris,Texas,0,2024-05-17 00:00:00,1344930
+48157,Fort Bend,Texas,,2024-05-16 23:45:00,271000
+48039,Brazoria,Texas,12,2024-05-16 23:45:00,150000
+48453,Travis,Texas,900,2024-05-16 23:45:00,600000
+1001,Autauga,Alabama,5,2024-05-16 23:45:00,25000

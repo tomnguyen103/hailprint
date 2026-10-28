@@ -142,6 +142,23 @@ export interface WarningsFile extends FeatureCollection<MultiPolygon, WarningPro
   receipt: Receipt;
 }
 
+/** One metro county in `power.json`: customers out at each of the 192 steps, null where the source has no row. */
+export interface PowerCounty {
+  fips: string;
+  name: string;
+  customers: number;
+  out: (number | null)[];
+}
+
+/** `power.json`: customers out per metro county over the impact window. `utilities` is null for EAGLE-I. */
+export interface PowerFile {
+  receipt: Receipt;
+  window: { start: string; step_minutes: 15; steps: 192 };
+  source: "eaglei" | "odin";
+  utilities: string[] | null;
+  counties: PowerCounty[];
+}
+
 /** One `publish` run in the run log, newest first in `pipeline.json`. */
 export interface PipelineRun {
   run_time: string;

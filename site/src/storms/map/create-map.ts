@@ -14,12 +14,17 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?url";
 import { Protocol } from "pmtiles";
 import { type Bbox, HARRIS_BBOX } from "../../county";
-import type { ReportsFile, SwathFile, WarningsFile } from "../../data/types";
+import type { PowerFile, ReportsFile, SwathFile, WarningsFile } from "../../data/types";
+import { type Fill, countyFeatures, hatchPixels, hexRgb } from "../../impact/power";
 import type { FeatureCollection, MultiPolygon, Point } from "geojson";
 import { BASEMAP_FILE, BASEMAP_SOURCE, basemapLayers, probeBasemap } from "./basemap";
 import {
   COUNTY_SOURCE,
   POINT_SOURCE,
+  POWER_FILL,
+  POWER_HATCH,
+  POWER_LAYER_IDS,
+  POWER_SOURCE,
   REPORTS_LAYER,
   REPORTS_SOURCE,
   SWATH_SOURCE,
@@ -30,8 +35,11 @@ import {
   type Theme,
   activeWarnings,
   chromeLayers,
+  countyTags,
   fillLayerId,
   fillLayers,
+  powerLayers,
+  powerPaint,
   reportsAtStep,
   themedPaint,
   token,
@@ -64,6 +72,7 @@ function style(theme: Theme, basemap: boolean): StyleSpecification {
     [REPORTS_SOURCE]: { type: "geojson", data: EMPTY },
     [POINT_SOURCE]: { type: "geojson", data: EMPTY },
     [WARNINGS_SOURCE]: { type: "geojson", data: EMPTY },
+    [POWER_SOURCE]: { type: "geojson", data: EMPTY },
   };
   if (basemap) {
     sources[BASEMAP_SOURCE] = { type: "vector", url: `pmtiles://${BASEMAP_FILE}`, attribution: "Protomaps, OpenStreetMap" };
@@ -74,6 +83,7 @@ function style(theme: Theme, basemap: boolean): StyleSpecification {
     layers: [
       { id: "paper", type: "background", paint: { "background-color": token("--paper") } },
       ...(basemap ? basemapLayers(theme) : []),
+      ...powerLayers(),
       ...fillLayers(),
       ...warningLayers(),
       ...chromeLayers(),
@@ -91,6 +101,10 @@ export interface MapHandle {
   setLayerVisible(name: LayerName, visible: boolean): void;
   /** Draw the warnings in force at the step, each with its text label. */
   setWarnings(file: WarningsFile | null, date: string, step: number): void;
+  /** Keep the metro county outlines the power fill draws on; the fill redraws when they arrive. */
+  setCounties(outlines: FeatureCollection<MultiPolygon> | null): void;
+  /** Draw the power fill at the step, with a label per county. Fill none or a null file hides the layers and the labels. */
+  setFill(fill: Fill, file: PowerFile | null, step: number): void;
   /** Fade the reports after this step; null draws all of them in full. */
   setReportCutoff(step: number | null): void;
   fit(bounds: Bbox | null): void;
@@ -136,6 +150,49 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
   let reportsFile: ReportsFile | null = null;
   let cutoff: number | null = null;
   let tags: Marker[] = [];
+  let outlines: FeatureCollection<MultiPolygon> | null = null;
+  let fill: Fill = "none";
+  let power: PowerFile | null = null;
+  let powerStep = 0;
+  let powerShown = false;
+  let countyMarkers: Marker[] = [];
+
+  /** The hatch takes its colour from a token, so it is rebuilt on each show and each theme switch. */
+  const paintPower = () => {
+    for (const [id, paint] of Object.entries(powerPaint())) {
+      for (const [prop, value] of Object.entries(paint) as [PaintName, string][]) map.setPaintProperty(id, prop, value);
+    }
+    if (map.hasImage(POWER_HATCH)) map.removeImage(POWER_HATCH);
+    map.addImage(POWER_HATCH, hatchPixels(hexRgb(token("--ink-muted"))));
+  };
+  const clearCountyTags = () => {
+    for (const marker of countyMarkers) marker.remove();
+    countyMarkers = [];
+  };
+  const renderPower = () => {
+    if (fill !== "power" || power === null) {
+      if (powerShown) {
+        for (const id of POWER_LAYER_IDS) show(id, false);
+        clearCountyTags();
+        powerShown = false;
+      }
+      return;
+    }
+    if (!powerShown) {
+      paintPower();
+      for (const id of POWER_LAYER_IDS) show(id, true);
+      powerShown = true;
+    }
+    const counties = countyFeatures(outlines, power, powerStep);
+    geojson(POWER_SOURCE)?.setData(counties);
+    clearCountyTags();
+    countyMarkers = countyTags(counties.features).map((tag) => {
+      const element = document.createElement("div");
+      element.className = "county-tag";
+      element.textContent = tag.text;
+      return new Marker({ element }).setLngLat(tag.lngLat).addTo(map);
+    });
+  };
 
   const applySwath = () => {
     for (const mark of RULER) show(fillLayerId(mark.threshold_mm), swathOn && !hiddenClasses.has(mark.threshold_mm));
@@ -165,9 +222,9 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
       if (basemap) {
         // The basemap layers take their colours at build time, so swap them for the theme.
         for (const layer of map.getStyle().layers) if ("source" in layer && layer.source === BASEMAP_SOURCE) map.removeLayer(layer.id);
-        const first = fillLayerId(RULER[0]!.threshold_mm);
-        for (const layer of basemapLayers(nextTheme)) map.addLayer(layer, first);
+        for (const layer of basemapLayers(nextTheme)) map.addLayer(layer, POWER_FILL);
       }
+      if (powerShown) paintPower();
     },
     setClassVisible(thresholdMm, visible) {
       if (visible) hiddenClasses.delete(thresholdMm);
@@ -201,6 +258,16 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
       });
       syncTags();
     },
+    setCounties(next) {
+      outlines = next;
+      renderPower();
+    },
+    setFill(nextFill, file, step) {
+      fill = nextFill;
+      power = file;
+      powerStep = step;
+      renderPower();
+    },
     setReportCutoff(step) {
       cutoff = step;
       renderReports();
@@ -220,6 +287,7 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
     },
     destroy() {
       for (const tag of tags) tag.remove();
+      clearCountyTags();
       map.remove();
     },
   };

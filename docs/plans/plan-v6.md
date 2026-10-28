@@ -449,11 +449,12 @@ adds internet.
 */15 * * * * cd /path/to/hailprint && uv run hailprint odin >> data/odin.log 2>&1
 ```
 
-The ODIN command takes no lock. It writes only `data/derived/odin/`, through
-`write_atomic`, and no other command writes there. Cron starts one run per 15 minutes,
-and a run takes about one second, so two runs do not overlap. `power` reads a day file
-only after the window closes, and the rename in `write_atomic` keeps a read whole. One
-year of snapshots is about 280,000 rows across 365 small files.
+The ODIN command takes the lock `data/derived/odin/odin.lock` around the read, merge, and
+write of the day file. It writes only `data/derived/odin/`, through `write_atomic`, and no
+other command writes there. A manual run that overlaps a cron run exits 1 instead of
+replacing the day file from a stale copy. `power` reads a day file only after the window
+closes, and the rename in `write_atomic` keeps a read whole. One year of snapshots is
+about 280,000 rows across 365 small files.
 
 `hailprint eaglei` is not a nightly step. The run executes it once for 2021, 2023, 2024,
 and 2025. A new EAGLE-I year needs one manual run. Then `power --missing` replaces the

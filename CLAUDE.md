@@ -24,7 +24,10 @@ uv run hailprint candidates --top 20        # needs `index` first
 uv run hailprint parcels 2024-05-28         # needs `ingest` for that date and the HCAD gdb
 uv run hailprint score --radius-km 5        # needs `ingest`; scores every swath file against SPC daily CSVs
 uv run hailprint warnings --missing         # IEM storm-based warnings for each swath date with a closed impact window
-uv run hailprint publish                    # needs `ingest`; writes site/data/ (ZIP counts only where `parcels` ran, warnings only where `warnings` ran)
+uv run hailprint eaglei 2025                # EAGLE-I year CSV streamed once, metro rows kept; one manual run per new year
+uv run hailprint power --missing            # customers out per metro county and step for each swath date with a closed impact window
+uv run hailprint odin                       # one ODIN snapshot into the day file; cron runs it every 15 minutes
+uv run hailprint publish                    # needs `ingest`; writes site/data/ (ZIP counts only where `parcels` ran, warnings only where `warnings` ran, power only where `power` ran)
 make site                                   # cd site && npm ci && npm run check
 cd site && npm run dev                      # Vite dev server at http://localhost:5173
 cd site && npm run check                    # tsc --noEmit && vitest run && vite build
@@ -53,11 +56,16 @@ candidates.py SPC WCM hail database -> Harris County days (FIPS 201); all_days a
 parcels.py    HCAD Parcels.gdb -> allow-listed columns only, layer CRS -> one sjoin -> distinct hcad_num per size class and per ZIP
 sbw.py        IEM storm-based warnings (WFO HGX; SV, TO, FF; significance W) for the impact window of a storm date -> allow-listed properties only ->
               GeoParquet at data/derived/warnings/warnings-<date>.parquet; window() is 12:00 UTC on D up to 12:00 UTC on D+2
+power.py      EAGLE-I year stream (fetch_year, read_eaglei) -> metro rows at data/derived/eaglei/eaglei-<year>.parquet; build() reads those years for a storm date, else the ODIN day files ->
+              derive() or derive_odin() -> customers out per metro county and 15-minute step (null where no source row, never 0) at data/derived/power/power-<date>.parquet;
+              one file never mixes the two sources; MCC (2022 customers per county) is a constant; share_out() and share_bin() give the share out and its colour bin
+odin.py       one ODIN snapshot (fetch, snapshot) summed per county and utility -> merge() into the UTC day file data/derived/odin/odin-<YYYY-MM-DD>.parquet, keyed by the 15-minute slot (slot_of);
+              a failed fetch writes nothing; ODIN holds CenterPoint customers only in the metro
 score.py      swaths + nearby_reports -> per scored report, metre distance to each size class -> contingency table (hits, misses, false alarms, correct negatives) -> POD, FAR, CSI, HSS;
               scoring radius 5 km default, 20 km max; reports within radius + 1 km of the crop edge are excluded (scoring domain); unverifiable area = swath farther than the radius from every report;
               pool() sums counts and areas across days and recomputes the metrics; edge_m() is the signed metre distance to the crop edge
 publish.py    swaths + nearby_reports + ZIP counts -> validated JSON with a receipt under site/data/storms/<date>/ (swath.geojson, reports.geojson,
-              radius-free pairs.json with edge_m and per-class distances, zip-counts.json, and warnings.geojson where a warnings file exists) and the storms.json index; rescore(pairs, R) recomputes
+              radius-free pairs.json with edge_m and per-class distances, zip-counts.json, warnings.geojson where a warnings file exists, and power.json where a power file exists) and the storms.json index; rescore(pairs, R) recomputes
               the contingency table in Python for any whole-km radius; dumps() refuses NaN, the forbidden word, and owner fields;
               also pipeline.json (runs newest first, cap 50, merged by run_time; archive summary per year or null; one sources row per source and product)
 county.py     committed GeoJSON (package data): outline() and bbox() for Harris County; metro() and metro_bbox() for the 8 metro counties (the impact layers only)
@@ -65,12 +73,13 @@ files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling t
               lock(path): one publish run at a time, pid in site/data/publish.lock, a second run stops with exit 1
 paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR; every data path hangs from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
-__main__.py   argparse CLI wiring the seven commands and the fixed paths under data/, out/, and site/data/
+__main__.py   argparse CLI wiring the ten commands and the fixed paths under data/, out/, and site/data/;
+              `power --missing` also replaces an ODIN-sourced power file when EAGLE-I now covers its window (docs/DECISIONS.md row 12)
 ```
 
 `site/` is the static site (Preact 10, Vite 8, TypeScript strict, MapLibre GL 6). Routes:
-`/storms/<date>/map|parcels|score|data` and `/storms/<date>/map/<step>`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`, `/method/<data|storm-date|size-classes|scoring|limits>`, `/pipeline/<runs|archive|sources>`; `/` redirects
-to the newest storm date. It reads `storms.json` first, then the four per-date files and `warnings.geojson` when the date has it,
+`/storms/<date>/map|parcels|score|data` and `/storms/<date>/map/<step>`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`, `/method/<data|storm-date|size-classes|scoring|limits|impacts>`, `/pipeline/<runs|archive|sources>`; `/` redirects
+to the newest storm date. It reads `storms.json` first, then the four per-date files, then `warnings.geojson` and `power.json` when the date has them,
 each through a guard in `site/src/data/guard.ts`, and re-scores `pairs.json` in `site/src/rescore.ts` with the
 same radius rule as `publish.rescore`. Every MapLibre import lives under `site/src/storms/map/`.
 `site/README.md` holds the commands, the data path, the basemap step, and the Vercel fields.

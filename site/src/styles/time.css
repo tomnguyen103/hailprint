@@ -148,6 +148,41 @@
   stroke-width: 2px;
 }
 
+/* Power strip: a line for the share out; a step with no source row breaks the line and leaves a dashed gap */
+
+.timeline-power-line,
+.timeline-power-gap {
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.timeline-power-line {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.timeline-power-gap {
+  fill: color-mix(in srgb, var(--ink-muted) 12%, transparent);
+  stroke: var(--ink-muted);
+  stroke-width: 1px;
+  stroke-dasharray: 4 3;
+}
+
+.timeline .timeline-power-note {
+  margin: 4px 0 0;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.timeline-power-source {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
+}
+
 .timeline-empty {
   position: absolute;
   top: 0;
@@ -184,4 +219,16 @@
 
 .timeline-numbers .table-scroll + .table-scroll {
   margin-top: 24px;
+}
+
+/* The power table has one row per step, 192 in all: it scrolls inside its own box */
+.power-table {
+  max-height: 20rem;
+  overflow-y: auto;
+}
+
+.power-source {
+  display: block;
+  color: var(--ink);
+  font-weight: 600;
 }

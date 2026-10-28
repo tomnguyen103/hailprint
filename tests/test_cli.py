@@ -3,6 +3,7 @@
 import io
 import json
 import shutil
+import threading
 import urllib.error
 import urllib.request
 from contextlib import contextmanager
@@ -15,7 +16,7 @@ import pyarrow.parquet as pq
 import pytest
 
 from hailprint import __main__ as cli
-from hailprint import archive, candidates, files, parcels, publish, sbw, swath
+from hailprint import archive, candidates, files, odin, parcels, power, publish, sbw, swath
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = json.loads((FIXTURES / "score_golden.json").read_text(encoding="utf-8"))
@@ -38,6 +39,9 @@ class Env:
         self.parcels = root / "parcels"
         self.site = root / "site"
         self.warnings = root / "warnings"
+        self.eaglei = root / "eaglei"
+        self.power = root / "power"
+        self.odin = root / "odin"
         self.served: dict[date, object] = {}
 
     def add_day(self, storm_date: date, *, metadata: bool = True) -> Path:
@@ -96,6 +100,9 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "PARCELS_DIR", env.parcels)
     monkeypatch.setattr(cli, "SITE_DATA_DIR", env.site)
     monkeypatch.setattr(cli, "WARNINGS_DIR", env.warnings)
+    monkeypatch.setattr(cli, "EAGLEI_DIR", env.eaglei)
+    monkeypatch.setattr(cli, "POWER_DIR", env.power)
+    monkeypatch.setattr(cli, "ODIN_DIR", env.odin)
     monkeypatch.setattr(cli, "_utc_now", lambda: RUN_TIME)
     monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "index" / "mesh-archive.parquet")
     monkeypatch.setattr(candidates, "CANDIDATES_PATH", tmp_path / "candidate-days.csv")
@@ -681,3 +688,690 @@ def test_warnings_takes_storm_dates_or_missing_and_not_both_or_neither(env, iem,
 
     assert stop.value.code == 2
     assert iem.urls == []
+
+
+EAGLEI_CSV = FIXTURES / "eaglei_5col.csv"
+FIGSHARE_LISTING = json.dumps(
+    [
+        {"id": 301, "name": "MCC.csv"},
+        {"id": 111, "name": "eaglei_outages_2024.csv"},
+        {"id": 222, "name": "eaglei_outages_2023.csv"},
+    ]
+).encode()
+
+
+class Response(io.BytesIO):
+    """A response body with the one header `net.open_stream` reads."""
+
+    def __init__(self, body: bytes, declared: int | None = None):
+        super().__init__(body)
+        self._declared = len(body) if declared is None else declared
+
+    def getheader(self, name: str) -> str | None:
+        return str(self._declared) if name == "Content-Length" else None
+
+
+class Figshare:
+    """The Figshare boundary: urlopen serves the file listing and the year CSV."""
+
+    def __init__(self):
+        self.csv = EAGLEI_CSV.read_bytes()
+        self.listing = FIGSHARE_LISTING
+        self.declared: int | None = None
+        self.urls: list[str] = []
+
+
+@pytest.fixture
+def figshare(monkeypatch):
+    figshare = Figshare()
+
+    def urlopen(url, timeout=None):
+        figshare.urls.append(url)
+        if url == power.LISTING_URL:
+            return Response(figshare.listing)
+        return Response(figshare.csv, figshare.declared)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    return figshare
+
+
+def _eaglei_file(env, year):
+    return env.eaglei / f"eaglei-{year}.parquet"
+
+
+def test_eaglei_writes_one_parquet_per_year_with_the_eaglei_and_customers_out_metadata(
+    env, figshare, capsys
+):
+    assert cli.main(["eaglei", "2024"]) == 0
+
+    path = _eaglei_file(env, 2024)
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"eaglei", b"customers-out")
+    assert pd.read_parquet(path)["fips"].tolist() == ["48039", "48157", "48201", "48201", "48201"]
+    assert capsys.readouterr().out == "2024: 5 metro rows\n"
+    assert figshare.urls == [power.LISTING_URL, "https://ndownloader.figshare.com/files/111"]
+
+
+def test_two_eaglei_runs_write_the_same_bytes_and_leave_no_tmp_file(env, figshare):
+    cli.main(["eaglei", "2024"])
+    first = _eaglei_file(env, 2024).read_bytes()
+
+    cli.main(["eaglei", "2024"])
+
+    assert _eaglei_file(env, 2024).read_bytes() == first
+    assert list(env.eaglei.glob("*.tmp")) == []
+
+
+def test_a_broken_eaglei_stream_exits_1_with_one_line_and_leaves_no_file(env, figshare, capsys):
+    figshare.declared = len(figshare.csv) + 100
+
+    assert cli.main(["eaglei", "2024"]) == 1
+
+    (line,) = capsys.readouterr().err.splitlines()
+    assert line.startswith("EAGLE-I 2024 stream failed")
+    assert not env.eaglei.exists() or list(env.eaglei.iterdir()) == []
+
+
+def test_a_year_without_a_figshare_file_exits_1_and_names_the_file(env, figshare, capsys):
+    assert cli.main(["eaglei", "1999"]) == 1
+
+    assert capsys.readouterr().err == "EAGLE-I 1999: no file eaglei_outages_1999.csv in Figshare\n"
+    assert figshare.urls == [power.LISTING_URL]
+
+
+@pytest.mark.parametrize(
+    "listing",
+    [
+        b"{",
+        b'{"name": "eaglei_outages_2024.csv"}',
+        b'["eaglei_outages_2024.csv"]',
+        b'[{"id": 111}]',
+        b'[{"name": "eaglei_outages_2024.csv"}]',
+    ],
+)
+def test_a_figshare_listing_that_is_not_a_list_of_files_exits_1_with_one_line(
+    env, figshare, capsys, listing
+):
+    figshare.listing = listing
+
+    assert cli.main(["eaglei", "2024"]) == 1
+
+    (line,) = capsys.readouterr().err.splitlines()
+    assert line == "EAGLE-I 2024: the Figshare listing is not a list of files"
+    assert figshare.urls == [power.LISTING_URL]
+
+
+@pytest.mark.parametrize("file_id", ['"1/../x"', "true", "0", "-5", "1.5", "null"])
+def test_a_figshare_file_id_that_is_not_a_positive_whole_number_exits_1_naming_the_file(
+    env, figshare, capsys, file_id
+):
+    figshare.listing = f'[{{"name": "eaglei_outages_2024.csv", "id": {file_id}}}]'.encode()
+
+    assert cli.main(["eaglei", "2024"]) == 1
+
+    (line,) = capsys.readouterr().err.splitlines()
+    assert line == (
+        "EAGLE-I 2024: the id of eaglei_outages_2024.csv is not a positive whole number"
+    )
+    assert figshare.urls == [power.LISTING_URL]
+
+
+def test_a_failed_figshare_listing_request_exits_1_with_one_line(env, monkeypatch, capsys):
+    def urlopen(url, timeout=None):
+        raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+
+    assert cli.main(["eaglei", "2024"]) == 1
+
+    (line,) = capsys.readouterr().err.splitlines()
+    assert line.startswith("EAGLE-I 2024: the Figshare listing failed")
+    assert "404" in line
+
+
+def test_eaglei_stops_at_the_first_failed_year(env, figshare, capsys):
+    assert cli.main(["eaglei", "1999", "2024"]) == 1
+
+    assert not _eaglei_file(env, 2024).exists()
+
+
+@pytest.mark.parametrize("argv", [["eaglei"], ["eaglei", "24"], ["eaglei", "2024-05-28"]])
+def test_eaglei_takes_one_or_more_four_digit_years(env, figshare, argv):
+    with pytest.raises(SystemExit) as stop:
+        cli.main(argv)
+
+    assert stop.value.code == 2
+    assert figshare.urls == []
+
+
+def _write_eaglei(env, year, *rows):
+    """Write the EAGLE-I year file of the metro counties from (fips, time, customers_out) rows."""
+    frame = pd.DataFrame(
+        {
+            "fips": [fips for fips, _, _ in rows],
+            "time_utc": pd.to_datetime([time for _, time, _ in rows], utc=True),
+            "customers_out": pd.array([out for _, _, out in rows], dtype="Int64"),
+        }
+    )
+    return files.write_atomic(frame, env.eaglei / power.file_name(year), power.METADATA)
+
+
+def _power_file(env, storm_date):
+    return env.power / power.day_file_name(storm_date)
+
+
+HARRIS_ROWS = (("48201", "2024-05-28 20:00", 251_830), ("48201", "2024-05-28 20:15", 0))
+
+
+def test_power_writes_the_192_step_window_of_each_county_with_the_eaglei_metadata(env, capsys):
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+
+    assert cli.main(["power", "2024-05-28"]) == 0
+
+    path = _power_file(env, LATER)
+    frame = pd.read_parquet(path)
+    assert list(frame.columns) == ["fips", "step_utc", "customers_out"]
+    assert len(frame) == 8 * 192
+    assert frame["customers_out"].eq(0).sum() == 1
+    assert frame["customers_out"].notna().sum() == 2
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"eaglei", b"customers-out")
+    assert capsys.readouterr().out == "2024-05-28: 2 of 1536 county steps have a row\n"
+
+
+def test_two_explicit_power_runs_write_the_same_bytes_and_leave_no_tmp_file(env):
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    cli.main(["power", "2024-05-28"])
+    first = _power_file(env, LATER).read_bytes()
+
+    cli.main(["power", "2024-05-28"])
+
+    assert _power_file(env, LATER).read_bytes() == first
+    assert list(env.power.glob("*.tmp")) == []
+
+
+def test_power_for_a_date_without_an_eaglei_year_file_or_an_odin_slot_exits_1_and_writes_nothing(
+    env, capsys
+):
+    assert cli.main(["power", "2024-05-28"]) == 1
+
+    assert capsys.readouterr().err == (
+        "2024-05-28: no EAGLE-I file for 2024 and no ODIN snapshot in the window, "
+        "run hailprint eaglei 2024 first\n"
+    )
+    assert not env.power.exists() or list(env.power.iterdir()) == []
+
+
+def _write_odin(env, day, *rows):
+    """Write the ODIN day file from (slot, fips, utility, customers_out) rows."""
+    frame = pd.DataFrame(
+        {
+            "slot_utc": pd.to_datetime([slot for slot, *_ in rows], utc=True).as_unit("us"),
+            "fips": [fips for _, fips, _, _ in rows],
+            "utility": [utility for _, _, utility, _ in rows],
+            "customers_out": [out for _, _, _, out in rows],
+        }
+    )
+    path = env.odin / odin.file_name(date.fromisoformat(day))
+    return files.write_atomic(frame, path, odin.METADATA)
+
+
+ODIN_ROWS = (
+    ("2024-05-28 14:00", "48201", "CENTERPOINT ENERGY", 714),
+    ("2024-05-28 14:00", "48291", odin.NO_INCIDENT, 0),
+)
+
+
+def test_power_for_a_date_without_an_eaglei_file_reads_the_odin_day_files(env, capsys):
+    _write_odin(env, "2024-05-28", *ODIN_ROWS)
+
+    assert cli.main(["power", "2024-05-28"]) == 0
+
+    path = _power_file(env, LATER)
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"odin", ODIN_PRODUCT)
+    assert json.loads(metadata[b"utilities"]) == ["CENTERPOINT ENERGY"]
+    frame = pd.read_parquet(path)
+    assert frame["customers_out"].notna().sum() == 1
+    assert capsys.readouterr().out == "2024-05-28: 1 of 1536 county steps have a row\n"
+
+
+def test_power_missing_replaces_an_odin_file_with_an_eaglei_file_once_eaglei_covers_it(env):
+    env.add_day(LATER)
+    _write_odin(env, "2024-05-28", *ODIN_ROWS)
+    assert cli.main(["power", "--missing"]) == 0
+    assert pq.read_schema(_power_file(env, LATER)).metadata[b"source"] == b"odin"
+    first = _power_file(env, LATER).stat().st_mtime_ns
+    assert cli.main(["power", "--missing"]) == 0
+    assert _power_file(env, LATER).stat().st_mtime_ns == first  # no EAGLE-I file yet: kept
+
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    assert cli.main(["power", "--missing"]) == 0
+
+    path = _power_file(env, LATER)
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"eaglei", b"customers-out")
+    assert b"utilities" not in metadata
+    assert pd.read_parquet(path)["customers_out"].notna().sum() == 2
+
+
+def test_power_missing_makes_a_second_run_write_nothing(env, capsys):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    assert cli.main(["power", "--missing"]) == 0
+    first = _power_file(env, LATER).stat().st_mtime_ns
+    capsys.readouterr()
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    assert _power_file(env, LATER).stat().st_mtime_ns == first
+    assert capsys.readouterr().out == ""
+
+
+def test_power_missing_skips_a_date_whose_impact_window_is_not_closed(env):
+    env.add_day(LATER)
+    shutil.copy(
+        env.swaths / f"swaths-{LATER}.parquet", env.swaths / f"swaths-{OPEN_WINDOW}.parquet"
+    )
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    assert _power_file(env, LATER).exists()
+    assert not _power_file(env, OPEN_WINDOW).exists()
+
+
+def test_power_missing_skips_a_date_without_a_power_source_and_exits_0(env, capsys):
+    env.add_day(LATER)  # 2024
+    env.add_day(EARLIER)  # 2023
+    _write_eaglei(env, 2023, ("48201", "2023-06-23 22:00", 11))
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    assert _power_file(env, EARLIER).exists()
+    assert not _power_file(env, LATER).exists()
+    assert capsys.readouterr().out.splitlines() == [
+        "2023-06-23: 1 of 1536 county steps have a row",
+        "1 date skipped without an EAGLE-I file or an ODIN snapshot",
+    ]
+
+
+def test_power_for_two_dates_writes_the_second_when_the_first_fails_and_exits_1(
+    env, capsys, monkeypatch
+):
+    _write_eaglei(env, 2023, ("48201", "2023-06-23 22:00", 11))
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    build = power.build
+
+    def failing_first(storm_date, *args):
+        if storm_date == EARLIER:
+            raise ValueError("broken source")
+        return build(storm_date, *args)
+
+    monkeypatch.setattr(power, "build", failing_first)
+
+    assert cli.main(["power", str(EARLIER), str(LATER)]) == 1
+
+    assert not _power_file(env, EARLIER).exists()
+    assert _power_file(env, LATER).exists()
+    captured = capsys.readouterr()
+    assert captured.err.splitlines() == [
+        "2023-06-23: broken source",
+        "power failed for: 2023-06-23",
+    ]
+    assert captured.out == "2024-05-28: 2 of 1536 county steps have a row\n"
+
+
+def test_power_missing_rebuilds_a_power_file_that_is_not_a_parquet_file(env):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    env.power.mkdir(parents=True)
+    _power_file(env, LATER).write_bytes(b"junk")
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    path = _power_file(env, LATER)
+    assert pq.read_schema(path).metadata[b"source"] == b"eaglei"
+    assert pd.read_parquet(path)["customers_out"].notna().sum() == 2
+
+
+def test_power_missing_rebuilds_a_power_file_that_has_no_source_metadata(env):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    env.power.mkdir(parents=True)
+    pd.DataFrame({"fips": ["48201"]}).to_parquet(_power_file(env, LATER))
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    assert pq.read_schema(_power_file(env, LATER)).metadata[b"source"] == b"eaglei"
+
+
+def test_a_window_across_new_year_needs_both_year_files(env, capsys):
+    new_year_eve = "2023-12-31"
+    _write_eaglei(env, 2023, ("48201", "2023-12-31 23:45", 7))
+
+    assert cli.main(["power", new_year_eve]) == 1
+
+    assert "run hailprint eaglei 2024 first" in capsys.readouterr().err
+    _write_eaglei(env, 2024, ("48201", "2024-01-01 00:00", 9))
+
+    assert cli.main(["power", new_year_eve]) == 0
+
+    day = pd.read_parquet(env.power / "power-2023-12-31.parquet")
+    assert day.loc[day["fips"] == "48201", "customers_out"].dropna().tolist() == [7, 9]
+
+
+@pytest.mark.parametrize("argv", [["power"], ["power", "--missing", "2024-05-28"]])
+def test_power_takes_storm_dates_or_missing_and_not_both_or_neither(env, argv):
+    with pytest.raises(SystemExit) as stop:
+        cli.main(argv)
+
+    assert stop.value.code == 2
+
+
+ODIN_LIVE = FIXTURES / "odin_grouped.json"
+ODIN_MIXED = FIXTURES / "odin_mixed.json"
+ODIN_PRODUCT = b"odin-real-time-outages-county"
+
+
+class OdinFeed:
+    """A stub ODIN endpoint: the answer body, the fetch time, and the URLs asked."""
+
+    def __init__(self, monkeypatch):
+        self.body = ODIN_LIVE.read_bytes()
+        self.urls: list[str] = []
+        self.monkeypatch = monkeypatch
+        self.at(2024, 5, 28, 14, 7)
+
+    def at(self, year, month, day, hour, minute, second=0):
+        moment = datetime(year, month, day, hour, minute, second, tzinfo=UTC)
+        self.monkeypatch.setattr(cli, "_utc_now", lambda: moment)
+
+
+@pytest.fixture
+def odin_feed(env, monkeypatch):
+    feed = OdinFeed(monkeypatch)
+
+    @contextmanager
+    def urlopen(url, timeout=None):
+        feed.urls.append(url)
+        yield io.BytesIO(feed.body)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    return feed
+
+
+def _odin_file(env, day="2024-05-28"):
+    return env.odin / f"odin-{day}.parquet"
+
+
+def test_odin_writes_the_day_file_with_the_14_00_slot_and_the_odin_metadata(env, odin_feed, capsys):
+    """O8: a fetch at 14:07 UTC gives the 14:00 slot."""
+    assert cli.main(["odin"]) == 0
+
+    path = _odin_file(env)
+    frame = pd.read_parquet(path)
+    assert set(frame["slot_utc"]) == {pd.Timestamp("2024-05-28 14:00", tz="UTC")}
+    assert len(frame) == 8
+    assert frame.loc[frame["fips"] == "48201", "customers_out"].tolist() == [714]
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"odin", ODIN_PRODUCT)
+    assert b"confidence" in metadata
+    assert capsys.readouterr().out == "2024-05-28 14:00 UTC: 8 rows\n"
+    assert len(odin_feed.urls) == 1
+    assert list(env.odin.glob("*.tmp")) == []
+
+
+def test_odin_at_23_59_59_utc_stays_in_its_utc_day(env, odin_feed):
+    odin_feed.at(2024, 5, 28, 23, 59, 59)
+
+    assert cli.main(["odin"]) == 0
+
+    frame = pd.read_parquet(_odin_file(env))
+    assert set(frame["slot_utc"]) == {pd.Timestamp("2024-05-28 23:45", tz="UTC")}
+    assert [p.name for p in env.odin.iterdir()] == ["odin-2024-05-28.parquet"]
+
+
+def test_a_run_after_midnight_utc_starts_the_next_day_file(env, odin_feed):
+    cli.main(["odin"])
+    odin_feed.at(2024, 5, 29, 0, 3)
+
+    assert cli.main(["odin"]) == 0
+
+    assert sorted(p.name for p in env.odin.iterdir()) == [
+        "odin-2024-05-28.parquet",
+        "odin-2024-05-29.parquet",
+    ]
+
+
+def test_two_odin_runs_in_one_slot_leave_one_row_per_fips_and_utility(env, odin_feed):
+    cli.main(["odin"])
+    odin_feed.body = ODIN_MIXED.read_bytes()
+    odin_feed.at(2024, 5, 28, 14, 12)
+
+    assert cli.main(["odin"]) == 0
+
+    frame = pd.read_parquet(_odin_file(env))
+    assert not frame.duplicated(["slot_utc", "fips", "utility"]).any()
+    assert len(frame) == 9
+    assert frame.loc[frame["fips"] == "48201", "customers_out"].sum() == 720  # the second answer
+    assert list(env.odin.glob("*.tmp")) == []
+
+
+def test_a_later_slot_adds_its_rows_to_the_day_file(env, odin_feed):
+    cli.main(["odin"])
+    first = pd.read_parquet(_odin_file(env))
+    odin_feed.at(2024, 5, 28, 14, 22)
+
+    assert cli.main(["odin"]) == 0
+
+    frame = pd.read_parquet(_odin_file(env))
+    assert frame["slot_utc"].nunique() == 2
+    assert frame.iloc[: len(first)].reset_index(drop=True).equals(first)
+
+
+@pytest.mark.parametrize("body", [b"{", b"", b'{"total": 1}', b"[]"])
+def test_odin_with_a_bad_body_exits_1_with_one_line_and_writes_no_file(
+    env, odin_feed, capsys, body
+):
+    odin_feed.body = body
+
+    assert cli.main(["odin"]) == 1
+
+    err = capsys.readouterr().err
+    assert err.startswith("ODIN") and len(err.splitlines()) == 1
+    assert not env.odin.exists() or list(env.odin.iterdir()) == []
+
+
+def test_a_failed_odin_fetch_leaves_the_old_day_file_and_exits_1(
+    env, odin_feed, monkeypatch, capsys
+):
+    cli.main(["odin"])
+    before = _odin_file(env).read_bytes()
+    calls = []
+
+    def urlopen(url, timeout=None):
+        calls.append(url)
+        raise urllib.error.HTTPError(url, 503, "Service Unavailable", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(odin.net.time, "sleep", lambda s: None)
+    odin_feed.at(2024, 5, 28, 14, 22)
+    capsys.readouterr()
+
+    assert cli.main(["odin"]) == 1
+
+    assert len(calls) == 3
+    err = capsys.readouterr().err
+    assert "ODIN fetch failed" in err and "503" in err
+    assert _odin_file(env).read_bytes() == before
+    assert list(env.odin.glob("*.tmp")) == []
+
+
+def test_a_day_file_that_cannot_be_read_stops_the_run_and_keeps_its_bytes(env, odin_feed, capsys):
+    env.odin.mkdir()
+    _odin_file(env).write_bytes(b"not a parquet file")
+
+    assert cli.main(["odin"]) == 1
+
+    assert _odin_file(env).read_bytes() == b"not a parquet file"
+    assert capsys.readouterr().err != ""
+
+
+def test_a_reader_thread_that_opens_the_day_file_during_a_write_sees_the_old_file_whole(
+    env, odin_feed, monkeypatch
+):
+    """The rename is the only moment the target changes: the reader gets the old or the new file.
+
+    A free-running reader would block the rename on Windows, so the reader runs at the moment
+    just before the rename, when the temp file is complete and the target is still the old file.
+    """
+    cli.main(["odin"])
+    path = _odin_file(env)
+    old = pd.read_parquet(path)
+    seen: dict[str, pd.DataFrame] = {}
+    real_replace = Path.replace
+
+    def replace(self, target):
+        reader = threading.Thread(target=lambda: seen.update(during=pd.read_parquet(path)))
+        reader.start()
+        reader.join()
+        result = real_replace(self, target)
+        seen["after"] = pd.read_parquet(path)
+        return result
+
+    monkeypatch.setattr(Path, "replace", replace)
+    odin_feed.at(2024, 5, 28, 14, 22)
+
+    assert cli.main(["odin"]) == 0
+
+    pd.testing.assert_frame_equal(seen["during"], old)
+    assert len(seen["after"]) == 2 * len(old)
+    assert seen["after"].iloc[: len(old)].reset_index(drop=True).equals(old)
+
+
+def test_odin_takes_no_arguments(env, odin_feed):
+    with pytest.raises(SystemExit) as stop:
+        cli.main(["odin", "2024-05-28"])
+
+    assert stop.value.code == 2
+    assert odin_feed.urls == []
+
+
+def test_the_odin_command_ignores_the_publish_lock_and_writes_only_the_odin_directory(
+    env, odin_feed
+):
+    env.site.mkdir(parents=True)
+    (env.site / "publish.lock").write_text("1", encoding="utf-8")
+
+    assert cli.main(["odin"]) == 0
+
+    assert sorted(p.name for p in env.site.iterdir()) == ["publish.lock"]
+    assert [p.name for p in env.odin.iterdir()] == ["odin-2024-05-28.parquet"]
+    assert not env.swaths.exists() and not env.power.exists()
+
+
+def test_a_second_odin_run_stops_while_the_odin_lock_is_held(env, odin_feed, capsys):
+    cli.main(["odin"])
+    before = _odin_file(env).read_bytes()
+    lock = env.odin / "odin.lock"
+    lock.write_text("1", encoding="utf-8")
+    odin_feed.at(2024, 5, 28, 14, 22)
+    capsys.readouterr()
+
+    assert cli.main(["odin"]) == 1
+
+    assert "another run holds it" in capsys.readouterr().err
+    assert _odin_file(env).read_bytes() == before
+    assert lock.read_text(encoding="utf-8") == "1"
+
+
+def test_an_odin_run_removes_its_lock_when_the_day_file_cannot_be_read(env, odin_feed, capsys):
+    env.odin.mkdir()
+    _odin_file(env).write_bytes(b"not a parquet file")
+
+    assert cli.main(["odin"]) == 1
+
+    assert "not a readable ODIN day file" in capsys.readouterr().err
+    assert not (env.odin / "odin.lock").exists()
+
+
+def _published(env, storm_date, name):
+    return json.loads((env.storm_dir(storm_date) / name).read_text(encoding="utf-8"))
+
+
+def test_publish_writes_power_json_from_the_eaglei_power_file_of_the_date(env):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    cli.main(["power", "2024-05-28"])
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    doc = _published(env, LATER, publish.POWER_FILE)
+    publish.validate(doc, "power")
+    assert (doc["source"], doc["utilities"]) == ("eaglei", None)
+    assert [s["source"] for s in doc["receipt"]["sources"]] == ["eaglei"]
+    assert env.index()["storms"][0]["files"]["power"] == f"storms/{LATER}/{publish.POWER_FILE}"
+
+
+def test_publish_writes_the_odin_utilities_into_power_json(env):
+    env.add_day(LATER)
+    _write_odin(env, "2024-05-28", *ODIN_ROWS)
+    cli.main(["power", "2024-05-28"])
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    doc = _published(env, LATER, publish.POWER_FILE)
+    assert (doc["source"], doc["utilities"]) == ("odin", ["CENTERPOINT ENERGY"])
+
+
+def test_publish_without_a_power_file_writes_no_power_json_and_nulls_the_entry(env):
+    env.add_day(LATER)
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.POWER_FILE).exists()
+    assert env.index()["storms"][0]["files"]["power"] is None
+
+
+def test_publish_removes_a_stale_power_json_when_the_power_file_is_gone(env):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    cli.main(["power", "2024-05-28"])
+    cli.main(["publish", "2024-05-28"])
+    _power_file(env, LATER).unlink()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.POWER_FILE).exists()
+    assert env.index()["storms"][0]["files"]["power"] is None
+
+
+def test_publish_exits_1_and_names_the_file_for_a_power_file_without_metadata(env, capsys):
+    env.add_day(LATER)
+    frame = pd.DataFrame(
+        {"fips": [], "step_utc": pd.to_datetime([], utc=True), "customers_out": []}
+    )
+    env.power.mkdir(parents=True)
+    frame.to_parquet(_power_file(env, LATER))
+
+    assert cli.main(["publish", "2024-05-28"]) == 1
+
+    assert "power-2024-05-28.parquet" in capsys.readouterr().err
+    assert not env.storm_dir(LATER).exists()
+
+
+def test_publish_writes_warnings_geojson_from_the_warnings_file_and_removes_it_when_gone(env, iem):
+    env.add_day(LATER)
+    cli.main(["warnings", "2024-05-28"])
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert (env.storm_dir(LATER) / publish.WARNINGS_FILE).exists()
+    assert env.index()["storms"][0]["files"]["warnings"] == f"storms/{LATER}/warnings.geojson"
+    _warnings_file(env, LATER).unlink()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert not (env.storm_dir(LATER) / publish.WARNINGS_FILE).exists()
+    assert env.index()["storms"][0]["files"]["warnings"] is None

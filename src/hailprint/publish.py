@@ -19,7 +19,7 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 from shapely.geometry.polygon import orient
 
-from hailprint import score, swath
+from hailprint import county, power, sbw, score, swath
 from hailprint.files import FORBIDDEN_WORD, METADATA
 from hailprint.parcels import OWNER_FIELDS
 
@@ -35,6 +35,7 @@ SWATH_FILE = "swath.geojson"
 REPORTS_FILE = "reports.geojson"
 PAIRS_FILE = "pairs.json"
 WARNINGS_FILE = "warnings.geojson"
+POWER_FILE = "power.json"
 ZIPS_FILE = "zip-counts.json"
 METADATA_KEYS = tuple(METADATA)
 SPC_PRODUCT = "preliminary hail reports"
@@ -220,6 +221,46 @@ def warnings_doc(frame: gpd.GeoDataFrame, rcpt: Doc) -> Doc:
         for row in ordered.to_dict("records")
     ]
     return {"type": "FeatureCollection", "receipt": rcpt, "features": features}
+
+
+def power_doc(frame: pd.DataFrame, rcpt: Doc, utilities: list[str] | None = None) -> Doc:
+    """The customers without power of the 8 metro counties at the 192 steps of the impact window.
+
+    `frame` holds `fips`, `step_utc`, and `customers_out` (the output of `power.derive`). A
+    county step with no source row is null, never zero; an explicit 0 stays 0. The window comes
+    from the storm date of the receipt. A county whose steps differ from the window raises
+    ValueError that names the county. `utilities` is None for EAGLE-I and the list of ODIN
+    utility names for an ODIN file.
+    """
+    start, _ = sbw.window(date.fromisoformat(rcpt["storm_date"]))
+    steps = pd.date_range(start, periods=power.STEPS, freq=power.STEP)
+    counties = []
+    for fips, name in county.METRO_NAMES.items():
+        rows = frame.loc[frame["fips"] == fips]
+        # the Parquet unit varies, so both sides take the unit of the window before they meet
+        got = rows["step_utc"].dt.as_unit(steps.unit)
+        if len(rows) != power.STEPS or not got.isin(steps).all() or not got.is_unique:
+            raise ValueError(f"power: {fips}: the steps differ from the impact window")
+        out = rows.assign(step_utc=got).set_index("step_utc")["customers_out"].reindex(steps)
+        counties.append(
+            {
+                "fips": fips,
+                "name": name,
+                "customers": power.MCC[fips],
+                "out": [None if pd.isna(value) else int(value) for value in out],
+            }
+        )
+    return {
+        "receipt": rcpt,
+        "window": {
+            "start": _utc_text(start),
+            "step_minutes": int(power.STEP.total_seconds() // 60),
+            "steps": power.STEPS,
+        },
+        "source": rcpt["sources"][0]["source"],
+        "utilities": None if utilities is None else list(utilities),
+        "counties": counties,
+    }
 
 
 def reports_doc(frame: gpd.GeoDataFrame, rcpt: Doc) -> Doc:
@@ -521,6 +562,26 @@ def warnings_source(path: Path) -> Doc:
     return swath_source(path)[0]
 
 
+def power_source(path: Path) -> Doc:
+    """The source entry from the metadata of a power file, with `utilities` when the file has them.
+
+    An ODIN file stores `utilities` as JSON text of a list of names. A file without the source,
+    product, or confidence key, or with a `utilities` value that is not such a list, raises
+    ValueError that names the file.
+    """
+    entry = swath_source(path)[0]
+    raw = (pq.read_schema(path).metadata or {}).get(b"utilities")
+    if raw is None:
+        return entry
+    try:
+        utilities = json.loads(raw)
+    except ValueError:
+        utilities = None
+    if not isinstance(utilities, list) or not all(isinstance(name, str) for name in utilities):
+        raise ValueError(f"{path.name}: the utilities metadata is not a JSON list of text")
+    return {**entry, "utilities": utilities}
+
+
 def spc_source(storm_date: date) -> Doc:
     """The source entry of the SPC daily CSV of one storm date."""
     return {
@@ -567,6 +628,7 @@ def build_day(
     facts: Doc | None,
     run_time: datetime,
     warnings: tuple[gpd.GeoDataFrame, Doc] | None = None,
+    power: tuple[pd.DataFrame, Doc] | None = None,
 ) -> tuple[dict[str, str], Doc]:
     """The serialised files of one storm date, by file name, and its entry for the storms index.
 
@@ -576,7 +638,9 @@ def build_day(
     candidate file, or None when the date is absent there. `zips` and `hcad` are both None
     when the date has no parcel counts. `warnings` holds the warnings frame and its IEM source
     entry, or None when the date has no warnings file; an empty frame gives an empty
-    FeatureCollection.
+    FeatureCollection. `power` holds the power frame and its source entry (the output of
+    `power_source`), or None when the date has no power file; the `utilities` key of the entry
+    goes to the document and not to the receipt.
     """
     day = score.score_day(swaths, nearby, storm_date, score.DEFAULT_RADIUS_KM)
 
@@ -596,6 +660,13 @@ def build_day(
     if warnings is not None:
         frame, iem = warnings
         documents[WARNINGS_FILE] = ("warnings", warnings_doc(frame, stamp(iem)))
+    if power is not None:
+        outages, layer = power
+        origin = {key: layer[key] for key in ("source", "product", "file")}
+        documents[POWER_FILE] = (
+            "power",
+            power_doc(outages, stamp(origin), layer.get("utilities")),
+        )
     texts = {}
     for name, (kind, doc) in documents.items():
         validate(doc, kind)
@@ -623,6 +694,7 @@ def build_day(
             "pairs": f"{folder}/{PAIRS_FILE}",
             "zip_counts": f"{folder}/{ZIPS_FILE}" if ZIPS_FILE in texts else None,
             **dict.fromkeys(IMPACT_KEYS),
+            "power": f"{folder}/{POWER_FILE}" if POWER_FILE in texts else None,
             "warnings": f"{folder}/{WARNINGS_FILE}" if WARNINGS_FILE in texts else None,
         },
     }
