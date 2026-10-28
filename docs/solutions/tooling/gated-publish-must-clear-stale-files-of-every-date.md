@@ -22,6 +22,14 @@ The gate is global, but the cleanup ran per date. The read of an optional layer 
 ## Fix
 
 - `_remove_internet_files` in `src/hailprint/__main__.py` globs `*/internet.json` under `site/data/storms/` once per run and removes every match when the flag is off. `publish.merge_entries` then sets `files.internet` to null for each removed file.
-- `_internet_layer` catches `OSError`, `ValueError`, and `KeyError`, prints a note, and returns None. The date publishes without the layer. `internet --missing` fetches an unreadable file again.
+- `_internet_layer` catches the `_UNREADABLE` tuple, prints a note, and returns None. The date publishes without the layer. `internet --missing` fetches an unreadable file again.
 
-Rule: a flag that turns a layer off clears the layer for all dates, in one place, before the index write. An optional layer read never fails a required file. A new gated layer adds a test for both cases next to `test_publish_without_the_flag_removes_the_internet_json_of_a_date_it_does_not_publish` in `tests/test_cli.py`.
+## Second pass (v6 hardening)
+
+The first catch was too narrow. A pyarrow type error is a `TypeError`, a text `step_utc` column raises `AttributeError` at the `.dt` accessor, and a file without the source metadata raises `ValueError` after the read. Each one still stopped the date or the run.
+
+- `_UNREADABLE` in `src/hailprint/__main__.py` lists `OSError`, `ValueError`, `KeyError`, `TypeError`, `AttributeError`, and `pa.ArrowException`. `_internet_settled` uses the same tuple.
+- `_internet_layer(path, storm_date)` reads the file, reads the source metadata, and dry-runs `publish.internet_doc` inside one `try`. A file that `build_day` would reject now skips only its layer.
+- The dry run covers `internet_doc` and not the receipt schema. A schema failure on a file that `internet_doc` accepts still fails the date, which is the correct stop for a code defect.
+
+Rule: a flag that turns a layer off clears the layer for all dates, in one place, before the index write. An optional layer read never fails a required file. The catch of an optional layer lists every error class that its parsers raise, and a dry run of the builder moves the builder errors inside the same catch. A new gated layer adds a test for both cases next to `test_publish_without_the_flag_removes_the_internet_json_of_a_date_it_does_not_publish` in `tests/test_cli.py`.

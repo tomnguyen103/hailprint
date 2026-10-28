@@ -4,9 +4,8 @@ import { fetchCounties, fetchCounty } from "../county";
 import { fetchJson } from "../data/fetch";
 import { guardSwath, guardWarnings } from "../data/guard";
 import { DataError, type InternetFile, type PowerFile, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
-import { internetNote } from "../impact/internet";
-import { type Fill, powerNote } from "../impact/power";
-import { InternetLegend, PowerFillControl, PowerLegend } from "../impact/power-fill";
+import type { Fill } from "../impact/power";
+import { fillNotes, InternetLegend, PowerFillControl, PowerLegend } from "../impact/power-fill";
 import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
 import { countyAt } from "../state/county";
@@ -169,10 +168,8 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   const warningsLine = warningsNote(warningsFile, warnings);
   // A failed power file or county file hides the fill with one line; the hail map stays.
   const powerAvailable = powerData !== null && outlines !== null;
-  const powerLine = powerNote(storm.files.power, power) ?? (metro.status === "error" ? `Power off. ${metro.error.message}` : null);
   const internetAvailable = internetData !== null && outlines !== null;
-  const internetLine =
-    internetNote(storm.files.internet, internet) ?? (metro.status === "error" ? `Internet reachability off. ${metro.error.message}` : null);
+  const { power: powerLine, internet: internetLine } = fillNotes(storm.files, power, internet, metro);
   return (
     <div class="map-pane" data-inspector={pick !== null}>
       <div class="map-main">

@@ -581,6 +581,12 @@ describe("guardPower", () => {
     );
   });
 
+  it("throws on a window that starts on another date than the receipt storm date", () => {
+    expect(() => guardPower({ ...power, window: { ...power.window, start: "2024-05-29T12:00:00Z" } })).toThrow(
+      /^power\.json: window\.start is on 2024-05-29, not the storm date 2024-05-28/,
+    );
+  });
+
   it("throws when the receipt is missing", () => {
     expect(() => guardPower(without(power, "receipt"))).toThrow(/^power\.json: receipt is not an object/);
   });
@@ -682,6 +688,12 @@ describe("guardInternet", () => {
     );
     expect(() => guardInternet({ ...internet, window: { ...internet.window, start: "2024-05-28T00:00:00Z" } })).toThrow(
       /window\.start is not 12:00 UTC/,
+    );
+  });
+
+  it("throws on a window that starts on another date than the receipt storm date", () => {
+    expect(() => guardInternet({ ...internet, window: { ...internet.window, start: "2024-05-27T12:00:00Z" } })).toThrow(
+      /^internet\.json: window\.start is on 2024-05-27, not the storm date 2024-05-28/,
     );
   });
 

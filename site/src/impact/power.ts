@@ -23,9 +23,9 @@ export const FILLED_BINS: readonly Bin[] = ["--out-1", "--out-2", "--out-3", "--
 export const ODIN_LABEL = "CenterPoint customers only";
 export const ODIN_BOUND = "Lower bound: other utilities are not counted.";
 
-/** Customers out over customers; a null step stays null, never zero. */
+/** Customers out over the MCC customers, at most 1: a utility count can pass the modelled MCC. A null step stays null, never zero. */
 export function shareOut(out: number | null, customers: number): number | null {
-  return out === null ? null : out / customers;
+  return out === null ? null : Math.min(1, out / customers);
 }
 
 export function shareBin(share: number | null): Bin {

@@ -196,9 +196,12 @@ def file_source(path: Path) -> str | None:
 
 
 def share_out(frame: pd.DataFrame) -> pd.Series:
-    """Return `customers_out` over the MCC 2022 customers of the county; a null stays null."""
+    """Return `customers_out` over the MCC 2022 customers, at most 1; a null stays null.
+
+    The MCC is a modelled count, and a utility count can pass it (Waller on 2024-07-08).
+    """
     customers = frame["fips"].map(MCC.__getitem__)
-    return pd.Series(frame["customers_out"] / customers, index=frame.index)
+    return pd.Series(frame["customers_out"] / customers, index=frame.index).clip(upper=1.0)
 
 
 # The site reads these edges from this line (site/src/impact/power.test.ts): keep it at column 0.

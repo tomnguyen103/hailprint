@@ -164,6 +164,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
         text: "EAGLE-I counts customers without power. ODIN snapshots cover later storm dates. One file never mixes the two.",
       },
       { kind: "prose", text: "Share out is customers out divided by the MCC, the 2022 modelled county customers." },
+      { kind: "prose", text: "A utility count can pass the MCC in a small county. The share out then stops at 100%." },
       { kind: "prose", text: "ODIN lists CenterPoint customers only. Its share out is a lower bound." },
       { kind: "prose", text: "Source: EAGLE-I, Oak Ridge National Laboratory (ORNL), CC BY 4.0." },
       { kind: "prose", text: "Source: ODIN, ORNL." },

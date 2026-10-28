@@ -71,7 +71,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | ODIN | The ORNL open outage feed. It gives open incidents now and holds no history. `hailprint odin` stores one snapshot every 15 minutes. In the metro it holds CenterPoint customers only. |
 | MCC | The EAGLE-I file `MCC.csv`: customers per county as of 2022. Its value is the denominator of the share out for every year. |
 | Customers out | The count of customers without power in one county at one step, from EAGLE-I or ODIN. A count, never a cause. |
-| Share out | Customers out divided by the MCC value of the county, at one step. A null step has no share. The site clamps the colour, never the number. |
+| Share out | Customers out divided by the MCC value of the county, at one step. A null step has no share. The share stops at 1, because the MCC is a modelled count that a utility count can pass. |
 | Power file | `power.json` of one storm date: per metro county, the share out and the customers out at each of the 192 steps, and one source, `eaglei` or `odin`. A file never mixes the two. |
 | Power layer | The county fill of the share out at the slider step, and the power strip of the storm timeline. The fill control picks none or power. With an internet file on the date, it also picks internet. |
 | CenterPoint customers only | The label on every value of an ODIN-sourced power file. Such a value is a lower bound. |

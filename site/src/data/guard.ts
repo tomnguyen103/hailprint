@@ -304,11 +304,14 @@ function outValue(file: string, value: unknown, path: string): void {
   }
 }
 
-/** The impact window every layer file shares: 192 steps of 15 minutes from 12:00 UTC on the storm date. */
+/** The impact window every layer file shares: 192 steps of 15 minutes from 12:00 UTC on the storm date of its receipt. */
 function guardWindow(file: string, root: Rec): void {
   const window = rec(file, root["window"], "window");
-  if (!WINDOW_START.test(str(file, window["start"], "window.start"))) {
-    throw new DataError(file, "window.start is not 12:00 UTC");
+  const start = str(file, window["start"], "window.start");
+  if (!WINDOW_START.test(start)) throw new DataError(file, "window.start is not 12:00 UTC");
+  const stormDate = (root["receipt"] as Rec)["storm_date"];
+  if (start.slice(0, 10) !== stormDate) {
+    throw new DataError(file, `window.start is on ${start.slice(0, 10)}, not the storm date ${String(stormDate)}`);
   }
   if (window["step_minutes"] !== 15) throw new DataError(file, "window.step_minutes is not 15");
   if (window["steps"] !== STEPS) throw new DataError(file, `window.steps is not ${STEPS}`);
