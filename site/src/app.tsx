@@ -4,6 +4,7 @@ import { Method } from "./method/method";
 import { Pipeline } from "./pipeline/pipeline";
 import { href, replace, type Area } from "./router";
 import { Scorecard } from "./scorecard/scorecard";
+import { AreaBoundary } from "./shell/area-boundary";
 import { Layout } from "./shell/layout";
 import { EmptyState, ErrorState, LoadingState } from "./shell/states";
 import { useIndex } from "./state/index";
@@ -13,7 +14,7 @@ import { TryIt } from "./try/try";
 const NO_INDEX = "No storm date is published yet.";
 
 export function App() {
-  const { route } = useRoute();
+  const { path, route } = useRoute();
   const index = useIndex();
   const storms = index.status === "ready" ? index.data.storms : [];
   const newest = storms[0];
@@ -50,5 +51,9 @@ export function App() {
     body = storm ? <StormsArea index={index.data} storm={storm} tab={route.tab} />
       : <EmptyState sentence={`No storm date ${route.date} is published.`} link={{ href: href({ area: "storms", date: newest.storm_date }), label: newest.storm_date }} />;
   }
-  return <Layout active={active}>{body}</Layout>;
+  return (
+    <Layout active={active}>
+      <AreaBoundary resetKey={path}>{body}</AreaBoundary>
+    </Layout>
+  );
 }

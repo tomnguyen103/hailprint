@@ -209,8 +209,7 @@ Behavior change: a render throw shows the error state with Retry, not a blank pa
 
 ### M8 (theme part)
 
-The create effect in [map-pane.tsx:66-104](site/src/storms/map-pane.tsx:66) reads `theme` but depends only on `[attempt]`. A Retry after a theme switch creates the map with the old theme.
-Read the theme through a ref, as `onCountyRef` does.
+Dropped in PR 2. The premise was false: the `setTheme` effect in `map-pane.tsx` repairs the style at ready, and a Retry render already holds the current theme. The plan adds no theme ref.
 
 ### Tests
 

@@ -88,3 +88,5 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Deploy | `scripts/deploy.sh`: the prebuilt Vercel flow from a machine that holds `site/data/`. |
 | Dry run | `--dry-run`: the build into `site/dist` with the artifact check and no `vercel` call. |
 | Cron entry | `scripts/hailprint.cron`: two crontab lines. One starts the nightly run at 14:00 UTC. One runs `hailprint odin` every 15 minutes. |
+| Tile error | A MapLibre `error` event that carries a `tile` field: one map tile failed to load. It leaves a gap, logs one console warning, and never fails the map load. An error without `tile`, or no `load` within `LOAD_TIMEOUT_MS` (15 000 ms), fails the load and releases the map. The timeout runs only while the tab is visible, and each return to visible restarts it. |
+| Area boundary | `AreaBoundary` in `site/src/shell/area-boundary.tsx`. It wraps the page body inside the layout. A render throw shows the error state with Retry under the top bar, not a blank page. A new route path renders the page again. |

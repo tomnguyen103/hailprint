@@ -50,6 +50,7 @@ import {
 } from "./layers";
 import { PHENOMENA } from "../../data/types";
 import { RULER } from "../../ruler";
+import { whenLoaded } from "./when-loaded";
 
 export type { MapLibreMap };
 
@@ -133,10 +134,7 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
     cooperativeGestures: window.matchMedia("(pointer: coarse)").matches,
   });
   map.addControl(new NavigationControl({ showCompass: false }), "top-left");
-  await new Promise<void>((resolve, reject) => {
-    map.once("load", () => resolve());
-    map.once("error", (e) => reject(e.error ?? new Error("map failed to load")));
-  });
+  await whenLoaded(map);
 
   return makeHandle(map, basemap);
 }
