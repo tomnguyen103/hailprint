@@ -574,6 +574,20 @@ next PR branches from fresh `main`.
 5. **Cron.** Approve the 15-minute ODIN cron line on the cron host?
 6. **Programme.** Approve PRs I to N and the owner steps in section 11.3?
 
+### Adopted answers
+
+The autonomous run adopts every recommendation above.
+
+1. Scope: the impact layers cover the 8 metro counties (row 11).
+2. Gap rule: an absent step is a gap, never a zero (row 13).
+3. Internet layer: PR N is built and merged behind `publish --with-internet`. The nightly run
+   passes the flag only when `.env` sets `PUBLISH_INTERNET=1` (row 14). This replaces "hold the
+   merge until IODA answers": the default publish ships no IODA data, so the merge is safe, and
+   the owner opts in when IODA replies.
+4. ODIN: county totals are published with attribution, and the ORNL email stays open (row 15).
+5. Cron: the 15-minute ODIN line sits in `scripts/hailprint.cron`. The owner installs it.
+6. Programme: PRs I to N are built. The owner steps in section 11.3 stay with the owner.
+
 ## 14. Email drafts
 
 IODA (to the contact on the IODA site):

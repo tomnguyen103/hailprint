@@ -36,7 +36,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Scoring domain | The Harris bbox shrunk by the scoring radius plus one cell (`score.EDGE_M`). The swath is only known inside the bbox, so a report near its edge is not scored. |
 | Contingency table | For one size class and one scoring radius: hits, misses, false alarms, and correct negatives over the scored reports. POD, FAR, CSI, and HSS come from it. |
 | Unverifiable area | The part of a swath class, in km2, farther than the scoring radius from every SPC report. No report could confirm or deny hail there. |
-| Published file | One JSON or GeoJSON file under `site/data/` that `hailprint publish` writes for the site: `swath.geojson`, `reports.geojson`, `pairs.json`, `zip-counts.json`, `warnings.geojson` (only where `warnings` ran), and `power.json` (only where `power` ran) per storm date, and the `storms.json` index. Each validates against its schema in `src/hailprint/schemas/` and carries a receipt. |
+| Published file | One JSON or GeoJSON file under `site/data/` that `hailprint publish` writes for the site: `swath.geojson`, `reports.geojson`, `pairs.json`, `zip-counts.json`, `warnings.geojson` (only where `warnings` ran), `power.json` (only where `power` ran), and `internet.json` (only where `internet` ran and `publish` used `--with-internet`) per storm date, and the `storms.json` index. Each validates against its schema in `src/hailprint/schemas/` and carries a receipt. |
 | Receipt | The provenance block of a published file: `storm_date`, `sources` (each with `source`, `product`, and `file`), the one confidence band `swath.CONFIDENCE`, `run_time` (one UTC second per run), and `package_version`. |
 | Edge distance | `edge_m`: the signed metre distance from a report point to the swath crop edge, positive inside the Harris bbox and negative outside. A report is scored at radius R when `edge_m > R*1000 + score.EDGE_M`. Stored per report in `pairs.json`, so the browser re-scores at any whole-kilometre radius. |
 | Spike | The week-1 run, replaced by `ingest` in week 2. Its evidence stays in `docs/reports/week-01.md`. |
@@ -66,17 +66,23 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Warning polygon | One NWS storm-based warning polygon (`SV`, `TO`, or `FF`, significance `W`) from WFO HGX, with its begin and end time. `hailprint warnings` stores them per storm date. |
 | Impact layer | A map layer with a time axis. The warnings layer is the first one. |
 | Time slider | The native range under the map over the 192 steps of the impact window. The step in the path `/storms/<date>/map/<step>` is its value. |
-| Storm timeline | The chart under the time slider with strips on the 48-hour axis: power, the share out of the picked county; warnings, one bar per warning polygon; and report times, one tick per SPC report. A cursor marks the slider step, and a click on a strip moves it. |
+| Storm timeline | The chart under the time slider with strips on the 48-hour axis: power, the share out of the picked county; internet, the drop of the picked county; warnings, one bar per warning polygon; and report times, one tick per SPC report. A cursor marks the slider step, and a click on a strip moves it. |
 | EAGLE-I | The ORNL record of customers out per county, one CSV per year, every 15 minutes, in UTC. `hailprint eaglei <year>` stores the metro rows. |
 | ODIN | The ORNL open outage feed. It gives open incidents now and holds no history. `hailprint odin` stores one snapshot every 15 minutes. In the metro it holds CenterPoint customers only. |
 | MCC | The EAGLE-I file `MCC.csv`: customers per county as of 2022. Its value is the denominator of the share out for every year. |
 | Customers out | The count of customers without power in one county at one step, from EAGLE-I or ODIN. A count, never a cause. |
 | Share out | Customers out divided by the MCC value of the county, at one step. A null step has no share. The site clamps the colour, never the number. |
 | Power file | `power.json` of one storm date: per metro county, the share out and the customers out at each of the 192 steps, and one source, `eaglei` or `odin`. A file never mixes the two. |
-| Power layer | The county fill of the share out at the slider step, and the power strip of the storm timeline. The fill control picks none or power. |
+| Power layer | The county fill of the share out at the slider step, and the power strip of the storm timeline. The fill control picks none or power. With an internet file on the date, it also picks internet. |
 | CenterPoint customers only | The label on every value of an ODIN-sourced power file. Such a value is a lower bound. |
+| IODA | The Georgia Tech Internet Outage Detection and Analysis service. Its `ping-slash24` signal counts the /24 address blocks in a county that answer active pings, every 10 minutes. Only 2022-03 to 2024-05 has a county signal. |
+| Baseline | The median of the IODA signal over the 7 days before the impact window starts. A county with fewer than half of the 1008 baseline points has no baseline, and no ratio. |
+| Ratio | The IODA signal of one step divided by the baseline, rounded to 3 places. The step value is the median of the signal points inside the step. A step with no point has a null ratio. |
+| Drop | 1 minus the ratio, never below zero. The site words it as "internet reachability below baseline". A drop states a level, never a cause. |
+| Internet file | `internet.json` of one storm date: per metro county, the baseline and the ratio at each of the 192 steps, with the signal `ping-slash24`. `publish` writes it only with `--with-internet` (`docs/DECISIONS.md` row 14). |
+| Internet layer | The county fill of the drop at the slider step, and the internet strip of the storm timeline. The fill bins are 0, under 2, 2 to 5, 5 to 10, 10 to 20, and 20 percent and up. |
 | Missing candidate day | A candidate day with a 12Z file and no swath file. `hailprint candidates --missing` prints them newest first. |
-| Nightly run | `scripts/nightly.sh`: index, missing candidate days, ingest, parcels, score, warnings, power, publish, deploy, under `data/nightly.lock`, at most `MAX_INGEST` storm dates. A failed warnings or power step logs one line, and `publish` still runs. |
+| Nightly run | `scripts/nightly.sh`: index, missing candidate days, ingest, parcels, score, warnings, power, internet, publish, deploy, under `data/nightly.lock`, at most `MAX_INGEST` storm dates. A failed warnings, power, or internet step logs one line, and `publish` still runs. The script passes `--with-internet` only when `.env` sets `PUBLISH_INTERNET=1`. |
 | Deploy | `scripts/deploy.sh`: the prebuilt Vercel flow from a machine that holds `site/data/`. |
 | Dry run | `--dry-run`: the build into `site/dist` with the artifact check and no `vercel` call. |
 | Cron entry | `scripts/hailprint.cron`: two crontab lines. One starts the nightly run at 14:00 UTC. One runs `hailprint odin` every 15 minutes. |

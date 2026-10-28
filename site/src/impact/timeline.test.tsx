@@ -2,6 +2,7 @@ import type { Feature, MultiPolygon, Point } from "geojson";
 import type { ComponentChild, VNode } from "preact";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { InternetFile, Phenomena, PowerFile, ReportProps, ReportsFile, Receipt, WarningProps, WarningsFile } from "../data/types";
+import { FORBIDDEN_WORD } from "../method/prose";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { FileItem } from "../storms/data-pane";
 import { CountySection, InternetSection, countyRows } from "../storms/map/inspector";
@@ -443,7 +444,7 @@ const netLines = (tree: ComponentChild) => findAll(tree, withClass("timeline-net
 const netGaps = (tree: ComponentChild) => findAll(tree, withClass("timeline-net-gap"));
 const netBase = (tree: ComponentChild) => findAll(tree, withClass("timeline-net-base"));
 const netStrip = (tree: ComponentChild) => findAll(tree, (v) => v.props["data-strip"] === "internet");
-const BANNED = /\bdown\b|damage|caused|because of hail/i;
+const BANNED = new RegExp(`\\bdown\\b|${FORBIDDEN_WORD}|caused|because`, "i");
 
 describe("the internet strip", () => {
   it("draws one line through every step and a dotted baseline, and no gap when the county has no null", () => {
@@ -539,7 +540,7 @@ describe("the internet strip", () => {
     expect(textOf(netStrip(chart({ internet: internet() }).tree)[0])).toContain("no drop below baseline");
   });
 
-  it("uses no word that blames the weather or calls the internet down", () => {
+  it("uses no word that blames the weather or says the line failed", () => {
     for (const file of [internet(series({ 20: 0.8 }, 1)), internet(series({}, null)), null]) {
       expect(textOf(chart({ internet: file, internetNote: file === null ? "No internet file for this storm date." : null }).tree)).not.toMatch(BANNED);
     }

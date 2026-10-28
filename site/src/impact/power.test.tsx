@@ -1,5 +1,6 @@
 import type { ComponentChild, VNode } from "preact";
 import { describe, expect, it } from "vitest";
+import { FORBIDDEN_WORD } from "../method/prose";
 import { ODIN_LABEL } from "./power";
 import { InternetLegend, PowerFillControl, PowerLegend } from "./power-fill";
 
@@ -91,7 +92,7 @@ describe("the internet legend", () => {
 
   it("never says the internet is down or names a cause", () => {
     const words = (textOf(InternetLegend({ fill: "internet" })) + textOf(PowerFillControl({ fill: "none", power: READY, internet: READY, onFill: () => {} }))).toLowerCase();
-    for (const banned of ["down", "damage", "caused", "because of hail"]) expect(words).not.toContain(banned);
+    for (const banned of ["down", FORBIDDEN_WORD, "caused", "because"]) expect(words).not.toContain(banned);
   });
 });
 

@@ -1,6 +1,7 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { describe, expect, it } from "vitest";
 import { DataError, type InternetFile, type PowerFile } from "../data/types";
+import { FORBIDDEN_WORD } from "../method/prose";
 import type { Load } from "../state/load";
 import { METRO_FIPS, percentText } from "./power";
 import { NET_EDGES, NET_FILLED, NET_LABELS, dropBin, dropOf, internetFeatures, internetNote, isInternet } from "./internet";
@@ -125,10 +126,10 @@ describe("the internet note", () => {
     expect(internetNote("storms/2024-05-17/internet.json", { status: "ready", data: internetFile() })).toBeNull();
   });
 
-  it("never says down, damage, or a cause", () => {
+  it("never says down, the forbidden word, or a cause", () => {
     const failed: Load<InternetFile | null> = { status: "error", error: new DataError("internet.json", "bad") };
     const text = [internetNote(null, ready), internetNote("x", failed), ...NET_LABELS].join(" ").toLowerCase();
-    for (const word of ["down", "damage", "caused", "because"]) expect(text).not.toContain(word);
+    for (const word of ["down", FORBIDDEN_WORD, "caused", "because"]) expect(text).not.toContain(word);
   });
 });
 
