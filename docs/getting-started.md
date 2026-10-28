@@ -39,7 +39,8 @@ uv run hailprint candidates --missing       # candidate days with a 12Z file and
 uv run hailprint parcels 2024-05-28         # parcel count per size class; needs `ingest` for that date and the HCAD gdb
 uv run hailprint score --radius-km 5        # scores every swath file against the SPC daily CSVs
 uv run hailprint warnings 2024-05-28        # NWS warning polygons for one or more storm dates; `--missing` fills the gaps
-uv run hailprint publish                    # writes site/data/ (ZIP counts only where `parcels` ran)
+uv run hailprint internet 2024-05-17        # IODA county reachability for one or more storm dates from 2022-03 to 2024-05; `--missing` fills the gaps
+uv run hailprint publish                    # writes site/data/ (ZIP counts only where `parcels` ran); `--with-internet` adds internet.json
 ```
 
 A first run for one storm date:
