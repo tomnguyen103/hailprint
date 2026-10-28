@@ -9,14 +9,13 @@ from datetime import date
 
 import pandas as pd
 
-from hailprint import net, sbw
-from hailprint.power import METRO_FIPS, STEP, STEPS
+from hailprint import impact, net
 
 BASE_URL = "https://api.ioda.inetintel.cc.gatech.edu/v2/signals/raw/county/"
 DATASOURCE = "ping-slash24"
 METADATA = {"source": "ioda", "product": DATASOURCE}
 SIGNAL_STEP_S = 600  # IODA answers ping-slash24 every 10 minutes
-STEP_S = int(STEP.total_seconds())
+STEP_S = int(impact.STEP.total_seconds())
 MAX_COUNT = 2**24  # the count of /24 blocks in all of IPv4; a larger value is not a signal
 BASELINE_DAYS = 7
 # A baseline needs at least half of its points: 504 of the 1008 in 7 days.
@@ -127,10 +126,10 @@ def derive(storm_date: date, series: dict[str, dict[int, float]]) -> pd.DataFram
     """
     # shortcut: the baseline is one flat 7-day median, upgrade to a time-of-day baseline when a
     # quiet day shows a drop above 5 percent
-    start, _ = sbw.window(storm_date)
+    start, _ = impact.window(storm_date)
     first = int(start.timestamp())
     baseline_from = first - BASELINE_DAYS * 86400
-    fips_list = sorted(METRO_FIPS)
+    fips_list = sorted(impact.METRO_FIPS)
     values: list[float | None] = []
     baselines: list[float | None] = []
     ratios: list[float | None] = []
@@ -140,16 +139,16 @@ def derive(storm_date: date, series: dict[str, dict[int, float]]) -> pd.DataFram
         for epoch, value in series.get(fips, {}).items():
             if baseline_from <= epoch < first:
                 before.append(value)
-            elif first <= epoch < first + STEPS * STEP_S:
+            elif first <= epoch < first + impact.STEPS * STEP_S:
                 steps[(epoch - first) // STEP_S].append(value)
         baseline = float(statistics.median(before)) if len(before) >= BASELINE_MIN_POINTS else None
-        for n in range(STEPS):
+        for n in range(impact.STEPS):
             value = float(statistics.median(steps[n])) if steps[n] else None
             values.append(value)
             baselines.append(baseline)
             ratios.append(ratio(value, baseline))
     grid = pd.MultiIndex.from_product(
-        [fips_list, pd.date_range(start, periods=STEPS, freq=STEP)], names=["fips", "step_utc"]
+        [fips_list, impact.steps(storm_date)], names=["fips", "step_utc"]
     ).to_frame(index=False)
     return grid.assign(
         value=pd.Series(values, dtype="float64"),
@@ -160,8 +159,8 @@ def derive(storm_date: date, series: dict[str, dict[int, float]]) -> pd.DataFram
 
 def build(storm_date: date) -> pd.DataFrame:
     """Fetch the baseline and the window of each metro county and return the derived frame."""
-    start, end = sbw.window(storm_date)
+    start, end = impact.window(storm_date)
     first = int(start.timestamp()) - BASELINE_DAYS * 86400
     last = int(end.timestamp())
-    series = {fips: fetch(fips, first, last) for fips in sorted(METRO_FIPS)}
+    series = {fips: fetch(fips, first, last) for fips in sorted(impact.METRO_FIPS)}
     return derive(storm_date, series)

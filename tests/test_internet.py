@@ -9,13 +9,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from hailprint import county, internet, sbw
+from hailprint import county, impact, internet
 from tests.conftest import needs_network
 
 FIXTURES = Path(__file__).parent / "fixtures"
 PLAN = Path(__file__).parent.parent / "docs" / "plans" / "plan-v6.md"
 STORM = date(2024, 5, 17)
-FIRST = int(sbw.window(STORM)[0].timestamp())  # 12:00 UTC on the storm date
+FIRST = int(impact.window(STORM)[0].timestamp())  # 12:00 UTC on the storm date
 BASE_FIRST = FIRST - 7 * 86400
 LAST = FIRST + 192 * 900
 HARRIS = "48201"

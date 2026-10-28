@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 import pytest
 
-from hailprint import files, odin, power
+from hailprint import files, impact, odin, power
 from tests.conftest import EAGLEI_2024, needs_eaglei
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -153,7 +153,7 @@ def _harris(day: pd.DataFrame) -> pd.Series:
 
 def test_the_mcc_constants_match_the_plan_table_and_cover_the_metro_counties():
     assert power.MCC == MCC_TABLE
-    assert set(power.MCC) == power.METRO_FIPS
+    assert set(power.MCC) == impact.METRO_FIPS
 
 
 def test_the_window_holds_192_steps_per_county_from_12z_d_to_12z_d_plus_2():

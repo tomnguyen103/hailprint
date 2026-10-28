@@ -19,7 +19,7 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 from shapely.geometry.polygon import orient
 
-from hailprint import county, internet, power, sbw, score, swath
+from hailprint import county, impact, internet, power, score, swath
 from hailprint.files import FORBIDDEN_WORD, METADATA
 from hailprint.parcels import OWNER_FIELDS
 
@@ -234,14 +234,15 @@ def power_doc(frame: pd.DataFrame, rcpt: Doc, utilities: list[str] | None = None
     ValueError that names the county. `utilities` is None for EAGLE-I and the list of ODIN
     utility names for an ODIN file.
     """
-    start, _ = sbw.window(date.fromisoformat(rcpt["storm_date"]))
-    steps = pd.date_range(start, periods=power.STEPS, freq=power.STEP)
+    storm_date = date.fromisoformat(rcpt["storm_date"])
+    start, _ = impact.window(storm_date)
+    steps = impact.steps(storm_date)
     counties = []
     for fips, name in county.METRO_NAMES.items():
         rows = frame.loc[frame["fips"] == fips]
         # the Parquet unit varies, so both sides take the unit of the window before they meet
         got = rows["step_utc"].dt.as_unit(steps.unit)
-        if len(rows) != power.STEPS or not got.isin(steps).all() or not got.is_unique:
+        if len(rows) != impact.STEPS or not got.isin(steps).all() or not got.is_unique:
             raise ValueError(f"power: {fips}: the steps differ from the impact window")
         out = rows.assign(step_utc=got).set_index("step_utc")["customers_out"].reindex(steps)
         counties.append(
@@ -256,8 +257,8 @@ def power_doc(frame: pd.DataFrame, rcpt: Doc, utilities: list[str] | None = None
         "receipt": rcpt,
         "window": {
             "start": _utc_text(start),
-            "step_minutes": int(power.STEP.total_seconds() // 60),
-            "steps": power.STEPS,
+            "step_minutes": int(impact.STEP.total_seconds() // 60),
+            "steps": impact.STEPS,
         },
         "source": rcpt["sources"][0]["source"],
         "utilities": None if utilities is None else list(utilities),
@@ -273,14 +274,15 @@ def internet_doc(frame: pd.DataFrame, rcpt: Doc) -> Doc:
     `baseline`. The window comes from the storm date of the receipt. A county whose steps differ
     from the window raises ValueError that names the county.
     """
-    start, _ = sbw.window(date.fromisoformat(rcpt["storm_date"]))
-    steps = pd.date_range(start, periods=power.STEPS, freq=power.STEP)
+    storm_date = date.fromisoformat(rcpt["storm_date"])
+    start, _ = impact.window(storm_date)
+    steps = impact.steps(storm_date)
     counties = []
     for fips, name in county.METRO_NAMES.items():
         rows = frame.loc[frame["fips"] == fips]
         # the Parquet unit varies, so both sides take the unit of the window before they meet
         got = rows["step_utc"].dt.as_unit(steps.unit)
-        if len(rows) != power.STEPS or not got.isin(steps).all() or not got.is_unique:
+        if len(rows) != impact.STEPS or not got.isin(steps).all() or not got.is_unique:
             raise ValueError(f"internet: {fips}: the steps differ from the impact window")
         series = rows.assign(step_utc=got).set_index("step_utc")["ratio"].reindex(steps)
         baseline = rows["baseline"].iloc[0]
@@ -296,8 +298,8 @@ def internet_doc(frame: pd.DataFrame, rcpt: Doc) -> Doc:
         "receipt": rcpt,
         "window": {
             "start": _utc_text(start),
-            "step_minutes": int(power.STEP.total_seconds() // 60),
-            "steps": power.STEPS,
+            "step_minutes": int(impact.STEP.total_seconds() // 60),
+            "steps": impact.STEPS,
         },
         "signal": internet.DATASOURCE,
         "baseline_days": internet.BASELINE_DAYS,

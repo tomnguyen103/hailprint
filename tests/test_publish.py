@@ -15,7 +15,7 @@ import shapely
 from jsonschema import Draft202012Validator
 
 from hailprint import __main__ as cli
-from hailprint import county, internet, parcels, power, publish, reports, sbw, swath
+from hailprint import county, impact, internet, parcels, power, publish, reports, sbw, swath
 from hailprint import files as files_module
 from hailprint.parcels import OWNER_FIELDS
 from tests.test_cli import EARLIER, LATER
@@ -1553,7 +1553,7 @@ INTERNET_SOURCE = {
     "product": "ping-slash24",
     "file": "internet-2024-05-28.parquet",
 }
-INTERNET_FIRST = int(sbw.window(POWER_STORM)[0].timestamp())  # 12:00 UTC on the storm date
+INTERNET_FIRST = int(impact.window(POWER_STORM)[0].timestamp())  # 12:00 UTC on the storm date
 INTERNET_BASE = INTERNET_FIRST - 7 * 86400
 INTERNET_LAST = INTERNET_FIRST + 192 * 900
 FORT_BEND = 1  # position in the county order of internet.json

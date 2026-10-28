@@ -11,12 +11,11 @@ from typing import IO
 import pandas as pd
 import pyarrow.parquet as pq
 
-from hailprint import county, net, odin, sbw
+from hailprint import impact, net, odin
 
 ARTICLE_ID = 24237376
 LISTING_URL = f"https://api.figshare.com/v2/articles/{ARTICLE_ID}/files?page_size=100"
 DOWNLOAD_URL = "https://ndownloader.figshare.com/files/"
-METRO_FIPS = frozenset(county.METRO_NAMES)
 # The EAGLE-I MCC 2022 customers per county: the denominator of the share out.
 # shortcut: the MCC 2022 customer counts are constants in power.py, upgrade to a read of MCC.csv
 # when the scope leaves the 8 counties
@@ -30,8 +29,6 @@ MCC = {
     "48291": 44_189,  # Liberty
     "48071": 26_381,  # Chambers
 }
-STEP = timedelta(minutes=15)
-STEPS = 192  # 48 hours of 15-minute steps: the impact window
 # The header drifts by year (a total_customers column in 2024, none in 2020 and 2025): read by name.
 COLUMNS = ("fips_code", "customers_out", "run_start_time")
 CHUNK_ROWS = 500_000  # rows per pandas chunk: the whole year CSV never sits in memory
@@ -48,8 +45,8 @@ def day_file_name(storm_date: date) -> str:
 
 def years_of(storm_date: date) -> list[int]:
     """The EAGLE-I years the impact window reads: two when the window crosses new year."""
-    start, _ = sbw.window(storm_date)
-    return sorted({start.year, (start + (STEPS - 1) * STEP).year})
+    start, _ = impact.window(storm_date)
+    return sorted({start.year, (start + (impact.STEPS - 1) * impact.STEP).year})
 
 
 def _metro_rows(chunk: pd.DataFrame, year: int) -> pd.DataFrame:
@@ -57,7 +54,7 @@ def _metro_rows(chunk: pd.DataFrame, year: int) -> pd.DataFrame:
     for name in COLUMNS:
         if name not in chunk.columns:
             raise ValueError(f"EAGLE-I {year}: the CSV has no {name} column")
-    metro = chunk.loc[chunk["fips_code"].isin(list(METRO_FIPS))]
+    metro = chunk.loc[chunk["fips_code"].isin(list(impact.METRO_FIPS))]
     try:
         # a blank value is null, never zero; an explicit 0 stays 0
         customers_out = metro["customers_out"].astype("Int64")
@@ -127,15 +124,16 @@ def derive(frame: pd.DataFrame, storm_date: date) -> pd.DataFrame:
     `frame` holds `fips`, `time_utc`, and `customers_out` (the EAGLE-I year frames of the window).
     A step with no source row is null, never zero. An explicit 0 row stays 0.
     """
-    start, _ = sbw.window(storm_date)
-    steps = pd.date_range(start, periods=STEPS, freq=STEP)
+    steps = impact.steps(storm_date)
     # pandas keeps the unit of the input, so both sides take one unit before they meet
     time_utc = frame["time_utc"].dt.as_unit(steps.unit)
     rows = frame.assign(time_utc=time_utc).loc[time_utc.isin(steps)]
     duplicates = int(rows.duplicated(["fips", "time_utc"]).sum())
     if duplicates:
         raise ValueError(f"EAGLE-I {storm_date}: duplicate county steps: {duplicates}")
-    grid = pd.MultiIndex.from_product([sorted(METRO_FIPS), steps], names=["fips", "step_utc"])
+    grid = pd.MultiIndex.from_product(
+        [sorted(impact.METRO_FIPS), steps], names=["fips", "step_utc"]
+    )
     by_step = rows.set_index(["fips", "time_utc"])["customers_out"]
     by_step.index = by_step.index.set_names(["fips", "step_utc"])
     return by_step.reindex(grid).reset_index()
@@ -149,15 +147,16 @@ def derive_odin(frame: pd.DataFrame, storm_date: date) -> tuple[pd.DataFrame, li
     snapshot is null. A county with no incident in any snapshot of the window is null at every
     step: ODIN cannot show that its utility reports to ODIN.
     """
-    start, _ = sbw.window(storm_date)
-    steps = pd.date_range(start, periods=STEPS, freq=STEP)
+    steps = impact.steps(storm_date)
     slot = frame["slot_utc"].dt.as_unit(steps.unit)
     rows = frame.assign(slot_utc=slot).loc[slot.isin(steps)]
     incidents = rows.loc[rows["utility"] != odin.NO_INCIDENT]
     totals = rows.groupby(["fips", "slot_utc"])["customers_out"].sum()
     totals = totals[totals.index.get_level_values("fips").isin(set(incidents["fips"]))]
     totals.index = totals.index.set_names(["fips", "step_utc"])
-    grid = pd.MultiIndex.from_product([sorted(METRO_FIPS), steps], names=["fips", "step_utc"])
+    grid = pd.MultiIndex.from_product(
+        [sorted(impact.METRO_FIPS), steps], names=["fips", "step_utc"]
+    )
     day = totals.reindex(grid).astype("Int64").reset_index()
     return day, sorted(set(incidents["utility"]))
 
@@ -176,8 +175,8 @@ def build(
     if all(path.exists() for path in paths):
         frames = [pd.read_parquet(path) for path in paths]
         return derive(pd.concat(frames, ignore_index=True), storm_date), METADATA
-    start, _ = sbw.window(storm_date)
-    last = start + (STEPS - 1) * STEP
+    start, _ = impact.window(storm_date)
+    last = start + (impact.STEPS - 1) * impact.STEP
     days = [start.date() + timedelta(days=n) for n in range((last.date() - start.date()).days + 1)]
     day_files = [odin_dir / odin.file_name(day) for day in days]
     frames = [pd.read_parquet(path) for path in day_files if path.exists()]

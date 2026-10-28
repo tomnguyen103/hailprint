@@ -5,14 +5,14 @@ The impact window runs from 12:00 UTC on the storm date to 12:00 UTC two days la
 
 import http.client
 import json
-from datetime import UTC, date, datetime, timedelta
+from datetime import date
 
 import geopandas as gpd
 import pandas as pd
 from shapely.errors import ShapelyError
 from shapely.geometry import shape
 
-from hailprint import county, net
+from hailprint import county, impact, net
 
 URL = (
     "https://mesonet.agron.iastate.edu/api/1/vtec/sbw_interval.geojson"
@@ -34,13 +34,6 @@ ALLOWED = (
 FEED_KEY = {"polygon_begin": "utc_polygon_begin", "polygon_end": "utc_polygon_end"}
 GEOMETRY_TYPES = ("Polygon", "MultiPolygon")
 METADATA = {"source": "iem", "product": "sbw"}
-WINDOW = timedelta(hours=48)
-
-
-def window(storm_date: date) -> tuple[datetime, datetime]:
-    """The impact window of the storm date: 12:00 UTC on D up to 12:00 UTC on D+2."""
-    start = datetime(storm_date.year, storm_date.month, storm_date.day, 12, tzinfo=UTC)
-    return start, start + WINDOW
 
 
 def file_name(storm_date: date) -> str:
@@ -49,7 +42,7 @@ def file_name(storm_date: date) -> str:
 
 def fetch(storm_date: date) -> str:
     """Return the IEM feed text for the impact window of the storm date."""
-    begin, end = window(storm_date)
+    begin, end = impact.window(storm_date)
     try:
         return net.get(URL.format(begin=begin, end=end), timeout=30).decode()
     except (OSError, http.client.HTTPException) as exc:
@@ -80,7 +73,7 @@ def parse(text: str, storm_date: date) -> gpd.GeoDataFrame:
         raise ValueError(f"IEM warnings feed is not JSON: {exc}") from exc
     if not isinstance(document, dict) or not isinstance(document.get("features"), list):
         raise ValueError("IEM warnings feed is not a FeatureCollection")
-    start, end = window(storm_date)
+    start, end = impact.window(storm_date)
     metro = county.metro().geometry.union_all()
     rows = []
     for feature in document["features"]:

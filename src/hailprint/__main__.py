@@ -24,6 +24,7 @@ from hailprint import (
     candidates,
     county,
     files,
+    impact,
     internet,
     mesh,
     odin,
@@ -411,7 +412,7 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
         storm_dates = [
             d
             for d, _ in _swath_files([])
-            if sbw.window(d)[1] <= now and not _warnings_settled(d, now)
+            if impact.window(d)[1] <= now and not _warnings_settled(d, now)
         ]
     written = []
     failed = []
@@ -463,7 +464,7 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     if missing:
         now = _utc_now()
         storm_dates = [
-            d for d, _ in _swath_files([]) if sbw.window(d)[1] <= now and _needs_power(d)
+            d for d, _ in _swath_files([]) if impact.window(d)[1] <= now and _needs_power(d)
         ]
     written = []
     failed = []
@@ -570,7 +571,7 @@ def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
         storm_dates = [
             d
             for d, _ in _swath_files([])
-            if sbw.window(d)[1] <= now and not _internet_settled(d, now)
+            if impact.window(d)[1] <= now and not _internet_settled(d, now)
         ]
     written = []
     failed = []
