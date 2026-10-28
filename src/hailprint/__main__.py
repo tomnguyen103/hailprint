@@ -613,7 +613,8 @@ def publish_days(storm_dates: list[date], with_internet: bool = False) -> list[P
 
     One run at a time: a second run that finds the lock file stops with exit 1. A date without
     an SPC daily CSV is skipped. A date that fails a check writes no file and is named in the
-    final error. The index holds the dates of this run over the entries of the earlier runs.
+    final error. A bad internet file skips the internet layer of its date and fails nothing.
+    The index holds the dates of this run over the entries of the earlier runs.
     A malformed storms.json, pipeline.json, or archive index stops the run before any write. A
     malformed per-date file of an earlier run, or a pipeline document that fails its schema,
     stops the run before the index write. Without `with_internet` no date gets an internet.json

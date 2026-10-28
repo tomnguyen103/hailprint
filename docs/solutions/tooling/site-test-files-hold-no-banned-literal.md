@@ -18,7 +18,7 @@ Keeping the literal and adding the test file to an allow-list. The scans have no
 
 ## Fix
 
-- A site test file builds each banned phrase at run time: `[["internet", "down"], ["caused", "by", "hail"]].map((words) => words.join(" "))` in `site/src/method/content.test.ts`.
+- A site test file builds each banned phrase at run time: `[["internet", "down"], ["caused", "by", "hail"], ["because", "of", "hail"]].map((words) => words.join(" "))` in `site/src/method/content.test.ts`.
 - A site test file imports the forbidden word: `FORBIDDEN_WORD` from `site/src/method/prose.ts:8`, which joins `"dam"` and `"age"`.
 
 Rule: a site test never spells a banned word or phrase in one literal. Build it from fragments or import the constant. Run `uv run pytest tests/test_wording.py tests/test_outputs_clean.py -q` after any new site test that checks wording.
