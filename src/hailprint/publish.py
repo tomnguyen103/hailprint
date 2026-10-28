@@ -646,7 +646,7 @@ def layer_doc(
 
     `source` is the output of `warnings_source`, `power_source`, or `internet_source`. The
     `utilities` key of a power source goes to the document and not to the receipt.
-    `build_day` and the dry run of `__main__._impact_layer` both call this function, so they
+    `build_day` and the dry run of `publish_run.impact_layer` both call this function, so they
     cannot differ.
     """
     origin = {key: source[key] for key in ("source", "product", "file")}
