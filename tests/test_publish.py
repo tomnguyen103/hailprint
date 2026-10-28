@@ -1832,15 +1832,18 @@ def test_a_second_publish_run_that_finds_the_lock_exits_1_and_writes_no_warnings
     assert list(two_days.site.rglob("warnings.geojson")) == []
 
 
-def test_a_warnings_parquet_without_metadata_fails_its_date_and_publishes_the_other(
+def test_a_warnings_parquet_without_metadata_skips_its_layer_and_publishes_the_date(
     two_days, capsys
 ):
     path = two_days.warnings / sbw.file_name(LATER)
     path.unlink()
     _warnings_frame(LATER).to_parquet(path)
 
-    assert cli.main(["publish"]) == 1
+    assert cli.main(["publish"]) == 0
 
-    assert "2024-05-28: warnings-2024-05-28.parquet: the metadata lacks" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "warnings-2024-05-28.parquet: unreadable, warnings layer skipped" in err
+    assert "the metadata lacks" in err
     assert (two_days.storm_dir(EARLIER) / "warnings.geojson").exists()
+    assert (two_days.storm_dir(LATER) / "swath.geojson").exists()
     assert not (two_days.storm_dir(LATER) / "warnings.geojson").exists()

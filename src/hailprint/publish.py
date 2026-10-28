@@ -8,7 +8,7 @@ from functools import cache
 from importlib.metadata import version
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 import geopandas as gpd
 import numpy as np
@@ -24,6 +24,7 @@ from hailprint.files import FORBIDDEN_WORD, METADATA
 from hailprint.parcels import OWNER_FIELDS
 
 Doc = dict[str, Any]
+LayerKind = Literal["warnings", "power", "internet"]
 RECEIPT_KIND = "receipt"
 RUN_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 MESSAGE_CHARS = 200
@@ -631,6 +632,25 @@ def internet_source(path: Path) -> Doc:
     return swath_source(path)[0]
 
 
+def layer_doc(
+    kind: LayerKind, frame: pd.DataFrame, source: Doc, storm_date: date, run_time: datetime
+) -> Doc:
+    """The document of one optional layer, built from its frame and its source entry.
+
+    `source` is the output of `warnings_source`, `power_source`, or `internet_source`. The
+    `utilities` key of a power source goes to the document and not to the receipt.
+    `build_day` and the dry run of `__main__._impact_layer` both call this function, so they
+    cannot differ.
+    """
+    origin = {key: source[key] for key in ("source", "product", "file")}
+    rcpt = receipt(storm_date, [origin], run_time)
+    if kind == "warnings":
+        return warnings_doc(cast(gpd.GeoDataFrame, frame), rcpt)
+    if kind == "power":
+        return power_doc(frame, rcpt, source.get("utilities"))
+    return internet_doc(frame, rcpt)
+
+
 def spc_source(storm_date: date) -> Doc:
     """The source entry of the SPC daily CSV of one storm date."""
     return {
@@ -676,7 +696,7 @@ def build_day(
     hcad: Doc | None,
     facts: Doc | None,
     run_time: datetime,
-    warnings: tuple[gpd.GeoDataFrame, Doc] | None = None,
+    warnings: tuple[pd.DataFrame, Doc] | None = None,
     power: tuple[pd.DataFrame, Doc] | None = None,
     internet: tuple[pd.DataFrame, Doc] | None = None,
 ) -> tuple[dict[str, str], Doc]:
@@ -709,18 +729,17 @@ def build_day(
         documents[ZIPS_FILE] = ("zip-counts", zip_counts)
         parcel_total = zip_counts["classes"][0]["parcel_count"] if zip_counts["classes"] else 0
     if warnings is not None:
-        frame, iem = warnings
-        documents[WARNINGS_FILE] = ("warnings", warnings_doc(frame, stamp(iem)))
-    if power is not None:
-        outages, layer = power
-        origin = {key: layer[key] for key in ("source", "product", "file")}
-        documents[POWER_FILE] = (
-            "power",
-            power_doc(outages, stamp(origin), layer.get("utilities")),
+        documents[WARNINGS_FILE] = (
+            "warnings",
+            layer_doc("warnings", *warnings, storm_date, run_time),
         )
+    if power is not None:
+        documents[POWER_FILE] = ("power", layer_doc("power", *power, storm_date, run_time))
     if internet is not None:
-        reach, ioda = internet
-        documents[INTERNET_FILE] = ("internet", internet_doc(reach, stamp(ioda)))
+        documents[INTERNET_FILE] = (
+            "internet",
+            layer_doc("internet", *internet, storm_date, run_time),
+        )
     texts = {}
     for name, (kind, doc) in documents.items():
         validate(doc, kind)

@@ -1514,7 +1514,7 @@ def test_publish_removes_a_stale_power_json_when_the_power_file_is_gone(env):
     assert env.index()["storms"][0]["files"]["power"] is None
 
 
-def test_publish_exits_1_and_names_the_file_for_a_power_file_without_metadata(env, capsys):
+def test_publish_skips_the_power_layer_of_a_power_file_without_metadata(env, capsys):
     env.add_day(LATER)
     frame = pd.DataFrame(
         {"fips": [], "step_utc": pd.to_datetime([], utc=True), "customers_out": []}
@@ -1522,10 +1522,37 @@ def test_publish_exits_1_and_names_the_file_for_a_power_file_without_metadata(en
     env.power.mkdir(parents=True)
     frame.to_parquet(_power_file(env, LATER))
 
-    assert cli.main(["publish", "2024-05-28"]) == 1
+    assert cli.main(["publish", "2024-05-28"]) == 0
 
-    assert "power-2024-05-28.parquet" in capsys.readouterr().err
-    assert not env.storm_dir(LATER).exists()
+    err = capsys.readouterr().err
+    assert "power-2024-05-28.parquet" in err and "power layer skipped" in err
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert not (env.storm_dir(LATER) / publish.POWER_FILE).exists()
+    assert env.index()["storms"][0]["files"]["power"] is None
+
+
+@pytest.mark.parametrize("column", ["geometry", "eventid"])
+def test_publish_skips_the_warnings_layer_of_a_warnings_file_without_a_column(
+    env, iem, capsys, column
+):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    cli.main(["power", "2024-05-28"])
+    cli.main(["warnings", "2024-05-28"])
+    path = _warnings_file(env, LATER)
+    files.write_atomic(gpd.read_parquet(path).drop(columns=column), path, sbw.METADATA)
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    err = capsys.readouterr().err
+    assert "warnings-2024-05-28.parquet" in err and "warnings layer skipped" in err
+    folder = env.storm_dir(LATER)
+    published = sorted(p.name for p in folder.iterdir())
+    assert published == ["pairs.json", "power.json", "reports.geojson", "swath.geojson"]
+    files_entry = env.index()["storms"][0]["files"]
+    assert files_entry["warnings"] is None
+    assert files_entry["power"] == f"storms/{LATER}/{publish.POWER_FILE}"
 
 
 def test_publish_writes_warnings_geojson_from_the_warnings_file_and_removes_it_when_gone(env, iem):

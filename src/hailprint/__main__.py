@@ -600,28 +600,35 @@ def _pipeline_doc(
     )
 
 
-def _internet_layer(
-    path: Path, storm_date: date, run_time: datetime
-) -> tuple[pd.DataFrame, publish.Doc] | None:
-    """The internet frame and its source entry, or None for a missing, bad, or all-null file.
+_LAYER_SOURCE = {
+    "warnings": publish.warnings_source,
+    "power": publish.power_source,
+    "internet": publish.internet_source,
+}
 
-    A bad file is one that cannot be read, lacks the source metadata, or fails the document
-    build (a wrong column type, a county whose steps differ from the window, a ratio below 0).
-    A dry run of `internet_doc`, `validate`, and `dumps` runs here, so such a file skips only
-    the internet layer of its date.
+
+def _impact_layer(
+    kind: publish.LayerKind, path: Path, storm_date: date, run_time: datetime
+) -> tuple[pd.DataFrame, publish.Doc] | None:
+    """The frame and the source entry of one impact layer, or None for a missing or bad file.
+
+    An internet file without a ratio also gives None. A bad file is one that cannot be read,
+    lacks the source metadata, or fails the document build (a missing column, a wrong column
+    type, a county whose steps differ from the window). A dry run of `publish.layer_doc`,
+    `validate`, and `dumps` runs here, so such a file skips only the layer of its date.
     """
     if not path.exists():
         return None
     try:
-        frame = pd.read_parquet(path)
-        if not bool(frame["ratio"].notna().any()):
+        frame = (gpd.read_parquet if kind == "warnings" else pd.read_parquet)(path)
+        if kind == "internet" and not bool(frame["ratio"].notna().any()):
             return None
-        source = publish.internet_source(path)
-        doc = publish.internet_doc(frame, publish.receipt(storm_date, [source], run_time))
-        publish.validate(doc, "internet")
-        publish.dumps(doc, "internet")
-    except _UNREADABLE as exc:  # `internet <date>` rebuilds the file
-        print(f"{path.name}: unreadable, internet layer skipped: {exc!r}", file=sys.stderr)
+        source = _LAYER_SOURCE[kind](path)
+        doc = publish.layer_doc(kind, frame, source, storm_date, run_time)
+        publish.validate(doc, kind)
+        publish.dumps(doc, kind)
+    except _UNREADABLE as exc:  # the command of the layer rebuilds the file
+        print(f"{path.name}: unreadable, {kind} layer skipped: {exc!r}", file=sys.stderr)
         return None
     return frame, source
 
@@ -682,10 +689,6 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
         has_zips = zips_path.exists()
         spc = publish.spc_source(storm_date)
         hcad = publish.hcad_source(zips_path.name) if has_zips else None
-        warnings_path = WARNINGS_DIR / sbw.file_name(storm_date)
-        has_warnings = warnings_path.exists()
-        power_path = POWER_DIR / power.day_file_name(storm_date)
-        has_power = power_path.exists()
         try:
             mrms, max_mesh_mm = publish.swath_source(swath_path)
             texts, entry = publish.build_day(
@@ -699,18 +702,14 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
                 hcad=hcad,
                 facts=facts.get(storm_date.isoformat()),
                 run_time=run_time,
-                warnings=(
-                    (gpd.read_parquet(warnings_path), publish.warnings_source(warnings_path))
-                    if has_warnings
-                    else None
+                warnings=_impact_layer(
+                    "warnings", WARNINGS_DIR / sbw.file_name(storm_date), storm_date, run_time
                 ),
-                power=(
-                    (pd.read_parquet(power_path), publish.power_source(power_path))
-                    if has_power
-                    else None
+                power=_impact_layer(
+                    "power", POWER_DIR / power.day_file_name(storm_date), storm_date, run_time
                 ),
-                internet=_internet_layer(
-                    INTERNET_DIR / internet.file_name(storm_date), storm_date, run_time
+                internet=_impact_layer(
+                    "internet", INTERNET_DIR / internet.file_name(storm_date), storm_date, run_time
                 )
                 if with_internet
                 else None,
