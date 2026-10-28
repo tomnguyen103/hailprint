@@ -16,7 +16,18 @@ import pyarrow.parquet as pq
 import pytest
 
 from hailprint import __main__ as cli
-from hailprint import archive, candidates, files, odin, parcels, power, publish, sbw, swath
+from hailprint import (
+    archive,
+    candidates,
+    files,
+    internet,
+    odin,
+    parcels,
+    power,
+    publish,
+    sbw,
+    swath,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 GOLDEN = json.loads((FIXTURES / "score_golden.json").read_text(encoding="utf-8"))
@@ -42,6 +53,7 @@ class Env:
         self.eaglei = root / "eaglei"
         self.power = root / "power"
         self.odin = root / "odin"
+        self.internet = root / "internet"
         self.served: dict[date, object] = {}
 
     def add_day(self, storm_date: date, *, metadata: bool = True) -> Path:
@@ -103,6 +115,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "EAGLEI_DIR", env.eaglei)
     monkeypatch.setattr(cli, "POWER_DIR", env.power)
     monkeypatch.setattr(cli, "ODIN_DIR", env.odin)
+    monkeypatch.setattr(cli, "INTERNET_DIR", env.internet)
     monkeypatch.setattr(cli, "_utc_now", lambda: RUN_TIME)
     monkeypatch.setattr(archive, "INDEX_PATH", tmp_path / "index" / "mesh-archive.parquet")
     monkeypatch.setattr(candidates, "CANDIDATES_PATH", tmp_path / "candidate-days.csv")
@@ -1067,6 +1080,132 @@ def test_power_takes_storm_dates_or_missing_and_not_both_or_neither(env, argv):
         cli.main(argv)
 
     assert stop.value.code == 2
+
+
+def _internet_file(env, storm_date):
+    return env.internet / f"internet-{storm_date}.parquet"
+
+
+def _add_signal(ioda, storm_date, value=1000):
+    """Serve a steady Harris signal from 7 days before the window to its end."""
+    start, end = sbw.window(storm_date)
+    first = int(start.timestamp()) - internet.BASELINE_DAYS * 86400
+    ioda.add("48201", first, int(end.timestamp()), value)
+
+
+def test_internet_writes_one_parquet_per_date_with_the_ioda_metadata(env, ioda, capsys):
+    _add_signal(ioda, LATER)
+
+    assert cli.main(["internet", "2024-05-28"]) == 0
+
+    path = _internet_file(env, LATER)
+    day = pd.read_parquet(path)
+    assert list(day.columns) == ["fips", "step_utc", "value", "baseline", "ratio"]
+    assert day.loc[day["fips"] == "48201", "ratio"].eq(1.0).all()
+    metadata = pq.read_schema(path).metadata
+    assert (metadata[b"source"], metadata[b"product"]) == (b"ioda", b"ping-slash24")
+    assert capsys.readouterr().out == "2024-05-28: 192 of 1536 county steps have a ratio\n"
+    assert len(ioda.urls) == 8
+
+
+def test_internet_missing_makes_no_second_request_for_a_date_that_has_a_file(env, ioda):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+
+    assert cli.main(["internet", "--missing"]) == 0
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert len(ioda.urls) == 8
+    assert _internet_file(env, LATER).exists()
+
+
+def test_internet_keeps_a_file_with_no_ratio_and_missing_skips_it(env, ioda, capsys):
+    env.add_day(LATER)  # IODA holds no signal for the date
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert pd.read_parquet(_internet_file(env, LATER))["ratio"].isna().all()
+    assert capsys.readouterr().out == "2024-05-28: 0 of 1536 county steps have a ratio\n"
+    asked = len(ioda.urls)
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert len(ioda.urls) == asked
+    assert capsys.readouterr().out == ""
+
+
+def test_internet_missing_skips_a_date_whose_impact_window_is_not_closed(env, ioda):
+    env.add_day(LATER)
+    shutil.copy(
+        env.swaths / f"swaths-{LATER}.parquet", env.swaths / f"swaths-{OPEN_WINDOW}.parquet"
+    )
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    assert _internet_file(env, LATER).exists()
+    assert not _internet_file(env, OPEN_WINDOW).exists()
+
+
+def test_an_explicit_internet_rerun_writes_the_same_bytes(env, ioda):
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+    first = _internet_file(env, LATER).read_bytes()
+
+    cli.main(["internet", "2024-05-28"])
+
+    assert _internet_file(env, LATER).read_bytes() == first
+    assert list(env.internet.glob("*.tmp")) == []
+
+
+def test_internet_exits_1_with_one_line_and_no_file_when_ioda_times_out(env, ioda, capsys):
+    ioda.error = TimeoutError("timed out")
+
+    assert cli.main(["internet", "2024-05-28"]) == 1
+
+    assert len(ioda.urls) == 3  # one county, 3 tries, then the date fails
+    line, summary = capsys.readouterr().err.splitlines()
+    assert line.startswith("2024-05-28: IODA 48039") and "timed out" in line
+    assert summary == "internet failed for: 2024-05-28"
+    assert not env.internet.exists() or list(env.internet.iterdir()) == []
+
+
+def test_internet_exits_1_when_ioda_answers_5xx_three_times(env, ioda, capsys):
+    ioda.error = urllib.error.HTTPError("https://ioda", 503, "Service Unavailable", {}, None)
+
+    assert cli.main(["internet", "2024-05-28"]) == 1
+
+    assert "503" in capsys.readouterr().err
+    assert not env.internet.exists() or list(env.internet.iterdir()) == []
+
+
+def test_a_failed_internet_date_does_not_stop_the_later_date(env, ioda, monkeypatch, capsys):
+    _add_signal(ioda, LATER)
+    answer = urllib.request.urlopen  # the Ioda stub
+    earlier_from = int(sbw.window(EARLIER)[0].timestamp()) - internet.BASELINE_DAYS * 86400
+
+    def urlopen(url, timeout=None):
+        if f"from={earlier_from}&" in url:
+            raise TimeoutError("timed out")
+        return answer(url, timeout=timeout)
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+
+    assert cli.main(["internet", "2023-06-23", "2024-05-28"]) == 1
+
+    assert _internet_file(env, LATER).exists()
+    assert not _internet_file(env, EARLIER).exists()
+    captured = capsys.readouterr()
+    assert captured.out == "2024-05-28: 192 of 1536 county steps have a ratio\n"
+    assert captured.err.splitlines()[-1] == "internet failed for: 2023-06-23"
+
+
+@pytest.mark.parametrize("argv", [["internet"], ["internet", "--missing", "2024-05-28"]])
+def test_internet_takes_storm_dates_or_missing_and_not_both_or_neither(env, ioda, argv):
+    with pytest.raises(SystemExit) as stop:
+        cli.main(argv)
+
+    assert stop.value.code == 2
+    assert ioda.urls == []
 
 
 ODIN_LIVE = FIXTURES / "odin_grouped.json"

@@ -1,7 +1,7 @@
 """Command line entry for the hailprint commands.
 
 The commands are ``ingest``, ``index``, ``candidates``, ``parcels``, ``score``, ``warnings``,
-``eaglei``, ``power``, ``odin``, and ``publish``.
+``eaglei``, ``power``, ``odin``, ``internet``, and ``publish``.
 Run ``hailprint <command> --help`` for the arguments of one command.
 """
 
@@ -21,6 +21,7 @@ from hailprint import (
     candidates,
     county,
     files,
+    internet,
     mesh,
     odin,
     parcels,
@@ -44,6 +45,7 @@ WARNINGS_DIR = paths.DERIVED_DIR / "warnings"
 EAGLEI_DIR = paths.DERIVED_DIR / "eaglei"
 POWER_DIR = paths.DERIVED_DIR / "power"
 ODIN_DIR = paths.DERIVED_DIR / "odin"
+INTERNET_DIR = paths.DERIVED_DIR / "internet"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
 ODIN_LOCK_FILE = "odin.lock"
@@ -139,6 +141,18 @@ def build_parser() -> argparse.ArgumentParser:
     commands.add_parser(
         "odin", help="store one ODIN snapshot of the customers out of the metro counties"
     )
+    internet_cmd = commands.add_parser(
+        "internet",
+        help="store the IODA internet reachability of the metro counties per step of the window",
+    )
+    internet_cmd.add_argument(
+        "storm_dates", nargs="*", type=_storm_date, help="SPC convective day, YYYY-MM-DD"
+    )
+    internet_cmd.add_argument(
+        "--missing",
+        action="store_true",
+        help="fetch each swath date with a closed impact window and no internet file",
+    )
     publish_cmd = commands.add_parser(
         "publish", help="write the site data files and the storms index for storm dates"
     )
@@ -154,7 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command in ("warnings", "power") and bool(args.storm_dates) == args.missing:
+    if args.command in ("warnings", "power", "internet") and bool(args.storm_dates) == args.missing:
         parser.error(f"{args.command} takes storm dates or --missing, not both and not neither")
     try:
         if args.command == "ingest":
@@ -175,6 +189,8 @@ def main(argv: list[str] | None = None) -> int:
             power_days(args.storm_dates, args.missing)
         elif args.command == "odin":
             odin_snapshot()
+        elif args.command == "internet":
+            internet_days(args.storm_dates, args.missing)
         elif args.command == "publish":
             publish_days(args.storm_dates)
     except (RuntimeError, OSError, ValueError) as exc:
@@ -488,6 +504,45 @@ def odin_snapshot() -> Path:
             raise ValueError(f"{path}: not a readable ODIN day file: {exc}") from exc
         written = files.write_atomic(odin.merge(existing, fresh), path, odin.METADATA)
     print(f"{slot:%Y-%m-%d %H:%M} UTC: {len(fresh)} rows")
+    return written
+
+
+def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
+    """One internet file per storm date from the IODA county signals of the impact window.
+
+    With `missing`, the dates are the swath dates whose window has closed and that have no
+    internet file. A file with no ratio at all stays, so a date with no IODA signal costs no
+    request on a later run. A failed date writes no file and does not stop the other dates. The
+    run prints one line per failed date, then exits 1. The next `--missing` run starts again with
+    the failed dates.
+    """
+    # shortcut: an explicit date runs for an open window too and writes a file with null future
+    # steps that `--missing` then skips; add a closed-window check when explicit reruns of
+    # recent days become routine.
+    if missing:
+        now = _utc_now()
+        storm_dates = [
+            d
+            for d, _ in _swath_files([])
+            if sbw.window(d)[1] <= now and not (INTERNET_DIR / internet.file_name(d)).exists()
+        ]
+    written = []
+    failed = []
+    for storm_date in storm_dates:
+        try:
+            frame = internet.build(storm_date)
+            written.append(
+                files.write_atomic(
+                    frame, INTERNET_DIR / internet.file_name(storm_date), internet.METADATA
+                )
+            )
+        except (RuntimeError, ValueError, OSError) as exc:
+            print(f"{storm_date}: {exc}", file=sys.stderr)
+            failed.append(storm_date.isoformat())
+            continue
+        print(f"{storm_date}: {frame['ratio'].count()} of {len(frame)} county steps have a ratio")
+    if failed:
+        raise ValueError(f"internet failed for: {', '.join(failed)}")
     return written
 
 
