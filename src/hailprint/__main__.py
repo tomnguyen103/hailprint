@@ -16,6 +16,7 @@ import geopandas as gpd
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+import pyproj.exceptions
 import shapely.errors
 
 from hailprint import (
@@ -54,6 +55,7 @@ ODIN_LOCK_FILE = "odin.lock"
 # What a derived Parquet that cannot serve its layer raises: a bad file, a missing column or
 # metadata key, a column of the wrong type (`ArrowTypeError` is a TypeError; `.dt` raises an
 # AttributeError). A geometry column with invalid WKB raises a GEOSException, a ShapelyError.
+# A `crs` entry that pyproj cannot parse raises a CRSError, a ProjError (and a RuntimeError).
 _UNREADABLE = (
     OSError,
     ValueError,
@@ -62,6 +64,7 @@ _UNREADABLE = (
     AttributeError,
     pa.ArrowException,
     shapely.errors.ShapelyError,
+    pyproj.exceptions.ProjError,
 )
 
 

@@ -20,6 +20,7 @@ Plan section 16 listed six decisions. Tom approved the plan on 2026-10-24 and ad
 | 14 | Internet layer | Publish IODA-derived ratios only after IODA answers in writing. Until then `publish` writes no `internet.json` unless the run passes `--with-internet`. The nightly script passes the flag only when `.env` sets `PUBLISH_INTERNET=1` | IODA reply: remove the flag gate and the `.env` opt-in |
 | 15 | ODIN terms | Publish ODIN county totals with attribution to ORNL. ODIN states no licence, so the owner asks ORNL in writing | ORNL reply |
 | 16 | Share out cap | The share out is `min(1, customers_out / MCC)` in `power.share_out` and in the site `shareOut`. The MCC constants equal ORNL `MCC.csv`, and the EAGLE-I count passes them on 2024-07-08 (Waller 31,398 of 18,532). The inspector keeps the raw counts. This replaces the V5 plan rule that the site clamps the colour and not the number | A per-county denominator that tracks the utility service area |
+| 17 | Skipped impact layer | A bad warnings, power, or internet file skips that layer of its date. This includes a file that `publish.dumps` refuses in the dry run. `publish` prints one stderr line and exits 0, because `nightly.sh` runs under `set -euo pipefail`. A bad required file (swath, SPC CSV, ZIP counts) fails only its date and exits 1. A skipped layer leaves no layer file of that date, and the index lists it as null. This replaces the earlier rule that one bad layer file stopped the run | A run summary that counts the skipped layers in `pipeline.json` |
 
 ## Standing constraints
 

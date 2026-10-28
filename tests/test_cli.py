@@ -1605,6 +1605,26 @@ def test_publish_skips_the_warnings_layer_of_a_warnings_file_with_an_invalid_geo
     assert env.index()["storms"][0]["files"]["warnings"] is None
 
 
+def test_publish_skips_the_warnings_layer_of_a_warnings_file_with_an_invalid_crs(env, iem, capsys):
+    env.add_day(LATER)
+    cli.main(["warnings", "2024-05-28"])
+    path = _warnings_file(env, LATER)
+    table = pq.read_table(path)
+    metadata = dict(table.schema.metadata)
+    geo = json.loads(metadata[b"geo"])
+    geo["columns"]["geometry"]["crs"] = {"type": "not a crs"}
+    metadata[b"geo"] = json.dumps(geo).encode()
+    pq.write_table(table.replace_schema_metadata(metadata), path)
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    err = capsys.readouterr().err
+    assert "warnings-2024-05-28.parquet" in err and "warnings layer skipped" in err
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert env.index()["storms"][0]["files"]["warnings"] is None
+
+
 def test_publish_fails_only_the_date_of_a_swath_file_it_cannot_read(env, capsys):
     env.add_day(LATER)
     broken = env.add_day(EARLIER)

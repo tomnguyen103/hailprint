@@ -636,7 +636,7 @@ def internet_source(path: Path) -> Doc:
 def layer_doc(
     kind: LayerKind, frame: pd.DataFrame, source: Doc, storm_date: date, run_time: datetime
 ) -> Doc:
-    """The document of one optional layer, built from its frame and its source entry.
+    """The document of one impact layer, built from its frame and its source entry.
 
     `source` is the output of `warnings_source`, `power_source`, or `internet_source`. The
     `utilities` key of a power source goes to the document and not to the receipt.
