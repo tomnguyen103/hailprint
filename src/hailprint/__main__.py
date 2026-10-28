@@ -512,14 +512,26 @@ def odin_snapshot() -> Path:
     return written
 
 
+def _internet_settled(storm_date: date, now: datetime) -> bool:
+    """True when the internet file holds a ratio, or holds none for a date older than FRESH_DAYS."""
+    path = INTERNET_DIR / internet.file_name(storm_date)
+    if not path.exists():
+        return False
+    # a gap is never zero: an all-null file of a fresh date may be a late IODA feed
+    return (
+        bool(pd.read_parquet(path, columns=["ratio"])["ratio"].notna().any())
+        or (now.date() - storm_date).days > candidates.FRESH_DAYS
+    )
+
+
 def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     """One internet file per storm date from the IODA county signals of the impact window.
 
     With `missing`, the dates are the swath dates whose window has closed and that have no
-    internet file. A file with no ratio at all stays, so a date with no IODA signal costs no
-    request on a later run. A failed date writes no file and does not stop the other dates. The
-    run prints one line per failed date, then exits 1. The next `--missing` run starts again with
-    the failed dates.
+    settled internet file. A file with no ratio at all settles only after `candidates.FRESH_DAYS`,
+    so a date with no IODA signal costs no request on a later run once it is old. A failed date
+    writes no file and does not stop the other dates. The run prints one line per failed date,
+    then exits 1. The next `--missing` run starts again with the failed dates.
     """
     # shortcut: an explicit date runs for an open window too and writes a file with null future
     # steps that `--missing` then skips; add a closed-window check when explicit reruns of
@@ -529,7 +541,7 @@ def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
         storm_dates = [
             d
             for d, _ in _swath_files([])
-            if sbw.window(d)[1] <= now and not (INTERNET_DIR / internet.file_name(d)).exists()
+            if sbw.window(d)[1] <= now and not _internet_settled(d, now)
         ]
     written = []
     failed = []
@@ -605,6 +617,17 @@ def publish_days(storm_dates: list[date], with_internet: bool = False) -> list[P
     # shortcut: internet publish gated by --with-internet, remove the gate when IODA replies
     with files.lock(SITE_DATA_DIR / LOCK_FILE):
         return _publish_days(storm_dates, with_internet)
+
+
+def _remove_internet_files() -> None:
+    """Remove every published internet.json, also of a date this run does not publish.
+
+    `merge_entries` then clears the index path of each removed file.
+    """
+    pattern = f"*/{publish.INTERNET_FILE}"
+    for path in sorted((SITE_DATA_DIR / publish.STORMS_DIR).glob(pattern)):
+        path.unlink()
+        print(f"{path.parent.name}: removed {path.name}, this run has no --with-internet")
 
 
 def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
@@ -688,6 +711,8 @@ def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
         raise RuntimeError(
             "no storm date was published" + (f"; failed: {', '.join(failed)}" if failed else "")
         )
+    if not with_internet:
+        _remove_internet_files()
     merged = publish.merge_entries(old, entries, SITE_DATA_DIR)
     receipts = publish.index_receipts(merged, SITE_DATA_DIR)
     doc = publish.storms_doc(merged, run_time)

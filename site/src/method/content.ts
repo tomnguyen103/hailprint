@@ -182,7 +182,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
       },
       {
         kind: "prose",
-        text: "IODA has a county signal from 2022-03 to 2024-05 only. Other storm dates show No county signal.",
+        text: "IODA has a county signal from 2022-03 to 2024-05 only. Other storm dates have no internet file, and the strip says so.",
       },
       {
         kind: "prose",

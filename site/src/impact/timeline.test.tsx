@@ -507,12 +507,14 @@ describe("the internet strip", () => {
     expect(textOf(netStrip(tree)[0])).toContain("no data");
   });
 
-  it("says No county signal for a date with no file or a failed file, and draws no row while the file loads", () => {
+  it("shows the note, not No county signal, for a date with no file or a failed file, and draws no row while the file loads", () => {
     for (const internetNote of ["No internet file for this storm date.", "Internet reachability off. internet.json: HTTP 500"]) {
       const { tree } = chart({ internet: null, internetNote });
       expect(netStrip(tree)).toHaveLength(1);
       expect(netLines(tree)).toHaveLength(0);
-      expect(findAll(tree, withClass("timeline-empty")).map(textOf)).toContain("No county signal");
+      const lines = findAll(tree, withClass("timeline-empty")).map(textOf);
+      expect(lines).toContain(internetNote);
+      expect(lines).not.toContain("No county signal");
     }
     const loading = chart({ internet: null, internetNote: null }).tree;
     expect(netStrip(loading)).toHaveLength(0);
@@ -559,6 +561,16 @@ describe("the internet series", () => {
   it("reports no low step at or above the baseline and widens the top for a ratio above it", () => {
     expect(internetSeries(internet(), HARRIS_FIPS)).toMatchObject({ low: 1, lowStep: null, top: 1 });
     expect(internetSeries(internet(series({ 5: 1.25 }, 1)), HARRIS_FIPS)).toMatchObject({ low: 1, lowStep: null, top: 1.25 });
+  });
+
+  it("keeps the baseline inside the row when every ratio is above it", () => {
+    const above = internetSeries(internet(series({ 5: 1.25, 6: 1.1 }, 1.05)), HARRIS_FIPS)!;
+    expect(above.low).toBe(1.05);
+    expect(above.bottom).toBe(1);
+    expect(above.top).toBe(1.25);
+    const tree = chart({ internet: internet(series({ 5: 1.25, 6: 1.1 }, 1.05)) }).tree;
+    const base = findAll(tree, withClass("timeline-net-base"))[0]!;
+    expect(Number(base.props["y1"])).toBeLessThanOrEqual(36);
   });
 
   it("holds a 10% span for a drop smaller than that", () => {

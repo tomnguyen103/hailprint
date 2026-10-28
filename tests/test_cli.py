@@ -9,6 +9,7 @@ import urllib.request
 from contextlib import contextmanager
 from datetime import UTC, date, datetime
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import geopandas as gpd
 import pandas as pd
@@ -1134,6 +1135,21 @@ def test_internet_keeps_a_file_with_no_ratio_and_missing_skips_it(env, ioda, cap
     assert capsys.readouterr().out == ""
 
 
+def test_internet_missing_asks_again_for_an_all_null_file_only_while_the_date_is_fresh(env, ioda):
+    fresh = date(2024, 5, 30)  # window closed at RUN_TIME, 2 days old: inside FRESH_DAYS
+    env.add_day(LATER)  # 4 days old: past FRESH_DAYS
+    shutil.copy(env.swaths / f"swaths-{LATER}.parquet", env.swaths / f"swaths-{fresh}.parquet")
+    for storm_date in (LATER, fresh):
+        files.write_atomic(
+            internet.derive(storm_date, {}), _internet_file(env, storm_date), internet.METADATA
+        )
+
+    assert cli.main(["internet", "--missing"]) == 0
+
+    asked = {parse_qs(urlsplit(u).query)["from"][0] for u in ioda.urls}
+    assert asked == {str(int(sbw.window(fresh)[0].timestamp()) - internet.BASELINE_DAYS * 86400)}
+
+
 def test_internet_missing_skips_a_date_whose_impact_window_is_not_closed(env, ioda):
     env.add_day(LATER)
     shutil.copy(
@@ -1574,3 +1590,24 @@ def test_publish_without_the_flag_removes_a_stale_internet_json(env, ioda):
 
     assert not (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
     assert env.index()["storms"][0]["files"]["internet"] is None
+
+
+def test_publish_without_the_flag_removes_the_internet_json_of_a_date_it_does_not_publish(
+    env, ioda, capsys
+):
+    for storm_date in (LATER, EARLIER):
+        env.add_day(storm_date)
+        _add_signal(ioda, storm_date)
+        cli.main(["internet", str(storm_date)])
+    cli.main(["publish", "--with-internet"])
+    assert (env.storm_dir(EARLIER) / publish.INTERNET_FILE).exists()
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    assert f"{EARLIER}: removed internet.json" in capsys.readouterr().out
+    assert not (env.storm_dir(EARLIER) / publish.INTERNET_FILE).exists()
+    assert {e["storm_date"]: e["files"]["internet"] for e in env.index()["storms"]} == {
+        str(LATER): None,
+        str(EARLIER): None,
+    }

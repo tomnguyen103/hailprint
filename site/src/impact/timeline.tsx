@@ -145,7 +145,7 @@ export interface InternetSeries {
   /** The first step of the lowest ratio; null when no step is below baseline. */
   lowStep: number | null;
   gapSteps: number;
-  /** The ratios at the top and the bottom of the row: baseline (1) or the highest ratio, down to the lowest ratio or a 10% span. */
+  /** The ratios at the top and the bottom of the row. The baseline (1) always sits inside: top is 1 or the highest ratio, bottom is 1 or the lowest ratio, held a 10% span below top. */
   top: number;
   bottom: number;
 }
@@ -165,7 +165,7 @@ export function internetSeries(file: InternetFile | null, fips: string): Interne
     lowStep,
     gapSteps: county.ratio.length - values.length,
     top,
-    bottom: Math.max(0, Math.min(low ?? 1, top - NET_SPAN_FLOOR)),
+    bottom: Math.max(0, Math.min(low ?? 1, 1, top - NET_SPAN_FLOOR)),
   };
 }
 
@@ -399,7 +399,7 @@ export function Timeline({ date, step, warnings, note, reports, power, internet,
           ) : null}
           {withInternet && (net === null || net.low === null) ? (
             <p class="timeline-empty" style={netEmptyStyle}>
-              {NO_SIGNAL}
+              {net === null ? internetNote : NO_SIGNAL}
             </p>
           ) : null}
           <div class="timeline-axis mono" aria-hidden="true">

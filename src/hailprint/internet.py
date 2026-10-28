@@ -44,12 +44,12 @@ def url(fips: str, first: int, last: int) -> str:
 
 
 def _count(value: object) -> bool:
-    return (
-        isinstance(value, (int, float))
-        and not isinstance(value, bool)
-        and math.isfinite(value)
-        and value >= 0
-    )
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value) and value >= 0
+    except OverflowError:  # an int too large for a float
+        return False
 
 
 def parse(body: bytes) -> dict[int, float]:
@@ -73,7 +73,12 @@ def parse(body: bytes) -> dict[int, float]:
         first, step, values = series[0]["from"], series[0]["step"], series[0]["values"]
     except (TypeError, KeyError) as exc:
         raise ValueError("IODA: the signal has no from, step, or values") from exc
-    if not isinstance(first, int) or step != SIGNAL_STEP_S or not isinstance(values, list):
+    if (
+        not isinstance(first, int)
+        or isinstance(first, bool)
+        or step != SIGNAL_STEP_S
+        or not isinstance(values, list)
+    ):
         raise ValueError(f"IODA: the signal does not step {SIGNAL_STEP_S} s from a whole epoch")
     points: dict[int, float] = {}
     for n, value in enumerate(values):
