@@ -10,7 +10,7 @@ An open hail-exposure map for Harris County that grades itself against NOAA stor
 
 </div>
 
-Hailprint draws the MRMS MESH hail swath for each storm date over Harris County, Texas. It counts the HCAD parcels inside each size class and scores the swath against SPC hail reports at every whole-km radius. Every value on the site is a radar-estimated hail size with a confidence band: the published skill ceiling is an HSS of about 0.38 at 30 mm.
+Hailprint draws the MRMS MESH hail swath for each storm date over Harris County, Texas. It counts the HCAD parcels inside each size class and scores the swath against SPC hail reports at every whole-km radius. Every hail size on the site is a radar-estimated hail size with a confidence band: the published skill ceiling is an HSS of about 0.38 at 30 mm. The impact layers (warnings, power, internet) show their own sources and make no claim about a cause.
 
 Site: https://hailprint.tomnguyen.me
 
