@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { afterEach, describe, expect, it } from "vitest";
-import { setFetch } from "./data/fetch";
-import { HARRIS_BBOX, METRO_BBOX, PAD_DEG, contains, fetchCounties, fetchCounty } from "./county";
+import { setFetch, type Fetch } from "./data/fetch";
+import { HARRIS_BBOX, METRO_BBOX, PAD_DEG, contains, fetchCounties, fetchCounty, resetCounties } from "./county";
 
 const FILE = fileURLToPath(new URL("../public/counties.geojson", import.meta.url));
 const text = readFileSync(FILE, "utf8");
@@ -14,7 +14,10 @@ const harris = counties.features.filter((f) => f.properties?.["fips"] === "48201
 const corners = (features: typeof counties.features): Corner[] =>
   features.flatMap((f) => f.geometry.coordinates.flat(2)) as Corner[];
 
-afterEach(() => setFetch(null));
+afterEach(() => {
+  setFetch(null);
+  resetCounties();
+});
 
 describe("counties.geojson", () => {
   it("holds the 8 metro counties", () => {
@@ -79,5 +82,68 @@ describe("fetchCounties and fetchCounty", () => {
     const result = await fetchCounty();
     expect(result.features).toHaveLength(1);
     expect(result.features[0]?.properties?.["fips"]).toBe("48201");
+  });
+
+  function counted(respond: () => Response = () => new Response(text, { status: 200 })) {
+    let calls = 0;
+    const fetcher: Fetch = async () => {
+      calls += 1;
+      return respond();
+    };
+    return { fetcher, calls: () => calls };
+  }
+
+  it("makes one request for two fetchCounties calls and gives both the same outline", async () => {
+    const { fetcher, calls } = counted();
+    setFetch(fetcher);
+    const first = await fetchCounties();
+    const second = await fetchCounties();
+    expect(calls()).toBe(1);
+    expect(second).toBe(first);
+  });
+
+  it("makes no second request when fetchCounty follows fetchCounties", async () => {
+    const { fetcher, calls } = counted();
+    setFetch(fetcher);
+    await fetchCounties();
+    const result = await fetchCounty();
+    expect(calls()).toBe(1);
+    expect(result.features.map((f) => f.properties?.["fips"])).toEqual(["48201"]);
+  });
+
+  it("does not cache a rejection, so the next call fetches again", async () => {
+    const failing = counted(() => new Response("", { status: 500 }));
+    setFetch(failing.fetcher);
+    await expect(fetchCounties()).rejects.toThrow("counties.geojson: HTTP 500");
+    const working = counted();
+    setFetch(working.fetcher);
+    expect((await fetchCounties()).features).toHaveLength(8);
+    expect(failing.calls()).toBe(1);
+    expect(working.calls()).toBe(1);
+  });
+
+  it("shares one promise between two calls that start before the first resolves", async () => {
+    const { fetcher, calls } = counted();
+    setFetch(fetcher);
+    const first = fetchCounties();
+    const second = fetchCounties();
+    expect(second).toBe(first);
+    await Promise.all([first, second]);
+    expect(calls()).toBe(1);
+  });
+
+  it("keeps a newer promise when an older request fails late", async () => {
+    let failOld: (error: Error) => void = () => {};
+    setFetch(() => new Promise<Response>((_, reject) => (failOld = reject)));
+    const old = fetchCounties();
+    resetCounties();
+    const { fetcher, calls } = counted();
+    setFetch(fetcher);
+    const fresh = fetchCounties();
+    failOld(new Error("late"));
+    await expect(old).rejects.toThrow("late");
+    expect(fetchCounties()).toBe(fresh);
+    await fresh;
+    expect(calls()).toBe(1);
   });
 });
