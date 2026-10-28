@@ -14,17 +14,12 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
-import pyproj.exceptions
-import shapely.errors
 
 from hailprint import (
     archive,
     candidates,
     county,
     files,
-    impact,
     internet,
     mesh,
     odin,
@@ -32,8 +27,9 @@ from hailprint import (
     paths,
     plot,
     power,
-    publish,
+    publish_run,
     reports,
+    runs,
     sbw,
     score,
     swath,
@@ -53,20 +49,6 @@ INTERNET_DIR = paths.DERIVED_DIR / "internet"
 SITE_DATA_DIR = paths.SITE_DATA_DIR
 LOCK_FILE = "publish.lock"
 ODIN_LOCK_FILE = "odin.lock"
-# What a derived Parquet that cannot serve its layer raises: a bad file, a missing column or
-# metadata key, a column of the wrong type (`ArrowTypeError` is a TypeError; `.dt` raises an
-# AttributeError). A geometry column with invalid WKB raises a GEOSException, a ShapelyError.
-# A `crs` entry that pyproj cannot parse raises a CRSError, a ProjError (and a RuntimeError).
-_UNREADABLE = (
-    OSError,
-    ValueError,
-    KeyError,
-    TypeError,
-    AttributeError,
-    pa.ArrowException,
-    shapely.errors.ShapelyError,
-    pyproj.exceptions.ProjError,
-)
 
 
 def _storm_date(text: str) -> date:
@@ -373,29 +355,6 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def _rows(path: Path) -> int | None:
-    """The row count of a Parquet file, or None when the file is unreadable."""
-    try:
-        return pq.read_metadata(path).num_rows
-    except _UNREADABLE:
-        return None
-
-
-def _warnings_settled(storm_date: date, now: datetime) -> bool:
-    """True when the warnings file holds a row, or holds none for a date older than FRESH_DAYS.
-
-    An unreadable file is not settled: the date is fetched again and the file is rewritten.
-    """
-    path = WARNINGS_DIR / sbw.file_name(storm_date)
-    if not path.exists():
-        return False
-    rows = _rows(path)
-    if rows is None:
-        return False
-    # a gap is never zero: an empty file of a fresh date may be a late IEM feed
-    return rows > 0 or (now.date() - storm_date).days > candidates.FRESH_DAYS
-
-
 def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     """One warnings file per storm date from the IEM feed of the impact window.
 
@@ -404,31 +363,26 @@ def warn_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     A failed date does not stop the other dates. The run prints one line per failed date,
     then exits 1. The next `--missing` run starts again with the failed dates.
     """
-    # shortcut: an explicit date runs for an open window too and writes a partial file that
-    # `--missing` then skips; add a closed-window check when explicit reruns of recent days
-    # become routine.
     if missing:
         now = _utc_now()
         storm_dates = [
             d
             for d, _ in _swath_files([])
-            if impact.window(d)[1] <= now and not _warnings_settled(d, now)
+            if runs.window_closed(d, now) and not runs.warnings_settled(WARNINGS_DIR, d, now)
         ]
     written = []
-    failed = []
-    for storm_date in storm_dates:
-        try:
-            frame = sbw.parse(sbw.fetch(storm_date), storm_date)
-            written.append(
-                files.write_atomic(frame, WARNINGS_DIR / sbw.file_name(storm_date), sbw.METADATA)
-            )
-        except (RuntimeError, ValueError) as exc:
-            print(f"{storm_date}: {exc}", file=sys.stderr)
-            failed.append(storm_date.isoformat())
-            continue
+
+    def build(storm_date: date) -> bool:
+        frame = sbw.parse(sbw.fetch(storm_date), storm_date)
+        written.append(
+            files.write_atomic(frame, WARNINGS_DIR / sbw.file_name(storm_date), sbw.METADATA)
+        )
         print(f"{storm_date}: {len(frame)} warnings")
-    if failed:
-        raise ValueError(f"warnings failed for: {', '.join(failed)}")
+        return True
+
+    tally = runs.run_dates(storm_dates, build, errors=(RuntimeError, ValueError))
+    if tally.failed:
+        raise ValueError(f"warnings failed for: {', '.join(d.isoformat() for d in tally.failed)}")
     return written
 
 
@@ -456,69 +410,50 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     with exit 1. A failed date does not stop the other dates. The run prints one line per failed
     date, then exits 1.
     """
-    # shortcut: an EAGLE-I year file counts as covering its year, upgrade to a check of the last
-    # row time if a partial year file is ever ingested
-    # shortcut: an explicit date runs for an open window too and writes a file with null future
-    # steps that `--missing` then skips; add a closed-window check when explicit reruns of
-    # recent days become routine.
     if missing:
         now = _utc_now()
         storm_dates = [
-            d for d, _ in _swath_files([]) if impact.window(d)[1] <= now and _needs_power(d)
+            d
+            for d, _ in _swath_files([])
+            if runs.window_closed(d, now) and runs.needs_power(d, POWER_DIR, EAGLEI_DIR)
         ]
     written = []
-    failed = []
-    skipped = 0
-    for storm_date in storm_dates:
-        try:
-            built = power.build(storm_date, EAGLEI_DIR, ODIN_DIR)
-            if built is not None:
-                frame, metadata = built
-                path = POWER_DIR / power.day_file_name(storm_date)
-                written.append(files.write_atomic(frame, path, metadata))
-        except (RuntimeError, ValueError, OSError) as exc:
-            print(f"{storm_date}: {exc}", file=sys.stderr)
-            failed.append(storm_date.isoformat())
-            continue
+
+    def build(storm_date: date) -> bool:
+        built = power.build(storm_date, EAGLEI_DIR, ODIN_DIR)
         if built is None:
-            if not missing:
-                absent = [
-                    str(year)
-                    for year in power.years_of(storm_date)
-                    if not (EAGLEI_DIR / power.file_name(year)).exists()
-                ]
-                raise ValueError(
-                    f"{storm_date}: no EAGLE-I file for {' and '.join(absent)} and no ODIN "
-                    f"snapshot in the window, run hailprint eaglei {' '.join(absent)} first"
-                )
-            skipped += 1
-            continue
-        frame, _ = built
+            if missing:
+                return False
+            absent = [
+                str(year)
+                for year in power.years_of(storm_date)
+                if not (EAGLEI_DIR / power.file_name(year)).exists()
+            ]
+            raise runs.NoSource(
+                f"{storm_date}: no EAGLE-I file for {' and '.join(absent)} and no ODIN "
+                f"snapshot in the window, run hailprint eaglei {' '.join(absent)} first"
+            )
+        frame, metadata = built
+        written.append(
+            files.write_atomic(frame, POWER_DIR / power.day_file_name(storm_date), metadata)
+        )
         known = frame["customers_out"].count()
         print(f"{storm_date}: {known} of {len(frame)} county steps have a row")
+        return True
+
+    try:
+        tally = runs.run_dates(storm_dates, build, errors=(RuntimeError, ValueError, OSError))
+    except runs.NoSource as exc:
+        raise ValueError(str(exc)) from None
+    skipped = len(tally.skipped)
     if skipped:
         print(
             f"{skipped} date{'s' if skipped > 1 else ''} skipped "
             "without an EAGLE-I file or an ODIN snapshot"
         )
-    if failed:
-        raise ValueError(f"power failed for: {', '.join(failed)}")
+    if tally.failed:
+        raise ValueError(f"power failed for: {', '.join(d.isoformat() for d in tally.failed)}")
     return written
-
-
-def _needs_power(storm_date: date) -> bool:
-    """True when the date has no power file, or has an ODIN file that EAGLE-I now replaces."""
-    path = POWER_DIR / power.day_file_name(storm_date)
-    if not path.exists():
-        return True
-    try:
-        source = power.file_source(path)
-    except _UNREADABLE:
-        return True  # an unreadable file is rebuilt
-    if source is None:
-        return True  # a file with no source metadata is rebuilt
-    covered = all((EAGLEI_DIR / power.file_name(y)).exists() for y in power.years_of(storm_date))
-    return covered and source == odin.METADATA["source"]
 
 
 def odin_snapshot() -> Path:
@@ -541,19 +476,6 @@ def odin_snapshot() -> Path:
     return written
 
 
-def _internet_settled(storm_date: date, now: datetime) -> bool:
-    """True when the internet file holds a ratio, or holds none for a date older than FRESH_DAYS."""
-    path = INTERNET_DIR / internet.file_name(storm_date)
-    if not path.exists():
-        return False
-    try:
-        has_ratio = bool(pd.read_parquet(path, columns=["ratio"])["ratio"].notna().any())
-    except _UNREADABLE:  # an unreadable file is fetched again and rewritten
-        return False
-    # a gap is never zero: an all-null file of a fresh date may be a late IODA feed
-    return has_ratio or (now.date() - storm_date).days > candidates.FRESH_DAYS
-
-
 def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     """One internet file per storm date from the IODA county signals of the impact window.
 
@@ -563,233 +485,41 @@ def internet_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     writes no file and does not stop the other dates. The run prints one line per failed date,
     then exits 1. The next `--missing` run starts again with the failed dates.
     """
-    # shortcut: an explicit date runs for an open window too and writes a file with null future
-    # steps that `--missing` then skips; add a closed-window check when explicit reruns of
-    # recent days become routine.
     if missing:
         now = _utc_now()
         storm_dates = [
             d
             for d, _ in _swath_files([])
-            if impact.window(d)[1] <= now and not _internet_settled(d, now)
+            if runs.window_closed(d, now) and not runs.internet_settled(INTERNET_DIR, d, now)
         ]
     written = []
-    failed = []
-    for storm_date in storm_dates:
-        try:
-            frame = internet.build(storm_date)
-            written.append(
-                files.write_atomic(
-                    frame, INTERNET_DIR / internet.file_name(storm_date), internet.METADATA
-                )
+
+    def build(storm_date: date) -> bool:
+        frame = internet.build(storm_date)
+        written.append(
+            files.write_atomic(
+                frame, INTERNET_DIR / internet.file_name(storm_date), internet.METADATA
             )
-        except (RuntimeError, ValueError, OSError) as exc:
-            print(f"{storm_date}: {exc}", file=sys.stderr)
-            failed.append(storm_date.isoformat())
-            continue
+        )
         print(f"{storm_date}: {frame['ratio'].count()} of {len(frame)} county steps have a ratio")
-    if failed:
-        raise ValueError(f"internet failed for: {', '.join(failed)}")
+        return True
+
+    tally = runs.run_dates(storm_dates, build, errors=(RuntimeError, ValueError, OSError))
+    if tally.failed:
+        raise ValueError(f"internet failed for: {', '.join(d.isoformat() for d in tally.failed)}")
     return written
-
-
-def _archive_summary() -> dict | None:
-    """The archive coverage from the archive index, or None without an index."""
-    if not archive.INDEX_PATH.exists():
-        return None
-    try:
-        return publish.archive_summary(pd.read_parquet(archive.INDEX_PATH))
-    except (OSError, ValueError, KeyError) as exc:
-        raise ValueError(
-            f"{archive.INDEX_PATH}: not a readable archive index, run hailprint index again"
-        ) from exc
-
-
-def _pipeline_doc(
-    old_runs: list[dict],
-    storm_dates: list[str],
-    receipts: list[dict],
-    summary: dict | None,
-    file_count: int,
-    run_time: datetime,
-) -> dict:
-    """Build the pipeline document: this run, the archive coverage, the sources.
-
-    `storm_dates` are the dates of this run. `receipts` are the pairs and ZIP count receipts of
-    every published storm date, so the sources cover the whole index and not this run alone.
-    """
-    run = publish.run_entry(storm_dates, file_count, run_time)
-    return publish.pipeline_doc(
-        publish.merge_runs(old_runs, run), summary, publish.sources_of(receipts), run_time
-    )
-
-
-_LAYER_SOURCE = {
-    "warnings": publish.warnings_source,
-    "power": publish.power_source,
-    "internet": publish.internet_source,
-}
-
-
-def _impact_layer(
-    kind: publish.LayerKind, path: Path, storm_date: date, run_time: datetime
-) -> tuple[pd.DataFrame, publish.Doc] | None:
-    """The frame and the source entry of one impact layer, or None for a missing or bad file.
-
-    An internet file without a ratio also gives None. A bad file is one that cannot be read,
-    lacks the source metadata, or fails the document build (a missing column, a wrong column
-    type, a county whose steps differ from the window). A dry run of `publish.layer_doc`,
-    `validate`, and `dumps` runs here, so such a file skips only the layer of its date.
-    """
-    if not path.exists():
-        return None
-    try:
-        frame = (gpd.read_parquet if kind == "warnings" else pd.read_parquet)(path)
-        if kind == "internet" and not bool(frame["ratio"].notna().any()):
-            return None
-        source = _LAYER_SOURCE[kind](path)
-        doc = publish.layer_doc(kind, frame, source, storm_date, run_time)
-        publish.validate(doc, kind)
-        publish.dumps(doc, kind)
-    except _UNREADABLE as exc:  # an explicit `<kind> <date>` run rebuilds the file
-        print(f"{path.name}: unreadable, {kind} layer skipped: {exc!r}", file=sys.stderr)
-        return None
-    return frame, source
 
 
 def publish_days(storm_dates: list[date], with_internet: bool = False) -> list[Path]:
     """Write the site data files per storm date, then the storms index, then the pipeline file.
 
-    One run at a time: a second run that finds the lock file stops with exit 1. A date without
-    an SPC daily CSV is skipped. A date that fails a check writes no file and is named in the
-    final error. A bad warnings, power, or internet file skips that layer of its date and fails
-    nothing.
-    The index holds the dates of this run over the entries of the earlier runs.
-    A malformed storms.json, pipeline.json, or archive index stops the run before any write. A
-    malformed per-date file of an earlier run, or a pipeline document that fails its schema,
-    stops the run before the index write. Without `with_internet` no date gets an internet.json
-    and a stale one is removed. The run removes every stale file after the index write, so a run
-    that fails before the write leaves the old index and the old files together.
+    One run at a time: a second run that finds the lock file stops with exit 1.
+    The run behavior is in `publish_run.run`.
     """
-    # shortcut: internet publish gated by --with-internet, remove the gate when IODA replies
     with files.lock(SITE_DATA_DIR / LOCK_FILE):
-        return _publish_days(storm_dates, with_internet)
-
-
-def _stale_files(written: list[Path], with_internet: bool) -> set[Path]:
-    """The existing published files that this run leaves stale.
-
-    A stale file is a ZIP count, warnings, power, or internet file of a date that this run
-    published, when this run did not write that file. A run without `--with-internet` also makes
-    every internet file stale, also of a date that this run does not publish.
-    """
-    names = (publish.ZIPS_FILE, publish.WARNINGS_FILE, publish.POWER_FILE, publish.INTERNET_FILE)
-    stale = {folder / name for folder in {path.parent for path in written} for name in names}
-    if not with_internet:
-        stale |= set((SITE_DATA_DIR / publish.STORMS_DIR).glob(f"*/{publish.INTERNET_FILE}"))
-    return {path for path in stale - set(written) if path.exists()}
-
-
-def _remove_stale(paths: set[Path], with_internet: bool) -> None:
-    """Remove the stale files after the index write. A failed removal prints one line."""
-    for path in sorted(paths):
-        try:
-            path.unlink()
-        except OSError as exc:
-            print(f"{path.parent.name}/{path.name}: not removed: {exc}", file=sys.stderr)
-        else:
-            if path.name == publish.INTERNET_FILE and not with_internet:
-                print(f"{path.parent.name}: removed {path.name}, this run has no --with-internet")
-
-
-def _publish_days(storm_dates: list[date], with_internet: bool) -> list[Path]:
-    selected = _swath_files(storm_dates)
-    if not candidates.CANDIDATES_PATH.exists():
-        raise FileNotFoundError(f"run hailprint candidates first: {candidates.CANDIDATES_PATH}")
-    facts = candidates.read_facts(candidates.CANDIDATES_PATH)
-    index_path = SITE_DATA_DIR / "storms.json"
-    pipeline_path = SITE_DATA_DIR / publish.PIPELINE_FILE
-    old = publish.read_published(index_path, "storms")["storms"] if index_path.exists() else []
-    old_runs = (
-        publish.read_published(pipeline_path, "pipeline")["runs"] if pipeline_path.exists() else []
-    )
-    summary = _archive_summary()
-    run_time = _utc_now()
-    entries, written, failed = [], [], []
-    file_count = 0
-    for storm_date, swath_path in selected:
-        try:
-            text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, date.today())
-        except RuntimeError as exc:
-            print(f"{storm_date}: SPC fetch failed, skipped: {exc!r}", file=sys.stderr)
-            continue
-        if text is None:
-            print(f"{storm_date}: no SPC daily CSV, skipped", file=sys.stderr)
-            continue
-        zips_path = PARCELS_DIR / f"zip-counts-{storm_date}.parquet"
-        has_zips = zips_path.exists()
-        spc = publish.spc_source(storm_date)
-        hcad = publish.hcad_source(zips_path.name) if has_zips else None
-        try:
-            mrms, max_mesh_mm = publish.swath_source(swath_path)
-            texts, entry = publish.build_day(
-                storm_date,
-                gpd.read_parquet(swath_path),
-                reports.nearby_reports(storm_date, text),
-                mrms=mrms,
-                max_mesh_mm=max_mesh_mm,
-                spc=spc,
-                zips=pd.read_parquet(zips_path) if has_zips else None,
-                hcad=hcad,
-                facts=facts.get(storm_date.isoformat()),
-                run_time=run_time,
-                warnings=_impact_layer(
-                    "warnings", WARNINGS_DIR / sbw.file_name(storm_date), storm_date, run_time
-                ),
-                power=_impact_layer(
-                    "power", POWER_DIR / power.day_file_name(storm_date), storm_date, run_time
-                ),
-                internet=_impact_layer(
-                    "internet", INTERNET_DIR / internet.file_name(storm_date), storm_date, run_time
-                )
-                if with_internet
-                else None,
-            )
-        except _UNREADABLE as exc:  # a required file fails its date; the other dates publish
-            detail = f"{type(exc).__name__}: {exc}" if isinstance(exc, ValueError) else repr(exc)
-            print(f"{storm_date}: {detail}", file=sys.stderr)
-            failed.append(storm_date.isoformat())
-            continue
-        folder = SITE_DATA_DIR / publish.STORMS_DIR / storm_date.isoformat()
-        for name, body in texts.items():
-            written.append(files.write_text_atomic(body, folder / name))
-        entries.append(entry)
-        file_count += len(texts)
-        print(f"{storm_date}: published {len(texts)} files")
-    if not entries:
-        raise RuntimeError(
-            "no storm date was published" + (f"; failed: {', '.join(failed)}" if failed else "")
-        )
-    stale = _stale_files(written, with_internet)
-    merged = publish.merge_entries(old, entries, SITE_DATA_DIR, absent=frozenset(stale))
-    receipts = publish.index_receipts(merged, SITE_DATA_DIR)
-    doc = publish.storms_doc(merged, run_time)
-    this_run = [entry["storm_date"] for entry in entries]
-    pipeline = _pipeline_doc(old_runs, this_run, receipts, summary, file_count, run_time)
-    # both documents pass validate and dumps before the first index write
-    publish.validate(doc, "storms")
-    publish.validate(pipeline, "pipeline")
-    index_text = publish.dumps(doc, "storms")
-    pipeline_text = publish.dumps(pipeline, "pipeline")
-    written.append(files.write_text_atomic(index_text, index_path))
-    print(f"storms index: {len(doc['storms'])} entries")
-    written.append(files.write_text_atomic(pipeline_text, pipeline_path))
-    print(f"published {publish.PIPELINE_FILE} ({len(pipeline['runs'])} runs)")
-    _remove_stale(stale, with_internet)
-    print(f"confidence: {swath.CONFIDENCE}")
-    if failed:
-        raise ValueError(f"publish failed for: {', '.join(failed)}")
-    return written
+        selected = _swath_files(storm_dates)
+        dirs = publish_run.Dirs(PARCELS_DIR, WARNINGS_DIR, POWER_DIR, INTERNET_DIR, SITE_DATA_DIR)
+        return publish_run.run(selected, dirs, with_internet=with_internet, now=_utc_now())
 
 
 if __name__ == "__main__":

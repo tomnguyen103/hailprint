@@ -57,7 +57,7 @@ archive.py    one bucket listing -> one row per archive day (storm_date, file_co
 candidates.py SPC WCM hail database -> Harris County days (FIPS 201); all_days adds the days after the WCM end from SPC daily CSVs -> ranked, joined with the index
 parcels.py    HCAD Parcels.gdb -> allow-listed columns only, layer CRS -> one sjoin -> distinct hcad_num per size class and per ZIP
 impact.py     the impact window and its grid: window(storm_date) is 12:00 UTC on D up to 12:00 UTC on D+2; steps(storm_date) is the 192 start times of 15 minutes; WINDOW, STEP, STEPS,
-              and METRO_FIPS (the 8 metro county codes); the module imports only `county` and `pandas`; sbw, power, internet, publish, and __main__ import it
+              and METRO_FIPS (the 8 metro county codes); the module imports only `county` and `pandas`; sbw, power, internet, publish, and runs import it
 sbw.py        IEM storm-based warnings (WFO HGX; SV, TO, FF; significance W) for the impact window of a storm date -> allow-listed properties only ->
               GeoParquet at data/derived/warnings/warnings-<date>.parquet
 power.py      EAGLE-I year stream (fetch_year, read_eaglei) -> metro rows at data/derived/eaglei/eaglei-<year>.parquet; build() reads those years for a storm date, else the ODIN day files ->
@@ -68,6 +68,9 @@ odin.py       one ODIN snapshot (fetch, snapshot) summed per county and utility 
 internet.py   IODA county signal (ping-slash24, one 10-minute point series per county) for the impact window (impact.py owns the window and the step grid) plus the 7 days before -> build() -> derive(): step value = median of the points in the step,
               baseline = median of the 7 days before the window (null under 504 of 1008 points), ratio = value / baseline, drop = 1 - ratio floored at 0 -> data/derived/internet/internet-<date>.parquet;
               null where no point, never 0; only 2022-03 to 2024-05 has a county signal, so an earlier or later date gets an all-null file
+runs.py       the `--missing` rules and the run loop: window_closed(storm_date, now) is true once the impact window has closed; warnings_settled() and internet_settled() give the settled rules (GLOSSARY: Settled file),
+              needs_power() gives the power rule; rows() is the row count of a Parquet file or None; UNREADABLE is the tuple of errors that a bad derived Parquet raises;
+              run_dates(dates, build, errors=) returns a Tally (done, skipped, failed); NoSource sits outside every errors tuple and leaves the loop at once; the module imports no argparse and never imports `__main__`
 score.py      swaths + nearby_reports -> per scored report, metre distance to each size class -> contingency table (hits, misses, false alarms, correct negatives) -> POD, FAR, CSI, HSS;
               scoring radius 5 km default, 20 km max; reports within radius + 1 km of the crop edge are excluded (scoring domain); unverifiable area = swath farther than the radius from every report;
               pool() sums counts and areas across days and recomputes the metrics; edge_m() is the signed metre distance to the crop edge
@@ -76,12 +79,14 @@ publish.py    swaths + nearby_reports + ZIP counts -> validated JSON with a rece
               and the storms.json index; rescore(pairs, R) recomputes
               the contingency table in Python for any whole-km radius; dumps() refuses NaN, the forbidden word, and owner fields;
               also pipeline.json (runs newest first, cap 50, merged by run_time; archive summary per year or null; one sources row per source and product)
+publish_run.py run(selected, dirs, with_internet=, now=) is the publish run: the files per storm date, then storms.json, then pipeline.json; Dirs holds the parcels, warnings, power, internet, and site directories;
+               archive_summary, pipeline_doc, impact_layer, stale_files, and remove_stale sit beside it; the caller holds the publish lock
 county.py     committed GeoJSON (package data): outline() and bbox() for Harris County; metro() and metro_bbox() for the 8 metro counties (the impact layers only)
 files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata;
               lock(path): one publish run at a time, pid in site/data/publish.lock, a second run stops with exit 1
 paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR; every data path hangs from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
-__main__.py   argparse CLI wiring the eleven commands and the fixed paths under data/, out/, and site/data/;
+__main__.py   argparse wiring, one function per command (the `ingest`, `score`, `eaglei`, and `odin` bodies stay here), printing, and the fixed paths under data/, out/, and site/data/; the `--missing` rules, the run loop, and the publish run sit in `runs` and `publish_run`;
               `power --missing` also replaces an ODIN-sourced power file when EAGLE-I now covers its window (docs/DECISIONS.md row 12)
 ```
 
