@@ -8,7 +8,7 @@ from functools import cache
 from importlib.metadata import version
 from importlib.resources import files
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, cast
 
 import geopandas as gpd
 import numpy as np
@@ -24,6 +24,7 @@ from hailprint.files import FORBIDDEN_WORD, METADATA
 from hailprint.parcels import OWNER_FIELDS
 
 Doc = dict[str, Any]
+LayerKind = Literal["warnings", "power", "internet"]
 RECEIPT_KIND = "receipt"
 RUN_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 MESSAGE_CHARS = 200
@@ -460,30 +461,31 @@ def storms_doc(entries: list[Doc], run_time: datetime) -> Doc:
     }
 
 
-def merge_entries(old: list[Doc], new: list[Doc], data_dir: Path) -> list[Doc]:
+def merge_entries(
+    old: list[Doc], new: list[Doc], data_dir: Path, *, absent: frozenset[Path] = frozenset()
+) -> list[Doc]:
     """The old entries with the new entries over them by storm date.
 
     An entry stays only while its swath, reports, and pairs files exist under `data_dir`. An
     entry whose ZIP count file is gone loses `zip_counts` and `parcel_total`. An entry whose
     impact file is gone loses that path, so `index_receipts` never reads a missing file. An entry
     that lacks an impact key gains it as null: this is the one migration site for an older index.
+    A path in `absent` counts as gone. The caller removes that file after it writes the index.
     """
     # shortcut: an entry stays until its directory vanishes, upgrade when a prune command is needed
     merged = {e["storm_date"]: e for e in old} | {e["storm_date"]: e for e in new}
     required = ("swath", "reports", "pairs")
-    kept = [
-        e for e in merged.values() if all((data_dir / e["files"][k]).exists() for k in required)
-    ]
+
+    def present(path: str) -> bool:
+        return data_dir / path not in absent and (data_dir / path).exists()
+
+    kept = [e for e in merged.values() if all(present(e["files"][k]) for k in required)]
     filled = [e | {"files": dict.fromkeys(IMPACT_KEYS) | e["files"]} for e in kept]
 
     def settled(e: Doc) -> Doc:
-        if e["files"]["zip_counts"] and not (data_dir / e["files"]["zip_counts"]).exists():
+        if e["files"]["zip_counts"] and not present(e["files"]["zip_counts"]):
             e = e | {"parcel_total": None, "files": e["files"] | {"zip_counts": None}}
-        gone = {
-            k: None
-            for k in IMPACT_KEYS
-            if e["files"][k] and not (data_dir / e["files"][k]).exists()
-        }
+        gone = {k: None for k in IMPACT_KEYS if e["files"][k] and not present(e["files"][k])}
         return e | {"files": e["files"] | gone}
 
     return [settled(e) for e in filled]
@@ -631,6 +633,25 @@ def internet_source(path: Path) -> Doc:
     return swath_source(path)[0]
 
 
+def layer_doc(
+    kind: LayerKind, frame: pd.DataFrame, source: Doc, storm_date: date, run_time: datetime
+) -> Doc:
+    """The document of one impact layer, built from its frame and its source entry.
+
+    `source` is the output of `warnings_source`, `power_source`, or `internet_source`. The
+    `utilities` key of a power source goes to the document and not to the receipt.
+    `build_day` and the dry run of `__main__._impact_layer` both call this function, so they
+    cannot differ.
+    """
+    origin = {key: source[key] for key in ("source", "product", "file")}
+    rcpt = receipt(storm_date, [origin], run_time)
+    if kind == "warnings":
+        return warnings_doc(cast(gpd.GeoDataFrame, frame), rcpt)
+    if kind == "power":
+        return power_doc(frame, rcpt, source.get("utilities"))
+    return internet_doc(frame, rcpt)
+
+
 def spc_source(storm_date: date) -> Doc:
     """The source entry of the SPC daily CSV of one storm date."""
     return {
@@ -676,7 +697,7 @@ def build_day(
     hcad: Doc | None,
     facts: Doc | None,
     run_time: datetime,
-    warnings: tuple[gpd.GeoDataFrame, Doc] | None = None,
+    warnings: tuple[pd.DataFrame, Doc] | None = None,
     power: tuple[pd.DataFrame, Doc] | None = None,
     internet: tuple[pd.DataFrame, Doc] | None = None,
 ) -> tuple[dict[str, str], Doc]:
@@ -709,18 +730,17 @@ def build_day(
         documents[ZIPS_FILE] = ("zip-counts", zip_counts)
         parcel_total = zip_counts["classes"][0]["parcel_count"] if zip_counts["classes"] else 0
     if warnings is not None:
-        frame, iem = warnings
-        documents[WARNINGS_FILE] = ("warnings", warnings_doc(frame, stamp(iem)))
-    if power is not None:
-        outages, layer = power
-        origin = {key: layer[key] for key in ("source", "product", "file")}
-        documents[POWER_FILE] = (
-            "power",
-            power_doc(outages, stamp(origin), layer.get("utilities")),
+        documents[WARNINGS_FILE] = (
+            "warnings",
+            layer_doc("warnings", *warnings, storm_date, run_time),
         )
+    if power is not None:
+        documents[POWER_FILE] = ("power", layer_doc("power", *power, storm_date, run_time))
     if internet is not None:
-        reach, ioda = internet
-        documents[INTERNET_FILE] = ("internet", internet_doc(reach, stamp(ioda)))
+        documents[INTERNET_FILE] = (
+            "internet",
+            layer_doc("internet", *internet, storm_date, run_time),
+        )
     texts = {}
     for name, (kind, doc) in documents.items():
         validate(doc, kind)

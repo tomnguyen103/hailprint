@@ -629,6 +629,17 @@ def test_warnings_missing_fetches_an_empty_file_again_only_for_a_fresh_date(env,
     assert [u.split("begints=")[1][:17] for u in iem.urls] == ["2024-05-30T12:00Z"]
 
 
+def test_warnings_missing_fetches_again_for_a_date_with_a_corrupt_file(env, iem):
+    env.add_day(LATER)
+    env.warnings.mkdir(parents=True, exist_ok=True)
+    _warnings_file(env, LATER).write_bytes(b"junk")
+
+    assert cli.main(["warnings", "--missing"]) == 0
+
+    assert len(iem.urls) == 1
+    assert gpd.read_parquet(_warnings_file(env, LATER))["eventid"].tolist() == SBW_KEPT
+
+
 def test_an_explicit_warnings_rerun_writes_the_same_bytes(env, iem):
     cli.main(["warnings", "2024-05-28"])
     first = _warnings_file(env, LATER).read_bytes()
@@ -1059,6 +1070,24 @@ def test_power_missing_rebuilds_a_power_file_that_has_no_source_metadata(env):
     assert cli.main(["power", "--missing"]) == 0
 
     assert pq.read_schema(_power_file(env, LATER)).metadata[b"source"] == b"eaglei"
+
+
+def test_power_missing_rebuilds_a_file_whose_metadata_read_raises_a_type_error(env, monkeypatch):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    env.power.mkdir(parents=True)
+    pd.DataFrame({"fips": ["48201"]}).to_parquet(_power_file(env, LATER))
+
+    def fail(path):
+        raise pa.ArrowTypeError("Expected bytes, got a 'int' object")
+
+    monkeypatch.setattr(power, "file_source", fail)
+
+    assert cli.main(["power", "--missing"]) == 0
+
+    path = _power_file(env, LATER)
+    assert pq.read_schema(path).metadata[b"source"] == b"eaglei"
+    assert pd.read_parquet(path)["customers_out"].notna().sum() == 2
 
 
 def test_a_window_across_new_year_needs_both_year_files(env, capsys):
@@ -1514,7 +1543,7 @@ def test_publish_removes_a_stale_power_json_when_the_power_file_is_gone(env):
     assert env.index()["storms"][0]["files"]["power"] is None
 
 
-def test_publish_exits_1_and_names_the_file_for_a_power_file_without_metadata(env, capsys):
+def test_publish_skips_the_power_layer_of_a_power_file_without_metadata(env, capsys):
     env.add_day(LATER)
     frame = pd.DataFrame(
         {"fips": [], "step_utc": pd.to_datetime([], utc=True), "customers_out": []}
@@ -1522,10 +1551,107 @@ def test_publish_exits_1_and_names_the_file_for_a_power_file_without_metadata(en
     env.power.mkdir(parents=True)
     frame.to_parquet(_power_file(env, LATER))
 
-    assert cli.main(["publish", "2024-05-28"]) == 1
+    assert cli.main(["publish", "2024-05-28"]) == 0
 
-    assert "power-2024-05-28.parquet" in capsys.readouterr().err
-    assert not env.storm_dir(LATER).exists()
+    err = capsys.readouterr().err
+    assert "power-2024-05-28.parquet" in err and "power layer skipped" in err
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert not (env.storm_dir(LATER) / publish.POWER_FILE).exists()
+    assert env.index()["storms"][0]["files"]["power"] is None
+
+
+@pytest.mark.parametrize("column", ["geometry", "eventid"])
+def test_publish_skips_the_warnings_layer_of_a_warnings_file_without_a_column(
+    env, iem, capsys, column
+):
+    env.add_day(LATER)
+    _write_eaglei(env, 2024, *HARRIS_ROWS)
+    cli.main(["power", "2024-05-28"])
+    cli.main(["warnings", "2024-05-28"])
+    path = _warnings_file(env, LATER)
+    files.write_atomic(gpd.read_parquet(path).drop(columns=column), path, sbw.METADATA)
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    err = capsys.readouterr().err
+    assert "warnings-2024-05-28.parquet" in err and "warnings layer skipped" in err
+    folder = env.storm_dir(LATER)
+    published = sorted(p.name for p in folder.iterdir())
+    assert published == ["pairs.json", "power.json", "reports.geojson", "swath.geojson"]
+    files_entry = env.index()["storms"][0]["files"]
+    assert files_entry["warnings"] is None
+    assert files_entry["power"] == f"storms/{LATER}/{publish.POWER_FILE}"
+
+
+def test_publish_skips_the_warnings_layer_of_a_warnings_file_with_an_invalid_geometry(
+    env, iem, capsys
+):
+    env.add_day(LATER)
+    cli.main(["warnings", "2024-05-28"])
+    path = _warnings_file(env, LATER)
+    table = pq.read_table(path)
+    column = table.schema.get_field_index("geometry")
+    bad_wkb = pa.array([b"not a geometry"] * table.num_rows, type=pa.binary())
+    pq.write_table(table.set_column(column, "geometry", bad_wkb), path)
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    err = capsys.readouterr().err
+    assert "warnings-2024-05-28.parquet" in err and "warnings layer skipped" in err
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert not (env.storm_dir(LATER) / publish.WARNINGS_FILE).exists()
+    assert env.index()["storms"][0]["files"]["warnings"] is None
+
+
+def test_publish_skips_the_warnings_layer_of_a_warnings_file_with_an_invalid_crs(env, iem, capsys):
+    env.add_day(LATER)
+    cli.main(["warnings", "2024-05-28"])
+    path = _warnings_file(env, LATER)
+    table = pq.read_table(path)
+    metadata = dict(table.schema.metadata)
+    geo = json.loads(metadata[b"geo"])
+    geo["columns"]["geometry"]["crs"] = {"type": "not a crs"}
+    metadata[b"geo"] = json.dumps(geo).encode()
+    pq.write_table(table.replace_schema_metadata(metadata), path)
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    err = capsys.readouterr().err
+    assert "warnings-2024-05-28.parquet" in err and "warnings layer skipped" in err
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert env.index()["storms"][0]["files"]["warnings"] is None
+
+
+def test_publish_fails_only_the_date_of_a_swath_file_it_cannot_read(env, capsys):
+    env.add_day(LATER)
+    broken = env.add_day(EARLIER)
+    meta = {"file_count": "1", "max_mesh_mm": str(MAX_MESH_MM)}
+    files.write_atomic(gpd.read_parquet(broken).drop(columns="threshold_mm"), broken, meta)
+
+    assert cli.main(["publish"]) == 1
+
+    err = capsys.readouterr().err
+    assert str(EARLIER) in err and "KeyError" in err
+    assert [s["storm_date"] for s in env.index()["storms"]] == [str(LATER)]
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert not env.storm_dir(EARLIER).exists()
+
+
+def test_publish_names_the_date_and_the_error_class_of_a_truncated_swath_file(env, capsys):
+    env.add_day(LATER)
+    broken = env.add_day(EARLIER)
+    broken.write_bytes(broken.read_bytes()[: broken.stat().st_size // 2])
+
+    assert cli.main(["publish"]) == 1
+
+    err = capsys.readouterr().err
+    assert str(EARLIER) in err and "ArrowInvalid" in err
+    assert [s["storm_date"] for s in env.index()["storms"]] == [str(LATER)]
+    assert (env.storm_dir(LATER) / publish.SWATH_FILE).exists()
+    assert not env.storm_dir(EARLIER).exists()
 
 
 def test_publish_writes_warnings_geojson_from_the_warnings_file_and_removes_it_when_gone(env, iem):
@@ -1648,6 +1774,101 @@ def test_publish_without_the_flag_removes_the_internet_json_of_a_date_it_does_no
         str(LATER): None,
         str(EARLIER): None,
     }
+
+
+def test_publish_lists_no_removed_file_in_storms_json(env, ioda, monkeypatch, capsys):
+    for storm_date in (LATER, EARLIER):
+        env.add_day(storm_date)
+        _add_signal(ioda, storm_date)
+        cli.main(["internet", str(storm_date)])
+    zips = env.add_zips(LATER, [("77002", 19.05, 4)])
+    cli.main(["publish", "--with-internet"])
+    zips.unlink()
+    capsys.readouterr()
+    write = files.write_text_atomic
+
+    def fail_the_index_write(text, path):
+        if path.name == "storms.json":
+            raise OSError(28, "no space left on device")
+        return write(text, path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(files, "write_text_atomic", fail_the_index_write)
+        assert cli.main(["publish", "2024-05-28"]) == 1
+    listed = [path for e in env.index()["storms"] for path in e["files"].values() if path]
+    assert all((env.site / path).exists() for path in listed)
+    capsys.readouterr()
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    out = capsys.readouterr().out
+    assert f"{EARLIER}: removed internet.json, this run has no --with-internet" in out
+    assert not (env.storm_dir(LATER) / publish.ZIPS_FILE).exists()
+    assert not (env.storm_dir(EARLIER) / publish.INTERNET_FILE).exists()
+    listed = [path for e in env.index()["storms"] for path in e["files"].values() if path]
+    assert listed and all((env.site / path).exists() for path in listed)
+    after = env.tree()
+    assert cli.main(["publish", "2024-05-28"]) == 0
+    assert "removed" not in capsys.readouterr().out
+    assert env.tree() == after
+
+
+def test_publish_keeps_the_old_internet_json_when_the_index_fails_validation(
+    env, ioda, monkeypatch
+):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+    cli.main(["publish", "2024-05-28", "--with-internet"])
+    index = (env.site / "storms.json").read_bytes()
+    validate, merge_entries = publish.validate, publish.merge_entries
+    merged, rejected = [], []
+
+    def merge_then_flag(*args, **kwargs):
+        result = merge_entries(*args, **kwargs)
+        merged.append(True)
+        return result
+
+    def reject_the_merged_index(doc, kind):
+        # only the storms check after the merge is the index check; an earlier one passes
+        if kind == "storms" and merged:
+            rejected.append(doc)
+            raise ValueError("the storms document is rejected")
+        validate(doc, kind)
+
+    monkeypatch.setattr(publish, "merge_entries", merge_then_flag)
+    monkeypatch.setattr(publish, "validate", reject_the_merged_index)
+
+    assert cli.main(["publish", "2024-05-28"]) == 1
+
+    assert rejected
+    assert (env.storm_dir(LATER) / publish.INTERNET_FILE).exists()
+    assert (env.site / "storms.json").read_bytes() == index
+
+
+def test_publish_reports_an_unlink_failure_after_the_index_write(env, ioda, monkeypatch, capsys):
+    env.add_day(LATER)
+    _add_signal(ioda, LATER)
+    cli.main(["internet", "2024-05-28"])
+    zips = env.add_zips(LATER, [("77002", 19.05, 4)])
+    cli.main(["publish", "2024-05-28", "--with-internet"])
+    zips.unlink()
+    capsys.readouterr()
+    unlink = Path.unlink
+
+    def fail_for_the_internet_file(self, *args, **kwargs):
+        if self.name == publish.INTERNET_FILE:
+            raise OSError(13, "file in use")
+        return unlink(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "unlink", fail_for_the_internet_file)
+
+    assert cli.main(["publish", "2024-05-28"]) == 0
+
+    lines = capsys.readouterr().err.splitlines()
+    assert len(lines) == 1 and publish.INTERNET_FILE in lines[0] and "file in use" in lines[0]
+    assert not (env.storm_dir(LATER) / publish.ZIPS_FILE).exists()
+    assert env.index()["storms"][0]["files"]["internet"] is None
 
 
 def _rewrite_internet(env, ioda, storm_date, change):
