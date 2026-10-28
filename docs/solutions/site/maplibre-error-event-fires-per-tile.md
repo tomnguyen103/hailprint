@@ -18,6 +18,7 @@ MapLibre fires `error` once for each failed tile request, except a 404, and the 
 
 ## Fix
 
-- `whenLoaded` in `site/src/storms/map/when-loaded.ts` resolves on `load`. An event with a `tile` field leaves a gap and never fails the load. Any other error, or no `load` within `LOAD_TIMEOUT_MS` (15 000 ms), calls `map.remove()` once and rejects. Every exit removes the listeners and the timer. Test: `site/src/storms/map/when-loaded.test.ts`.
+- `whenLoaded` in `site/src/storms/map/when-loaded.ts` resolves on `load`. An event with a `tile` field logs one `console.warn`, leaves a gap, and never fails the load. Any other error, or no `load` within `LOAD_TIMEOUT_MS` (15 000 ms), calls `map.remove()` once and rejects. Every exit removes the listeners and the timer. Test: `site/src/storms/map/when-loaded.test.ts`.
 - The timeout counts only time while the tab is visible. A `visibilitychange` listener stops the timer on hidden and starts a full `LOAD_TIMEOUT_MS` on visible.
 - A `shortcut:` comment in `when-loaded.ts` names the pinned maplibre-gl version. Recheck the `tile` field on any version bump.
+- `site/src/storms/map/create-map.test.ts` covers the wiring of `createMap`. A tripwire test in `when-loaded.test.ts` reads the installed maplibre-gl bundle for the `tile` field.

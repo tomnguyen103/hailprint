@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { Map as MapLibreMap } from "maplibre-gl";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { LOAD_TIMEOUT_MS, whenLoaded } from "./when-loaded";
 
 type Listener = (event: object) => void;
@@ -67,19 +69,28 @@ function fakeDocument(hidden: boolean) {
 const advance = (ms: number) => vi.advanceTimersByTimeAsync(ms);
 
 describe("whenLoaded", () => {
-  beforeEach(() => vi.useFakeTimers());
+  // A tile error logs one warning. The spy keeps it out of the test output.
+  let warn: MockInstance<typeof console.warn>;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  });
   afterEach(() => {
+    warn.mockRestore();
     vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
-  it("a tile error does not fail the load", async () => {
+  it("a tile error logs one warning and does not fail the load", async () => {
     const fake = fakeMap();
     const state = track(whenLoaded(fake.map));
+    const failure = new Error("404");
 
-    fake.emit("error", { error: new Error("404"), tile: {} });
+    fake.emit("error", { error: failure, tile: {} });
     await advance(0);
     expect(state.status).toBe("pending");
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith("map tile failed", failure);
 
     fake.emit("load");
     await advance(0);
@@ -125,6 +136,21 @@ describe("whenLoaded", () => {
     expect(state.status).toBe("rejected");
     expect(state.error).toBe(failure);
     expect(fake.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("a source-metadata error carries a sourceId and no tile, so it rejects and removes the map", async () => {
+    const fake = fakeMap();
+    const state = track(whenLoaded(fake.map));
+    const failure = new Error("tilejson is broken");
+
+    fake.emit("error", { error: failure, sourceId: "basemap" });
+    await advance(0);
+
+    expect(state.status).toBe("rejected");
+    expect(state.error).toBe(failure);
+    expect(fake.remove).toHaveBeenCalledTimes(1);
+    expect(fake.listening("load")).toBe(0);
+    expect(fake.listening("error")).toBe(0);
   });
 
   it("an error event with no error field rejects with a fallback message", async () => {
@@ -266,5 +292,20 @@ describe("whenLoaded", () => {
     expect(vi.getTimerCount()).toBe(0);
     expect(doc.listening()).toBe(0);
     expect(fake.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe("the load limits", () => {
+  it("LOAD_TIMEOUT_MS is 15 000 ms", () => {
+    expect(LOAD_TIMEOUT_MS).toBe(15_000);
+  });
+
+  // Tripwire: `whenLoaded` tells a tile error apart by the `tile` field, which the maplibre-gl types do not declare.
+  it("the installed maplibre-gl bundle still fires a tile error with a tile field", () => {
+    const bundle = fileURLToPath(new URL("../../../node_modules/maplibre-gl/dist/maplibre-gl-dev.mjs", import.meta.url));
+    expect(
+      readFileSync(bundle, "utf8"),
+      "maplibre-gl no longer fires `new ErrorEvent(..., { tile })`: recheck the `tile` field in when-loaded.ts after a maplibre-gl bump",
+    ).toMatch(/new ErrorEvent\([^\n]*\{ tile \}\)/);
   });
 });
