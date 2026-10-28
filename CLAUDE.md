@@ -56,14 +56,16 @@ plot.py       swaths + county outline + report points -> PNG (Agg backend)
 archive.py    one bucket listing -> one row per archive day (storm_date, file_count, bytes, has_12z)
 candidates.py SPC WCM hail database -> Harris County days (FIPS 201); all_days adds the days after the WCM end from SPC daily CSVs -> ranked, joined with the index
 parcels.py    HCAD Parcels.gdb -> allow-listed columns only, layer CRS -> one sjoin -> distinct hcad_num per size class and per ZIP
+impact.py     the impact window and its grid: window(storm_date) is 12:00 UTC on D up to 12:00 UTC on D+2; steps(storm_date) is the 192 start times of 15 minutes; WINDOW, STEP, STEPS,
+              and METRO_FIPS (the 8 metro county codes); the module imports only `county` and `pandas`; sbw, power, internet, publish, and __main__ import it
 sbw.py        IEM storm-based warnings (WFO HGX; SV, TO, FF; significance W) for the impact window of a storm date -> allow-listed properties only ->
-              GeoParquet at data/derived/warnings/warnings-<date>.parquet; window() is 12:00 UTC on D up to 12:00 UTC on D+2
+              GeoParquet at data/derived/warnings/warnings-<date>.parquet
 power.py      EAGLE-I year stream (fetch_year, read_eaglei) -> metro rows at data/derived/eaglei/eaglei-<year>.parquet; build() reads those years for a storm date, else the ODIN day files ->
               derive() or derive_odin() -> customers out per metro county and 15-minute step (null where no source row, never 0) at data/derived/power/power-<date>.parquet;
               one file never mixes the two sources; MCC (2022 customers per county) is a constant; share_out() and share_bin() give the share out and its colour bin
 odin.py       one ODIN snapshot (fetch, snapshot) summed per county and utility -> merge() into the UTC day file data/derived/odin/odin-<YYYY-MM-DD>.parquet, keyed by the 15-minute slot (slot_of);
               a failed fetch writes nothing; ODIN holds CenterPoint customers only in the metro
-internet.py   IODA county signal (ping-slash24, one 10-minute point series per county) for the impact window plus the 7 days before -> build() -> derive(): step value = median of the points in the step,
+internet.py   IODA county signal (ping-slash24, one 10-minute point series per county) for the impact window (impact.py owns the window and the step grid) plus the 7 days before -> build() -> derive(): step value = median of the points in the step,
               baseline = median of the 7 days before the window (null under 504 of 1008 points), ratio = value / baseline, drop = 1 - ratio floored at 0 -> data/derived/internet/internet-<date>.parquet;
               null where no point, never 0; only 2022-03 to 2024-05 has a county signal, so an earlier or later date gets an all-null file
 score.py      swaths + nearby_reports -> per scored report, metre distance to each size class -> contingency table (hits, misses, false alarms, correct negatives) -> POD, FAR, CSI, HSS;

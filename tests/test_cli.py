@@ -22,6 +22,7 @@ from hailprint import (
     archive,
     candidates,
     files,
+    impact,
     internet,
     odin,
     parcels,
@@ -1119,7 +1120,7 @@ def _internet_file(env, storm_date):
 
 def _add_signal(ioda, storm_date, value=1000):
     """Serve a steady Harris signal from 7 days before the window to its end."""
-    start, end = sbw.window(storm_date)
+    start, end = impact.window(storm_date)
     first = int(start.timestamp()) - internet.BASELINE_DAYS * 86400
     ioda.add("48201", first, int(end.timestamp()), value)
 
@@ -1177,7 +1178,7 @@ def test_internet_missing_asks_again_for_an_all_null_file_only_while_the_date_is
     assert cli.main(["internet", "--missing"]) == 0
 
     asked = {parse_qs(urlsplit(u).query)["from"][0] for u in ioda.urls}
-    assert asked == {str(int(sbw.window(fresh)[0].timestamp()) - internet.BASELINE_DAYS * 86400)}
+    assert asked == {str(int(impact.window(fresh)[0].timestamp()) - internet.BASELINE_DAYS * 86400)}
 
 
 def test_internet_missing_fetches_again_a_date_whose_file_cannot_be_read(env, ioda):
@@ -1238,7 +1239,7 @@ def test_internet_exits_1_when_ioda_answers_5xx_three_times(env, ioda, capsys):
 def test_a_failed_internet_date_does_not_stop_the_later_date(env, ioda, monkeypatch, capsys):
     _add_signal(ioda, LATER)
     answer = urllib.request.urlopen  # the Ioda stub
-    earlier_from = int(sbw.window(EARLIER)[0].timestamp()) - internet.BASELINE_DAYS * 86400
+    earlier_from = int(impact.window(EARLIER)[0].timestamp()) - internet.BASELINE_DAYS * 86400
 
     def urlopen(url, timeout=None):
         if f"from={earlier_from}&" in url:

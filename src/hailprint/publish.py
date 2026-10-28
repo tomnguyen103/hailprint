@@ -19,7 +19,7 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 from shapely.geometry.polygon import orient
 
-from hailprint import county, internet, power, sbw, score, swath
+from hailprint import county, impact, internet, power, score, swath
 from hailprint.files import FORBIDDEN_WORD, METADATA
 from hailprint.parcels import OWNER_FIELDS
 
@@ -225,6 +225,27 @@ def warnings_doc(frame: gpd.GeoDataFrame, rcpt: Doc) -> Doc:
     return {"type": "FeatureCollection", "receipt": rcpt, "features": features}
 
 
+def _county_rows(
+    frame: pd.DataFrame, fips: str, steps: pd.DatetimeIndex, layer: str
+) -> pd.DataFrame:
+    """The rows of one county, indexed by step. ValueError when they differ from the window."""
+    rows = frame.loc[frame["fips"] == fips]
+    # the Parquet unit varies, so both sides take the unit of the window before they meet
+    got = rows["step_utc"].dt.as_unit(steps.unit)
+    if len(rows) != len(steps) or not got.isin(steps).all() or not got.is_unique:
+        raise ValueError(f"{layer}: {fips}: the steps differ from the impact window")
+    return rows.assign(step_utc=got).set_index("step_utc")
+
+
+def _window_block(start: datetime) -> Doc:
+    """The `window` block of the power and internet documents."""
+    return {
+        "start": _utc_text(start),
+        "step_minutes": int(impact.STEP.total_seconds() // 60),
+        "steps": impact.STEPS,
+    }
+
+
 def power_doc(frame: pd.DataFrame, rcpt: Doc, utilities: list[str] | None = None) -> Doc:
     """The customers without power of the 8 metro counties at the 192 steps of the impact window.
 
@@ -234,16 +255,12 @@ def power_doc(frame: pd.DataFrame, rcpt: Doc, utilities: list[str] | None = None
     ValueError that names the county. `utilities` is None for EAGLE-I and the list of ODIN
     utility names for an ODIN file.
     """
-    start, _ = sbw.window(date.fromisoformat(rcpt["storm_date"]))
-    steps = pd.date_range(start, periods=power.STEPS, freq=power.STEP)
+    storm_date = date.fromisoformat(rcpt["storm_date"])
+    start, _ = impact.window(storm_date)
+    steps = impact.steps(storm_date)
     counties = []
     for fips, name in county.METRO_NAMES.items():
-        rows = frame.loc[frame["fips"] == fips]
-        # the Parquet unit varies, so both sides take the unit of the window before they meet
-        got = rows["step_utc"].dt.as_unit(steps.unit)
-        if len(rows) != power.STEPS or not got.isin(steps).all() or not got.is_unique:
-            raise ValueError(f"power: {fips}: the steps differ from the impact window")
-        out = rows.assign(step_utc=got).set_index("step_utc")["customers_out"].reindex(steps)
+        out = _county_rows(frame, fips, steps, "power")["customers_out"].reindex(steps)
         counties.append(
             {
                 "fips": fips,
@@ -254,11 +271,7 @@ def power_doc(frame: pd.DataFrame, rcpt: Doc, utilities: list[str] | None = None
         )
     return {
         "receipt": rcpt,
-        "window": {
-            "start": _utc_text(start),
-            "step_minutes": int(power.STEP.total_seconds() // 60),
-            "steps": power.STEPS,
-        },
+        "window": _window_block(start),
         "source": rcpt["sources"][0]["source"],
         "utilities": None if utilities is None else list(utilities),
         "counties": counties,
@@ -273,16 +286,13 @@ def internet_doc(frame: pd.DataFrame, rcpt: Doc) -> Doc:
     `baseline`. The window comes from the storm date of the receipt. A county whose steps differ
     from the window raises ValueError that names the county.
     """
-    start, _ = sbw.window(date.fromisoformat(rcpt["storm_date"]))
-    steps = pd.date_range(start, periods=power.STEPS, freq=power.STEP)
+    storm_date = date.fromisoformat(rcpt["storm_date"])
+    start, _ = impact.window(storm_date)
+    steps = impact.steps(storm_date)
     counties = []
     for fips, name in county.METRO_NAMES.items():
-        rows = frame.loc[frame["fips"] == fips]
-        # the Parquet unit varies, so both sides take the unit of the window before they meet
-        got = rows["step_utc"].dt.as_unit(steps.unit)
-        if len(rows) != power.STEPS or not got.isin(steps).all() or not got.is_unique:
-            raise ValueError(f"internet: {fips}: the steps differ from the impact window")
-        series = rows.assign(step_utc=got).set_index("step_utc")["ratio"].reindex(steps)
+        rows = _county_rows(frame, fips, steps, "internet")
+        series = rows["ratio"].reindex(steps)
         baseline = rows["baseline"].iloc[0]
         counties.append(
             {
@@ -294,11 +304,7 @@ def internet_doc(frame: pd.DataFrame, rcpt: Doc) -> Doc:
         )
     return {
         "receipt": rcpt,
-        "window": {
-            "start": _utc_text(start),
-            "step_minutes": int(power.STEP.total_seconds() // 60),
-            "steps": power.STEPS,
-        },
+        "window": _window_block(start),
         "signal": internet.DATASOURCE,
         "baseline_days": internet.BASELINE_DAYS,
         "counties": counties,
@@ -767,7 +773,6 @@ def build_day(
             "reports": f"{folder}/{REPORTS_FILE}",
             "pairs": f"{folder}/{PAIRS_FILE}",
             "zip_counts": f"{folder}/{ZIPS_FILE}" if ZIPS_FILE in texts else None,
-            **dict.fromkeys(IMPACT_KEYS),
             "power": f"{folder}/{POWER_FILE}" if POWER_FILE in texts else None,
             "internet": f"{folder}/{INTERNET_FILE}" if INTERNET_FILE in texts else None,
             "warnings": f"{folder}/{WARNINGS_FILE}" if WARNINGS_FILE in texts else None,

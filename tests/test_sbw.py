@@ -10,7 +10,7 @@ import pyarrow.parquet as pq
 import pytest
 from shapely.geometry import shape
 
-from hailprint import county, files, sbw
+from hailprint import county, files, impact, sbw
 from tests.conftest import needs_network
 
 FIXTURE = Path(__file__).parent / "fixtures" / "iem_sbw_hgx.geojson"
@@ -24,13 +24,6 @@ KEPT = [107, 101, 102, 109, 103]
 
 def feed() -> dict:
     return json.loads(FIXTURE.read_text(encoding="utf-8"))
-
-
-def test_window_runs_48_hours_from_12z_of_the_storm_date():
-    assert sbw.window(STORM_DATE) == (
-        datetime(2024, 5, 28, 12, tzinfo=UTC),
-        datetime(2024, 5, 30, 12, tzinfo=UTC),
-    )
 
 
 def test_parse_keeps_only_sv_to_ff_warnings_that_reach_a_metro_county():
@@ -222,7 +215,7 @@ def test_fetch_raises_runtime_error_that_names_the_date_when_iem_fails(monkeypat
 def test_the_live_feed_count_after_the_filter_equals_the_parquet_row_count():
     """O14: an independent filter of the raw feed gives the row count `parse` returns."""
     text = sbw.fetch(STORM_DATE)
-    start, end = (t.strftime("%Y-%m-%dT%H:%M:%SZ") for t in sbw.window(STORM_DATE))
+    start, end = (t.strftime("%Y-%m-%dT%H:%M:%SZ") for t in impact.window(STORM_DATE))
     union = county.metro().geometry.union_all()
     expected = [
         f
