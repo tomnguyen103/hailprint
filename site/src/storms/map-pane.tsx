@@ -61,6 +61,8 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   const outlinesRef = useRef<FeatureCollection<MultiPolygon> | null>(null);
   const onCountyRef = useRef(onCounty);
   onCountyRef.current = onCounty;
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
 
   // Create the map once; MapLibre arrives in its own chunk. Retry runs the import again.
   useEffect(() => {
@@ -71,7 +73,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     setMapError(null);
     import("./map/create-map")
       .then(async ({ createMap }) => {
-        const next = await createMap(node, theme);
+        const next = await createMap(node, themeRef.current);
         if (!live) {
           next.destroy();
           return;
