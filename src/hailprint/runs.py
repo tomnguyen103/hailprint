@@ -86,6 +86,8 @@ def needs_power(storm_date: date, power_dir: Path, eaglei_dir: Path) -> bool:
         return True  # an unreadable file is rebuilt
     if source is None:
         return True  # a file with no source metadata is rebuilt
+    # shortcut: an EAGLE-I year file counts as covering its year, upgrade to a check of the last
+    # row time if a partial year file is ever ingested
     covered = all((eaglei_dir / power.file_name(y)).exists() for y in power.years_of(storm_date))
     return covered and source == odin.METADATA["source"]
 

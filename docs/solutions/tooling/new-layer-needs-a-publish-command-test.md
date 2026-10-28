@@ -6,7 +6,7 @@ trigger: the audit found that hailprint publish never wrote power.json, while ev
 
 ## Problem
 
-Batch B added `power.json`. `publish.build_day` took a `power` argument and wrote the file. The `publish_days` command never passed that argument. A real `hailprint publish` run wrote no `power.json` and left `files.power` null in the storms index.
+Batch B added `power.json`. `publish.build_day` took a `power` argument and wrote the file. The publish run behind the `publish` command never passed that argument. A real `hailprint publish` run wrote no `power.json` and left `files.power` null in the storms index.
 
 ## What did not work
 

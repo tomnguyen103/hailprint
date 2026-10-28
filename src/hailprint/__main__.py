@@ -410,8 +410,6 @@ def power_days(storm_dates: list[date], missing: bool = False) -> list[Path]:
     with exit 1. A failed date does not stop the other dates. The run prints one line per failed
     date, then exits 1.
     """
-    # shortcut: an EAGLE-I year file counts as covering its year, upgrade to a check of the last
-    # row time if a partial year file is ever ingested
     if missing:
         now = _utc_now()
         storm_dates = [
@@ -518,7 +516,6 @@ def publish_days(storm_dates: list[date], with_internet: bool = False) -> list[P
     One run at a time: a second run that finds the lock file stops with exit 1.
     The run behavior is in `publish_run.run`.
     """
-    # shortcut: internet publish gated by --with-internet, remove the gate when IODA replies
     with files.lock(SITE_DATA_DIR / LOCK_FILE):
         selected = _swath_files(storm_dates)
         dirs = publish_run.Dirs(PARCELS_DIR, WARNINGS_DIR, POWER_DIR, INTERNET_DIR, SITE_DATA_DIR)

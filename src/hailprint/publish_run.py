@@ -186,6 +186,8 @@ def run(
                 power=impact_layer(
                     "power", dirs.power / power.day_file_name(storm_date), storm_date, run_time
                 ),
+                # shortcut: internet publish gated by --with-internet, remove the gate when IODA
+                # replies
                 internet=impact_layer(
                     "internet", dirs.internet / internet.file_name(storm_date), storm_date, run_time
                 )

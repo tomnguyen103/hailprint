@@ -86,7 +86,7 @@ files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling t
               lock(path): one publish run at a time, pid in site/data/publish.lock, a second run stops with exit 1
 paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR; every data path hangs from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
-__main__.py   argparse wiring and printing for the eleven commands and the fixed paths under data/, out/, and site/data/; the `--missing` rules, the run loop, and the publish run sit in `runs` and `publish_run`;
+__main__.py   argparse wiring, one function per command (the `ingest`, `score`, `eaglei`, and `odin` bodies stay here), printing, and the fixed paths under data/, out/, and site/data/; the `--missing` rules, the run loop, and the publish run sit in `runs` and `publish_run`;
               `power --missing` also replaces an ODIN-sourced power file when EAGLE-I now covers its window (docs/DECISIONS.md row 12)
 ```
 
