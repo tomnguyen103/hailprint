@@ -2,15 +2,13 @@ import type { FeatureCollection, MultiPolygon } from "geojson";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { HARRIS_FIPS, METRO_FIPS } from "../data/constants";
+import { METRO_FIPS } from "../data/constants";
 import { DataError, type PowerFile } from "../data/types";
 import type { Load } from "../state/load";
-import { resolveStep } from "../time/step";
 import {
   ODIN_LABEL,
   POWER_FILL,
   countyFeatures,
-  harrisPeak,
   hatchPixels,
   hexRgb,
   percentText,
@@ -140,31 +138,6 @@ describe("the share out", () => {
     expect(percentText(0)).toBe("0%");
     expect(percentText(0.0004)).toBe("<0.1%");
     expect(percentText(null)).toBe("no data");
-  });
-});
-
-describe("the Harris peak", () => {
-  it("is the first step of the largest Harris value", () => {
-    const file = powerFile({ [HARRIS_FIPS]: series({ 40: 5, 80: 9, 90: 9, 100: 3 }) });
-    expect(harrisPeak(file)).toBe(80);
-  });
-
-  it("ignores a gap and another county", () => {
-    const file = powerFile({ [HARRIS_FIPS]: series({ 10: 4, 12: null }, null), "48157": series({ 5: 999 }) });
-    expect(harrisPeak(file)).toBe(10);
-  });
-
-  it("is null without a file, with no outage, or with only gaps", () => {
-    expect(harrisPeak(null)).toBeNull();
-    expect(harrisPeak(powerFile())).toBeNull();
-    expect(harrisPeak(powerFile({ [HARRIS_FIPS]: series({}, null) }))).toBeNull();
-  });
-
-  it("opens the map at the peak with a valid file and at step 48 without one", () => {
-    const file = powerFile({ [HARRIS_FIPS]: series({ 77: 12 }) });
-    expect(resolveStep(null, harrisPeak(file))).toBe(77);
-    expect(resolveStep(null, harrisPeak(null))).toBe(48);
-    expect(resolveStep(20, harrisPeak(file))).toBe(20);
   });
 });
 

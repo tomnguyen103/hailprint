@@ -9,19 +9,8 @@ import { FileItem } from "../storms/data-pane";
 import { CountySection, InternetSection, countyRows } from "../storms/map/inspector";
 import { createPlayer } from "../time/slider";
 import { ODIN_LABEL, percentText, shareOut } from "./power";
-import {
-  InternetTable,
-  PowerTable,
-  Timeline,
-  TimelineTables,
-  barKey,
-  internetSeries,
-  powerSeries,
-  reportTicks,
-  runsOf,
-  stepAt,
-  warningBars,
-} from "./timeline";
+import { barKey, internetSeries, warningBars } from "./series";
+import { InternetTable, PowerTable, Timeline, TimelineTables } from "./timeline";
 
 type Node = VNode<Record<string, unknown>>;
 
@@ -95,28 +84,9 @@ describe("the report ticks", () => {
     const ticks = findAll(tree, withClass("timeline-tick")).map((v) => Number(v.props["x1"]) / unit);
     expect(ticks).toEqual([0, 95]);
   });
-
-  it("skip a report with a bad time", () => {
-    expect(reportTicks(reports(report(1, "1200"), report(2, "2575"), report(3, "noon"))).map((t) => t.step)).toEqual([0]);
-  });
 });
 
 describe("the warning bars", () => {
-  it("clip a warning that starts before the window at step 0", () => {
-    const bars = warningBars(warnings(BEFORE_START), DATE);
-    expect(bars).toMatchObject([{ phenomena: "SV", eventid: 101, from: 0, to: 4 }]);
-  });
-
-  it("place a warning inside the window at its begin and end steps", () => {
-    expect(warningBars(warnings(INSIDE), DATE)).toMatchObject([{ phenomena: "TO", from: 42, to: 45 }]);
-  });
-
-  it("clip at step 192 and drop a warning that ends before the window", () => {
-    const late = warning("SV", "2024-05-30T11:00:00Z", "2024-05-30T15:00:00Z", 104);
-    const early = warning("SV", "2024-05-28T08:00:00Z", "2024-05-28T12:00:00Z", 105);
-    expect(warningBars(warnings(late, early), DATE)).toMatchObject([{ eventid: 104, from: 188, to: 192 }]);
-  });
-
   it("draw one bar per polygon, with a different line style for each type", () => {
     const { tree, unit } = chart();
     const bars = findAll(tree, withClass("timeline-bar"));
@@ -155,13 +125,6 @@ describe("the cursor", () => {
 
 describe("the strips", () => {
   const rect = { left: 100, width: 960 };
-
-  it("turn a click position into a step from 0 to 191", () => {
-    expect(stepAt(100, rect)).toBe(0);
-    expect(stepAt(580, rect)).toBe(96);
-    expect(stepAt(1060, rect)).toBe(191);
-    expect(stepAt(40, rect)).toBe(0);
-  });
 
   it("report the clicked step from either strip", () => {
     const { tree, calls } = chart();
@@ -290,18 +253,6 @@ const rowsOf = (tree: ComponentChild) =>
     .filter((row) => row.length > 0);
 const powerStrip = (tree: ComponentChild) => findAll(tree, (v) => v.props["data-strip"] === "power");
 
-describe("the power runs", () => {
-  it("split a series into runs of values and runs of gaps", () => {
-    expect(runsOf([1, null, null, 2, 3])).toEqual([
-      { from: 0, to: 1, gap: false },
-      { from: 1, to: 3, gap: true },
-      { from: 3, to: 5, gap: false },
-    ]);
-    expect(runsOf([])).toEqual([]);
-    expect(runsOf([null, null])).toEqual([{ from: 0, to: 2, gap: true }]);
-  });
-});
-
 describe("the power strip", () => {
   it("draws one line through every step and no gap when the county has no null", () => {
     const { tree } = chart({ power: power("eaglei", series({ 20: 250 })) });
@@ -377,23 +328,6 @@ describe("the power strip", () => {
   it("labels an ODIN file on the strip and leaves an EAGLE-I file unlabelled", () => {
     expect(textOf(chart({ power: power("odin") }).tree)).toContain(ODIN_LABEL);
     expect(textOf(chart({ power: power("eaglei") }).tree)).not.toContain(ODIN_LABEL);
-  });
-});
-
-describe("the power series", () => {
-  it("returns the shares, the peak and the count of gap steps", () => {
-    const series_ = powerSeries(power("eaglei", series({ 3: null, 20: 250 })), HARRIS_FIPS)!;
-    expect(series_.county.name).toBe("Harris");
-    expect(series_.shares[20]).toBe(shareOut(250, 2000));
-    expect(series_.shares[3]).toBeNull();
-    expect(series_).toMatchObject({ peak: 0.125, peakStep: 20, gapSteps: 1, scale: 0.125 });
-  });
-
-  it("holds the scale at 1% for a county with no outage and returns null for an unknown county", () => {
-    expect(powerSeries(power(), HARRIS_FIPS)).toMatchObject({ peak: 0, scale: 0.01 });
-    expect(powerSeries(power("eaglei", series({}, null)), HARRIS_FIPS)).toMatchObject({ peak: null, peakStep: null, gapSteps: 192 });
-    expect(powerSeries(power(), "99999")).toBeNull();
-    expect(powerSeries(null, HARRIS_FIPS)).toBeNull();
   });
 });
 
@@ -557,19 +491,6 @@ describe("the internet strip", () => {
 });
 
 describe("the internet series", () => {
-  it("returns the ratios, the lowest ratio and its step, the gap count, and the row scale", () => {
-    const result = internetSeries(internet(series({ 3: null, 20: 0.8 }, 1)), HARRIS_FIPS)!;
-    expect(result.county.name).toBe("Harris");
-    expect(result.ratios[20]).toBe(0.8);
-    expect(result.ratios[3]).toBeNull();
-    expect(result).toMatchObject({ low: 0.8, lowStep: 20, gapSteps: 1, top: 1, bottom: 0.8 });
-  });
-
-  it("reports no low step at or above the baseline and widens the top for a ratio above it", () => {
-    expect(internetSeries(internet(), HARRIS_FIPS)).toMatchObject({ low: 1, lowStep: null, top: 1 });
-    expect(internetSeries(internet(series({ 5: 1.25 }, 1)), HARRIS_FIPS)).toMatchObject({ low: 1, lowStep: null, top: 1.25 });
-  });
-
   it("keeps the baseline inside the row when every ratio is above it", () => {
     const above = internetSeries(internet(series({ 5: 1.25, 6: 1.1 }, 1.05)), HARRIS_FIPS)!;
     expect(above.low).toBe(1.05);
@@ -578,18 +499,6 @@ describe("the internet series", () => {
     const tree = chart({ internet: internet(series({ 5: 1.25, 6: 1.1 }, 1.05)) }).tree;
     const base = findAll(tree, withClass("timeline-net-base"))[0]!;
     expect(Number(base.props["y1"])).toBeLessThanOrEqual(36);
-  });
-
-  it("holds a 10% span for a drop smaller than that", () => {
-    const tiny = internetSeries(internet(series({ 4: 0.98 }, 1)), HARRIS_FIPS)!;
-    expect(tiny.lowStep).toBe(4);
-    expect(tiny.top - tiny.bottom).toBeCloseTo(0.1, 10);
-  });
-
-  it("returns a null low for a county with no data and null for an unknown county or file", () => {
-    expect(internetSeries(internet(series({}, null)), HARRIS_FIPS)).toMatchObject({ low: null, lowStep: null, gapSteps: 192 });
-    expect(internetSeries(internet(), "99999")).toBeNull();
-    expect(internetSeries(null, HARRIS_FIPS)).toBeNull();
   });
 });
 

@@ -4,7 +4,7 @@ import { HARRIS_FIPS } from "../data/constants";
 import { fetchJson } from "../data/fetch";
 import { guardInternet, guardPower, guardReports } from "../data/guard";
 import type { InternetFile, PowerFile, Receipt, Storm, StormsIndex } from "../data/types";
-import { harrisPeak } from "../impact/power";
+import { harrisPeak } from "../impact/series";
 import { TABS, TAB_LABELS, href, type Tab } from "../router";
 import { SubTabs } from "../shell/sub-tabs";
 import { useLoad } from "../state/load";
