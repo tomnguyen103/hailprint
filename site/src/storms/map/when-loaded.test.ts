@@ -42,6 +42,28 @@ function track(promise: Promise<void>) {
   return state;
 }
 
+/** The `document` parts `whenLoaded` uses, installed as a global. `setHidden` flips `hidden` and fires `visibilitychange`. */
+function fakeDocument(hidden: boolean) {
+  const listeners = new Set<() => void>();
+  const doc = {
+    hidden,
+    addEventListener: (type: string, listener: () => void) => {
+      if (type === "visibilitychange") listeners.add(listener);
+    },
+    removeEventListener: (type: string, listener: () => void) => {
+      if (type === "visibilitychange") listeners.delete(listener);
+    },
+  };
+  vi.stubGlobal("document", doc);
+  return {
+    listening: () => listeners.size,
+    setHidden(value: boolean) {
+      doc.hidden = value;
+      for (const listener of [...listeners]) listener();
+    },
+  };
+}
+
 const advance = (ms: number) => vi.advanceTimersByTimeAsync(ms);
 
 describe("whenLoaded", () => {
@@ -118,8 +140,10 @@ describe("whenLoaded", () => {
   });
 
   it("a settled load ignores later events and holds no listener", async () => {
+    const doc = fakeDocument(false);
     const fake = fakeMap();
     const state = track(whenLoaded(fake.map));
+    expect(doc.listening()).toBe(1);
     fake.emit("load");
     fake.emit("load");
     fake.emit("error", { error: new Error("late") });
@@ -129,9 +153,11 @@ describe("whenLoaded", () => {
     expect(fake.remove).not.toHaveBeenCalled();
     expect(fake.listening("load")).toBe(0);
     expect(fake.listening("error")).toBe(0);
+    expect(doc.listening()).toBe(0);
   });
 
   it("a failed load ignores later events, rejects once, and holds no listener", async () => {
+    const doc = fakeDocument(false);
     const fake = fakeMap();
     const state = track(whenLoaded(fake.map));
     fake.emit("error", { error: new Error("first") });
@@ -144,6 +170,20 @@ describe("whenLoaded", () => {
     expect(fake.remove).toHaveBeenCalledTimes(1);
     expect(fake.listening("load")).toBe(0);
     expect(fake.listening("error")).toBe(0);
+    expect(doc.listening()).toBe(0);
+  });
+
+  it("a timeout holds no listener", async () => {
+    const doc = fakeDocument(false);
+    const fake = fakeMap();
+    const state = track(whenLoaded(fake.map));
+
+    await advance(LOAD_TIMEOUT_MS);
+
+    expect(state.status).toBe("rejected");
+    expect(fake.listening("load")).toBe(0);
+    expect(fake.listening("error")).toBe(0);
+    expect(doc.listening()).toBe(0);
   });
 
   it("a throw from remove() still rejects the load", async () => {
@@ -161,24 +201,60 @@ describe("whenLoaded", () => {
     expect(state.error).toBe(failure);
   });
 
-  it("the timeout waits while the tab is hidden", async () => {
-    const doc = { hidden: true };
-    vi.stubGlobal("document", doc);
+  it("a load that starts in a hidden tab arms no timer", async () => {
+    fakeDocument(true);
     const fake = fakeMap();
     const state = track(whenLoaded(fake.map));
 
     await advance(LOAD_TIMEOUT_MS * 2);
+
+    expect(state.status).toBe("pending");
+    expect(vi.getTimerCount()).toBe(0);
+    expect(fake.remove).not.toHaveBeenCalled();
+  });
+
+  it("hidden time does not count: a reader who returns late still gets the full load time", async () => {
+    const doc = fakeDocument(false);
+    const fake = fakeMap();
+    const state = track(whenLoaded(fake.map));
+
+    await advance(14_000);
+    doc.setHidden(true);
+    await advance(LOAD_TIMEOUT_MS * 10);
+    expect(state.status).toBe("pending");
+
+    doc.setHidden(false);
+    await advance(1_000);
+    expect(state.status).toBe("pending");
+
+    fake.emit("load");
+    await advance(0);
+    expect(state.status).toBe("resolved");
+    expect(fake.remove).not.toHaveBeenCalled();
+  });
+
+  it("each visible spell gets a full timeout, then the load rejects and removes the map", async () => {
+    const doc = fakeDocument(false);
+    const fake = fakeMap();
+    const state = track(whenLoaded(fake.map));
+
+    await advance(10_000);
+    doc.setHidden(true);
+    await advance(LOAD_TIMEOUT_MS * 10);
+    doc.setHidden(false);
+
+    await advance(LOAD_TIMEOUT_MS - 1);
     expect(state.status).toBe("pending");
     expect(fake.remove).not.toHaveBeenCalled();
 
-    doc.hidden = false;
-    await advance(LOAD_TIMEOUT_MS);
+    await advance(1);
     expect(state.status).toBe("rejected");
+    expect(state.error).toEqual(new Error(`map did not load in ${LOAD_TIMEOUT_MS} ms`));
     expect(fake.remove).toHaveBeenCalledTimes(1);
   });
 
-  it("a load while the tab is hidden still resolves", async () => {
-    vi.stubGlobal("document", { hidden: true });
+  it("a load while the tab is hidden resolves and leaves no timer and no listener", async () => {
+    const doc = fakeDocument(true);
     const fake = fakeMap();
     const state = track(whenLoaded(fake.map));
 
@@ -187,6 +263,8 @@ describe("whenLoaded", () => {
     await advance(0);
 
     expect(state.status).toBe("resolved");
+    expect(vi.getTimerCount()).toBe(0);
+    expect(doc.listening()).toBe(0);
     expect(fake.remove).not.toHaveBeenCalled();
   });
 });

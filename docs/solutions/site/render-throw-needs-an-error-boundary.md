@@ -11,7 +11,7 @@ A throw during render in any page body left a blank page. The site had no error 
 ## Fix
 
 - `AreaBoundary` in `site/src/shell/area-boundary.tsx` wraps the page body inside `Layout`. A render throw shows `ErrorState` under the top bar. Retry, or a new route path, renders the page again.
-- Tests: `site/src/shell/area-boundary.test.tsx` covers the boundary. `site/src/app.test.tsx` proves that `App` mounts the boundary with the path as its key.
+- Tests: `site/src/shell/area-boundary.test.tsx` covers the boundary. `site/src/app.test.tsx` proves that `App` mounts the boundary with the path as its `resetKey`. `key={path}` stays rejected because the time slider changes the path on each step, and a key would remount the area.
 
 ## Known limits
 

@@ -1,4 +1,4 @@
-import { h, render, type VNode } from "preact";
+import { h, render, type ComponentChildren, type Context, type VNode } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./app";
@@ -10,25 +10,34 @@ type Current = { path: string; route: object };
 const stub = vi.hoisted(() => ({
   layouts: [] as { children: unknown }[],
   log: [] as string[],
-  shown: [] as { error: { message: string } }[],
+  shown: [] as { error: { message: string }; inLayout: boolean }[],
+  // The Layout stub provides it, the ErrorState stub reads it: true when the error state renders under the layout.
+  layoutContext: undefined as unknown as Context<boolean>,
   armed: true,
   current: { path: "/method/data", route: { kind: "method", page: "data" } } as Current,
 }));
-vi.mock("./shell/layout", () => ({
-  Layout: (props: { children: unknown }) => {
-    stub.layouts.push(props);
-    return props.children;
-  },
-}));
-vi.mock("./shell/states", () => ({
-  ErrorState: (props: { error: { message: string } }) => {
-    stub.shown.push(props);
-    stub.log.push("error");
-    return null;
-  },
-  EmptyState: () => null,
-  LoadingState: () => null,
-}));
+vi.mock("./shell/layout", async () => {
+  const { createContext } = await import("preact");
+  stub.layoutContext = createContext(false);
+  return {
+    Layout: (props: { children: unknown }) => {
+      stub.layouts.push(props);
+      return h(stub.layoutContext.Provider, { value: true }, props.children as ComponentChildren);
+    },
+  };
+});
+vi.mock("./shell/states", async () => {
+  const { useContext } = await import("preact/hooks");
+  return {
+    ErrorState: (props: { error: { message: string } }) => {
+      stub.shown.push({ ...props, inLayout: useContext(stub.layoutContext) });
+      stub.log.push("error");
+      return null;
+    },
+    EmptyState: () => null,
+    LoadingState: () => null,
+  };
+});
 vi.mock("./state/route", () => ({ useRoute: () => stub.current }));
 vi.mock("./state/index", () => ({
   useIndex: () => ({ status: "ready", data: { storms: [{ storm_date: "2024-05-28" }] }, showLoading: false, retry() {} }),
@@ -81,11 +90,11 @@ describe("App", () => {
     expect(body.props.resetKey).toBe("/method/data");
   });
 
-  it("a page that throws shows the error state and keeps the layout", async () => {
+  it("a page that throws shows the error state under the layout", async () => {
     await mount();
 
     expect(stub.shown.at(-1)?.error.message).toBe("page: Error: boom");
-    expect(stub.layouts.length).toBeGreaterThan(0);
+    expect(stub.shown.at(-1)?.inLayout).toBe(true);
   });
 
   it("a new path clears the error state and renders the new page", async () => {
