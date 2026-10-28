@@ -48,7 +48,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
         kind: "prose",
         text:
           "Every published file carries a receipt: the source, the product, the file, the run time, the package version, and the confidence band. " +
-          "Every value on the site is a radar-estimated hail size.",
+          "Every hail size on the site is a radar-estimated hail size.",
       },
     ],
   },

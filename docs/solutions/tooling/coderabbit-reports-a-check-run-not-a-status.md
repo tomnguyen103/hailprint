@@ -10,7 +10,7 @@ The wait protocol polled `repos/<owner>/<repo>/commits/<sha>/status` for CodeRab
 
 ## What did not work
 
-`gh api repos/<owner>/<repo>/commits/<sha>/status` and `gh pr checks`. Both list commit statuses, and CodeRabbit posts none.
+`gh api repos/<owner>/<repo>/commits/<sha>/status`. It lists commit statuses, and CodeRabbit posts none.
 
 ## Root cause
 

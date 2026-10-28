@@ -10,7 +10,7 @@ Two Windows PowerShell 5.1 traps cost several tool calls in the PR 12 and PR 13 
 
 ## What did not work
 
-- `gh api ... --jq '.[] | {login: .user.login}'` typed inline in PowerShell. The inner double quotes vanished, and `jq` reported a syntax error.
+- `gh api ... --jq '.[] | {"login": .user.login}'` typed inline in PowerShell. The inner double quotes vanished, and `jq` reported a syntax error.
 - `$x = gh api ... | ConvertFrom-Json`, then `$x.Count`. A one-element array became a bare object, and a pipeline that expected an array saw one item at a time.
 
 ## Root cause
