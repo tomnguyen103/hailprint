@@ -62,6 +62,7 @@ export function useScopeRows(index: StormsIndex, scope: string, radius: number) 
   const load = useAllFiles<Pairs>(
     storms.map((s) => s.files.pairs),
     guardPairs,
+    index.run_time,
   );
   const data = load.status === "ready" ? load.data : null;
   const table = useMemo(() => (data === null ? null : pooledRows(data, radius)), [data, radius]);

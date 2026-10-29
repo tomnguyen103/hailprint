@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
-import io
 import json
 import os
 import re
@@ -12,13 +11,14 @@ import sys
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 import boto3
+import pandas as pd
 
-from hailprint import odin, paths
+from hailprint import candidates, odin, paths
 
 ENV_VARS: tuple[str, ...] = (
     "SUPABASE_S3_ENDPOINT",
@@ -31,7 +31,14 @@ ENV_VARS: tuple[str, ...] = (
 STATE_PREFIXES: tuple[str, ...] = ("raw/spc/", "derived/")
 PUBLIC_PREFIXES: tuple[str, ...] = ("",)
 ODIN_PREFIX = "derived/odin/"
-BACKFILL_EAGLEI_YEARS: tuple[int, ...] = (2021, 2023, 2025)
+BACKFILL_EAGLEI_YEARS: tuple[int, ...] = (2020, 2021, 2022, 2023, 2024, 2025)
+MAX_BYTES = 64 * 1024 * 1024
+_PROJECT_REF_RE = re.compile(r"^[a-z0-9-]+$")
+_PUBLIC_KEY_RE = re.compile(
+    r"^(storms\.json|pipeline\.json|storms/\d{4}-\d{2}-\d{2}/"
+    r"(swath\.geojson|reports\.geojson|pairs\.json|zip-counts\.json|"
+    r"warnings\.geojson|power\.json|internet\.json))$"
+)
 
 
 @dataclass(frozen=True)
@@ -65,6 +72,8 @@ class SyncState:
 
 
 def _fetch_session_token(project_ref: str, anon_key: str, email: str, password: str) -> str:
+    if not _PROJECT_REF_RE.fullmatch(project_ref):
+        raise ValueError(f"invalid Supabase project_ref: {project_ref!r}")
     url = f"https://{project_ref}.supabase.co/auth/v1/token?grant_type=password"
     payload = json.dumps({"email": email, "password": password}).encode("utf-8")
     req = urllib.request.Request(
@@ -84,6 +93,8 @@ def _fetch_session_token(project_ref: str, anon_key: str, email: str, password: 
 def s3_client(config: Config) -> Any:
     if ":" in config.access_key_id:
         project_ref, email, password = config.access_key_id.split(":", 2)
+        if not _PROJECT_REF_RE.fullmatch(project_ref):
+            raise ValueError(f"invalid Supabase project_ref: {project_ref!r}")
         token = _fetch_session_token(project_ref, config.secret_access_key, email, password)
         return boto3.client(
             "s3",
@@ -102,8 +113,10 @@ def s3_client(config: Config) -> Any:
     )
 
 
-def _validate_key(key: str, local_base: Path | None = None) -> None:
+def _validate_key(key: str, local_base: Path | None = None, *, public: bool = False) -> None:
     if not key or key.startswith("/") or "\\" in key or ":" in key or ".." in key.split("/"):
+        raise ValueError("unsafe S3 key")
+    if public and not _PUBLIC_KEY_RE.fullmatch(key):
         raise ValueError("unsafe S3 key")
     if local_base is not None:
         base_resolved = local_base.resolve()
@@ -112,7 +125,7 @@ def _validate_key(key: str, local_base: Path | None = None) -> None:
             raise ValueError("unsafe S3 key")
 
 
-def _list_keys(client: Any, bucket: str, prefix: str) -> list[str]:
+def _list_keys(client: Any, bucket: str, prefix: str, max_bytes: int = MAX_BYTES) -> list[str]:
     keys: list[str] = []
     token: str | None = None
     while True:
@@ -123,6 +136,9 @@ def _list_keys(client: Any, bucket: str, prefix: str) -> list[str]:
         for obj in resp.get("Contents", []) or []:
             key = obj.get("Key", "")
             if key and not key.endswith("/"):
+                size = obj.get("Size")
+                if isinstance(size, int) and size > max_bytes:
+                    raise RuntimeError(f"S3 object {key} exceeds {max_bytes} bytes")
                 keys.append(key)
         if not resp.get("IsTruncated"):
             break
@@ -139,17 +155,22 @@ def sync_down(
     bucket: str,
     prefixes: Iterable[str],
     local_base: Path,
+    *,
+    max_bytes: int = MAX_BYTES,
+    public: bool = False,
 ) -> SyncState:
     state = SyncState()
     seen: set[str] = set()
     for prefix in prefixes:
-        for key in _list_keys(client, bucket, prefix):
+        for key in _list_keys(client, bucket, prefix, max_bytes=max_bytes):
             if key in seen:
                 continue
             seen.add(key)
-            _validate_key(key, local_base)
+            _validate_key(key, local_base, public=public)
             resp = client.get_object(Bucket=bucket, Key=key)
-            body: bytes = resp["Body"].read()
+            body: bytes = resp["Body"].read(max_bytes + 1)
+            if len(body) > max_bytes:
+                raise RuntimeError(f"S3 object {key} exceeds {max_bytes} bytes")
             dest = local_base / key
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(body)
@@ -169,9 +190,12 @@ def _collect_local_keys(
 ) -> list[str]:
     if not local_base.exists():
         return []
+    base_resolved = local_base.resolve()
     keys: list[str] = []
     for path in local_base.rglob("*"):
-        if not path.is_file():
+        if path.is_symlink() or not path.is_file():
+            continue
+        if not path.resolve().is_relative_to(base_resolved):
             continue
         if path.suffix in (".lock", ".tmp"):
             continue
@@ -212,10 +236,10 @@ def sync_up(
 ) -> list[str]:
     prefix_tuple = tuple(prefixes)
     exclude_tuple = tuple(exclude_prefixes)
-    local_keys = _order_keys(
-        _collect_local_keys(local_base, prefix_tuple, exclude_tuple),
-        public=public,
-    )
+    collected = _collect_local_keys(local_base, prefix_tuple, exclude_tuple)
+    if public:
+        collected = [k for k in collected if _PUBLIC_KEY_RE.fullmatch(k)]
+    local_keys = _order_keys(collected, public=public)
     local_set = set(local_keys)
     uploaded: list[str] = []
 
@@ -269,13 +293,23 @@ def nightly(
     if rc != 0:
         return rc
 
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        rc = run_cli(["candidates", "--missing", "--top", str(max_ingest)])
+    rc = run_cli(["candidates", "--missing", "--top", str(max_ingest)])
     if rc != 0:
         return rc
 
-    missing_dates = [line.strip() for line in buf.getvalue().splitlines() if line.strip()]
+    cand_path = root / "data" / "derived" / "index" / "candidate-days.csv"
+    swaths_dir = root / "data" / "derived" / "swaths"
+    if not cand_path.is_file():
+        _log("candidates failed: no candidate-days.csv")
+        return 1
+    ranked = pd.read_csv(cand_path, parse_dates=["storm_date"])
+    if ranked.empty:
+        missing_dates: list[str] = []
+    else:
+        ranked["storm_date"] = pd.to_datetime(ranked["storm_date"]).dt.date
+        missing_dates = [
+            d.isoformat() for d in candidates.missing_days(ranked, swaths_dir)[:max_ingest]
+        ]
     if missing_dates:
         gdb_dir = root / "data" / "raw" / "hcad" / "extracted" / "Parcels.gdb"
         has_gdb = gdb_dir.is_dir()
@@ -336,10 +370,56 @@ def backfill(
     return run_cli(publish_cmd)
 
 
-def _default_cli(argv: list[str]) -> int:
+@contextlib.contextmanager
+def _cli_context(root: Path, now: datetime | None):
+    from hailprint import __main__ as cli_mod
+    from hailprint import archive
+
+    derived = root / "data" / "derived"
+    raw = root / "data" / "raw"
+    patches: list[tuple[Any, str, Any]] = [
+        (paths, "ROOT", root),
+        (paths, "RAW_DIR", raw),
+        (paths, "DERIVED_DIR", derived),
+        (paths, "OUT_DIR", root / "out"),
+        (paths, "SITE_DATA_DIR", root / "site" / "data"),
+        (cli_mod, "RAW_DIR", raw / "mesh"),
+        (cli_mod, "DERIVED_DIR", derived / "swaths"),
+        (cli_mod, "OUT_DIR", root / "out"),
+        (cli_mod, "PARCELS_GDB", raw / "hcad" / "extracted" / "Parcels.gdb"),
+        (cli_mod, "PARCELS_DIR", derived / "parcels"),
+        (cli_mod, "SCORES_DIR", derived / "scores"),
+        (cli_mod, "WARNINGS_DIR", derived / "warnings"),
+        (cli_mod, "EAGLEI_DIR", derived / "eaglei"),
+        (cli_mod, "POWER_DIR", derived / "power"),
+        (cli_mod, "ODIN_DIR", derived / "odin"),
+        (cli_mod, "INTERNET_DIR", derived / "internet"),
+        (cli_mod, "SITE_DATA_DIR", root / "site" / "data"),
+        (archive, "INDEX_PATH", derived / "index" / "mesh-archive.parquet"),
+        (candidates, "WCM_PATH", raw / "spc" / "1955-2025_hail.csv.zip"),
+        (candidates, "CANDIDATES_PATH", derived / "index" / "candidate-days.csv"),
+        (candidates, "DAILY_DIR", raw / "spc" / "daily"),
+    ]
+    if now is not None:
+        patches.append((cli_mod, "_utc_now", lambda: now))
+        patches.append((candidates, "_utc_today", lambda: now.date()))
+    saved = [(mod, attr, getattr(mod, attr)) for mod, attr, _ in patches]
+    try:
+        for mod, attr, val in patches:
+            setattr(mod, attr, val)
+        yield
+    finally:
+        for mod, attr, old_val in saved:
+            setattr(mod, attr, old_val)
+
+
+def _default_cli(argv: list[str], *, root: Path | None = None, now: datetime | None = None) -> int:
     from hailprint import __main__ as cli_mod
 
-    return cli_mod.main(argv)
+    if root is None and now is None:
+        return cli_mod.main(argv)
+    with _cli_context(root if root is not None else paths.ROOT, now):
+        return cli_mod.main(argv)
 
 
 def run_cloud(
@@ -354,32 +434,53 @@ def run_cloud(
     config = Config.from_env(env)
     resolved_root = root if root is not None else paths.resolve_root(env)
     s3 = client if client is not None else s3_client(config)
-    runner = run_cli if run_cli is not None else _default_cli
+    runner: Callable[[list[str]], int] = (
+        run_cli
+        if run_cli is not None
+        else (lambda argv: _default_cli(argv, root=resolved_root, now=now))
+    )
     data_dir = resolved_root / "data"
     site_dir = resolved_root / "site" / "data"
 
     if task == "odin":
-        slot = odin.slot_of(now if now is not None else datetime.now(UTC))
+        pre_now = now if now is not None else datetime.now(UTC)
+        slot = odin.slot_of(pre_now)
         odin_key = f"{ODIN_PREFIX}{odin.file_name(slot.date())}"
+        next_day_key = f"{ODIN_PREFIX}{odin.file_name((slot + timedelta(days=1)).date())}"
         state = sync_down(s3, config.state_bucket, (odin_key,), data_dir)
         rc = odin_run(runner)
         if rc != 0:
             return rc
-        sync_up(s3, config.state_bucket, (odin_key,), data_dir, state)
+        post_slot = odin.slot_of(datetime.now(UTC) if now is None else pre_now)
+        post_key = f"{ODIN_PREFIX}{odin.file_name(post_slot.date())}"
+        odin_keys = tuple(
+            dict.fromkeys(
+                [
+                    odin_key,
+                    post_key,
+                    next_day_key,
+                    *(
+                        f"{ODIN_PREFIX}{p.name}"
+                        for p in sorted((data_dir / ODIN_PREFIX).glob("odin-*.parquet"))
+                    ),
+                ]
+            )
+        )
+        sync_up(s3, config.state_bucket, odin_keys, data_dir, state)
         return 0
 
     if task not in ("nightly", "backfill"):
         raise ValueError(f"unknown cloud task: {task}")
 
     state = sync_down(s3, config.state_bucket, STATE_PREFIXES, data_dir)
-    pub_state = sync_down(s3, config.public_bucket, PUBLIC_PREFIXES, site_dir)
+    pub_state = sync_down(s3, config.public_bucket, PUBLIC_PREFIXES, site_dir, public=True)
 
     rc = (
         nightly(runner, resolved_root, env)
         if task == "nightly"
         else backfill(runner, resolved_root, env)
     )
-    if rc != 0:
+    if rc != 0 and not (site_dir / "storms.json").exists():
         return rc
 
     sync_up(
@@ -399,4 +500,4 @@ def run_cloud(
         public=True,
         mirror=True,
     )
-    return 0
+    return rc

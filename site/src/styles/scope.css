@@ -37,6 +37,9 @@
 }
 
 .scope summary {
+  display: flex;
+  align-items: center;
+  min-height: 40px;
   cursor: pointer;
   padding: 6px 8px;
   border-radius: var(--radius-control);
@@ -79,6 +82,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 40px;
   padding: 6px 8px 6px 24px;
   border-radius: var(--radius-control);
   text-decoration: none;

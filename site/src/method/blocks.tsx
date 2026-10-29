@@ -77,7 +77,7 @@ function figure(id: FigureId, index: Index) {
 function Receipt({ index }: { index: StormsIndex }) {
   const storm = index.storms[0]!;
   // the pairs cache: the Scoring figures read the same file, so one fetch serves both
-  const pairs = useAllFiles([storm.files.pairs], guardPairs);
+  const pairs = useAllFiles([storm.files.pairs], guardPairs, index.run_time);
   if (pairs.status === "error") return <ErrorState error={pairs.error} onRetry={pairs.retry} />;
   if (pairs.status === "loading") return pairs.showLoading ? <LoadingState file="pairs.json" /> : null;
   return (

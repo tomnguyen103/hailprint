@@ -22,6 +22,14 @@ interface Props {
   tab: Tab;
 }
 
+export function stormTabItems(stormDate: string, step: number) {
+  return TABS.map((t) => ({
+    id: t,
+    label: TAB_LABELS[t],
+    href: href({ area: "storms", date: stormDate, tab: t, step: t === "map" ? step : undefined }),
+  }));
+}
+
 export function Workspace({ index, storm, tab }: Props) {
   const [datesOpen, setDatesOpen] = useState(false);
   // The county of the power strip lives here, apart from the step and the play state: a pick moves neither.
@@ -58,7 +66,14 @@ export function Workspace({ index, storm, tab }: Props) {
   return (
     <div class="workspace">
       <div class="scope-rail">
-        <button type="button" class="button button-small" aria-haspopup="dialog" onClick={() => setDatesOpen(true)}>
+        <button
+          type="button"
+          class="button button-small"
+          aria-haspopup="dialog"
+          aria-expanded={datesOpen}
+          aria-controls="storms-scope"
+          onClick={() => setDatesOpen(true)}
+        >
           Dates
         </button>
       </div>
@@ -70,11 +85,12 @@ export function Workspace({ index, storm, tab }: Props) {
           reports={reports}
           step={tab === "map" ? step : null}
           indexReceipt={indexReceipt}
+          datesOpen={datesOpen}
           onOpenDates={() => setDatesOpen(true)}
         />
         <SubTabs
           label="Storm panes"
-          tabs={TABS.map((t) => ({ id: t, label: TAB_LABELS[t], href: href({ area: "storms", date: storm.storm_date, tab: t }) }))}
+          tabs={stormTabItems(storm.storm_date, step)}
           selected={tab}
         />
         <section class="pane" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>

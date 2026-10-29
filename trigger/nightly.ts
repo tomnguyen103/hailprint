@@ -6,7 +6,7 @@ export const nightlyTask = schedules.task({
   cron: "30 13 * * *",
   machine: "medium-1x",
   queue: {
-    name: "nightly",
+    name: "pipeline",
     concurrencyLimit: 1,
   },
   run: async () => {

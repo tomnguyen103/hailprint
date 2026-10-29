@@ -26,7 +26,6 @@ from hailprint import (
     odin,
     parcels,
     paths,
-    plot,
     power,
     publish_run,
     reports,
@@ -35,6 +34,7 @@ from hailprint import (
     score,
     swath,
 )
+from hailprint import plot as plot_mod
 
 RAW_DIR = paths.RAW_DIR / "mesh"
 DERIVED_DIR = paths.DERIVED_DIR / "swaths"
@@ -85,6 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_cmd = commands.add_parser("ingest", help="write the daily-max swaths for storm dates")
     ingest_cmd.add_argument(
         "storm_dates", nargs="+", type=_storm_date, help="SPC convective day, YYYY-MM-DD"
+    )
+    ingest_cmd.add_argument(
+        "--plot",
+        action="store_true",
+        help="also fetch SPC reports and write the week-1 diagnostic PNG",
     )
     commands.add_parser("index", help="list the MESH archive and store one row per day")
     cand = commands.add_parser("candidates", help="rank Harris County hail days by report count")
@@ -186,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"{args.command} takes storm dates or --missing, not both and not neither")
     try:
         if args.command == "ingest":
-            ingest(args.storm_dates)
+            ingest(args.storm_dates, plot=args.plot)
         elif args.command == "index":
             index()
         elif args.command == "candidates":
@@ -215,37 +220,42 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def ingest(storm_dates: list[date]) -> list[Path]:
-    """Swath file and PNG per storm date from the one 12Z file. Prints one fact per line."""
+def ingest(storm_dates: list[date], *, plot: bool = False) -> list[Path]:
+    """Swath file (and optional PNG with `--plot`) per storm date from the one 12Z file."""
     mesh.download_many([mesh.key_for(d) for d in storm_dates], RAW_DIR)
-    pngs = []
+    written: list[Path] = []
     for storm_date in storm_dates:
         da = mesh.daily_max(storm_date, RAW_DIR)
         max_mesh_mm = None if bool(da.isnull().all()) else round(float(da.max()), 2)
         swaths = swath.build_swaths(da, storm_date)
-        swath.write_swaths(swaths, DERIVED_DIR / swath.file_name(storm_date), 1, max_mesh_mm)
-        try:
-            points = reports.harris_reports(storm_date)
-            report_count = str(len(points))
-        except Exception as exc:  # noqa: BLE001 - the picture still lands without points
-            points = None
-            report_count = "unknown (fetch failed)"
-            print(f"SPC fetch failed: {exc!r}", file=sys.stderr)
-        title = (
-            f"Hailprint {storm_date} — radar-estimated hail size "
-            f"(MESH daily max, SPC 12Z-12Z day)\n{swath.CONFIDENCE}"
-        )
-        png = plot.render(
-            swaths, county.outline(), points, title, OUT_DIR / f"ingest-{storm_date}.png"
+        swath_path = swath.write_swaths(
+            swaths, DERIVED_DIR / swath.file_name(storm_date), 1, max_mesh_mm
         )
         max_text = "none (no valid cell)" if max_mesh_mm is None else f"{max_mesh_mm} mm"
         print(f"storm date: {storm_date}")
         print(f"max MESH in bbox: {max_text}")
-        print(f"SPC hail reports in Harris County: {report_count}")
-        print(png)
+        if plot:
+            try:
+                points = reports.harris_reports(storm_date)
+                report_count = str(len(points))
+            except Exception as exc:  # noqa: BLE001 - the picture still lands without points
+                points = None
+                report_count = "unknown (fetch failed)"
+                print(f"SPC fetch failed: {exc!r}", file=sys.stderr)
+            title = (
+                f"Hailprint {storm_date} — radar-estimated hail size "
+                f"(MESH daily max, SPC 12Z-12Z day)\n{swath.CONFIDENCE}"
+            )
+            png = plot_mod.render(
+                swaths, county.outline(), points, title, OUT_DIR / f"ingest-{storm_date}.png"
+            )
+            print(f"SPC hail reports in Harris County: {report_count}")
+            print(png)
+            written.append(png)
+        else:
+            written.append(swath_path)
         print(f"confidence: {swath.CONFIDENCE}")
-        pngs.append(png)
-    return pngs
+    return written
 
 
 def index() -> Path:
@@ -321,7 +331,7 @@ def score_days(storm_dates: list[date], radius_km: float) -> list[Path]:
     meta = {"radius_km": f"{radius_km:.15g}", "report_source": score.REPORT_SOURCE}
     tables, written = [], []
     for storm_date, swath_path in _swath_files(storm_dates):
-        text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, date.today())
+        text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, _utc_now().date())
         if text is None:
             continue
         day = score.score_day(

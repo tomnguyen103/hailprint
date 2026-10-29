@@ -31,7 +31,9 @@ def test_spike_command_is_gone(capsys):
     assert exc.value.code == 2
 
 
-def test_ingest_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
+def test_ingest_skips_spc_and_plot_by_default_and_writes_png_with_plot_flag(
+    tmp_path, monkeypatch, capsys
+):
     grid = np.full((4, 4), np.nan, dtype=np.float32)
     grid[1, 1] = 30.0
     da = xr.DataArray(
@@ -52,7 +54,16 @@ def test_ingest_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
 
     monkeypatch.setattr(reports, "fetch_hail_csv", boom)
 
+    # Default ingest (no --plot) does not call fetch_hail_csv or write PNG
     assert main(["ingest", "2024-05-28"]) == 0
+    default_out = capsys.readouterr()
+    assert default_out.err == ""
+    assert not (tmp_path / "out" / "ingest-2024-05-28.png").exists()
+    path = tmp_path / "derived" / "swaths-2024-05-28.parquet"
+    assert pq.read_metadata(path).metadata[b"file_count"] == b"1"
+
+    # With --plot, writes PNG even when SPC fetch fails
+    assert main(["ingest", "--plot", "2024-05-28"]) == 0
 
     captured = capsys.readouterr()
     lines = captured.out.splitlines()
@@ -63,8 +74,6 @@ def test_ingest_writes_png_when_spc_fetch_fails(tmp_path, monkeypatch, capsys):
     assert lines[4] == f"confidence: {swath.CONFIDENCE}"
     assert "SPC fetch failed: OSError('network down')" in captured.err
     assert (tmp_path / "out" / "ingest-2024-05-28.png").stat().st_size > 0
-    path = tmp_path / "derived" / "swaths-2024-05-28.parquet"
-    assert pq.read_metadata(path).metadata[b"file_count"] == b"1"
 
 
 def _stub_ingest(monkeypatch, tmp_path):
@@ -123,7 +132,7 @@ def test_ingest_on_the_real_day_matches_spc_reports(capsys, monkeypatch):
     # golden copy of https://www.spc.noaa.gov/climo/reports/240528_rpts_hail.csv
     monkeypatch.setattr(reports, "fetch_hail_csv", lambda storm_date: GOLDEN_SPC_CSV.read_text())
 
-    assert main(["ingest", "2024-05-28"]) == 0
+    assert main(["ingest", "--plot", "2024-05-28"]) == 0
     out = capsys.readouterr().out
     assert "damage" not in out.lower()
     assert "SPC hail reports in Harris County: 10" in out

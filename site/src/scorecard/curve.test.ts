@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { HEIGHT, LITERATURE_HSS, MARGIN, WIDTH, pathOf, xOf, yOf } from "./curve";
+import { HEIGHT, LITERATURE_HSS, MARGIN, WIDTH, pathOf, xOf, yMinOf, yOf } from "./curve";
 
 describe("curve scales", () => {
   it("maps the threshold range to the plot width", () => {
@@ -14,6 +14,18 @@ describe("curve scales", () => {
     expect(yOf(0)).toBe(280);
     expect(yOf(1)).toBe(MARGIN.top);
     expect(yOf(1)).toBe(16);
+  });
+
+  it("computes a dynamic floor for negative HSS and clamps yOf within the plot box", () => {
+    expect(yMinOf([0.1, 0.5, null])).toBe(0);
+    expect(yMinOf([-0.25, 0.4])).toBe(-0.4);
+    expect(yMinOf([-1.2, 0.1])).toBe(-1);
+    const yMin = yMinOf([-0.25, 0.4]);
+    expect(yOf(yMin, yMin)).toBe(280);
+    expect(yOf(1, yMin)).toBe(16);
+    expect(yOf(-0.25, yMin)).toBeGreaterThanOrEqual(16);
+    expect(yOf(-0.25, yMin)).toBeLessThanOrEqual(280);
+    expect(yOf(-1.0, -1)).toBe(280);
   });
 
   it("holds the literature HSS", () => {

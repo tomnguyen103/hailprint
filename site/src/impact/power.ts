@@ -47,13 +47,7 @@ export const POWER_FILL: FillSpec<Filled> = {
   bin: (share) => binOf(EDGES, FILLED, share),
 };
 
-// shortcut: NO_POWER_SOURCE_DATES lists the 3 pre-ODIN 2026 storm dates,
-// remove when EAGLE-I publishes a 2026 file
-export const NO_POWER_SOURCE_DATES: ReadonlySet<string> = new Set([
-  "2026-04-30",
-  "2026-06-02",
-  "2026-08-28",
-]);
+export const ODIN_START_DATE = "2026-01-01";
 
 /** The one line the fill control shows when the power file is missing or failed; null when nothing is wrong. */
 export function powerNote(
@@ -62,7 +56,7 @@ export function powerNote(
   stormDate?: string,
 ): string | null {
   if (file === null) {
-    return stormDate !== undefined && NO_POWER_SOURCE_DATES.has(stormDate)
+    return stormDate !== undefined && stormDate >= ODIN_START_DATE
       ? "No power source for this date."
       : "No power file for this storm date.";
   }

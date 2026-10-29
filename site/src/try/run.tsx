@@ -35,7 +35,7 @@ function selectText(node: HTMLElement) {
 export function Run({ index }: { index: StormsIndex }) {
   const [date, setDate] = useState(newestFirst(index.storms)[0]?.storm_date ?? "");
   const storm = index.storms.find((s) => s.storm_date === date);
-  const pairs = useAllFiles<Pairs>(storm ? [storm.files.pairs] : [], guardPairs);
+  const pairs = useAllFiles<Pairs>(storm ? [storm.files.pairs] : [], guardPairs, index.run_time);
   const [copied, setCopied] = useState<number | null>(null);
   const [fallback, setFallback] = useState(false);
   const timer = useRef<number | undefined>(undefined);

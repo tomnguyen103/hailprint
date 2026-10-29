@@ -189,6 +189,19 @@ def test_publish_one_date_writes_three_valid_files_and_one_index_entry(env, caps
     assert f"confidence: {swath.CONFIDENCE}" in capsys.readouterr().out
 
 
+def test_publish_passes_now_date_to_daily_csv(env, monkeypatch):
+    env.add_day(LATER)
+    recorded_today: list[date] = []
+
+    def spy_daily(storm_date, cache_dir, today):
+        recorded_today.append(today)
+        return str(env.served[storm_date])
+
+    monkeypatch.setattr(candidates, "daily_csv", spy_daily)
+    assert cli.main(["publish", "2024-05-28"]) == 0
+    assert recorded_today == [RUN_TIME.date()]
+
+
 def test_every_published_file_names_its_inputs_the_run_time_and_the_band(env):
     env.add_day(LATER)
 

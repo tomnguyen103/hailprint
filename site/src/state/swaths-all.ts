@@ -7,5 +7,6 @@ export function useSwathsAll(index: StormsIndex) {
   return useAllFiles<SwathFile>(
     index.storms.map((s) => s.files.swath),
     guardSwath,
+    index.run_time,
   );
 }

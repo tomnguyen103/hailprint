@@ -53,7 +53,7 @@ vi.mock("./state/route", () => ({ useRoute: () => stub.current }));
 vi.mock("./state/index", () => ({
   useIndex: () => ({ status: "ready", data: { storms: stub.storms }, showLoading: false, retry() {} }),
 }));
-vi.mock("./areas/storms", () => ({ StormsArea: () => null }));
+vi.mock("./storms/workspace", () => ({ Workspace: () => null }));
 vi.mock("./method/method", () => ({
   Method: () => {
     stub.log.push("method");
@@ -143,5 +143,133 @@ describe("App", () => {
     await mount();
 
     expect(stub.replaced).toEqual(["/storms/2025-05-01/map"]);
+  });
+});
+
+describe("ReceiptChip & ScopeDrawer accessibility", () => {
+  it("coordinates ReceiptChip single-open state and clamps fixed coordinates", async () => {
+    const { ReceiptChip, openReceiptChip, getActiveReceiptChipId, clampPopoverPosition } = await import(
+      "./shell/receipt-chip"
+    );
+    expect(typeof openReceiptChip).toBe("function");
+    expect(typeof getActiveReceiptChipId).toBe("function");
+    openReceiptChip("chip-a");
+    expect(getActiveReceiptChipId()).toBe("chip-a");
+    openReceiptChip("chip-b");
+    expect(getActiveReceiptChipId()).toBe("chip-b");
+    openReceiptChip(null);
+    expect(getActiveReceiptChipId()).toBeNull();
+    expect(typeof ReceiptChip).toBe("function");
+
+    // Near left edge of 390px mobile screen: clamps left to >= 8
+    const leftClamped = clampPopoverPosition(
+      { top: 100, bottom: 124, left: 12, right: 80 },
+      { width: 320, height: 160 },
+      { width: 390, height: 844 },
+    );
+    expect(leftClamped.left).toBe(8);
+    expect(leftClamped.top).toBe(130);
+
+    // Near bottom edge: flips above trigger
+    const bottomFlipped = clampPopoverPosition(
+      { top: 760, bottom: 784, left: 200, right: 360 },
+      { width: 300, height: 160 },
+      { width: 1280, height: 800 },
+    );
+    expect(bottomFlipped.top).toBe(594);
+  });
+
+  it("wraps Tab focus inside ScopeDrawer when open", async () => {
+    const { trapDrawerTab } = await import("./shell/scope-drawer");
+    const focused: string[] = [];
+    const first = { tagName: "BUTTON", closest: () => null, focus: () => focused.push("first") };
+    const last = { tagName: "A", closest: () => null, focus: () => focused.push("last") };
+    const root = {
+      querySelectorAll: () => [first, last],
+      contains: (el: unknown) => el === first || el === last,
+    } as unknown as HTMLElement;
+
+    vi.stubGlobal("document", { activeElement: last });
+    let prevented = false;
+    trapDrawerTab(
+      { key: "Tab", shiftKey: false, preventDefault: () => { prevented = true; } } as unknown as KeyboardEvent,
+      root,
+      true,
+    );
+    expect(prevented).toBe(true);
+    expect(focused).toEqual(["first"]);
+  });
+
+  it("renders Stamp mobile date button with aria-expanded, aria-controls, and chevron", async () => {
+    const { Stamp } = await import("./storms/stamp");
+    const storm = {
+      storm_date: "2024-05-28",
+      report_count: 5,
+      max_size_in: 1.5,
+      report_source: "wcm" as const,
+      max_mesh_mm: 40,
+      scored_reports: 5,
+      excluded_reports: 0,
+      table: [],
+      parcel_total: null,
+      files: {
+        swath: "s",
+        reports: "r",
+        pairs: "p",
+        zip_counts: null,
+        warnings: null,
+        power: null,
+        internet: null,
+      },
+    };
+    const vnode = Stamp({
+      storm,
+      reports: { status: "loading", showLoading: false, retry: () => {} },
+      step: null,
+      indexReceipt: {
+        storm_date: "2024-05-28",
+        sources: [],
+        confidence: "c",
+        run_time: "2024-06-01T00:00:00Z",
+        package_version: "0.1.0",
+      },
+      datesOpen: true,
+      onOpenDates: () => {},
+    } as never) as VNode<Record<string, unknown>>;
+    const children = vnode.props["children"] as VNode<Record<string, unknown>>[];
+    const btn = children[0]!;
+    expect(btn.props["aria-expanded"]).toBe(true);
+    expect(btn.props["aria-controls"]).toBe("storms-scope");
+  });
+
+  it("clears stale MapPane pick synchronously on storm switch and preserves step in Workspace Map tab href", async () => {
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+    vi.stubGlobal("window", {
+      matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      location: { pathname: "/storms/2024-05-28/map" },
+    });
+    const { isPickForStorm } = await import("./storms/map-pane");
+    expect(typeof isPickForStorm).toBe("function");
+    expect(
+      isPickForStorm(
+        { date: "2024-05-28", lngLat: [-95.36, 29.76], coveringMm: 25.4, nearest: null },
+        "2024-05-28",
+      ),
+    ).toBe(true);
+    expect(
+      isPickForStorm(
+        { date: "2024-05-28", lngLat: [-95.36, 29.76], coveringMm: 25.4, nearest: null },
+        "2025-05-01",
+      ),
+    ).toBe(false);
+    expect(isPickForStorm(null, "2024-05-28")).toBe(false);
+
+    const { stormTabItems } = await vi.importActual<typeof import("./storms/workspace")>("./storms/workspace");
+    expect(typeof stormTabItems).toBe("function");
+    const items = stormTabItems("2024-05-28", 64);
+    expect(items.find((t: { id: string; href: string }) => t.id === "map")?.href).toBe("/storms/2024-05-28/map/64");
+    expect(items.find((t: { id: string; href: string }) => t.id === "parcels")?.href).toBe("/storms/2024-05-28/parcels");
   });
 });

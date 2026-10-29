@@ -5,7 +5,7 @@ export const backfillTask = task({
   id: "backfill",
   machine: "medium-1x",
   queue: {
-    name: "backfill",
+    name: "pipeline",
     concurrencyLimit: 1,
   },
   run: async () => {

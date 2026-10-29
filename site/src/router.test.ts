@@ -12,8 +12,9 @@ it("resolves a storm date to the Map sub-tab by default", () => {
   expect(match("/storms/2024-05-28/score")).toEqual({ kind: "storms", date: "2024-05-28", tab: "score", step: null });
 });
 
-it("falls back to map for a bad tab", () => {
-  expect(match("/storms/2024-05-28/nope")).toEqual({ kind: "storms", date: "2024-05-28", tab: "map", step: null });
+it("gives not-found for an unknown storm tab", () => {
+  expect(match("/storms/2024-05-28/nope")).toEqual({ kind: "not-found" });
+  expect(match("/storms/2024-05-28/invalid-tab")).toEqual({ kind: "not-found" });
 });
 
 it("gives the method page, the first page when absent", () => {

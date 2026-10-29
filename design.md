@@ -98,8 +98,8 @@ for internet. The county fill shows one ramp at a time.
    true relative diameter and the object name. It is the map legend and the slider
    track for the threshold control.
 2. **Storm stamp.** A compact block: storm date in mono, the 12Z-to-12Z window as a
-   24-cell bar, the report count, and the max radar-estimated size.
-3. **Contingency grid.** A 2 x 2 grid (hit, miss, false alarm, unverifiable) with each
+   24-cell bar, the report count, and the max report size.
+3. **Contingency grid.** A 2 x 2 grid (hit, miss, false alarm, correct negatives) with each
    cell sized by count. It replaces a pie chart for every score.
 4. **Receipt chip.** A small mono chip after every published number. It opens a drawer
    with source, product, file name, run time, and the confidence band.

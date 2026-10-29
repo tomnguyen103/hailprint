@@ -70,6 +70,18 @@ def test_build_index_empty_listing_raises():
         archive.build_index(client=FakeS3([]))
 
 
+def test_build_index_ignores_non_date_folder_segments():
+    objects = [
+        (_key("20240529", "120000"), 1000),
+        (f"{PRODUCT}/index.html", 50),
+        (f"{PRODUCT}/README/notes.txt", 25),
+        (_key("99999999", "120000"), 10),
+    ]
+    df = archive.build_index(client=FakeS3(objects))
+    assert df["storm_date"].tolist() == [date(2024, 5, 28)]
+    assert df["file_count"].tolist() == [1]
+
+
 def test_write_atomic_replaces_the_old_index_file(tmp_path):
     path = tmp_path / "index" / "mesh-archive.parquet"
     old = pd.DataFrame(

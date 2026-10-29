@@ -1,5 +1,4 @@
 import { useEffect } from "preact/hooks";
-import { StormsArea } from "./areas/storms";
 import { Method } from "./method/method";
 import { Pipeline } from "./pipeline/pipeline";
 import { href, replace, type Area } from "./router";
@@ -10,6 +9,7 @@ import { EmptyState, ErrorState, LoadingState } from "./shell/states";
 import { useIndex } from "./state/index";
 import { useRoute } from "./state/route";
 import { landingStorm } from "./storms/select";
+import { Workspace } from "./storms/workspace";
 import { TryIt } from "./try/try";
 
 const NO_INDEX = "No storm date is published yet.";
@@ -50,7 +50,7 @@ export function App() {
     body = <TryIt index={index.data} tool={route.tool} />;
   } else {
     const storm = storms.find((s) => s.storm_date === route.date);
-    body = storm ? <StormsArea index={index.data} storm={storm} tab={route.tab} />
+    body = storm ? <Workspace index={index.data} storm={storm} tab={route.tab} />
       : <EmptyState sentence={`No storm date ${route.date} is published.`} link={{ href: href({ area: "storms", date: newest.storm_date }), label: newest.storm_date }} />;
   }
   return (

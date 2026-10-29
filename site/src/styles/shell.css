@@ -39,6 +39,9 @@
 }
 
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
   font: 600 20px/1 var(--serif);
   color: var(--ink);
   padding: 2px 0;
@@ -160,7 +163,7 @@
 .button {
   display: inline-flex;
   align-items: center;
-  height: 36px;
+  min-height: 40px;
   padding: 0 14px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
@@ -186,7 +189,7 @@
 }
 
 .button-small {
-  height: 28px;
+  min-height: 40px;
   padding: 0 10px;
   font-size: 12px;
 }
@@ -345,6 +348,7 @@
 }
 
 .chip {
+  position: relative;
   padding: 1px 6px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-control);
@@ -355,6 +359,14 @@
   cursor: pointer;
 }
 
+.chip::after {
+  content: "";
+  position: absolute;
+  inset: -8px -2px;
+  min-width: 24px;
+  min-height: 40px;
+}
+
 .chip:hover,
 .chip[aria-expanded="true"] {
   border-color: var(--accent);
@@ -362,16 +374,15 @@
 }
 
 .receipt-pop {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 15;
-  width: min(360px, 80vw);
+  position: fixed;
+  z-index: 50;
+  width: min(360px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: 12px 14px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-pane);
   background: var(--sheet);
-  box-shadow: var(--shadow);
   font-size: 0.85rem;
   white-space: normal;
   text-align: left;

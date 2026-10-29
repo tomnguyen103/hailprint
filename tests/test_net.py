@@ -111,6 +111,13 @@ def test_get_retries_a_timeout(monkeypatch):
     assert len(calls) == 2
 
 
+def test_get_rejects_response_exceeding_max_bytes(monkeypatch):
+    _script(monkeypatch, b"x" * 11)
+
+    with pytest.raises(RuntimeError, match="exceeds"):
+        net.get(URL, max_bytes=10)
+
+
 @pytest.fixture
 def server():
     """A local HTTP server. `hits` counts the requests per path."""

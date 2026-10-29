@@ -156,7 +156,7 @@ def run(
     file_count = 0
     for storm_date, swath_path in selected:
         try:
-            text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, date.today())
+            text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, now.date())
         except RuntimeError as exc:
             print(f"{storm_date}: SPC fetch failed, skipped: {exc!r}", file=sys.stderr)
             continue

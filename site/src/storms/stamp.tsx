@@ -12,6 +12,7 @@ interface Props {
   /** The map step; null off the map tab, where no cell is marked. */
   step: number | null;
   indexReceipt: Receipt;
+  datesOpen?: boolean;
   onOpenDates: () => void;
 }
 
@@ -23,7 +24,7 @@ export function sliderCell(step: number): number | null {
 }
 
 /** Storm date in mono, the 24-cell 12Z-to-12Z bar, the report count, and the max size. */
-export function Stamp({ storm, reports, step, indexReceipt, onOpenDates }: Props) {
+export function Stamp({ storm, reports, step, indexReceipt, datesOpen = false, onOpenDates }: Props) {
   const times = reports.status === "ready" ? reports.data.features.map((f) => f.properties.time) : [];
   const filled = cells(times);
   const hours = HOUR_LABELS.filter((_, i) => filled[i]);
@@ -31,8 +32,16 @@ export function Stamp({ storm, reports, step, indexReceipt, onOpenDates }: Props
   const label = `Storm window 12Z to 12Z, reports in ${hours.length} of ${CELLS} hours${marked === null ? "" : `, map time in the ${HOUR_LABELS[marked]} hour`}`;
   return (
     <div class="stamp">
-      <button type="button" class="stamp-date stamp-date-button mono" aria-haspopup="dialog" onClick={onOpenDates}>
-        {storm.storm_date}
+      <button
+        type="button"
+        class="stamp-date stamp-date-button mono"
+        aria-haspopup="dialog"
+        aria-expanded={datesOpen}
+        aria-controls="storms-scope"
+        onClick={onOpenDates}
+      >
+        <span>{storm.storm_date}</span>
+        <span class="stamp-date-chevron" aria-hidden="true" />
       </button>
       <span class="stamp-date stamp-date-text mono">{storm.storm_date}</span>
       <div class="stamp-bar" role="img" aria-label={label}>

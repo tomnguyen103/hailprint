@@ -40,6 +40,9 @@
 /* Run log rows */
 
 .row-pick {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
   padding: 4px 8px;
   margin: -4px -8px;
   border: 0;

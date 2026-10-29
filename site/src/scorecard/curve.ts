@@ -13,10 +13,21 @@ export function xOf(thresholdIn: number): number {
   return MARGIN.left + ((thresholdIn - X_MIN_IN) / (X_MAX_IN - X_MIN_IN)) * plot;
 }
 
-/** Metric value to the plot y: 0 at the bottom plot edge, 1 at the top. */
-export function yOf(value: number): number {
+/** Dynamic y-axis floor: 0 when all values are non-negative, else stepped down to 0.2 down to -1. */
+export function yMinOf(values: readonly (number | null)[]): number {
+  let min = 0;
+  for (const v of values) {
+    if (v !== null && Number.isFinite(v) && v < min) min = v;
+  }
+  return min >= 0 ? 0 : Math.max(-1, Math.floor(min * 5) / 5);
+}
+
+/** Metric value to the plot y: yMin at the bottom plot edge, 1 at the top, clamped to the plot box. */
+export function yOf(value: number, yMin = 0): number {
   const plot = HEIGHT - MARGIN.top - MARGIN.bottom;
-  return HEIGHT - MARGIN.bottom - value * plot;
+  const span = 1 - yMin;
+  const raw = HEIGHT - MARGIN.bottom - ((value - yMin) / (span > 0 ? span : 1)) * plot;
+  return Math.min(HEIGHT - MARGIN.bottom, Math.max(MARGIN.top, raw));
 }
 
 /** An SVG path that starts a new M after each null and joins with L otherwise. */

@@ -198,4 +198,58 @@ describe("useIndex", () => {
       expect(states.at(-1)!.data!.storms.map((s) => s.storm_date)).toEqual(["2025-05-01"]);
     }
   });
+
+  it("refetches cached pairs files when index.run_time changes", async () => {
+    const { usePairsAll, clearFileCache } = await import("./pairs-all");
+    clearFileCache();
+    let pairCalls = 0;
+    setFetch(async () => {
+      pairCalls += 1;
+      return jsonResponse({
+        receipt: {
+          storm_date: "2024-05-28",
+          sources: [],
+          confidence: "radar-estimated hail size",
+          run_time: `2026-10-29T1${pairCalls}:00:00Z`,
+          package_version: "0.1.0",
+        },
+        radius_km_default: 5,
+        radius_km_max: 25,
+        thresholds: [
+          {
+            threshold_mm: 19.05,
+            threshold_in: 0.75,
+            label: ">= 0.75 in",
+            swath_km2: 10,
+            unverifiable_km2: 0,
+            hits_by_km: [1],
+            false_alarm_min_km: [],
+          },
+        ],
+        reports: [{ size_in: 1.0, nearest_km_by_threshold: [0.5] }],
+        excluded_reports: 0,
+      });
+    });
+
+    let currentIndex = makeIndex(["2024-05-28"], "2026-10-29T11:00:00Z");
+    function PairsProbe() {
+      usePairsAll(currentIndex);
+      return null;
+    }
+
+    await act(() => render(h(PairsProbe, null), host));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+    expect(pairCalls).toBe(1);
+
+    // Same run_time reuses cache
+    await act(() => render(h(PairsProbe, null), host));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+    expect(pairCalls).toBe(1);
+
+    // Updated run_time invalidates/keys cache and fetches fresh pairs.json
+    currentIndex = makeIndex(["2024-05-28"], "2026-10-29T12:00:00Z");
+    await act(() => render(h(PairsProbe, null), host));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+    expect(pairCalls).toBe(2);
+  });
 });

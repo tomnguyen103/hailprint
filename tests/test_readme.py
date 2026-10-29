@@ -1,11 +1,15 @@
 """README names every CLI command, every week report, and the cloud tasks."""
 
+import json
 import re
 
-from hailprint import paths
+from hailprint import mesh, paths
 from hailprint.__main__ import build_parser
 
 README = (paths.ROOT / "README.md").read_text(encoding="utf-8")
+GLOSSARY = (paths.ROOT / "GLOSSARY.md").read_text(encoding="utf-8")
+DESIGN = (paths.ROOT / "design.md").read_text(encoding="utf-8")
+VERCEL = json.loads((paths.ROOT / "vercel.json").read_text(encoding="utf-8"))
 
 
 def test_readme_names_every_cli_command():
@@ -31,3 +35,27 @@ def test_readme_names_the_cloud_tasks():
 
 def test_readme_holds_no_live_map_sentence():
     assert "live map" not in README
+
+
+def test_readme_glossary_and_design_match_shipped_features():
+    assert "six short pages" in README
+    assert "impacts" in README
+    assert "hit, miss, false alarm, and correct negatives" in GLOSSARY
+    assert "hit, miss, false alarm, correct negatives" in DESIGN
+    assert "max report size" in DESIGN
+    assert not hasattr(mesh, "prefix")
+    assert not (paths.ROOT / "site" / "src" / "areas" / "storms.tsx").exists()
+
+
+def test_vercel_json_serves_security_headers():
+    headers_blocks = VERCEL.get("headers", [])
+    assert headers_blocks
+    headers = {h["key"]: h["value"] for b in headers_blocks for h in b.get("headers", [])}
+    assert headers.get("X-Content-Type-Options") == "nosniff"
+    assert headers.get("X-Frame-Options") == "DENY"
+    assert headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+    csp = headers.get("Content-Security-Policy", "")
+    assert "frame-ancestors 'none'" in csp
+    assert "object-src 'none'" in csp
+    assert "https://*.supabase.co" in csp
+    assert "blob:" in csp

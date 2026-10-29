@@ -58,7 +58,7 @@ function useMap(theme: Theme) {
 /** One side of the compare: the date's swath through the shared file cache, drawn on its own map. */
 function useSide(index: StormsIndex, date: string, theme: Theme, county: Load<FeatureCollection<MultiPolygon>> & { retry: () => void }) {
   const storm = index.storms.find((s) => s.storm_date === date);
-  const load = useAllFiles<SwathFile>(storm ? [storm.files.swath] : [], guardSwath);
+  const load = useAllFiles<SwathFile>(storm ? [storm.files.swath] : [], guardSwath, index.run_time);
   const swath = load.status === "ready" ? (load.data[0] ?? null) : null;
   const countyData = county.status === "ready" ? county.data : null;
   const map = useMap(theme);
