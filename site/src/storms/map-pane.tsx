@@ -148,8 +148,8 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   const toggle = useCallback(
     (thresholdMm: number) => {
       const next = new Set(hidden);
-      const visible = next.has(thresholdMm);
-      if (visible) next.delete(thresholdMm);
+      const wasHidden = next.has(thresholdMm);
+      if (wasHidden) next.delete(thresholdMm);
       else next.add(thresholdMm);
       setHidden(next);
     },

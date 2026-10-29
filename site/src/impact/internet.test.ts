@@ -1,10 +1,11 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { describe, expect, it } from "vitest";
+import { METRO_FIPS } from "../data/constants";
 import { DataError, type InternetFile, type PowerFile } from "../data/types";
 import { FORBIDDEN_WORD } from "../method/prose";
 import type { Load } from "../state/load";
-import { METRO_FIPS, percentText } from "./power";
-import { NET_EDGES, NET_FILLED, NET_LABELS, dropBin, dropOf, internetFeatures, internetNote, isInternet } from "./internet";
+import { percentText } from "./power";
+import { NET_FILL, dropOf, internetFeatures, internetNote, isInternet } from "./internet";
 
 const receipt = {
   storm_date: "2024-05-17",
@@ -47,7 +48,7 @@ describe("the drop", () => {
 
   it("rounds to three decimals so 1 - 0.9 reads as 0.1 and not 0.09999999999999998", () => {
     expect(dropOf(0.9)).toBe(0.1);
-    expect(dropBin(dropOf(0.9))).toBe("--net-4");
+    expect(NET_FILL.bin(dropOf(0.9))).toBe("--net-4");
   });
 
   it("never gives a zero drop the sign of a negative zero", () => {
@@ -64,7 +65,7 @@ describe("the drop bins", () => {
     [0.2, "--net-5"],
     [null, "gap"],
   ])("drop %s is bin %s", (drop, bin) => {
-    expect(dropBin(drop)).toBe(bin);
+    expect(NET_FILL.bin(drop)).toBe(bin);
   });
 
   it.each([
@@ -79,31 +80,31 @@ describe("the drop bins", () => {
     [0.2, "--net-5"],
     [1, "--net-5"],
   ])("drop %s sits in the right band", (drop, bin) => {
-    expect(dropBin(drop)).toBe(bin);
+    expect(NET_FILL.bin(drop)).toBe(bin);
   });
 
   it("reads 1.9 percent as the first bin and 2 percent as the second", () => {
-    expect(dropBin(dropOf(0.981))).toBe("--net-1");
-    expect(dropBin(dropOf(0.98))).toBe("--net-2");
-    expect(dropBin(dropOf(0.8))).toBe("--net-5");
-    expect(dropBin(dropOf(1))).toBe("none");
+    expect(NET_FILL.bin(dropOf(0.981))).toBe("--net-1");
+    expect(NET_FILL.bin(dropOf(0.98))).toBe("--net-2");
+    expect(NET_FILL.bin(dropOf(0.8))).toBe("--net-5");
+    expect(NET_FILL.bin(dropOf(1))).toBe("none");
   });
 
   it("holds each edge to 1e-9", () => {
-    NET_EDGES.forEach((edge, i) => {
-      expect(dropBin(edge - 1e-9)).toBe(`--net-${i + 1}`);
-      expect(dropBin(edge + 1e-9)).toBe(`--net-${i + 2}`);
+    NET_FILL.edges.forEach((edge, i) => {
+      expect(NET_FILL.bin(edge - 1e-9)).toBe(`--net-${i + 1}`);
+      expect(NET_FILL.bin(edge + 1e-9)).toBe(`--net-${i + 2}`);
     });
   });
 
   it("never gives a null ratio the bin of a zero drop", () => {
-    expect(dropBin(dropOf(null))).toBe("gap");
-    expect(dropBin(dropOf(null))).not.toBe(dropBin(dropOf(1)));
+    expect(NET_FILL.bin(dropOf(null))).toBe("gap");
+    expect(NET_FILL.bin(dropOf(null))).not.toBe(NET_FILL.bin(dropOf(1)));
   });
 
   it("names the five filled bins and a label for each", () => {
-    expect(NET_FILLED).toEqual(["--net-1", "--net-2", "--net-3", "--net-4", "--net-5"]);
-    expect(NET_LABELS).toEqual(["above 0 to 2%", "2 to 5%", "5 to 10%", "10 to 20%", "20% or more"]);
+    expect(NET_FILL.bins).toEqual(["--net-1", "--net-2", "--net-3", "--net-4", "--net-5"]);
+    expect(NET_FILL.labels).toEqual(["above 0 to 2%", "2 to 5%", "5 to 10%", "10 to 20%", "20% or more"]);
   });
 });
 
@@ -128,7 +129,7 @@ describe("the internet note", () => {
 
   it("never says down, the forbidden word, or a cause", () => {
     const failed: Load<InternetFile | null> = { status: "error", error: new DataError("internet.json", "bad") };
-    const text = [internetNote(null, ready), internetNote("x", failed), ...NET_LABELS].join(" ").toLowerCase();
+    const text = [internetNote(null, ready), internetNote("x", failed), ...NET_FILL.labels].join(" ").toLowerCase();
     for (const word of ["down", FORBIDDEN_WORD, "caused", "because"]) expect(text).not.toContain(word);
   });
 });

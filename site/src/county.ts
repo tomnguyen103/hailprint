@@ -1,5 +1,6 @@
-// Metro county bounds and outlines for the map. Pure: no MapLibre, no Preact.
+// Metro county bounds and outlines for the map. No MapLibre, no Preact. Holds the one cached counties request.
 import type { FeatureCollection, MultiPolygon } from "geojson";
+import { HARRIS_FIPS } from "./data/constants";
 import { fetchJson } from "./data/fetch";
 import { guardOutline } from "./data/guard";
 
@@ -15,15 +16,28 @@ export const HARRIS_BBOX: Bbox = [-96.010733, 29.44752, -94.858498, 30.220606];
 export const METRO_BBOX: Bbox = [-96.242208, 28.77556588, -94.303383, 30.680284];
 
 export const COUNTIES_FILE = "/counties.geojson";
-const HARRIS_FIPS = "48201";
 
 export function contains(bbox: Bbox, [lon, lat]: [number, number]): boolean {
   return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
 }
 
-/** The 8 metro outlines, copied verbatim from the Python package data. */
+let counties: Promise<FeatureCollection<MultiPolygon>> | null = null;
+
+/** The 8 metro outlines, copied verbatim from the Python package data. One request per page load. */
 export function fetchCounties(): Promise<FeatureCollection<MultiPolygon>> {
-  return fetchJson(COUNTIES_FILE, guardOutline, "");
+  if (counties) return counties;
+  const request = fetchJson(COUNTIES_FILE, guardOutline, "");
+  counties = request;
+  // A failed request leaves the cache only while it still holds this promise; the caller still sees the error.
+  request.catch(() => {
+    if (counties === request) counties = null;
+  });
+  return request;
+}
+
+/** Clears the cached request, for tests. */
+export function resetCounties(): void {
+  counties = null;
 }
 
 /** The Harris feature alone, so the single-outline map views stay unchanged. */

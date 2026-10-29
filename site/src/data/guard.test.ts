@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { DATE } from "./constants";
 import { fetchJson, setFetch } from "./fetch";
 import {
   GEOJSON_PATH,
@@ -284,6 +285,16 @@ describe.each(cases)("%s", (_name, file, guard, good, paths) => {
     const run = () => guard(without(good, path));
     expect(run).toThrow(DataError);
     expect(run).toThrow(new RegExp(`^${file.replace(".", "\\.")}: .*${key}`));
+  });
+});
+
+describe("the DATE pattern", () => {
+  it("accepts a zero-padded storm date", () => {
+    expect(DATE.test("2024-05-28")).toBe(true);
+  });
+
+  it.each(["2024-5-28", "2024-05-28x", "x2024-05-28", "2024-05-28\n", ""])("rejects %j", (text) => {
+    expect(DATE.test(text)).toBe(false);
   });
 });
 

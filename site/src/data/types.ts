@@ -1,4 +1,5 @@
 import type { FeatureCollection, MultiPolygon, Point } from "geojson";
+import type { STEP_MINUTES, STEPS } from "./constants";
 
 // Types for the published files under site/data/. The shapes follow
 // src/hailprint/schemas/ and publish.py; the guards in guard.ts check them at read time.
@@ -153,7 +154,7 @@ export interface PowerCounty {
 /** `power.json`: customers out per metro county over the impact window. `utilities` is null for EAGLE-I. */
 export interface PowerFile {
   receipt: Receipt;
-  window: { start: string; step_minutes: 15; steps: 192 };
+  window: { start: string; step_minutes: typeof STEP_MINUTES; steps: typeof STEPS };
   source: "eaglei" | "odin";
   utilities: string[] | null;
   counties: PowerCounty[];
@@ -170,7 +171,7 @@ export interface InternetCounty {
 /** `internet.json`: IODA ping reachability per metro county over the impact window. */
 export interface InternetFile {
   receipt: Receipt;
-  window: { start: string; step_minutes: 15; steps: 192 };
+  window: { start: string; step_minutes: typeof STEP_MINUTES; steps: typeof STEPS };
   signal: "ping-slash24";
   baseline_days: 7;
   counties: InternetCounty[];

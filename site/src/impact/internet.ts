@@ -3,15 +3,17 @@
 import type { Feature, FeatureCollection, MultiPolygon } from "geojson";
 import type { InternetFile, PowerFile } from "../data/types";
 import type { Load } from "../state/load";
+import { binOf, type FillSpec } from "./fill-spec";
 
 /** The drop where each bin starts after the zero bin: 2, 5, 10, and 20 percent. `design.md` holds the same four numbers. */
-export const NET_EDGES = [0.02, 0.05, 0.1, 0.2] as const;
-
-/** A bin is a design token name, `none` for no drop, or `gap` for a step the signal did not report. */
-export type NetBin = "none" | "gap" | "--net-1" | "--net-2" | "--net-3" | "--net-4" | "--net-5";
+const EDGES = [0.02, 0.05, 0.1, 0.2] as const;
 
 /** The five bins that draw a fill, lightest first. */
-export const NET_FILLED: readonly NetBin[] = ["--net-1", "--net-2", "--net-3", "--net-4", "--net-5"];
+type Filled = "--net-1" | "--net-2" | "--net-3" | "--net-4" | "--net-5";
+const FILLED: readonly Filled[] = ["--net-1", "--net-2", "--net-3", "--net-4", "--net-5"];
+
+/** A bin is a design token name, `none` for no drop, or `gap` for a step the signal did not report. */
+export type NetBin = "none" | "gap" | Filled;
 
 /** The drop below baseline as a fraction, rounded to 3 decimals like `internet.drop`; a ratio above 1 is no drop. */
 export function dropOf(ratio: number | null): number | null {
@@ -19,24 +21,22 @@ export function dropOf(ratio: number | null): number | null {
   return Math.max(0, Math.round((1 - ratio) * 1000) / 1000);
 }
 
-export function dropBin(drop: number | null): NetBin {
-  if (drop === null || Number.isNaN(drop)) return "gap";
-  if (drop <= 0) return "none";
-  const below = NET_EDGES.filter((edge) => drop >= edge).length;
-  return NET_FILLED[below]!;
-}
-
 const edgePercent = (edge: number) => String(Math.round(edge * 100));
-const FROM = [0, ...NET_EDGES];
+const FROM = [0, ...EDGES];
 
-/** The legend text of the five filled bins, from the same edges as the bins. */
-export const NET_LABELS: readonly string[] = FROM.map((from, i) =>
-  i === 0
-    ? `above 0 to ${edgePercent(FROM[1]!)}%`
-    : i === NET_EDGES.length
-      ? `${edgePercent(from)}% or more`
-      : `${edgePercent(from)} to ${edgePercent(FROM[i + 1]!)}%`,
-);
+/** The internet fill spec: the edges, the five filled bins, and the legend text from the same edges. */
+export const NET_FILL: FillSpec<Filled> = {
+  edges: EDGES,
+  bins: FILLED,
+  labels: FROM.map((from, i) =>
+    i === 0
+      ? `above 0 to ${edgePercent(FROM[1]!)}%`
+      : i === EDGES.length
+        ? `${edgePercent(from)}% or more`
+        : `${edgePercent(from)} to ${edgePercent(FROM[i + 1]!)}%`,
+  ),
+  bin: (drop) => binOf(EDGES, FILLED, drop),
+};
 
 /** True for an internet file; a power file has a `source` and no `signal`. */
 export function isInternet(file: PowerFile | InternetFile | null): file is InternetFile {
@@ -70,7 +70,7 @@ export function internetFeatures(
     const drop = county === undefined ? null : dropOf(county.ratio[step] ?? null);
     return {
       type: "Feature",
-      properties: { fips, name: String(outline.properties?.["name"]), drop, bin: dropBin(drop) },
+      properties: { fips, name: String(outline.properties?.["name"]), drop, bin: NET_FILL.bin(drop) },
       geometry: outline.geometry,
     };
   });

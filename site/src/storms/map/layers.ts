@@ -2,8 +2,8 @@
 import type { Feature, FeatureCollection, MultiPolygon, Point } from "geojson";
 import type { LayerSpecification } from "maplibre-gl";
 import { PHENOMENA, type Phenomena, type ReportsFile, type WarningProps, type WarningsFile } from "../../data/types";
-import { NET_FILLED } from "../../impact/internet";
-import { FILLED_BINS } from "../../impact/power";
+import { NET_FILL } from "../../impact/internet";
+import { POWER_FILL as POWER_FILL_SPEC } from "../../impact/power";
 import { WARNING_STYLES } from "../../impact/warning-styles";
 import { RULER } from "../../ruler";
 import type { Load } from "../../state/load";
@@ -61,7 +61,7 @@ export const REPORTS_LAYER = "report-points";
 type FillColor = NonNullable<Extract<LayerSpecification, { type: "fill" }>["paint"]>["fill-color"];
 
 /** The bins that draw a county fill: the power ramp and the internet ramp. Their token names differ, so one layer serves both. */
-const COUNTY_BINS: readonly string[] = [...FILLED_BINS, ...NET_FILLED];
+const COUNTY_BINS: readonly string[] = [...POWER_FILL_SPEC.bins, ...NET_FILL.bins];
 
 /** The fill colour of a county: the bin name picks its `--out-N` or `--net-N` token. A zero or missing bin has no colour. */
 export function powerFillColor(): FillColor {

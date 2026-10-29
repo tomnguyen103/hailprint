@@ -2,9 +2,7 @@
 // and the first missing or mistyped key, so the error state can name the problem.
 // Each guard checks every key the site reads from that file, and nothing more.
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { METRO_FIPS } from "../impact/power";
-import { DATE } from "../router";
-import { STEPS } from "../time/step";
+import { DATE, METRO_FIPS, STEP_MINUTES, STEPS } from "./constants";
 import type {
   InternetFile,
   Pairs,
@@ -313,7 +311,7 @@ function guardWindow(file: string, root: Rec): void {
   if (start.slice(0, 10) !== stormDate) {
     throw new DataError(file, `window.start is on ${start.slice(0, 10)}, not the storm date ${String(stormDate)}`);
   }
-  if (window["step_minutes"] !== 15) throw new DataError(file, "window.step_minutes is not 15");
+  if (window["step_minutes"] !== STEP_MINUTES) throw new DataError(file, `window.step_minutes is not ${STEP_MINUTES}`);
   if (window["steps"] !== STEPS) throw new DataError(file, `window.steps is not ${STEPS}`);
 }
 

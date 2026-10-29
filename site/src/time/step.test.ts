@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_STEP, LAST_STEP, STEPS, STEP_MS, parseStep, readout, reportStep, resolveStep, stepTime } from "./step";
+import { STEPS } from "../data/constants";
+import { DEFAULT_STEP, LAST_STEP, STEP_MS, parseStep, readout, reportStep, resolveStep, stepTime } from "./step";
 
 describe("the impact window", () => {
   it("holds 192 steps of 15 minutes, 12:00 UTC on D to 12:00 UTC on D+2", () => {

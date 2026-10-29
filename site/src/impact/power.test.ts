@@ -2,21 +2,17 @@ import type { FeatureCollection, MultiPolygon } from "geojson";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { METRO_FIPS } from "../data/constants";
 import { DataError, type PowerFile } from "../data/types";
 import type { Load } from "../state/load";
-import { resolveStep } from "../time/step";
 import {
-  BIN_EDGES,
-  HARRIS_FIPS,
-  METRO_FIPS,
   ODIN_LABEL,
+  POWER_FILL,
   countyFeatures,
-  harrisPeak,
   hatchPixels,
   hexRgb,
   percentText,
   powerNote,
-  shareBin,
   shareOut,
 } from "./power";
 
@@ -65,7 +61,7 @@ describe("the share bins", () => {
     [0.3, "--out-5"],
     [null, "gap"],
   ])("share %s is bin %s", (share, bin) => {
-    expect(shareBin(share)).toBe(bin);
+    expect(POWER_FILL.bin(share)).toBe(bin);
   });
 
   it.each([
@@ -79,11 +75,11 @@ describe("the share bins", () => {
     [0.3, "--out-5"],
     [1, "--out-5"],
   ])("share %s sits in the right band", (share, bin) => {
-    expect(shareBin(share)).toBe(bin);
+    expect(POWER_FILL.bin(share)).toBe(bin);
   });
 
   it("never gives a null step the bin of a zero step", () => {
-    expect(shareBin(null)).not.toBe(shareBin(0));
+    expect(POWER_FILL.bin(null)).not.toBe(POWER_FILL.bin(0));
   });
 });
 
@@ -107,21 +103,21 @@ const PARITY: [number | null, number, string][] = [
 
 describe("the TS bin and the Python bin", () => {
   it.each(PARITY)("out %s of %s customers is %s", (out, customers, bin) => {
-    expect(shareBin(shareOut(out, customers))).toBe(bin);
+    expect(POWER_FILL.bin(shareOut(out, customers))).toBe(bin);
   });
 
   it("holds each edge to 1e-9", () => {
-    BIN_EDGES.forEach((edge, i) => {
-      expect(shareBin(edge - 1e-9)).toBe(`--out-${i + 1}`);
-      expect(shareBin(edge + 1e-9)).toBe(`--out-${i + 2}`);
+    POWER_FILL.edges.forEach((edge, i) => {
+      expect(POWER_FILL.bin(edge - 1e-9)).toBe(`--out-${i + 1}`);
+      expect(POWER_FILL.bin(edge + 1e-9)).toBe(`--out-${i + 2}`);
     });
   });
 
-  it("reads the same four edges as BIN_EDGES in power.py", () => {
+  it("reads the same four edges as power.py", () => {
     const path = fileURLToPath(new URL("../../../src/hailprint/power.py", import.meta.url));
-    const found = /^BIN_EDGES = \(([^)]*)\)/m.exec(readFileSync(path, "utf8"));
+    const found = /^BIN_\w+ = \(([^)]*)\)/m.exec(readFileSync(path, "utf8"));
     expect(found).not.toBeNull();
-    expect(found![1]!.split(",").map(Number)).toEqual([...BIN_EDGES]);
+    expect(found![1]!.split(",").map(Number)).toEqual([...POWER_FILL.edges]);
   });
 });
 
@@ -142,31 +138,6 @@ describe("the share out", () => {
     expect(percentText(0)).toBe("0%");
     expect(percentText(0.0004)).toBe("<0.1%");
     expect(percentText(null)).toBe("no data");
-  });
-});
-
-describe("the Harris peak", () => {
-  it("is the first step of the largest Harris value", () => {
-    const file = powerFile({ [HARRIS_FIPS]: series({ 40: 5, 80: 9, 90: 9, 100: 3 }) });
-    expect(harrisPeak(file)).toBe(80);
-  });
-
-  it("ignores a gap and another county", () => {
-    const file = powerFile({ [HARRIS_FIPS]: series({ 10: 4, 12: null }, null), "48157": series({ 5: 999 }) });
-    expect(harrisPeak(file)).toBe(10);
-  });
-
-  it("is null without a file, with no outage, or with only gaps", () => {
-    expect(harrisPeak(null)).toBeNull();
-    expect(harrisPeak(powerFile())).toBeNull();
-    expect(harrisPeak(powerFile({ [HARRIS_FIPS]: series({}, null) }))).toBeNull();
-  });
-
-  it("opens the map at the peak with a valid file and at step 48 without one", () => {
-    const file = powerFile({ [HARRIS_FIPS]: series({ 77: 12 }) });
-    expect(resolveStep(null, harrisPeak(file))).toBe(77);
-    expect(resolveStep(null, harrisPeak(null))).toBe(48);
-    expect(resolveStep(20, harrisPeak(file))).toBe(20);
   });
 });
 
@@ -228,7 +199,7 @@ describe("the county features at a step", () => {
     const file = powerFile({ "48201": series({}, null) });
     const [harris] = countyFeatures(OUTLINES, file, 60).features;
     expect(harris!.properties.bin).toBe("gap");
-    expect(harris!.properties.bin).not.toBe(shareBin(0));
+    expect(harris!.properties.bin).not.toBe(POWER_FILL.bin(0));
   });
 
   it("draws a gap for a county the file does not list", () => {

@@ -1,9 +1,9 @@
 // Step math for the impact window: 192 steps of 15 minutes, 12:00 UTC on D to 12:00 UTC on D+2.
 // Step 0 is 12:00 UTC on the storm date D. Step 48 is 00:00 UTC on D+1. Pure: no DOM, no clock.
 
-export const STEP_MINUTES = 15;
+import { STEP_MINUTES, STEPS } from "../data/constants";
+
 export const STEPS_PER_HOUR = 60 / STEP_MINUTES;
-export const STEPS = 192;
 export const LAST_STEP = STEPS - 1;
 /** The step a link without a step opens: 00:00 UTC on D+1, until a power file names a peak. */
 export const DEFAULT_STEP = 48;
