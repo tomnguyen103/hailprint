@@ -18,7 +18,11 @@ export function useIndex(): Load<StormsIndex> & { showLoading: boolean; retry: (
   const runRefresh = useRef(latest<StormsIndex>());
 
   useEffect(() => {
-    setFresh(null);
+    if (!initial.data) return;
+    setFresh((prev) => {
+      if (prev === null) return null;
+      return initial.data.run_time >= prev.run_time ? null : prev;
+    });
   }, [initial.data]);
 
   useEffect(() => {
@@ -37,7 +41,9 @@ export function useIndex(): Load<StormsIndex> & { showLoading: boolean; retry: (
       runRefresh
         .current(() => fetchJson(INDEX_FILE, guardIndex))
         .then((next) => {
-          if (live && next !== STALE) setFresh(next);
+          if (live && next !== STALE) {
+            setFresh((prev) => (prev === null || next.run_time >= prev.run_time ? next : prev));
+          }
         })
         .catch(() => {
           // Keep existing ready data when a background refresh fails.
@@ -60,7 +66,9 @@ export function useIndex(): Load<StormsIndex> & { showLoading: boolean; retry: (
   }, []);
 
   if (initial.status === "ready") {
-    return { ...initial, data: fresh ?? initial.data };
+    const chosen =
+      fresh !== null && fresh.run_time >= initial.data.run_time ? fresh : initial.data;
+    return { ...initial, data: chosen };
   }
   if (fresh !== null) {
     return { status: "ready", data: fresh, showLoading: false, retry: initial.retry };

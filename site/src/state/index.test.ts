@@ -5,10 +5,10 @@ import { setFetch } from "../data/fetch";
 import type { StormsIndex } from "../data/types";
 import { REFRESH_MS, useIndex } from "./index";
 
-function makeIndex(dates: string[]): StormsIndex {
+function makeIndex(dates: string[], run_time = "2026-10-29T12:00:00Z"): StormsIndex {
   return {
     confidence: "radar-estimated hail size",
-    run_time: "2026-10-29T12:00:00Z",
+    run_time,
     package_version: "0.1.0",
     radius_km_default: 5,
     storms: dates.map((storm_date) => ({
@@ -157,6 +157,45 @@ describe("useIndex", () => {
     expect(current.status).toBe("ready");
     if (current.status === "ready") {
       expect(current.data.storms.map((s) => s.storm_date)).toEqual(["2024-05-28"]);
+    }
+  });
+
+  it("does not overwrite a newer refreshed index if the initial load settles later", async () => {
+    let resolveInitial!: (r: Response) => void;
+    let calls = 0;
+    setFetch(() => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise<Response>((resolve) => {
+          resolveInitial = resolve;
+        });
+      }
+      return Promise.resolve(jsonResponse(makeIndex(["2025-05-01"], "2026-10-29T13:00:00Z")));
+    });
+
+    const states: ReturnType<typeof useIndex>[] = [];
+    function Probe() {
+      states.push(useIndex());
+      return null;
+    }
+
+    await act(() => render(h(Probe, null), host));
+    // Trigger visibility refresh while initial request is still pending
+    await act(async () => emitVisibility());
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+    expect(states.at(-1)?.status).toBe("ready");
+    if (states.at(-1)?.status === "ready") {
+      expect(states.at(-1)!.data!.storms.map((s) => s.storm_date)).toEqual(["2025-05-01"]);
+    }
+
+    // Now settle the older initial request
+    await act(async () => {
+      resolveInitial(jsonResponse(makeIndex(["2024-05-28"], "2026-10-29T12:00:00Z")));
+      await vi.advanceTimersByTimeAsync(600);
+    });
+    expect(states.at(-1)?.status).toBe("ready");
+    if (states.at(-1)?.status === "ready") {
+      expect(states.at(-1)!.data!.storms.map((s) => s.storm_date)).toEqual(["2025-05-01"]);
     }
   });
 });

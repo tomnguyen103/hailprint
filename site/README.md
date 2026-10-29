@@ -26,7 +26,7 @@ page, and `/pipeline` opens Runs.
 The site reads published JSON from `DATA_BASE` (`import.meta.env.VITE_DATA_BASE ?? "/data/"` in `src/data/fetch.ts`). In production, `VITE_DATA_BASE` points to the public Supabase Storage bucket (`hailprint-public`), so a data refresh from Trigger.dev needs no site deploy.
 In local development, `uv run hailprint publish` at the repo root writes `site/data/storms.json` and one folder per
 storm date under `site/data/storms/<date>/`, served at `/data/`.
-Without the index the site shows "No storm date is published yet."
+If `storms.json` is missing, `fetchJson` returns an HTTP 404 error and the storm routes render an error state; when `storms.json` is valid and contains no storms, the site shows "No storm date is published yet."
 The same command writes `site/data/pipeline.json`: the run log, the archive coverage, and the source list for `/pipeline`.
 A storm date folder also holds `warnings.geojson` where `hailprint warnings` ran, `power.json` where `hailprint power` ran, and `internet.json` where `hailprint internet` ran and `publish` used `--with-internet`.
 `uv run python site/scripts/pool_golden.py` writes `site/data/pooled-golden.json`, the pooled table at

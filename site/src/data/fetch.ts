@@ -15,7 +15,11 @@ export function normalizeBase(base: string): string {
   return base.endsWith("/") ? base : `${base}/`;
 }
 
-export const DATA_BASE = normalizeBase(import.meta.env.VITE_DATA_BASE ?? "/data/");
+export function resolveDataBase(envBase: string | undefined): string {
+  return normalizeBase(envBase ?? "/data/");
+}
+
+export const DATA_BASE = resolveDataBase(import.meta.env.VITE_DATA_BASE);
 
 /** Fetch `<base><path>` and pass the parsed body through `guard`. The default base is `/data/`. */
 export async function fetchJson<T>(path: string, guard: (value: unknown) => T, base = DATA_BASE): Promise<T> {
