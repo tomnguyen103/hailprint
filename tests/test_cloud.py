@@ -155,10 +155,10 @@ def test_sync_down_and_sync_up_on_empty_or_clean_tree_perform_zero_puts(tmp_path
 
 
 def test_sync_down_rejects_unsafe_keys(tmp_path: Path):
-    s3 = FakeS3({("hailprint-state", "../escape.txt"): b"bad"})
-
-    with pytest.raises(ValueError, match="unsafe S3 key"):
-        cloud.sync_down(s3, "hailprint-state", ("",), tmp_path / "data")
+    for bad_key in ("../escape.txt", "/abs/path.txt", "C:/win/escape.txt", "a\\b.txt"):
+        s3 = FakeS3({("hailprint-state", bad_key): b"bad"})
+        with pytest.raises(ValueError, match="unsafe S3 key"):
+            cloud.sync_down(s3, "hailprint-state", ("",), tmp_path / "data")
 
 
 def test_sync_up_excludes_odin_prefix_on_state_upload(tmp_path: Path):

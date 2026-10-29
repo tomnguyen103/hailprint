@@ -72,9 +72,14 @@ def s3_client(config: Config) -> Any:
     )
 
 
-def _validate_key(key: str) -> None:
-    if not key or key.startswith("/") or "\\" in key or ".." in key.split("/"):
+def _validate_key(key: str, local_base: Path | None = None) -> None:
+    if not key or key.startswith("/") or "\\" in key or ":" in key or ".." in key.split("/"):
         raise ValueError("unsafe S3 key")
+    if local_base is not None:
+        base_resolved = local_base.resolve()
+        dest_resolved = (local_base / key).resolve()
+        if not dest_resolved.is_relative_to(base_resolved) or dest_resolved == base_resolved:
+            raise ValueError("unsafe S3 key")
 
 
 def _list_keys(client: Any, bucket: str, prefix: str) -> list[str]:
@@ -112,7 +117,7 @@ def sync_down(
             if key in seen:
                 continue
             seen.add(key)
-            _validate_key(key)
+            _validate_key(key, local_base)
             resp = client.get_object(Bucket=bucket, Key=key)
             body: bytes = resp["Body"].read()
             dest = local_base / key
