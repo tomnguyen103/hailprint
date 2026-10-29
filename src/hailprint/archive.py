@@ -26,6 +26,9 @@ def build_index(client=None) -> pd.DataFrame:
     if objects.empty:
         raise RuntimeError(f"no objects under s3://{BUCKET}/{PREFIX}")
     objects["folder"] = objects["key"].str.split("/").str[2]
+    objects = objects.loc[objects["folder"].astype(str).str.fullmatch(r"\d{8}")].copy()
+    if objects.empty:
+        raise RuntimeError(f"no objects under s3://{BUCKET}/{PREFIX}")
     objects["is_12z"] = objects["key"].str.endswith("-120000.grib2.gz")
     grouped = objects.groupby("folder").agg(
         file_count=("key", "size"), bytes=("size", "sum"), has_12z=("is_12z", "any")

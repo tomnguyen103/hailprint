@@ -138,13 +138,14 @@ def all_days(
     wcm = harris_days(wcm_path)
     today = date.today() if today is None else today
     wcm_end = wcm_last_day(wcm_path)
-    later = sorted({d for d in index["storm_date"] if d > wcm_end})
+    later = sorted({d for d in index["storm_date"] if d >= wcm_end})
     with ThreadPoolExecutor(FETCH_THREADS) as pool:
         texts = list(pool.map(lambda d: daily_csv(d, cache_dir, today), later))
     # one 404 day is a normal skip; a run of them means the URL scheme changed
-    if len(later) > 1 and all(text is None for text in texts):
+    after = [t for d, t in zip(later, texts, strict=True) if d > wcm_end]
+    if len(after) > 1 and all(text is None for text in after):
         raise RuntimeError(
-            f"SPC daily CSV not found for any of the {len(later)} days after the WCM"
+            f"SPC daily CSV not found for any of the {len(after)} days after the WCM"
         )
     rows = []
     for day, text in zip(later, texts, strict=True):
@@ -152,7 +153,18 @@ def all_days(
         if harris is not None and len(harris):
             rows.append((day, len(harris), harris["size_in"].max(), "spc-daily"))
     filled = pd.DataFrame(rows, columns=list(wcm.columns))
-    return wcm if filled.empty else pd.concat([wcm, filled], ignore_index=True)
+    if filled.empty:
+        return wcm
+    combined = pd.concat([wcm, filled], ignore_index=True)
+    return (
+        combined.groupby("storm_date", as_index=False, sort=False)
+        .agg(
+            report_count=("report_count", "max"),
+            max_size_in=("max_size_in", "max"),
+            report_source=("report_source", "first"),
+        )
+        .loc[:, list(wcm.columns)]
+    )
 
 
 def rank(days: pd.DataFrame, index: pd.DataFrame) -> pd.DataFrame:

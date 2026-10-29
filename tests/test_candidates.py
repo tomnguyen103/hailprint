@@ -214,7 +214,7 @@ def test_wcm_last_day_is_the_last_convective_day_of_any_row(tmp_path):
 
 def test_all_days_fills_a_day_after_the_wcm_end_from_the_daily_csv(tmp_path, monkeypatch):
     day = date(2026, 1, 5)
-    _serve(monkeypatch, {day: THREE_HARRIS})
+    _serve(monkeypatch, {WCM_END: THREE_HARRIS, day: THREE_HARRIS})
 
     days = _all_days(tmp_path, _index(WCM_END, day)).set_index("storm_date")
 
@@ -227,17 +227,31 @@ def test_all_days_fills_a_day_after_the_wcm_end_from_the_daily_csv(tmp_path, mon
 
 def test_all_days_fetches_only_days_after_the_last_wcm_day(tmp_path, monkeypatch):
     next_day = date(2024, 5, 29)
-    calls = _serve(monkeypatch, {next_day: THREE_HARRIS})
+    calls = _serve(monkeypatch, {WCM_END: THREE_HARRIS, next_day: THREE_HARRIS})
 
-    days = _all_days(tmp_path, _index(WCM_END, next_day))
+    days = _all_days(tmp_path, _index(date(2024, 5, 27), WCM_END, next_day))
 
-    assert calls == [next_day]
+    assert sorted(calls) == [WCM_END, next_day]
     assert days["report_source"].tolist() == ["wcm", "spc-daily"]
+
+
+def test_all_days_merges_wcm_end_day_with_daily_csv_taking_max_count_and_size(
+    tmp_path, monkeypatch
+):
+    # WCM has 3 reports, max 1.75 in on WCM_END (2024-05-28).
+    # Daily CSV for WCM_END has 4 reports (including early morning next calendar day), max 2.50 in.
+    four_harris = THREE_HARRIS + "0800,250,D,Harris,TX,29.75,-95.25,x\n"
+    _serve(monkeypatch, {WCM_END: four_harris})
+
+    days = _all_days(tmp_path, _index(WCM_END)).set_index("storm_date")
+
+    assert days.loc[WCM_END, "report_count"] == 4
+    assert days.loc[WCM_END, "max_size_in"] == 2.50
 
 
 def test_all_days_drops_a_day_with_no_harris_tx_row(tmp_path, monkeypatch):
     day = date(2026, 1, 5)
-    _serve(monkeypatch, {day: NOT_HARRIS})
+    _serve(monkeypatch, {WCM_END: THREE_HARRIS, day: NOT_HARRIS})
 
     days = _all_days(tmp_path, _index(WCM_END, day))
 

@@ -164,8 +164,12 @@ def _multipolygon(geometry: shapely.Geometry, decimals: int = COORD_DECIMALS) ->
     """GeoJSON coordinates by RFC 7946: counter-clockwise exteriors, clockwise holes."""
     # shortcut: swath and report coordinates round to 6 decimals (0.1 m), upgrade when a
     # sub-metre use appears
-    rounded = shapely.transform(geometry, lambda xy: np.round(xy, decimals))
-    polygons = [orient(polygon, 1.0) for polygon in shapely.get_parts(rounded)]
+    rounded = shapely.make_valid(shapely.transform(geometry, lambda xy: np.round(xy, decimals)))
+    polygons = [
+        orient(polygon, 1.0)
+        for polygon in shapely.get_parts(rounded)
+        if isinstance(polygon, shapely.Polygon) and not polygon.is_empty
+    ]
     return {
         "type": "MultiPolygon",
         "coordinates": [

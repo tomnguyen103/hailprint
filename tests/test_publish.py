@@ -369,6 +369,24 @@ def test_swath_doc_rounds_coordinates_to_six_decimals():
     assert [-95.123457, 29.1] in coordinates
 
 
+def test_multipolygon_repairs_bowtie_self_intersection_caused_by_rounding():
+    # Two triangles meeting at a narrow neck that collapses to a shared vertex at 4 decimals
+    poly = shapely.Polygon(
+        [
+            (-95.0000, 29.0000),
+            (-95.0000, 29.0100),
+            (-95.0050, 29.00504),
+            (-95.0100, 29.0100),
+            (-95.0100, 29.0000),
+            (-95.0050, 29.00496),
+        ]
+    )
+    assert poly.is_valid
+    doc = publish._multipolygon(poly, decimals=4)
+    rebuilt = shapely.geometry.shape(doc)
+    assert rebuilt.is_valid
+
+
 def test_swath_doc_of_one_class_and_of_an_empty_frame_validate():
     one = _fixture_swaths().iloc[:1]
     empty = _fixture_swaths().iloc[:0]

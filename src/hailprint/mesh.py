@@ -1,6 +1,7 @@
 """MESH download, GRIB2 decode, and the daily max for one storm date."""
 
 import gzip
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
@@ -18,6 +19,7 @@ from hailprint.county import bbox
 BUCKET = "noaa-mrms-pds"
 PRODUCT = "MESH_Max_1440min_00.50"
 UNITS_SOURCE = "NSSL MRMS GRIB2 table; the GRIB2 file carries no unit string"
+MAX_DECODE_BYTES = 64 * 1024 * 1024
 
 
 def prefix(storm_date: date) -> str:
@@ -36,7 +38,17 @@ def key_for(storm_date: date) -> str:
 
 def local_path(key: str, raw_dir: Path) -> Path:
     """raw_dir / <folder date> / <file name>."""
-    return Path(raw_dir) / key.split("/")[2] / key.rsplit("/", 1)[1]
+    parts = key.split("/")
+    if len(parts) != 4 or not re.fullmatch(r"\d{8}", parts[2]):
+        raise ValueError(f"unsafe MESH key: {key!r}")
+    filename = parts[3]
+    if not filename or "/" in filename or "\\" in filename or ".." in filename:
+        raise ValueError(f"unsafe MESH key: {key!r}")
+    base = Path(raw_dir)
+    dest = base / parts[2] / filename
+    if not dest.resolve().is_relative_to(base.resolve()):
+        raise ValueError(f"unsafe MESH key: {key!r}")
+    return dest
 
 
 def s3_client():
@@ -70,14 +82,21 @@ def mask_sentinels(da: xr.DataArray) -> xr.DataArray:
     return da.where(da >= 0)
 
 
-def decode(path: Path) -> xr.DataArray:
+def decode(path: Path, max_bytes: int = MAX_DECODE_BYTES) -> xr.DataArray:
     """Read one MESH file: mask sentinels, shift longitude to -180..180, crop to the Harris bbox."""
     path = Path(path)
     opener = gzip.open if path.suffix == ".gz" else open
     # eccodes keys, not cfgrib.open_dataset: cfgrib spends 7 s per file on the
     # 24.5 M-point coordinate build and eccodes reads the grid in 0.2 s
     with opener(path, "rb") as fh:
-        handle = eccodes.codes_new_from_message(fh.read())
+        raw = fh.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise RuntimeError(f"MESH file {path.name} exceeds {max_bytes} bytes")
+    codes_err = getattr(eccodes, "CodesInternalError", Exception)
+    try:
+        handle = eccodes.codes_new_from_message(raw)
+    except codes_err as exc:
+        raise RuntimeError(f"bad GRIB2 message in {path}: {exc}") from exc
     try:
         # eccodes has no precise return types; these keys hold numbers in a MESH GRIB2 file
         ni = cast(int, eccodes.codes_get(handle, "Ni"))
@@ -92,6 +111,8 @@ def decode(path: Path) -> xr.DataArray:
         if eccodes.codes_get(handle, "bitmapPresent"):
             raise ValueError(f"{path.name}: bitmapPresent is 1, expected 0")
         values = eccodes.codes_get_values(handle).reshape(nj, ni)
+    except codes_err as exc:
+        raise RuntimeError(f"bad GRIB2 message in {path}: {exc}") from exc
     finally:
         eccodes.codes_release(handle)
     lon = ((lon0 + dlon * np.arange(ni) + 180) % 360) - 180

@@ -50,6 +50,36 @@ def test_key_for_the_storm_date_is_the_cached_12z_path():
     assert mesh.local_path(mesh.key_for(STORM_DATE), RAW_DIR) == RAW_12Z
 
 
+@pytest.mark.parametrize(
+    "bad_key",
+    [
+        "CONUS/MESH_Max_1440min_00.50/../evil.grib2.gz",
+        "CONUS/MESH_Max_1440min_00.50/20240529/../../evil.grib2.gz",
+        "CONUS/MESH_Max_1440min_00.50/notadate/file.grib2.gz",
+    ],
+)
+def test_local_path_rejects_traversal_and_non_date_folders(tmp_path, bad_key):
+    with pytest.raises(ValueError, match="unsafe MESH key"):
+        mesh.local_path(bad_key, tmp_path)
+
+
+def test_decode_wraps_eccodes_error_as_runtime_error(tmp_path, monkeypatch):
+    grib = tmp_path / "corrupt.grib2"
+    grib.write_bytes(b"corrupt")
+
+    class FakeCodesError(Exception):
+        pass
+
+    monkeypatch.setattr(mesh.eccodes, "CodesInternalError", FakeCodesError, raising=False)
+
+    def raise_corrupt(raw):
+        raise FakeCodesError("corrupt message")
+
+    monkeypatch.setattr(mesh.eccodes, "codes_new_from_message", raise_corrupt)
+    with pytest.raises(RuntimeError, match="bad GRIB2 message"):
+        mesh.decode(grib)
+
+
 def test_download_many_empty_returns_empty_without_a_client(tmp_path, monkeypatch):
     def no_client():
         raise AssertionError("client built")
