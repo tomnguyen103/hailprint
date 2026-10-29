@@ -22,10 +22,6 @@ UNITS_SOURCE = "NSSL MRMS GRIB2 table; the GRIB2 file carries no unit string"
 MAX_DECODE_BYTES = 64 * 1024 * 1024
 
 
-def prefix(storm_date: date) -> str:
-    return f"CONUS/{PRODUCT}/{storm_date:%Y%m%d}/"
-
-
 def key_for(storm_date: date) -> str:
     """Key of the one file that holds the storm date.
 

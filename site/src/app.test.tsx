@@ -53,7 +53,18 @@ vi.mock("./state/route", () => ({ useRoute: () => stub.current }));
 vi.mock("./state/index", () => ({
   useIndex: () => ({ status: "ready", data: { storms: stub.storms }, showLoading: false, retry() {} }),
 }));
-vi.mock("./areas/storms", () => ({ StormsArea: () => null }));
+vi.mock("./storms/workspace", async () => {
+  const { TABS, TAB_LABELS, href } = await import("./router");
+  return {
+    Workspace: () => null,
+    stormTabItems: (stormDate: string, step: number) =>
+      TABS.map((t) => ({
+        id: t,
+        label: TAB_LABELS[t],
+        href: href({ area: "storms", date: stormDate, tab: t, step: t === "map" ? step : undefined }),
+      })),
+  };
+});
 vi.mock("./method/method", () => ({
   Method: () => {
     stub.log.push("method");

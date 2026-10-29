@@ -5,7 +5,7 @@ export const CELLS = 24;
 
 const HHMM = /^([01]\d|2[0-3])[0-5]\d$/;
 
-/** Cell index 0..23 for a CST `HHMM` time; null for a bad time. */
+/** Cell index 0..23 for a UTC `HHMM` time; null for a bad time. */
 export function cellFor(time: string): number | null {
   if (!HHMM.test(time)) return null;
   const hour = Number(time.slice(0, 2));

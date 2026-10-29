@@ -45,7 +45,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Scope sidebar | The Storms page tree: storm dates grouped by year, newest first, each with one chip per impact layer on the date (`power`, `internet`, `warnings`) and a report-count badge. A 240 px pane at 1280 px and up, a 56 px rail below that, a sheet below 768 px. |
 | Storm stamp | The header block of one storm date: the date in mono, the 24-cell 12Z-to-12Z bar with one cell per hour and a filled cell for each hour with a report, the report count, and the max size. |
 | Size ruler | The hail-size legend: seven circles at true relative diameter, 0.75 to 2.50 in, each with its object name (penny, quarter, half dollar, walnut, golf ball, hen egg, tennis ball). Also the track of the radius and threshold sliders. |
-| Contingency grid | The 2 by 2 block for one size class: hit, miss, false alarm, and unverifiable area, each cell sized by its count. |
+| Contingency grid | The 2 by 2 block for one size class: hit, miss, false alarm, and correct negatives, each cell sized by its count. |
 | Receipt chip | The mono chip after a number on the site. It opens a drawer with the receipt of the published file that holds the number: source, product, file, run time, and confidence band. |
 | Caveat line | The footer text on every page, exact: "Radar-estimated hail size. Literature skill: HSS about 0.38 at 30 mm." |
 | Inspector | The Storms drawer that opens on a map click: the point, the largest size class that covers it, the nearest report, and one receipt chip. Docked at 1280 px and up, an overlay below, a full-screen sheet below 768 px. |

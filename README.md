@@ -21,7 +21,7 @@ Site: https://hailprint.tomnguyen.me
 - **Score**: the contingency table (hits, misses, false alarms, correct negatives) with POD, FAR, CSI, and HSS. A slider re-scores in the browser at any radius from 0 to 20 km.
 - **Scorecard**: the pooled table over every published storm date, as a table, a 2 by 2 grid, and a threshold curve with the literature HSS line.
 - **Try it**: tune the radius, check one point against every storm date, swipe-compare two storm dates, and copy the commands that rebuild one date.
-- **Method**: five short pages on the data, the storm date, the size classes, the scoring, and the limits.
+- **Method**: six short pages on the data, the storm date, the size classes, the scoring, the limits, and the impacts.
 - **Pipeline**: the run log, the archive coverage per year, and the data sources.
 - **Receipts**: every number opens a chip with its source, product, file, run time, and confidence band.
 

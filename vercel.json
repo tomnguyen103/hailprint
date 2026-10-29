@@ -5,5 +5,19 @@
   "installCommand": "cd site && npm ci",
   "buildCommand": "cd site && npm run build",
   "outputDirectory": "site/dist",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://*.protomaps.com; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
+        }
+      ]
+    }
+  ],
   "rewrites": [{ "source": "/:path((?!.*\\.).*)", "destination": "/index.html" }]
 }
