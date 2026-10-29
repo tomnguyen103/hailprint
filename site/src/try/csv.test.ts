@@ -48,4 +48,11 @@ describe("csvOf", () => {
   it("quotes a label with a comma or a quote", () => {
     expect(csvOf([row({ label: 'a, "b"' })]).split("\n")[1]).toContain('"a, ""b"""');
   });
+
+  it("prefixes leading formula triggers with a single quote", () => {
+    for (const prefix of ["=cmd", "+1", "-2", "@sum"]) {
+      const line = csvOf([row({ label: prefix })]).split("\n")[1]!;
+      expect(line.split(",")[2]).toBe(`'${prefix}`);
+    }
+  });
 });

@@ -428,16 +428,6 @@
   }
 }
 
-@media (min-width: 768px) and (max-width: 1279px) {
-  .inspector {
-    position: absolute;
-    top: 16px;
-    right: 16px;
-    z-index: 4;
-    width: min(360px, calc(100% - 32px));
-  }
-}
-
 @media (max-width: 767px) {
   .inspector {
     position: fixed;

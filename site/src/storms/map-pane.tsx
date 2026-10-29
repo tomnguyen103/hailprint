@@ -39,6 +39,13 @@ interface Props {
   onCounty: (fips: string) => void;
 }
 
+export type DatedPick = Pick & { date: string };
+
+/** True only when the pick belongs to the current storm date. */
+export function isPickForStorm(pick: DatedPick | null, stormDate: string): pick is DatedPick {
+  return pick !== null && pick.date === stormDate;
+}
+
 export function MapPane({ storm, reports, power, internet, step, onStep, fips, onCounty }: Props) {
   const swath = useLoad(storm.files.swath, () => fetchJson(storm.files.swath, guardSwath));
   const county = useLoad("county", fetchCounty);
@@ -56,11 +63,14 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set());
   const [layers, setLayers] = useState<LayerState>({ swath: true, reports: true, warnings: true });
   const [fill, setFill] = useState<Fill>(() => defaultFill(storm.files));
-  const [pick, setPick] = useState<Pick | null>(null);
+  const [pick, setPick] = useState<DatedPick | null>(null);
+  const activePick = isPickForStorm(pick, storm.storm_date) ? pick : null;
 
   useEffect(() => {
     setFill(defaultFill(storm.files));
   }, [storm.storm_date, storm.files.power, storm.files.internet]);
+  const stormDateRef = useRef(storm.storm_date);
+  stormDateRef.current = storm.storm_date;
   const reportsRef = useRef<ReportsFile | null>(null);
   reportsRef.current = reports.status === "ready" ? reports.data : null;
   const outlinesRef = useRef<FeatureCollection<MultiPolygon> | null>(null);
@@ -90,6 +100,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
           const clicked = countyAt(lngLat, outlinesRef.current);
           if (clicked !== null) onCountyRef.current(clicked);
           setPick({
+            date: stormDateRef.current,
             lngLat,
             coveringMm: coveringClass(hits),
             nearest: nearestReport(lngLat, reportsRef.current?.features ?? []),
@@ -182,7 +193,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     storm.storm_date,
   );
   return (
-    <div class="map-pane" data-inspector={pick !== null}>
+    <div class="map-pane" data-inspector={activePick !== null}>
       <div class="map-main">
         <div class="map-stage">
           <div ref={container} class="map-frame" role="region" aria-label="Map of the hail swath" tabIndex={-1} />
@@ -230,9 +241,9 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
           onStep={onStep}
         />
       </div>
-      {pick !== null && receipt !== null ? (
+      {activePick !== null && receipt !== null ? (
         <Inspector
-          pick={pick}
+          pick={activePick}
           receipt={receipt}
           power={powerData}
           internet={internetData}

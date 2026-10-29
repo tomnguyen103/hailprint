@@ -22,7 +22,8 @@ export const CSV_HEADER = COLUMNS.join(",");
 
 function cell(value: string | number | null): string {
   if (value === null) return "";
-  const text = String(value);
+  const raw = String(value);
+  const text = typeof value === "string" && /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
   return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 

@@ -241,4 +241,35 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(btn.props["aria-expanded"]).toBe(true);
     expect(btn.props["aria-controls"]).toBe("storms-scope");
   });
+
+  it("clears stale MapPane pick synchronously on storm switch and preserves step in Workspace Map tab href", async () => {
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {} });
+    vi.stubGlobal("window", {
+      matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      location: { pathname: "/storms/2024-05-28/map" },
+    });
+    const { isPickForStorm } = await import("./storms/map-pane");
+    expect(typeof isPickForStorm).toBe("function");
+    expect(
+      isPickForStorm(
+        { date: "2024-05-28", lngLat: [-95.36, 29.76], coveringMm: 25.4, nearest: null },
+        "2024-05-28",
+      ),
+    ).toBe(true);
+    expect(
+      isPickForStorm(
+        { date: "2024-05-28", lngLat: [-95.36, 29.76], coveringMm: 25.4, nearest: null },
+        "2025-05-01",
+      ),
+    ).toBe(false);
+    expect(isPickForStorm(null, "2024-05-28")).toBe(false);
+
+    const { stormTabItems } = await import("./storms/workspace");
+    expect(typeof stormTabItems).toBe("function");
+    const items = stormTabItems("2024-05-28", 64);
+    expect(items.find((t: { id: string; href: string }) => t.id === "map")?.href).toBe("/storms/2024-05-28/map/64");
+    expect(items.find((t: { id: string; href: string }) => t.id === "parcels")?.href).toBe("/storms/2024-05-28/parcels");
+  });
 });

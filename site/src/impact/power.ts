@@ -62,7 +62,7 @@ export function powerNote(
   stormDate?: string,
 ): string | null {
   if (file === null) {
-    return stormDate !== undefined && NO_POWER_SOURCE_DATES.has(stormDate)
+    return stormDate !== undefined && (NO_POWER_SOURCE_DATES.has(stormDate) || stormDate >= "2026-01-01")
       ? "No power source for this date."
       : "No power file for this storm date.";
   }

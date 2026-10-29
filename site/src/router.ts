@@ -81,11 +81,12 @@ export function match(path: string): Route {
   if (date === undefined) return { kind: "redirect-latest" };
   const [stepPart, ...more] = rest;
   if (!DATE.test(date) || more.length > 0) return { kind: "not-found" };
+  if (tab !== undefined && !isTab(tab)) return { kind: "not-found" };
   if (stepPart !== undefined && tab !== "map") return { kind: "not-found" };
   return {
     kind: "storms",
     date,
-    tab: tab !== undefined && isTab(tab) ? tab : "map",
+    tab: tab ?? "map",
     step: stepPart === undefined ? null : parseStep(stepPart),
   };
 }

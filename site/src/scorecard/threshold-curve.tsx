@@ -2,7 +2,7 @@ import { useRef, useState } from "preact/hooks";
 import type { PooledRow } from "../pool";
 import { METRIC_LABELS, METRICS, formatInches, type MetricKey } from "../format";
 import { objectName } from "../ruler";
-import { HEIGHT, LITERATURE_HSS, MARGIN, WIDTH, pathOf, xOf, yOf } from "./curve";
+import { HEIGHT, LITERATURE_HSS, MARGIN, WIDTH, pathOf, xOf, yMinOf, yOf } from "./curve";
 
 const MARKER_R = 4;
 const HIGHLIGHT_R = 6;
@@ -24,9 +24,12 @@ export function ThresholdCurve({
   const [hover, setHover] = useState<number | null>(null);
   const [focus, setFocus] = useState<number | null>(null);
   const markers = useRef<(SVGCircleElement | null)[]>([]);
+  const yMin = yMinOf(rows.map((row) => row[metric]));
+  const yBottom = yOf(yMin, yMin);
+  const yTicks = yMin < 0 ? [yMin, 0, 0.5, 1] : Y_TICKS;
   const points = rows.map((row) => {
     const value = row[metric];
-    return { row, value, x: xOf(row.threshold_in), y: value === null ? null : yOf(value) };
+    return { row, value, x: xOf(row.threshold_in), y: value === null ? null : yOf(value, yMin) };
   });
   const active = hover ?? focus;
   const tip = active === null ? null : points[active];
@@ -80,18 +83,21 @@ export function ThresholdCurve({
         aria-label={`${METRIC_LABELS[metric]} by threshold`}
         onKeyDown={onKeyDown}
       >
-        <line class="axis" x1={MARGIN.left} y1={yOf(0)} x2={WIDTH - MARGIN.right} y2={yOf(0)} />
-        <line class="axis" x1={MARGIN.left} y1={yOf(1)} x2={MARGIN.left} y2={yOf(0)} />
-        {Y_TICKS.map((t) => (
+        <line class="axis" x1={MARGIN.left} y1={yBottom} x2={WIDTH - MARGIN.right} y2={yBottom} />
+        <line class="axis" x1={MARGIN.left} y1={yOf(1, yMin)} x2={MARGIN.left} y2={yBottom} />
+        {yMin < 0 ? (
+          <line class="literature" x1={MARGIN.left} y1={yOf(0, yMin)} x2={WIDTH - MARGIN.right} y2={yOf(0, yMin)} />
+        ) : null}
+        {yTicks.map((t) => (
           <g key={t}>
-            <line class="axis" x1={MARGIN.left - 4} y1={yOf(t)} x2={MARGIN.left} y2={yOf(t)} />
-            <text x={MARGIN.left - 8} y={yOf(t)} text-anchor="end" dominant-baseline="central">
+            <line class="axis" x1={MARGIN.left - 4} y1={yOf(t, yMin)} x2={MARGIN.left} y2={yOf(t, yMin)} />
+            <text x={MARGIN.left - 8} y={yOf(t, yMin)} text-anchor="end" dominant-baseline="central">
               {t.toFixed(1)}
             </text>
           </g>
         ))}
         {points.map((p) => (
-          <text key={p.row.threshold_mm} x={p.x} y={yOf(0) + 20} text-anchor="middle">
+          <text key={p.row.threshold_mm} x={p.x} y={yBottom + 20} text-anchor="middle">
             {p.row.threshold_in.toFixed(2)}
           </text>
         ))}
@@ -103,11 +109,11 @@ export function ThresholdCurve({
             <line
               class="literature"
               x1={MARGIN.left}
-              y1={yOf(LITERATURE_HSS)}
+              y1={yOf(LITERATURE_HSS, yMin)}
               x2={WIDTH - MARGIN.right}
-              y2={yOf(LITERATURE_HSS)}
+              y2={yOf(LITERATURE_HSS, yMin)}
             />
-            <text x={WIDTH - MARGIN.right} y={yOf(LITERATURE_HSS) - 6} text-anchor="end">
+            <text x={WIDTH - MARGIN.right} y={yOf(LITERATURE_HSS, yMin) - 6} text-anchor="end">
               Literature HSS {LITERATURE_HSS.toFixed(2)}
             </text>
           </g>
