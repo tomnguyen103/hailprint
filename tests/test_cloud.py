@@ -1,9 +1,11 @@
 import hashlib
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
 
 import pytest
 
+from hailprint import __main__ as cli
 from hailprint import cloud
 
 
@@ -205,3 +207,204 @@ def test_sync_up_mirror_deletes_stale_public_objects_after_index_upload(tmp_path
         ("delete", "hailprint-public", "storms/2024-05-28/internet.json"),
     ]
     assert ("hailprint-public", "storms/2024-05-28/internet.json") not in s3.objects
+
+
+def test_parse_max_ingest_accepts_default_and_positive_integers_and_rejects_bad_values():
+    assert cloud.parse_max_ingest({}) == 5
+    assert cloud.parse_max_ingest({"MAX_INGEST": "1"}) == 1
+    assert cloud.parse_max_ingest({"MAX_INGEST": "12"}) == 12
+
+    for bad in ("0", "-2", "abc", "", "5;rm"):
+        with pytest.raises(ValueError) as exc_info:
+            cloud.parse_max_ingest({"MAX_INGEST": bad})
+        assert str(exc_info.value) == "MAX_INGEST must be a whole number from 1"
+        if bad:
+            assert bad not in str(exc_info.value)
+
+
+def test_nightly_runs_pipeline_in_order_and_skips_parcels_without_gdb(tmp_path: Path):
+    calls: list[list[str]] = []
+
+    def fake_cli(argv: list[str]) -> int:
+        calls.append(list(argv))
+        if argv[:2] == ["candidates", "--missing"]:
+            print("2025-05-01\n2024-05-28")
+        return 0
+
+    rc = cloud.nightly(fake_cli, tmp_path, env={"MAX_INGEST": "2"})
+
+    assert rc == 0
+    assert calls == [
+        ["index"],
+        ["candidates", "--missing", "--top", "2"],
+        ["ingest", "2025-05-01"],
+        ["ingest", "2024-05-28"],
+        ["score"],
+        ["warnings", "--missing"],
+        ["power", "--missing"],
+        ["internet", "--missing"],
+        ["publish"],
+    ]
+
+
+def test_nightly_runs_parcels_when_gdb_present_and_passes_with_internet(tmp_path: Path):
+    (tmp_path / "data" / "raw" / "hcad" / "extracted" / "Parcels.gdb").mkdir(parents=True)
+    calls: list[list[str]] = []
+
+    def fake_cli(argv: list[str]) -> int:
+        calls.append(list(argv))
+        if argv[:2] == ["candidates", "--missing"]:
+            print("2025-05-01")
+        return 0
+
+    rc = cloud.nightly(fake_cli, tmp_path, env={"MAX_INGEST": "1", "PUBLISH_INTERNET": "1"})
+
+    assert rc == 0
+    assert calls == [
+        ["index"],
+        ["candidates", "--missing", "--top", "1"],
+        ["ingest", "2025-05-01"],
+        ["parcels", "2025-05-01"],
+        ["score"],
+        ["warnings", "--missing"],
+        ["power", "--missing"],
+        ["internet", "--missing"],
+        ["publish", "--with-internet"],
+    ]
+
+
+def test_nightly_continues_when_one_ingest_or_addon_layer_fails(tmp_path: Path, capsys):
+    calls: list[list[str]] = []
+
+    def fake_cli(argv: list[str]) -> int:
+        calls.append(list(argv))
+        if argv[:2] == ["candidates", "--missing"]:
+            print("2025-05-02\n2025-05-01")
+            return 0
+        if argv == ["ingest", "2025-05-02"]:
+            return 1
+        if argv[0] in ("warnings", "power", "internet"):
+            return 1
+        return 0
+
+    rc = cloud.nightly(fake_cli, tmp_path, env={})
+    err = capsys.readouterr().err
+
+    assert rc == 0
+    assert ["ingest", "2025-05-01"] in calls
+    assert ["publish"] in calls
+    assert "ingest 2025-05-02 failed; skipped" in err
+    assert "warnings failed; publish goes on" in err
+    assert "power failed; publish goes on" in err
+    assert "internet failed; publish goes on" in err
+
+
+def test_backfill_fetches_only_missing_eaglei_years_and_publishes(tmp_path: Path):
+    eaglei_dir = tmp_path / "data" / "derived" / "eaglei"
+    eaglei_dir.mkdir(parents=True)
+    (eaglei_dir / "eaglei-2023.parquet").write_bytes(b"2023")
+    calls: list[list[str]] = []
+
+    def fake_cli(argv: list[str]) -> int:
+        calls.append(list(argv))
+        return 0
+
+    rc = cloud.backfill(fake_cli, tmp_path, env={"PUBLISH_INTERNET": "1"})
+
+    assert rc == 0
+    assert calls == [
+        ["warnings", "--missing"],
+        ["eaglei", "2021", "2025"],
+        ["power", "--missing"],
+        ["internet", "--missing"],
+        ["publish", "--with-internet"],
+    ]
+
+
+def test_run_cloud_nightly_syncs_down_runs_and_syncs_up_without_odin(tmp_path: Path):
+    s3 = FakeS3(
+        {
+            ("hailprint-state", "raw/spc/1955-2025_hail.csv.zip"): b"wcm",
+            ("hailprint-public", "storms/2024-05-28/internet.json"): b'{"old":1}',
+            ("hailprint-public", "storms.json"): b'{"storms":[]}',
+        }
+    )
+    calls: list[list[str]] = []
+
+    def fake_cli(argv: list[str]) -> int:
+        calls.append(list(argv))
+        if argv == ["publish"]:
+            # Simulate publish writing a new file, updating storms.json, removing internet.json
+            (tmp_path / "data" / "derived" / "scores").mkdir(parents=True, exist_ok=True)
+            (tmp_path / "data" / "derived" / "scores" / "pooled.parquet").write_bytes(b"pooled")
+            (tmp_path / "data" / "derived" / "odin").mkdir(parents=True, exist_ok=True)
+            (tmp_path / "data" / "derived" / "odin" / "odin-2026-10-29.parquet").write_bytes(
+                b"should-not-upload"
+            )
+            (tmp_path / "site" / "data" / "storms" / "2024-05-28" / "internet.json").unlink()
+            (tmp_path / "site" / "data" / "storms" / "2024-05-28" / "swath.geojson").write_bytes(
+                b'{"type":"FeatureCollection"}'
+            )
+            (tmp_path / "site" / "data" / "storms.json").write_bytes(b'{"storms":["2024-05-28"]}')
+        return 0
+
+    rc = cloud.run_cloud(
+        "nightly",
+        client=s3,
+        root=tmp_path,
+        env=VALID_ENV,
+        run_cli=fake_cli,
+    )
+
+    assert rc == 0
+    assert ("hailprint-state", "derived/scores/pooled.parquet") in s3.objects
+    assert ("hailprint-state", "derived/odin/odin-2026-10-29.parquet") not in s3.objects
+    assert ("hailprint-public", "storms/2024-05-28/swath.geojson") in s3.objects
+    assert ("hailprint-public", "storms/2024-05-28/internet.json") not in s3.objects
+
+
+def test_run_cloud_odin_syncs_only_todays_odin_file_and_skips_upload_on_failure(tmp_path: Path):
+    now = datetime(2026, 10, 29, 14, 7, tzinfo=UTC)
+    odin_key = "derived/odin/odin-2026-10-29.parquet"
+    s3 = FakeS3(
+        {
+            ("hailprint-state", odin_key): b"slot-1",
+            ("hailprint-state", "raw/spc/1955-2025_hail.csv.zip"): b"wcm",
+        }
+    )
+
+    def ok_cli(argv: list[str]) -> int:
+        assert argv == ["odin"]
+        (tmp_path / "data" / odin_key).write_bytes(b"slot-1+slot-2")
+        return 0
+
+    rc = cloud.run_cloud("odin", client=s3, root=tmp_path, env=VALID_ENV, run_cli=ok_cli, now=now)
+    assert rc == 0
+    assert not (tmp_path / "data" / "raw" / "spc" / "1955-2025_hail.csv.zip").exists()
+    assert s3.objects[("hailprint-state", odin_key)] == b"slot-1+slot-2"
+
+    s3.puts.clear()
+
+    def fail_cli(argv: list[str]) -> int:
+        return 1
+
+    rc_fail = cloud.run_cloud(
+        "odin", client=s3, root=tmp_path, env=VALID_ENV, run_cli=fail_cli, now=now
+    )
+    assert rc_fail == 1
+    assert s3.puts == []
+
+
+def test_cli_cloud_subcommand_routes_to_run_cloud(monkeypatch):
+    recorded: list[str] = []
+
+    def fake_run_cloud(task: str) -> int:
+        recorded.append(task)
+        return 0
+
+    monkeypatch.setattr(cloud, "run_cloud", fake_run_cloud)
+
+    assert cli.main(["cloud", "nightly"]) == 0
+    assert cli.main(["cloud", "odin"]) == 0
+    assert cli.main(["cloud", "backfill"]) == 0
+    assert recorded == ["nightly", "odin", "backfill"]

@@ -1,7 +1,7 @@
 """Command line entry for the hailprint commands.
 
 The commands are ``ingest``, ``index``, ``candidates``, ``parcels``, ``score``, ``warnings``,
-``eaglei``, ``power``, ``odin``, ``internet``, and ``publish``.
+``eaglei``, ``power``, ``odin``, ``internet``, ``publish``, and ``cloud``.
 Run ``hailprint <command> --help`` for the arguments of one command.
 """
 
@@ -18,6 +18,7 @@ import pandas as pd
 from hailprint import (
     archive,
     candidates,
+    cloud,
     county,
     files,
     internet,
@@ -167,6 +168,14 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also publish internet.json for each date whose internet file holds a ratio",
     )
+    cloud_cmd = commands.add_parser(
+        "cloud", help="sync state with Supabase S3 and run a scheduled cloud task"
+    )
+    cloud_cmd.add_argument(
+        "task",
+        choices=("nightly", "odin", "backfill"),
+        help="cloud task to run",
+    )
     return parser
 
 
@@ -198,6 +207,8 @@ def main(argv: list[str] | None = None) -> int:
             internet_days(args.storm_dates, args.missing)
         elif args.command == "publish":
             publish_days(args.storm_dates, args.with_internet)
+        elif args.command == "cloud":
+            return cloud.run_cloud(args.task)
     except (RuntimeError, OSError, ValueError) as exc:
         print(exc, file=sys.stderr)
         return 1
