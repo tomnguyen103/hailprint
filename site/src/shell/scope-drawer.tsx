@@ -24,6 +24,7 @@ function useFocusReturn(open: boolean): void {
 }
 
 interface Props {
+  id?: string;
   /** The nav label; the backdrop reads "Close <label>". */
   label: string;
   /** The head text. */
@@ -35,14 +36,41 @@ interface Props {
   onKeyDown?: (event: KeyboardEvent) => void;
 }
 
+const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), summary, input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** Wrap Tab and Shift+Tab inside the drawer while it is open below 1280px. */
+export function trapDrawerTab(event: KeyboardEvent, root: HTMLElement | null, open: boolean): void {
+  if (!open || event.key !== "Tab" || !root) return;
+  const items = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => el.closest("details:not([open])") === null || el.tagName === "SUMMARY",
+  );
+  if (items.length === 0) return;
+  const first = items[0]!;
+  const last = items[items.length - 1]!;
+  const active = document.activeElement as HTMLElement | null;
+  if (event.shiftKey && (active === first || !root.contains(active))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (active === last || !root.contains(active))) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 /** The scope sidebar of the Method and Pipeline areas: a drawer below 1280 px with a backdrop, a head, and a Close button. */
-export function ScopeDrawer({ label, title, open, onClose, children, navRef, onKeyDown }: Props) {
+export function ScopeDrawer({ id, label, title, open, onClose, children, navRef, onKeyDown }: Props) {
+  const localNavRef = useRef<HTMLElement>(null);
+  const resolvedRef = navRef ?? localNavRef;
   useEscape(open, onClose);
   useFocusReturn(open);
+  const handleKeyDown = (event: KeyboardEvent) => {
+    trapDrawerTab(event, resolvedRef.current, open);
+    onKeyDown?.(event);
+  };
   return (
     <>
       {open ? <button type="button" class="scope-backdrop" aria-label={`Close ${label}`} onClick={onClose} /> : null}
-      <nav ref={navRef} class="scope" aria-label={label} data-open={open} onKeyDown={onKeyDown}>
+      <nav id={id} ref={resolvedRef} class="scope" aria-label={label} data-open={open} onKeyDown={handleKeyDown}>
         <div class="scope-head">
           <span class="section-label">{title}</span>
           <button type="button" class="button button-small scope-close" onClick={onClose}>

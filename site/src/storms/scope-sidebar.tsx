@@ -19,7 +19,7 @@ export function ScopeSidebar({ storms, current, open, onClose }: Props) {
   const groups = groupByYear(storms);
   const newestYear = groups[0]?.year;
   return (
-    <ScopeDrawer label="Storm dates" title="Storm dates" open={open} onClose={onClose}>
+    <ScopeDrawer id="storms-scope" label="Storm dates" title="Storm dates" open={open} onClose={onClose}>
         {/* shortcut: year groups do not persist their open state, upgrade when the list passes a few years */}
         {groups.map((group) => (
           <details key={group.year} open={group.year === newestYear || group.year === current.storm_date.slice(0, 4)}>

@@ -58,7 +58,14 @@ export function Workspace({ index, storm, tab }: Props) {
   return (
     <div class="workspace">
       <div class="scope-rail">
-        <button type="button" class="button button-small" aria-haspopup="dialog" onClick={() => setDatesOpen(true)}>
+        <button
+          type="button"
+          class="button button-small"
+          aria-haspopup="dialog"
+          aria-expanded={datesOpen}
+          aria-controls="storms-scope"
+          onClick={() => setDatesOpen(true)}
+        >
           Dates
         </button>
       </div>
@@ -70,6 +77,7 @@ export function Workspace({ index, storm, tab }: Props) {
           reports={reports}
           step={tab === "map" ? step : null}
           indexReceipt={indexReceipt}
+          datesOpen={datesOpen}
           onOpenDates={() => setDatesOpen(true)}
         />
         <SubTabs

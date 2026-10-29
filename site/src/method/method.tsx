@@ -45,11 +45,18 @@ export function Method({ page }: { page: MethodPage }) {
   return (
     <div class="workspace method">
       <div class="scope-rail">
-        <button type="button" class="button button-small" aria-haspopup="dialog" onClick={() => setPagesOpen(true)}>
+        <button
+          type="button"
+          class="button button-small"
+          aria-haspopup="dialog"
+          aria-expanded={pagesOpen}
+          aria-controls="method-scope"
+          onClick={() => setPagesOpen(true)}
+        >
           Pages
         </button>
       </div>
-      <ScopeDrawer label="Method pages" title="Pages" open={pagesOpen} onClose={close} navRef={nav} onKeyDown={onNavKey}>
+      <ScopeDrawer id="method-scope" label="Method pages" title="Pages" open={pagesOpen} onClose={close} navRef={nav} onKeyDown={onNavKey}>
         <PageList page={page} onNavigate={close} />
       </ScopeDrawer>
       <div class="workspace-main">

@@ -76,4 +76,15 @@ describe("ScopeSidebar", () => {
     expect(chips(items[1]!)).toEqual(["power", "internet", "warnings"]);
     expect(chips(items[2]!)).toEqual([]);
   });
+
+  it("passes id='storms-scope' to ScopeDrawer", () => {
+    const storms = [makeStorm("2024-05-28", 12)];
+    const tree = ScopeSidebar({
+      storms,
+      current: storms[0]!,
+      open: true,
+      onClose: () => {},
+    }) as Node;
+    expect(tree.props["id"]).toBe("storms-scope");
+  });
 });

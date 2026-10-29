@@ -20,12 +20,24 @@
 
 .stamp-date-button {
   display: none;
-  padding: 4px 8px;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 4px 10px;
   margin: -4px -8px;
-  border: 0;
+  border: 1px solid var(--rule);
   border-radius: var(--radius-control);
-  background: none;
+  background: var(--sheet);
   cursor: pointer;
+}
+
+.stamp-date-chevron {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
 }
 
 .stamp-date-button:hover {
@@ -132,6 +144,7 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  min-height: 40px;
   padding: 4px 8px;
   margin: -4px -8px;
   border: 0;
@@ -238,7 +251,7 @@
   }
 
   .stamp-date-button {
-    display: inline-block;
+    display: inline-flex;
   }
 
   .stamp-bar {
