@@ -1,4 +1,4 @@
-"""README names every CLI command, every week report, and the three scripts."""
+"""README names every CLI command, every week report, and the cloud tasks."""
 
 import re
 
@@ -22,9 +22,11 @@ def test_readme_names_every_week_report():
         assert f"docs/reports/{path.name}" in README, path.name
 
 
-def test_readme_names_the_three_scripts():
-    for script in ("scripts/deploy.sh", "scripts/nightly.sh", "scripts/hailprint.cron"):
-        assert script in README, script
+def test_readme_names_the_cloud_tasks():
+    for task in ("hailprint cloud nightly", "hailprint cloud odin", "hailprint cloud backfill"):
+        assert task in README, task
+    for old_script in ("scripts/deploy.sh", "scripts/nightly.sh", "scripts/hailprint.cron"):
+        assert old_script not in README, old_script
 
 
 def test_readme_holds_no_live_map_sentence():

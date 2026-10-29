@@ -1,55 +1,37 @@
 # Operations
 
-This guide covers the nightly run, the cron entry, the deploy, and the `.env` file on the cron host.
+This guide covers the Trigger.dev tasks, the Supabase Storage buckets, and the environment variables.
 
-## Nightly run
+## Cloud tasks
 
-`scripts/nightly.sh` (`make nightly`) runs these steps in this order:
+`hailprint cloud` (`src/hailprint/cloud.py`) synchronizes state and public files with Supabase Storage over the S3 protocol and runs the CLI steps:
 
-1. `index` refreshes the archive index.
-2. `candidates --missing --top $MAX_INGEST` prints the missing candidate days.
-3. `ingest` draws a swath file for each missing candidate day.
-4. `parcels` counts parcels for each of them when the HCAD gdb is present.
-5. `score`, `warnings --missing`, `power --missing`, and `internet --missing` write the scores and the impact layers. A failed layer step never blocks the publish.
-6. `publish` writes `site/data/`. It adds `internet.json` only when `.env` sets `PUBLISH_INTERNET=1` (`docs/DECISIONS.md` row 14).
-7. `scripts/deploy.sh` uploads the site.
+- `hailprint cloud nightly` (`trigger/nightly.ts`, cron `30 13 * * *` UTC on `medium-1x`, queue concurrency 1):
+  1. Downloads `raw/spc/` and `derived/` from `HAILPRINT_STATE_BUCKET` and all published files from `HAILPRINT_PUBLIC_BUCKET`.
+  2. Runs `index` and `candidates --missing --top $MAX_INGEST` (default `5`).
+  3. Runs `ingest` for each missing candidate day (and `parcels` when `data/raw/hcad/extracted/Parcels.gdb` exists). A failed ingest logs one line and skips to the next date.
+  4. Runs `score`, `warnings --missing`, `power --missing`, and `internet --missing`. A failed layer step logs `<step> failed; publish goes on`.
+  5. Runs `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`, per `docs/DECISIONS.md` row 14).
+  6. Uploads changed state files (excluding `derived/odin/`) to `HAILPRINT_STATE_BUCKET`, uploads changed per-date files to `HAILPRINT_PUBLIC_BUCKET` before `storms.json` and `pipeline.json` with `Cache-Control: max-age=60`, and deletes stale remote public objects last.
+- `hailprint cloud odin` (`trigger/odin.ts`, cron `0 * * * *` UTC on `small-1x`, queue concurrency 1):
+  1. Downloads today's UTC ODIN file `derived/odin/odin-<YYYY-MM-DD>.parquet` when present.
+  2. Runs `odin` to append the current 15-minute slot snapshot.
+  3. Uploads only `derived/odin/odin-<YYYY-MM-DD>.parquet`. Because `nightly` never uploads `derived/odin/`, the two schedules never race.
+- `hailprint cloud backfill` (`trigger/backfill.ts`, on-demand task on `medium-1x`, queue concurrency 1):
+  1. Downloads state and public buckets.
+  2. Runs `warnings --missing`, `eaglei` for any of `2021`, `2023`, `2025` not yet in `derived/eaglei/`, `power --missing`, `internet --missing`, and `publish`.
+  3. Uploads changed state and public files.
 
-The lock is the directory `data/nightly.lock`. A second run finds it and exits 1. A trap removes the lock on exit.
+## Environment variables
 
-`MAX_INGEST` caps the storm dates per night. The default is 5.
+Configure these variables in the Trigger.dev environment (never commit values to the repository):
 
-## Cron entry
-
-`scripts/hailprint.cron` holds the cron entry. It starts the nightly run at 14:00 UTC and appends the output to `data/nightly.log`.
-
-1. Edit the repo path in the entry.
-2. Edit the home path in the `PATH` line.
-3. Run `crontab scripts/hailprint.cron`.
-
-## Deploy
-
-Git deployments are off for `main` in `vercel.json`. A merge thus never replaces production with a data-free build. PR branches keep their previews.
-
-The cron host holds `site/data/` and deploys with the prebuilt flow in `scripts/deploy.sh`:
-
-1. `vercel pull`
-2. `vercel build --prod`
-3. `vercel deploy --prebuilt --prod --archive=tgz`
-
-`scripts/deploy.sh --dry-run` (`make deploy-dry`) builds `site/dist` and stops before any `vercel` call.
-
-The auth comes from `VERCEL_TOKEN` or from a `vercel login` session. A host without a link folder also needs `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`.
-
-## The `.env` file
-
-The values live in `.env` at the repo root. The file is gitignored and never enters the repo.
-
-The format rules:
-
-- One `NAME=value` per line.
-- The value uses letters, digits, and `_ . / : @ + -` only.
-- No `export` keyword and no quote.
-- LF line endings.
-- A comment line and a blank line pass.
-
-Both scripts refuse any other line before the first step. The refusal prints the line number only, never the value.
+- `SUPABASE_S3_ENDPOINT`: Supabase Storage S3 endpoint URL.
+- `SUPABASE_S3_REGION`: Supabase region string.
+- `SUPABASE_S3_ACCESS_KEY_ID`: S3 access key ID.
+- `SUPABASE_S3_SECRET_ACCESS_KEY`: S3 secret access key.
+- `HAILPRINT_STATE_BUCKET`: private state bucket name (`hailprint-state`).
+- `HAILPRINT_PUBLIC_BUCKET`: public-read bucket name (`hailprint-public`).
+- `MAX_INGEST`: maximum missing candidate days per nightly run (default `5`).
+- `PUBLISH_INTERNET`: set to `1` to pass `--with-internet` during publish.
+- `HAILPRINT_ROOT`: optional working directory override for `data/`, `out/`, and `site/data/`.

@@ -33,8 +33,9 @@ export function fillNotes(
   power: Load<PowerFile | null>,
   internet: Load<InternetFile | null>,
   outlines: Load<unknown>,
+  stormDate?: string,
 ): { power: string | null; internet: string | null } {
-  const file = powerNote(files.power, power);
+  const file = powerNote(files.power, power, stormDate);
   const outline = outlines.status === "error" ? outlines.error.message : null;
   return {
     power: outline === null ? file : `${file ?? "Power off."} ${outline}`,

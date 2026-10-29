@@ -2,7 +2,7 @@ import type { Storm } from "../data/types";
 import { href } from "../router";
 import { Link } from "../shell/link";
 import { ScopeDrawer } from "../shell/scope-drawer";
-import { groupByYear } from "./select";
+import { groupByYear, impactChips } from "./select";
 
 interface Props {
   storms: Storm[];
@@ -27,6 +27,7 @@ export function ScopeSidebar({ storms, current, open, onClose }: Props) {
             <ul class="scope-list">
               {group.storms.map((storm) => {
                 const active = storm.storm_date === current.storm_date;
+                const chips = storm.files ? impactChips(storm.files) : [];
                 return (
                   <li key={storm.storm_date}>
                     <Link
@@ -35,9 +36,16 @@ export function ScopeSidebar({ storms, current, open, onClose }: Props) {
                       onClick={onClose}
                     >
                       <span class="mono">{storm.storm_date}</span>
-                      <span class="badge">
-                        {storm.report_count}
-                        <span class="visually-hidden"> reports</span>
+                      <span class="scope-badges">
+                        {chips.map((layer) => (
+                          <span key={layer} class="scope-chip">
+                            {layer}
+                          </span>
+                        ))}
+                        <span class="badge">
+                          {storm.report_count}
+                          <span class="visually-hidden"> reports</span>
+                        </span>
                       </span>
                     </Link>
                   </li>

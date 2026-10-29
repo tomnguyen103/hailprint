@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from "vitest";
-import { STALE, fetchJson, latest, setFetch } from "./fetch";
+import { DATA_BASE, STALE, fetchJson, latest, normalizeBase, resolveDataBase, setFetch } from "./fetch";
 import { DataError } from "./types";
 
 afterEach(() => setFetch(null));
@@ -7,6 +7,20 @@ afterEach(() => setFetch(null));
 function response(status: number, body: string): Response {
   return new Response(body, { status, headers: { "content-type": "application/json" } });
 }
+
+it("normalizes a data base URL so it ends with a single slash", () => {
+  expect(normalizeBase("/data/")).toBe("/data/");
+  expect(normalizeBase("/data")).toBe("/data/");
+  expect(normalizeBase("https://example.supabase.co/storage/v1/object/public/hailprint-public")).toBe(
+    "https://example.supabase.co/storage/v1/object/public/hailprint-public/",
+  );
+  expect(normalizeBase("https://example.supabase.co/storage/v1/object/public/hailprint-public/")).toBe(
+    "https://example.supabase.co/storage/v1/object/public/hailprint-public/",
+  );
+  expect(resolveDataBase(undefined)).toBe("/data/");
+  expect(resolveDataBase("https://bucket.example/public")).toBe("https://bucket.example/public/");
+  expect(DATA_BASE).toBe(resolveDataBase(import.meta.env.VITE_DATA_BASE));
+});
 
 it("throws DataError with the file name on a 404", async () => {
   setFetch(async () => response(404, "nope"));
@@ -22,7 +36,7 @@ it("throws DataError when the body is not JSON", async () => {
 
 it("passes the parsed body through the guard", async () => {
   setFetch(async (input) => {
-    expect(String(input)).toBe("/data/storms.json");
+    expect(String(input)).toBe(`${DATA_BASE}storms.json`);
     return response(200, JSON.stringify({ n: 1 }));
   });
   await expect(fetchJson("storms.json", (v) => (v as { n: number }).n)).resolves.toBe(1);
