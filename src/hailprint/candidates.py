@@ -30,9 +30,13 @@ CST_TZ = 3  # WCM tz code for CST
 CST_TO_CONVECTIVE = timedelta(hours=6)
 
 
-def fetch_database(path: Path = WCM_PATH) -> Path:
+def _utc_today() -> date:
+    return date.today()
+
+
+def fetch_database(path: Path | None = None) -> Path:
     """Return the cached zip; download it once to a per-process .tmp name and rename."""
-    path = Path(path)
+    path = Path(WCM_PATH if path is None else path)
     if path.exists():
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -126,7 +130,10 @@ def read_facts(path: Path) -> dict[str, dict]:
 
 
 def all_days(
-    wcm_path: Path, index: pd.DataFrame, cache_dir: Path = DAILY_DIR, today: date | None = None
+    wcm_path: Path,
+    index: pd.DataFrame,
+    cache_dir: Path | None = None,
+    today: date | None = None,
 ) -> pd.DataFrame:
     """WCM Harris days plus the Harris, TX days of the index after the WCM end from SPC daily CSVs.
 
@@ -136,11 +143,12 @@ def all_days(
     # WCM file; the WCM end is the day of the last row of any county, and only later days are
     # filled, so a partial end day keeps its WCM count
     wcm = harris_days(wcm_path)
-    today = date.today() if today is None else today
+    resolved_cache_dir = DAILY_DIR if cache_dir is None else cache_dir
+    today = _utc_today() if today is None else today
     wcm_end = wcm_last_day(wcm_path)
     later = sorted({d for d in index["storm_date"] if d >= wcm_end})
     with ThreadPoolExecutor(FETCH_THREADS) as pool:
-        texts = list(pool.map(lambda d: daily_csv(d, cache_dir, today), later))
+        texts = list(pool.map(lambda d: daily_csv(d, resolved_cache_dir, today), later))
     # one 404 day is a normal skip; a run of them means the URL scheme changed
     after = [t for d, t in zip(later, texts, strict=True) if d > wcm_end]
     if len(after) > 1 and all(text is None for text in after):

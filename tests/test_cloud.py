@@ -229,7 +229,14 @@ def test_nightly_runs_pipeline_in_order_and_skips_parcels_without_gdb(tmp_path: 
     def fake_cli(argv: list[str]) -> int:
         calls.append(list(argv))
         if argv[:2] == ["candidates", "--missing"]:
-            print("2025-05-01\n2024-05-28")
+            cand_dir = tmp_path / "data" / "derived" / "index"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            (cand_dir / "candidate-days.csv").write_text(
+                "storm_date,report_count,max_size_in,has_12z,report_source\n"
+                "2025-05-01,10,2.0,True,wcm\n"
+                "2024-05-28,9,2.0,True,wcm\n",
+                encoding="utf-8",
+            )
         return 0
 
     rc = cloud.nightly(fake_cli, tmp_path, env={"MAX_INGEST": "2"})
@@ -255,7 +262,13 @@ def test_nightly_runs_parcels_when_gdb_present_and_passes_with_internet(tmp_path
     def fake_cli(argv: list[str]) -> int:
         calls.append(list(argv))
         if argv[:2] == ["candidates", "--missing"]:
-            print("2025-05-01")
+            cand_dir = tmp_path / "data" / "derived" / "index"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            (cand_dir / "candidate-days.csv").write_text(
+                "storm_date,report_count,max_size_in,has_12z,report_source\n"
+                "2025-05-01,10,2.0,True,wcm\n",
+                encoding="utf-8",
+            )
         return 0
 
     rc = cloud.nightly(fake_cli, tmp_path, env={"MAX_INGEST": "1", "PUBLISH_INTERNET": "1"})
@@ -280,7 +293,14 @@ def test_nightly_continues_when_one_ingest_or_addon_layer_fails(tmp_path: Path, 
     def fake_cli(argv: list[str]) -> int:
         calls.append(list(argv))
         if argv[:2] == ["candidates", "--missing"]:
-            print("2025-05-02\n2025-05-01")
+            cand_dir = tmp_path / "data" / "derived" / "index"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            (cand_dir / "candidate-days.csv").write_text(
+                "storm_date,report_count,max_size_in,has_12z,report_source\n"
+                "2025-05-02,10,2.0,True,wcm\n"
+                "2025-05-01,9,2.0,True,wcm\n",
+                encoding="utf-8",
+            )
             return 0
         if argv == ["ingest", "2025-05-02"]:
             return 1

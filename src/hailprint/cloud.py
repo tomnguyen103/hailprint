@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
-import io
 import json
 import os
 import re
@@ -12,7 +11,7 @@ import sys
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -294,22 +293,19 @@ def nightly(
     if rc != 0:
         return rc
 
-    buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        rc = run_cli(["candidates", "--missing", "--top", str(max_ingest)])
+    rc = run_cli(["candidates", "--missing", "--top", str(max_ingest)])
     if rc != 0:
         return rc
 
     cand_path = root / "data" / "derived" / "index" / "candidate-days.csv"
     swaths_dir = root / "data" / "derived" / "swaths"
+    missing_dates: list[str] = []
     if cand_path.is_file():
         ranked = pd.read_csv(cand_path, parse_dates=["storm_date"])
         ranked["storm_date"] = ranked["storm_date"].dt.date
         missing_dates = [
             d.isoformat() for d in candidates.missing_days(ranked, swaths_dir)[:max_ingest]
         ]
-    else:
-        missing_dates = [line.strip() for line in buf.getvalue().splitlines() if line.strip()]
     if missing_dates:
         gdb_dir = root / "data" / "raw" / "hcad" / "extracted" / "Parcels.gdb"
         has_gdb = gdb_dir.is_dir()
@@ -402,6 +398,7 @@ def _cli_context(root: Path, now: datetime | None):
     ]
     if now is not None:
         patches.append((cli_mod, "_utc_now", lambda: now))
+        patches.append((candidates, "_utc_today", lambda: now.date()))
     saved = [(mod, attr, getattr(mod, attr)) for mod, attr, _ in patches]
     try:
         for mod, attr, val in patches:
@@ -442,19 +439,22 @@ def run_cloud(
     site_dir = resolved_root / "site" / "data"
 
     if task == "odin":
-        slot = odin.slot_of(now if now is not None else datetime.now(UTC))
+        pre_now = now if now is not None else datetime.now(UTC)
+        slot = odin.slot_of(pre_now)
         odin_key = f"{ODIN_PREFIX}{odin.file_name(slot.date())}"
+        next_day_key = f"{ODIN_PREFIX}{odin.file_name((slot + timedelta(days=1)).date())}"
         state = sync_down(s3, config.state_bucket, (odin_key,), data_dir)
         rc = odin_run(runner)
         if rc != 0:
             return rc
-        post_slot = odin.slot_of(now if now is not None else datetime.now(UTC))
+        post_slot = odin.slot_of(datetime.now(UTC) if now is None else pre_now)
         post_key = f"{ODIN_PREFIX}{odin.file_name(post_slot.date())}"
         odin_keys = tuple(
             dict.fromkeys(
                 [
                     odin_key,
                     post_key,
+                    next_day_key,
                     *(
                         f"{ODIN_PREFIX}{p.name}"
                         for p in sorted((data_dir / ODIN_PREFIX).glob("odin-*.parquet"))
