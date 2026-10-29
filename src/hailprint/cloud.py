@@ -236,10 +236,10 @@ def sync_up(
 ) -> list[str]:
     prefix_tuple = tuple(prefixes)
     exclude_tuple = tuple(exclude_prefixes)
-    local_keys = _order_keys(
-        _collect_local_keys(local_base, prefix_tuple, exclude_tuple),
-        public=public,
-    )
+    collected = _collect_local_keys(local_base, prefix_tuple, exclude_tuple)
+    if public:
+        collected = [k for k in collected if _PUBLIC_KEY_RE.fullmatch(k)]
+    local_keys = _order_keys(collected, public=public)
     local_set = set(local_keys)
     uploaded: list[str] = []
 
@@ -299,10 +299,14 @@ def nightly(
 
     cand_path = root / "data" / "derived" / "index" / "candidate-days.csv"
     swaths_dir = root / "data" / "derived" / "swaths"
-    missing_dates: list[str] = []
-    if cand_path.is_file():
-        ranked = pd.read_csv(cand_path, parse_dates=["storm_date"])
-        ranked["storm_date"] = ranked["storm_date"].dt.date
+    if not cand_path.is_file():
+        _log("candidates failed: no candidate-days.csv")
+        return 1
+    ranked = pd.read_csv(cand_path, parse_dates=["storm_date"])
+    if ranked.empty:
+        missing_dates: list[str] = []
+    else:
+        ranked["storm_date"] = pd.to_datetime(ranked["storm_date"]).dt.date
         missing_dates = [
             d.isoformat() for d in candidates.missing_days(ranked, swaths_dir)[:max_ingest]
         ]

@@ -354,6 +354,13 @@ def test_run_cloud_nightly_syncs_down_runs_and_syncs_up_without_odin(tmp_path: P
 
     def fake_cli(argv: list[str]) -> int:
         calls.append(list(argv))
+        if argv[:2] == ["candidates", "--missing"]:
+            cand_dir = tmp_path / "data" / "derived" / "index"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            (cand_dir / "candidate-days.csv").write_text(
+                "storm_date,report_count,max_size_in,has_12z,report_source\n",
+                encoding="utf-8",
+            )
         if argv == ["publish"]:
             # Simulate publish writing a new file, updating storms.json, removing internet.json
             (tmp_path / "data" / "derived" / "scores").mkdir(parents=True, exist_ok=True)
@@ -594,6 +601,13 @@ def test_run_cloud_nightly_syncs_up_healthy_published_files_when_cli_returns_non
     s3 = FakeS3()
 
     def partial_cli(argv: list[str]) -> int:
+        if argv[:2] == ["candidates", "--missing"]:
+            cand_dir = tmp_path / "data" / "derived" / "index"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            (cand_dir / "candidate-days.csv").write_text(
+                "storm_date,report_count,max_size_in,has_12z,report_source\n",
+                encoding="utf-8",
+            )
         if argv == ["publish"]:
             storm_dir = tmp_path / "site" / "data" / "storms" / "2024-05-28"
             storm_dir.mkdir(parents=True, exist_ok=True)
@@ -639,3 +653,27 @@ def test_trigger_tasks_share_pipeline_queue_and_pin_uv():
     backfill_ts = (paths.ROOT / "trigger" / "backfill.ts").read_text(encoding="utf-8")
     assert 'name: "pipeline"' in nightly_ts
     assert 'name: "pipeline"' in backfill_ts
+
+
+def test_sync_up_public_skips_disallowed_keys(tmp_path: Path):
+    s3 = FakeS3()
+    site_dir = tmp_path / "site" / "data"
+    pub_state = cloud.sync_down(s3, "hailprint-public", ("",), site_dir)
+    site_dir.mkdir(parents=True, exist_ok=True)
+
+    (site_dir / "storms.json").write_bytes(b'{"storms":[]}')
+    (site_dir / ".DS_Store").write_bytes(b"junk")
+    (site_dir / "notes.txt").write_bytes(b"junk")
+
+    uploaded = cloud.sync_up(s3, "hailprint-public", ("",), site_dir, pub_state, public=True)
+    assert uploaded == ["storms.json"]
+    assert ("hailprint-public", ".DS_Store") not in s3.objects
+    assert ("hailprint-public", "notes.txt") not in s3.objects
+
+
+def test_nightly_returns_nonzero_when_candidate_csv_missing_after_candidates(
+    tmp_path: Path, capsys
+):
+    rc = cloud.nightly(lambda _argv: 0, tmp_path, env={"MAX_INGEST": "1"})
+    assert rc == 1
+    assert "no candidate-days.csv" in capsys.readouterr().err

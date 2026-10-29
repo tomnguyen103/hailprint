@@ -23,15 +23,19 @@ export function clampPopoverPosition(
   triggerRect: { top: number; bottom: number; left: number; right: number },
   popSize: { width: number; height: number },
   viewport: { width: number; height: number },
-): { top: number; left: number } {
+): { top: number; left: number; maxHeight: number } {
+  const maxHeight = Math.max(80, viewport.height - VIEWPORT_PAD * 2);
+  const effectiveHeight = Math.min(popSize.height, maxHeight);
   const maxLeft = Math.max(VIEWPORT_PAD, viewport.width - popSize.width - VIEWPORT_PAD);
   const idealLeft = triggerRect.right - popSize.width;
   const left = Math.min(Math.max(VIEWPORT_PAD, idealLeft), maxLeft);
   const belowTop = triggerRect.bottom + POP_GAP;
-  const fitsBelow = belowTop + popSize.height <= viewport.height - VIEWPORT_PAD;
-  const aboveTop = triggerRect.top - POP_GAP - popSize.height;
-  const top = fitsBelow ? belowTop : Math.max(VIEWPORT_PAD, aboveTop);
-  return { top, left };
+  const fitsBelow = belowTop + effectiveHeight <= viewport.height - VIEWPORT_PAD;
+  const aboveTop = triggerRect.top - POP_GAP - effectiveHeight;
+  const top = fitsBelow
+    ? belowTop
+    : Math.min(Math.max(VIEWPORT_PAD, aboveTop), Math.max(VIEWPORT_PAD, viewport.height - effectiveHeight - VIEWPORT_PAD));
+  return { top, left, maxHeight };
 }
 
 /**
@@ -41,7 +45,11 @@ export function clampPopoverPosition(
 export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string }) {
   const id = useId();
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState<{ top: number; left: number }>({ top: VIEWPORT_PAD, left: VIEWPORT_PAD });
+  const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number }>({
+    top: VIEWPORT_PAD,
+    left: VIEWPORT_PAD,
+    maxHeight: 600,
+  });
   const chip = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
 
@@ -110,7 +118,7 @@ export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string 
           class="receipt-pop"
           role="dialog"
           aria-label={`Receipt for ${file}`}
-          style={{ top: `${pos.top}px`, left: `${pos.left}px` }}
+          style={{ top: `${pos.top}px`, left: `${pos.left}px`, maxHeight: `${pos.maxHeight}px` }}
         >
           <ReceiptList receipt={receipt} file={file} />
         </div>

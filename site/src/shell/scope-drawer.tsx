@@ -2,7 +2,7 @@ import type { ComponentChildren, RefObject } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import "../styles/scope.css";
 
-/** Escape closes the drawer while it is open. */
+/** Close on Escape while `open` is true. */
 function useEscape(open: boolean, onClose: () => void): void {
   useEffect(() => {
     if (!open) return;
@@ -14,12 +14,13 @@ function useEscape(open: boolean, onClose: () => void): void {
   }, [open, onClose]);
 }
 
-/** A close returns focus to the element that opened the drawer, before the drawer turns hidden. */
+/** Remember the element that had focus when `open` became true, and focus it again when `open` becomes false. */
 function useFocusReturn(open: boolean): void {
   const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (open) opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    else opener.current?.focus();
+    if (!open) return;
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    return () => opener.current?.focus();
   }, [open]);
 }
 
@@ -38,11 +39,25 @@ interface Props {
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), summary, input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+function isElementVisible(el: HTMLElement): boolean {
+  if (el.hidden || el.getAttribute?.("aria-hidden") === "true") return false;
+  if (
+    typeof window !== "undefined" &&
+    typeof window.getComputedStyle === "function" &&
+    typeof Element !== "undefined" &&
+    el instanceof Element
+  ) {
+    const style = window.getComputedStyle(el);
+    if (style?.display === "none" || style?.visibility === "hidden") return false;
+  }
+  return true;
+}
+
 /** Wrap Tab and Shift+Tab inside the drawer while it is open below 1280px. */
 export function trapDrawerTab(event: KeyboardEvent, root: HTMLElement | null, open: boolean): void {
   if (!open || event.key !== "Tab" || !root) return;
   const items = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => el.closest("details:not([open])") === null || el.tagName === "SUMMARY",
+    (el) => (el.closest("details:not([open])") === null || el.tagName === "SUMMARY") && isElementVisible(el),
   );
   if (items.length === 0) return;
   const first = items[0]!;

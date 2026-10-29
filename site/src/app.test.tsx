@@ -53,18 +53,7 @@ vi.mock("./state/route", () => ({ useRoute: () => stub.current }));
 vi.mock("./state/index", () => ({
   useIndex: () => ({ status: "ready", data: { storms: stub.storms }, showLoading: false, retry() {} }),
 }));
-vi.mock("./storms/workspace", async () => {
-  const { TABS, TAB_LABELS, href } = await import("./router");
-  return {
-    Workspace: () => null,
-    stormTabItems: (stormDate: string, step: number) =>
-      TABS.map((t) => ({
-        id: t,
-        label: TAB_LABELS[t],
-        href: href({ area: "storms", date: stormDate, tab: t, step: t === "map" ? step : undefined }),
-      })),
-  };
-});
+vi.mock("./storms/workspace", () => ({ Workspace: () => null }));
 vi.mock("./method/method", () => ({
   Method: () => {
     stub.log.push("method");
@@ -277,7 +266,7 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     ).toBe(false);
     expect(isPickForStorm(null, "2024-05-28")).toBe(false);
 
-    const { stormTabItems } = await import("./storms/workspace");
+    const { stormTabItems } = await vi.importActual<typeof import("./storms/workspace")>("./storms/workspace");
     expect(typeof stormTabItems).toBe("function");
     const items = stormTabItems("2024-05-28", 64);
     expect(items.find((t: { id: string; href: string }) => t.id === "map")?.href).toBe("/storms/2024-05-28/map/64");

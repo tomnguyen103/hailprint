@@ -247,6 +247,7 @@ def test_all_days_merges_wcm_end_day_with_daily_csv_taking_max_count_and_size(
 
     assert days.loc[WCM_END, "report_count"] == 4
     assert days.loc[WCM_END, "max_size_in"] == 2.50
+    assert days.loc[WCM_END, "report_source"] == "spc-daily"
 
 
 def test_all_days_drops_a_day_with_no_harris_tx_row(tmp_path, monkeypatch):

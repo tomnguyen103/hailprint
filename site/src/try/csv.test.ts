@@ -49,10 +49,11 @@ describe("csvOf", () => {
     expect(csvOf([row({ label: 'a, "b"' })]).split("\n")[1]).toContain('"a, ""b"""');
   });
 
-  it("prefixes leading formula triggers with a single quote", () => {
-    for (const prefix of ["=cmd", "+1", "-2", "@sum"]) {
+  it("prefixes leading formula triggers and control characters with a single quote", () => {
+    for (const prefix of ["=cmd", "+1", "-2", "@sum", "\t=cmd"]) {
       const line = csvOf([row({ label: prefix })]).split("\n")[1]!;
       expect(line.split(",")[2]).toBe(`'${prefix}`);
     }
+    expect(csvOf([row({ label: "\r=cmd" })])).toContain('"\'\r=cmd"');
   });
 });

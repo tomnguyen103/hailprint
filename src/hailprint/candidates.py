@@ -6,7 +6,7 @@ import sys
 import urllib.error
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -31,7 +31,7 @@ CST_TO_CONVECTIVE = timedelta(hours=6)
 
 
 def _utc_today() -> date:
-    return date.today()
+    return datetime.now(UTC).date()
 
 
 def fetch_database(path: Path | None = None) -> Path:
@@ -164,8 +164,16 @@ def all_days(
     if filled.empty:
         return wcm
     combined = pd.concat([wcm, filled], ignore_index=True)
+    # Sort by report_count desc, max_size_in desc, and prefer "wcm" on ties so the winning row's
+    # report_source matches the row that supplies the larger report count.
+    source_rank = [0 if s == "wcm" else 1 for s in combined["report_source"]]
+    ordered = combined.assign(_src_rank=source_rank).sort_values(
+        ["storm_date", "report_count", "max_size_in", "_src_rank"],
+        ascending=[True, False, False, True],
+        kind="mergesort",
+    )
     return (
-        combined.groupby("storm_date", as_index=False, sort=False)
+        ordered.groupby("storm_date", as_index=False, sort=False)
         .agg(
             report_count=("report_count", "max"),
             max_size_in=("max_size_in", "max"),
