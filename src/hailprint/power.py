@@ -29,8 +29,10 @@ MCC = {
     "48291": 44_189,  # Liberty
     "48071": 26_381,  # Chambers
 }
-# The header drifts by year (a total_customers column in 2024, none in 2020 and 2025): read by name.
+# The header drifts by year (a total_customers column in 2024, none in 2020 and 2025;
+# customers_out is named sum in 2023): read by name.
 COLUMNS = ("fips_code", "customers_out", "run_start_time")
+READ_COLUMNS = (*COLUMNS, "sum")
 CHUNK_ROWS = 500_000  # rows per pandas chunk: the whole year CSV never sits in memory
 METADATA = {"source": "eaglei", "product": "customers-out"}
 
@@ -51,6 +53,8 @@ def years_of(storm_date: date) -> list[int]:
 
 def _metro_rows(chunk: pd.DataFrame, year: int) -> pd.DataFrame:
     """Return the metro rows of one chunk as `fips`, `time_utc`, `customers_out`."""
+    if "customers_out" not in chunk.columns and "sum" in chunk.columns:
+        chunk = chunk.rename(columns={"sum": "customers_out"})
     for name in COLUMNS:
         if name not in chunk.columns:
             raise ValueError(f"EAGLE-I {year}: the CSV has no {name} column")
@@ -76,7 +80,7 @@ def read_eaglei(stream: IO[bytes], year: int, chunk_rows: int = CHUNK_ROWS) -> p
     """
     reader = pd.read_csv(
         stream,
-        usecols=lambda name: name in COLUMNS,
+        usecols=lambda name: name in READ_COLUMNS,
         dtype={"fips_code": str},
         encoding="utf-8-sig",
         chunksize=chunk_rows,

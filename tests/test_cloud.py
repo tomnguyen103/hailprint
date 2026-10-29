@@ -460,3 +460,34 @@ def test_trigger_project_files_and_schedules_exist():
         paths.ROOT / "tests" / "test_scripts.py",
     ):
         assert not removed.exists(), f"{removed} should be removed"
+
+
+def test_s3_client_exchanges_session_token_when_access_key_has_colon_credentials(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_fetch(project_ref: str, anon_key: str, email: str, password: str) -> str:
+        captured["fetch"] = (project_ref, anon_key, email, password)
+        return "jwt-token-123"
+
+    def fake_boto3_client(service: str, **kwargs: object) -> dict[str, object]:
+        captured["boto"] = (service, kwargs)
+        return kwargs
+
+    monkeypatch.setattr(cloud, "_fetch_session_token", fake_fetch)
+    monkeypatch.setattr(cloud.boto3, "client", fake_boto3_client)
+
+    cfg = cloud.Config(
+        endpoint="https://ref.storage.supabase.co/storage/v1/s3",
+        region="us-east-1",
+        access_key_id="ref:worker@example.com:s3cret",
+        secret_access_key="anon-jwt",
+        state_bucket="hailprint-state",
+        public_bucket="hailprint-public",
+    )
+    cloud.s3_client(cfg)
+    assert captured["fetch"] == ("ref", "anon-jwt", "worker@example.com", "s3cret")
+    service, kwargs = captured["boto"]  # type: ignore[misc]
+    assert service == "s3"
+    assert kwargs["aws_access_key_id"] == "ref"  # type: ignore[index]
+    assert kwargs["aws_secret_access_key"] == "anon-jwt"  # type: ignore[index]
+    assert kwargs["aws_session_token"] == "jwt-token-123"  # type: ignore[index]

@@ -5,9 +5,11 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import io
+import json
 import os
 import re
 import sys
+import urllib.request
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -62,7 +64,35 @@ class SyncState:
     remote_keys: set[tuple[str, str]] = field(default_factory=set)
 
 
+def _fetch_session_token(project_ref: str, anon_key: str, email: str, password: str) -> str:
+    url = f"https://{project_ref}.supabase.co/auth/v1/token?grant_type=password"
+    payload = json.dumps({"email": email, "password": password}).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={"apikey": anon_key, "Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+        data = json.loads(resp.read().decode("utf-8"))
+    token = data.get("access_token")
+    if not isinstance(token, str) or not token:
+        raise ValueError("missing access_token from Supabase auth")
+    return token
+
+
 def s3_client(config: Config) -> Any:
+    if ":" in config.access_key_id:
+        project_ref, email, password = config.access_key_id.split(":", 2)
+        token = _fetch_session_token(project_ref, config.secret_access_key, email, password)
+        return boto3.client(
+            "s3",
+            endpoint_url=config.endpoint,
+            region_name=config.region,
+            aws_access_key_id=project_ref,
+            aws_secret_access_key=config.secret_access_key,
+            aws_session_token=token,
+        )
     return boto3.client(
         "s3",
         endpoint_url=config.endpoint,
