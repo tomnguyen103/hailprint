@@ -496,3 +496,11 @@ def test_the_harris_peak_of_beryl_is_1660703_at_19_15_utc_and_no_share_out_passe
     assert harris.max() == 1_660_703
     assert harris.idxmax() == pd.Timestamp("2024-07-08 19:15", tz="UTC")
     assert power.share_out(day).max() <= 1.0
+
+
+def test_a_2023_header_with_sum_maps_to_customers_out():
+    csv_2023 = FIVE.read_text(encoding="utf-8").replace("customers_out", "sum", 1)
+    pd.testing.assert_frame_equal(
+        power.read_eaglei(io.BytesIO(csv_2023.encode("utf-8")), 2023),
+        EXPECTED,
+    )
