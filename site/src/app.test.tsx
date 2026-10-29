@@ -10,12 +10,23 @@ type Current = { path: string; route: object };
 const stub = vi.hoisted(() => ({
   layouts: [] as { children: unknown }[],
   log: [] as string[],
+  replaced: [] as string[],
   shown: [] as { error: { message: string }; inLayout: boolean }[],
+  storms: [{ storm_date: "2024-05-28" }] as Record<string, unknown>[],
   // The Layout stub provides it, the ErrorState stub reads it: true when the error state renders under the layout.
   layoutContext: undefined as unknown as Context<boolean>,
   armed: true,
   current: { path: "/method/data", route: { kind: "method", page: "data" } } as Current,
 }));
+vi.mock("./router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./router")>();
+  return {
+    ...actual,
+    replace: (to: string) => {
+      stub.replaced.push(to);
+    },
+  };
+});
 vi.mock("./shell/layout", async () => {
   const { createContext } = await import("preact");
   stub.layoutContext = createContext(false);
@@ -40,7 +51,7 @@ vi.mock("./shell/states", async () => {
 });
 vi.mock("./state/route", () => ({ useRoute: () => stub.current }));
 vi.mock("./state/index", () => ({
-  useIndex: () => ({ status: "ready", data: { storms: [{ storm_date: "2024-05-28" }] }, showLoading: false, retry() {} }),
+  useIndex: () => ({ status: "ready", data: { storms: stub.storms }, showLoading: false, retry() {} }),
 }));
 vi.mock("./areas/storms", () => ({ StormsArea: () => null }));
 vi.mock("./method/method", () => ({
@@ -71,7 +82,9 @@ describe("App", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     stub.layouts.length = 0;
     stub.log.length = 0;
+    stub.replaced.length = 0;
     stub.shown.length = 0;
+    stub.storms = [{ storm_date: "2024-05-28" }];
     stub.armed = true;
     stub.current = { path: "/method/data", route: { kind: "method", page: "data" } };
   });
@@ -104,5 +117,31 @@ describe("App", () => {
     await mount();
 
     expect(stub.log.at(-1)).toBe("pipeline");
+  });
+
+  it("redirects / to the newest storm date that has an impact layer", async () => {
+    stub.storms = [
+      {
+        storm_date: "2026-08-28",
+        files: { swath: "s", reports: "r", pairs: "p", zip_counts: null, warnings: null, power: null, internet: null },
+      },
+      {
+        storm_date: "2025-05-01",
+        files: {
+          swath: "s",
+          reports: "r",
+          pairs: "p",
+          zip_counts: null,
+          warnings: null,
+          power: "storms/2025-05-01/power.json",
+          internet: null,
+        },
+      },
+    ];
+    stub.current = { path: "/", route: { kind: "redirect-latest" } };
+
+    await mount();
+
+    expect(stub.replaced).toEqual(["/storms/2025-05-01/map"]);
   });
 });

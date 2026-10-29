@@ -1,7 +1,40 @@
 // Pure selectors for the Storms workspace. No Preact import.
-import type { Storm, ZipCounts } from "../data/types";
+import type { Storm, StormFiles, ZipCounts } from "../data/types";
 import { BELOW_FIRST_CLASS } from "../format";
+import type { Fill } from "../impact/power";
 import { RULER } from "../ruler";
+
+export type ImpactLayer = "power" | "internet" | "warnings";
+
+/** Default county fill for a storm date: power when present, else internet when present, else none. */
+export function defaultFill(files: Pick<StormFiles, "power" | "internet">): Fill {
+  if (files.power !== null) return "power";
+  if (files.internet !== null) return "internet";
+  return "none";
+}
+
+/** Ordered impact layer chips for a storm date from its published file map. */
+export function impactChips(files: Pick<StormFiles, "power" | "internet" | "warnings">): ImpactLayer[] {
+  const chips: ImpactLayer[] = [];
+  if (files.power !== null) chips.push("power");
+  if (files.internet !== null) chips.push("internet");
+  if (files.warnings !== null) chips.push("warnings");
+  return chips;
+}
+
+/** True when a storm date has at least one impact layer (power, internet, or warnings). */
+export function hasImpactLayer(storm: Pick<Storm, "files">): boolean {
+  return (
+    storm.files.power !== null ||
+    storm.files.internet !== null ||
+    storm.files.warnings !== null
+  );
+}
+
+/** The newest storm date with an impact layer, or the newest storm date when none has one. */
+export function landingStorm(storms: readonly Storm[]): Storm | undefined {
+  return storms.find((s) => Boolean(s.files) && hasImpactLayer(s)) ?? storms[0];
+}
 
 /** Years newest first; dates newest first inside each year. */
 export function groupByYear(storms: readonly Storm[]): { year: string; storms: Storm[] }[] {

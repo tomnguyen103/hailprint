@@ -1,6 +1,6 @@
 # Hailprint site
 
-Static Preact site that reads the published files under `site/data/`. No server.
+Static Preact site that reads the published files from `VITE_DATA_BASE` (or `/data/` in local dev). No server.
 
 ## Commands
 
@@ -18,16 +18,17 @@ npm run check    # tsc --noEmit && vitest run && vite build
 
 `/storms/<date>/map|parcels|score|data`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`,
 `/method/<data|storm-date|size-classes|scoring|limits|impacts>`, `/pipeline/<runs|archive|sources>`. `/` redirects to
-the newest storm date, `/scorecard` opens the Table view, `/try` opens the Tune tool, `/method` opens the Data
+the newest storm date with an impact layer (or the newest storm date when none has one), `/scorecard` opens the Table view, `/try` opens the Tune tool, `/method` opens the Data
 page, and `/pipeline` opens Runs.
 
 ## Data
 
-`uv run hailprint publish` at the repo root writes `site/data/storms.json` and one folder per
-storm date under `site/data/storms/<date>/`. The build copies `site/data/` to `/data/`.
-Without the folder the site shows "No storm date is published yet."
+The site reads published JSON from `DATA_BASE` (`import.meta.env.VITE_DATA_BASE ?? "/data/"` in `src/data/fetch.ts`). In production, `VITE_DATA_BASE` points to the public Supabase Storage bucket (`hailprint-public`), so a data refresh from Trigger.dev needs no site deploy.
+In local development, `uv run hailprint publish` at the repo root writes `site/data/storms.json` and one folder per
+storm date under `site/data/storms/<date>/`, served at `/data/`.
+Without the index the site shows "No storm date is published yet."
 The same command writes `site/data/pipeline.json`: the run log, the archive coverage, and the source list for `/pipeline`.
-A storm date folder also holds `warnings.geojson` where `hailprint warnings` ran and `power.json` where `hailprint power` ran.
+A storm date folder also holds `warnings.geojson` where `hailprint warnings` ran, `power.json` where `hailprint power` ran, and `internet.json` where `hailprint internet` ran and `publish` used `--with-internet`.
 `uv run python site/scripts/pool_golden.py` writes `site/data/pooled-golden.json`, the pooled table at
 every whole radius; `src/pool.test.ts` checks the browser pool against it and skips without the file.
 
@@ -36,17 +37,15 @@ every whole radius; `src/pool.test.ts` checks the browser pool against it and sk
 `scripts/basemap.sh` extracts the 8-county metro bbox (`hailprint.county.metro_bbox()`) at
 maxzoom 12 from the Protomaps daily build into `public/basemap.pmtiles` with the `pmtiles`
 CLI. The file is optional: the map draws paper and the county outlines when it is absent.
-The file is gitignored. The impact layers (warnings and power) draw across the 8 counties.
+The file is gitignored. The impact layers (warnings, power, and internet) draw across the 8 counties.
 Rerun `scripts/basemap.sh` after a change to the metro bbox, and on a new host, so the extract covers all 8 counties.
 
 ## Vercel
 
 The root `vercel.json` sets the fields: install `cd site && npm ci`, build
 `cd site && npm run build`, output `site/dist`, and a rewrite of every path without a dot to
-`/index.html`. Git deployments are off for `main` (`git.deploymentEnabled` in `vercel.json`), so a
-merge never replaces production with a data-free build; PR branches keep their previews.
-The deploy from the cron host, its dry run, and its auth live in
-[docs/operations.md](../docs/operations.md#deploy).
+`/index.html`. Because published data lives in the public Supabase Storage bucket (`VITE_DATA_BASE`), the Vercel build holds code only and git deployments are enabled for `main` (`git.deploymentEnabled.main: true` in `vercel.json`).
+Cloud schedules and bucket setup live in [docs/operations.md](../docs/operations.md).
 
 ## Dev harness
 

@@ -91,6 +91,9 @@ describe("the fill notes", () => {
     expect(fillNotes({ ...files, power: null }, ready, ready, outlinesFailed).power).toBe(
       "No power file for this storm date. counties.geojson: HTTP 500",
     );
+    expect(fillNotes({ ...files, power: null }, ready, ready, ready, "2026-04-30").power).toBe(
+      "No power source for this date.",
+    );
   });
 
   it("keeps the note of an internet file that failed", () => {

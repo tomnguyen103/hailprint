@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from "vitest";
-import { STALE, fetchJson, latest, setFetch } from "./fetch";
+import { DATA_BASE, STALE, fetchJson, latest, normalizeBase, setFetch } from "./fetch";
 import { DataError } from "./types";
 
 afterEach(() => setFetch(null));
@@ -7,6 +7,18 @@ afterEach(() => setFetch(null));
 function response(status: number, body: string): Response {
   return new Response(body, { status, headers: { "content-type": "application/json" } });
 }
+
+it("normalizes a data base URL so it ends with a single slash", () => {
+  expect(normalizeBase("/data/")).toBe("/data/");
+  expect(normalizeBase("/data")).toBe("/data/");
+  expect(normalizeBase("https://example.supabase.co/storage/v1/object/public/hailprint-public")).toBe(
+    "https://example.supabase.co/storage/v1/object/public/hailprint-public/",
+  );
+  expect(normalizeBase("https://example.supabase.co/storage/v1/object/public/hailprint-public/")).toBe(
+    "https://example.supabase.co/storage/v1/object/public/hailprint-public/",
+  );
+  expect(DATA_BASE).toBe("/data/");
+});
 
 it("throws DataError with the file name on a 404", async () => {
   setFetch(async () => response(404, "nope"));

@@ -20,6 +20,7 @@ import { Inspector, type Pick } from "./map/inspector";
 import { type LayerName, fillLayerId, warningsNote } from "./map/layers";
 import { RulerLegend } from "./map/ruler-legend";
 import { RULER } from "../ruler";
+import { defaultFill } from "./select";
 
 const SWATH_FILE = "swath.geojson";
 const NO_BASEMAP = "No basemap file.";
@@ -54,8 +55,12 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   const [attempt, setAttempt] = useState(0);
   const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set());
   const [layers, setLayers] = useState<LayerState>({ swath: true, reports: true, warnings: true });
-  const [fill, setFill] = useState<Fill>("none");
+  const [fill, setFill] = useState<Fill>(() => defaultFill(storm.files));
   const [pick, setPick] = useState<Pick | null>(null);
+
+  useEffect(() => {
+    setFill(defaultFill(storm.files));
+  }, [storm.storm_date, storm.files.power, storm.files.internet]);
   const reportsRef = useRef<ReportsFile | null>(null);
   reportsRef.current = reports.status === "ready" ? reports.data : null;
   const outlinesRef = useRef<FeatureCollection<MultiPolygon> | null>(null);
@@ -169,7 +174,13 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   // A failed power file or county file hides the fill with one line; the hail map stays.
   const powerAvailable = powerData !== null && outlines !== null;
   const internetAvailable = internetData !== null && outlines !== null;
-  const { power: powerLine, internet: internetLine } = fillNotes(storm.files, power, internet, metro);
+  const { power: powerLine, internet: internetLine } = fillNotes(
+    storm.files,
+    power,
+    internet,
+    metro,
+    storm.storm_date,
+  );
   return (
     <div class="map-pane" data-inspector={pick !== null}>
       <div class="map-main">

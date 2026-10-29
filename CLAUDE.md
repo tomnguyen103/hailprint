@@ -96,7 +96,7 @@ __main__.py   argparse wiring, one function per command (the `ingest`, `score`, 
 
 `site/` is the static site (Preact 10, Vite 8, TypeScript strict, MapLibre GL 6). Routes:
 `/storms/<date>/map|parcels|score|data` and `/storms/<date>/map/<step>`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`, `/method/<data|storm-date|size-classes|scoring|limits|impacts>`, `/pipeline/<runs|archive|sources>`; `/` redirects
-to the newest storm date. It reads `storms.json` first, then the four per-date files, then `warnings.geojson`, `power.json`, and `internet.json` when the date has them,
+to the newest storm date with an impact layer (or the newest storm date when none has one). It reads `storms.json` first from `VITE_DATA_BASE` (defaulting to `/data/` in local dev) and re-fetches `storms.json` on tab focus and hourly while visible, then reads the four per-date files, then `warnings.geojson`, `power.json`, and `internet.json` when the date has them,
 each through a guard in `site/src/data/guard.ts`, and re-scores `pairs.json` in `site/src/rescore.ts` with the
 same radius rule as `publish.rescore`. Every MapLibre import lives under `site/src/storms/map/`.
 `site/README.md` holds the commands, the data path, the basemap step, and the Vercel fields.

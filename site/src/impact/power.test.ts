@@ -144,8 +144,16 @@ describe("the share out", () => {
 describe("the power line in the layers control", () => {
   const file = "storms/2024-05-28/power.json";
 
-  it("says the storm date has no power file when the index names none", () => {
+  it("says the storm date has no power file when the index names none, and no power source for the 3 past 2026 dates", () => {
     expect(powerNote(null, { status: "ready", data: null })).toBe("No power file for this storm date.");
+    expect(powerNote(null, { status: "ready", data: null }, "2024-05-28")).toBe(
+      "No power file for this storm date.",
+    );
+    for (const date of ["2026-04-30", "2026-06-02", "2026-08-28"]) {
+      expect(powerNote(null, { status: "ready", data: null }, date)).toBe(
+        "No power source for this date.",
+      );
+    }
   });
 
   it("names the failed file and reason", () => {

@@ -9,6 +9,7 @@ import { Layout } from "./shell/layout";
 import { EmptyState, ErrorState, LoadingState } from "./shell/states";
 import { useIndex } from "./state/index";
 import { useRoute } from "./state/route";
+import { landingStorm } from "./storms/select";
 import { TryIt } from "./try/try";
 
 const NO_INDEX = "No storm date is published yet.";
@@ -18,11 +19,12 @@ export function App() {
   const index = useIndex();
   const storms = index.status === "ready" ? index.data.storms : [];
   const newest = storms[0];
+  const landing = landingStorm(storms);
   useEffect(() => {
-    if (route.kind === "redirect-latest" && newest) {
-      replace(href({ area: "storms", date: newest.storm_date, tab: "map" }));
+    if (route.kind === "redirect-latest" && landing) {
+      replace(href({ area: "storms", date: landing.storm_date, tab: "map" }));
     }
-  }, [route.kind, newest]);
+  }, [route.kind, landing]);
   const active: Area | null =
     route.kind === "scorecard" || route.kind === "try" || route.kind === "method" || route.kind === "pipeline"
       ? route.kind
