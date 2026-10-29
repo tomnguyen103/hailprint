@@ -1,4 +1,5 @@
 import hashlib
+import subprocess
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -6,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from hailprint import __main__ as cli
-from hailprint import cloud
+from hailprint import cloud, paths
 
 
 class FakeS3:
@@ -408,3 +409,54 @@ def test_cli_cloud_subcommand_routes_to_run_cloud(monkeypatch):
     assert cli.main(["cloud", "odin"]) == 0
     assert cli.main(["cloud", "backfill"]) == 0
     assert recorded == ["nightly", "odin", "backfill"]
+
+
+def test_requirements_txt_matches_uv_export():
+    req_path = paths.ROOT / "requirements.txt"
+    assert req_path.is_file()
+    proc = subprocess.run(
+        ["uv", "export", "--no-dev", "--no-hashes"],
+        cwd=paths.ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert req_path.read_text(encoding="utf-8") == proc.stdout
+
+
+def test_trigger_project_files_and_schedules_exist():
+    cfg = (paths.ROOT / "trigger.config.ts").read_text(encoding="utf-8")
+    assert 'requirementsFile: "./requirements.txt"' in cfg
+    assert 'dirs: ["./trigger"]' in cfg
+    assert "maxDuration: 3600" in cfg
+
+    nightly_ts = (paths.ROOT / "trigger" / "nightly.ts").read_text(encoding="utf-8")
+    assert 'id: "nightly"' in nightly_ts
+    assert "30 13 * * *" in nightly_ts
+    assert "medium-1x" in nightly_ts
+    assert "concurrencyLimit: 1" in nightly_ts
+    assert '"cloud", "nightly"' in nightly_ts
+
+    odin_ts = (paths.ROOT / "trigger" / "odin.ts").read_text(encoding="utf-8")
+    assert 'id: "odin"' in odin_ts
+    assert "0 * * * *" in odin_ts
+    assert "small-1x" in odin_ts
+    assert "concurrencyLimit: 1" in odin_ts
+    assert '"cloud", "odin"' in odin_ts
+
+    backfill_ts = (paths.ROOT / "trigger" / "backfill.ts").read_text(encoding="utf-8")
+    assert 'id: "backfill"' in backfill_ts
+    assert "medium-1x" in backfill_ts
+    assert "concurrencyLimit: 1" in backfill_ts
+    assert '"cloud", "backfill"' in backfill_ts
+
+    hello_ts = (paths.ROOT / "trigger" / "hello.ts").read_text(encoding="utf-8")
+    assert 'id: "hello"' in hello_ts
+
+    for removed in (
+        paths.ROOT / "scripts" / "nightly.sh",
+        paths.ROOT / "scripts" / "deploy.sh",
+        paths.ROOT / "scripts" / "hailprint.cron",
+        paths.ROOT / "tests" / "test_scripts.py",
+    ):
+        assert not removed.exists(), f"{removed} should be removed"

@@ -15,10 +15,7 @@ ingest:
 site:
 	cd site && npm ci && npm run check
 
-deploy-dry:
-	scripts/deploy.sh --dry-run
-
 nightly:
-	scripts/nightly.sh
+	uv run hailprint cloud nightly
 
-.PHONY: setup lint test ingest site deploy-dry nightly
+.PHONY: setup lint test ingest site nightly

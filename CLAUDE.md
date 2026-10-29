@@ -26,10 +26,13 @@ uv run hailprint score --radius-km 5        # needs `ingest`; scores every swath
 uv run hailprint warnings --missing         # IEM storm-based warnings for each swath date with a closed impact window
 uv run hailprint eaglei 2025                # EAGLE-I year CSV streamed once, metro rows kept; one manual run per new year
 uv run hailprint power --missing            # customers out per metro county and step for each swath date with a closed impact window
-uv run hailprint odin                       # one ODIN snapshot into the day file; cron runs it every 15 minutes
+uv run hailprint odin                       # one ODIN snapshot into the day file
 uv run hailprint internet --missing         # IODA ping-slash24 reachability per metro county and step for each swath date with a closed impact window
 uv run hailprint publish                    # needs `ingest`; writes site/data/ (ZIP counts only where `parcels` ran, warnings only where `warnings` ran, power only where `power` ran)
-uv run hailprint publish --with-internet    # also writes internet.json where `internet` ran; nightly.sh passes it only when .env sets PUBLISH_INTERNET=1
+uv run hailprint publish --with-internet    # also writes internet.json where `internet` ran; cloud nightly passes it only when PUBLISH_INTERNET=1
+uv run hailprint cloud nightly              # syncs Supabase S3 state/public down, runs nightly pipeline, syncs changed files up
+uv run hailprint cloud odin                 # syncs today's ODIN day file down, runs `odin`, syncs that file up
+uv run hailprint cloud backfill             # syncs state/public down, runs warnings/eaglei/power/internet/publish, syncs up
 make site                                   # cd site && npm ci && npm run check
 cd site && npm run dev                      # Vite dev server at http://localhost:5173
 cd site && npm run check                    # tsc --noEmit && vitest run && vite build
@@ -81,10 +84,11 @@ publish.py    swaths + nearby_reports + ZIP counts -> validated JSON with a rece
               also pipeline.json (runs newest first, cap 50, merged by run_time; archive summary per year or null; one sources row per source and product)
 publish_run.py run(selected, dirs, with_internet=, now=) is the publish run: the files per storm date, then storms.json, then pipeline.json; Dirs holds the parcels, warnings, power, internet, and site directories;
                archive_summary, pipeline_doc, impact_layer, stale_files, and remove_stale sit beside it; the caller holds the publish lock
+cloud.py      Supabase S3 synchronization (sync_down, sync_up with SHA-256 digest tracking, index-last public upload ordering, and mirror deletion) and cloud runners (nightly, odin_run, backfill, run_cloud)
 county.py     committed GeoJSON (package data): outline() and bbox() for Harris County; metro() and metro_bbox() for the 8 metro counties (the impact layers only)
 files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata;
               lock(path): one publish run at a time, pid in site/data/publish.lock, a second run stops with exit 1
-paths.py      ROOT (the repo root) and RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR; every data path hangs from it
+paths.py      resolve_root() reads HAILPRINT_ROOT when set, else the repo root; ROOT, RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR hang from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
 __main__.py   argparse wiring, one function per command (the `ingest`, `score`, `eaglei`, and `odin` bodies stay here), printing, and the fixed paths under data/, out/, and site/data/; the `--missing` rules, the run loop, and the publish run sit in `runs` and `publish_run`;
               `power --missing` also replaces an ODIN-sourced power file when EAGLE-I now covers its window (docs/DECISIONS.md row 12)
@@ -107,7 +111,7 @@ The warnings layer sits under `site/src/storms/map/`, and the layers control sit
 `design.md` at the repo root is the locked design system: the tokens, the archetype of each area, and the layout rules.
 Read it before a UI change.
 
-Data paths hang from `paths.ROOT`, so a command writes under the repo `data/` and `out/` from any
+Data paths hang from `paths.ROOT`, so a command writes under `ROOT / "data"` and `ROOT / "out"` from any
 working directory. `data/`, `out/`, and `site/data/` are gitignored. No module holds a relative `Path("data...")`.
 
 Conventions that span modules:
@@ -153,7 +157,7 @@ Conventions that span modules:
   `docs/DECISIONS.md`.
 - Harris County only, HCAD footprints only (v1 scope, `docs/DECISIONS.md`). The scorer reads
   SPC reports within the 50 km buffer, so it sees reports from outside the county.
-- GitHub Actions stay disabled on this repo. Scheduling is a local or VPS cron job.
+- GitHub Actions stay disabled on this repo. Scheduling runs on Trigger.dev (`docs/DECISIONS.md` row 18).
 
 ## Documents
 

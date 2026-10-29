@@ -40,13 +40,14 @@ Site: https://hailprint.tomnguyen.me
 | ODIN | `hailprint odin` | One 15-minute snapshot of the open ODIN incidents, added to the file of the UTC day |
 | Internet | `hailprint internet` | Internet reachability per metro county and 15-minute step, from the IODA signal, for each storm date |
 | Publish | `hailprint publish` | Validated JSON under `site/data/`, each file with a receipt; `--with-internet` adds `internet.json` |
+| Cloud sync | `hailprint cloud` | Syncs state and public files with Supabase Storage and runs `nightly`, `odin`, or `backfill` |
 
-`scripts/nightly.sh` runs the steps for new storm dates. `scripts/hailprint.cron` starts it at 14:00 UTC and runs `hailprint odin` every 15 minutes. `scripts/deploy.sh` uploads the site to Vercel.
+Trigger.dev schedules run `hailprint cloud nightly` at 13:30 UTC and `hailprint cloud odin` every hour, while `hailprint cloud backfill` runs on demand. Published files upload to the public Supabase Storage bucket, and Vercel builds and hosts the static site from git.
 
 ## Documentation
 
 - [Getting started](docs/getting-started.md): requirements, install, data sources, commands, and checks.
-- [Operations](docs/operations.md): the nightly run, the cron entry, the deploy, and the `.env` rules.
+- [Operations](docs/operations.md): Trigger.dev schedules, Supabase Storage buckets, and environment variables.
 - [Site](site/README.md): routes, data path, basemap, and dev harness.
 - [Glossary](GLOSSARY.md) and [decisions](docs/DECISIONS.md).
 - [Documentation index](docs/README.md): plans, research, and learn-loop entries.
