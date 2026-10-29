@@ -41,3 +41,28 @@ def test_write_atomic_creates_missing_parent_folders(tmp_path):
     files.write_atomic(pd.DataFrame({"n": [1]}), path)
 
     assert path.is_file()
+
+
+def test_resolve_root_uses_hailprint_root_when_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("HAILPRINT_ROOT", str(tmp_path))
+
+    assert paths.resolve_root() == tmp_path.resolve()
+
+
+def test_resolve_root_falls_back_to_repo_when_unset_or_empty(monkeypatch):
+    expected = Path(__file__).resolve().parents[1]
+    monkeypatch.delenv("HAILPRINT_ROOT", raising=False)
+    assert paths.resolve_root() == expected
+
+    monkeypatch.setenv("HAILPRINT_ROOT", "")
+    assert paths.resolve_root() == expected
+
+
+def test_resolve_root_converts_relative_env_var_to_absolute(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HAILPRINT_ROOT", "./work_dir")
+
+    resolved = paths.resolve_root()
+
+    assert resolved.is_absolute()
+    assert resolved == (tmp_path / "work_dir").resolve()
