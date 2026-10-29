@@ -315,7 +315,7 @@ def test_backfill_fetches_only_missing_eaglei_years_and_publishes(tmp_path: Path
     assert rc == 0
     assert calls == [
         ["warnings", "--missing"],
-        ["eaglei", "2021", "2025"],
+        ["eaglei", "2020", "2021", "2022", "2024", "2025"],
         ["power", "--missing"],
         ["internet", "--missing"],
         ["publish", "--with-internet"],
@@ -491,3 +491,131 @@ def test_s3_client_exchanges_session_token_when_access_key_has_colon_credentials
     assert kwargs["aws_access_key_id"] == "ref"  # type: ignore[index]
     assert kwargs["aws_secret_access_key"] == "anon-jwt"  # type: ignore[index]
     assert kwargs["aws_session_token"] == "jwt-token-123"  # type: ignore[index]
+
+
+def test_s3_client_rejects_malformed_project_ref():
+    cfg = cloud.Config(
+        endpoint="https://ref.storage.supabase.co/storage/v1/s3",
+        region="us-east-1",
+        access_key_id="bad@evil.com:worker@example.com:s3cret",
+        secret_access_key="anon-jwt",
+        state_bucket="hailprint-state",
+        public_bucket="hailprint-public",
+    )
+    with pytest.raises(ValueError, match="project_ref"):
+        cloud.s3_client(cfg)
+
+
+def test_sync_down_rejects_oversized_s3_object_and_disallowed_public_key(tmp_path: Path):
+    s3_big = FakeS3({("hailprint-state", "raw/spc/big.bin"): b"12345678901"})
+    with pytest.raises(RuntimeError, match="exceeds"):
+        cloud.sync_down(s3_big, "hailprint-state", ("raw/spc/",), tmp_path / "data", max_bytes=10)
+    assert not (tmp_path / "data" / "raw" / "spc" / "big.bin").exists()
+
+    s3_bad_pub = FakeS3({("hailprint-public", "storms/2024-05-28/evil.html"): b"<html>"})
+    with pytest.raises(ValueError, match="unsafe S3 key"):
+        cloud.sync_down(
+            s3_bad_pub, "hailprint-public", ("",), tmp_path / "site" / "data", public=True
+        )
+
+
+def test_collect_local_keys_ignores_symlinks(tmp_path: Path):
+    base = tmp_path / "site" / "data"
+    base.mkdir(parents=True)
+    secret = tmp_path / "secret.txt"
+    secret.write_text("top-secret", encoding="utf-8")
+    (base / "storms.json").write_text("{}", encoding="utf-8")
+    link = base / "leak.json"
+    try:
+        link.symlink_to(secret)
+    except OSError:
+        pytest.skip("symlinks not supported in this environment")
+    keys = cloud._collect_local_keys(base, ("",), ())
+    assert keys == ["storms.json"]
+
+
+def test_run_cloud_propagates_custom_root_and_now_to_default_cli(tmp_path: Path, monkeypatch):
+    s3 = FakeS3()
+    fixed_now = datetime(2026, 10, 29, 23, 59, 59, tzinfo=UTC)
+    monkeypatch.setattr(
+        cli.odin,
+        "fetch",
+        lambda: '{"total_count": 0, "results": []}',
+    )
+    rc = cloud.run_cloud("odin", client=s3, root=tmp_path, env=VALID_ENV, now=fixed_now)
+    assert rc == 0
+    expected_key = "derived/odin/odin-2026-10-29.parquet"
+    assert (tmp_path / "data" / expected_key).exists()
+    assert ("hailprint-state", expected_key) in s3.objects
+
+
+def test_run_cloud_odin_syncs_both_days_across_midnight(tmp_path: Path):
+    pre_now = datetime(2026, 10, 29, 23, 59, 59, tzinfo=UTC)
+    day1_key = "derived/odin/odin-2026-10-29.parquet"
+    day2_key = "derived/odin/odin-2026-10-30.parquet"
+    s3 = FakeS3({("hailprint-state", day1_key): b"day1"})
+
+    def midnight_cli(argv: list[str]) -> int:
+        assert argv == ["odin"]
+        (tmp_path / "data" / day2_key).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "data" / day2_key).write_bytes(b"day2-midnight")
+        return 0
+
+    rc = cloud.run_cloud(
+        "odin", client=s3, root=tmp_path, env=VALID_ENV, run_cli=midnight_cli, now=pre_now
+    )
+    assert rc == 0
+    assert s3.objects.get(("hailprint-state", day2_key)) == b"day2-midnight"
+
+
+def test_run_cloud_nightly_syncs_up_healthy_published_files_when_cli_returns_nonzero(
+    tmp_path: Path,
+):
+    s3 = FakeS3()
+
+    def partial_cli(argv: list[str]) -> int:
+        if argv == ["publish"]:
+            storm_dir = tmp_path / "site" / "data" / "storms" / "2024-05-28"
+            storm_dir.mkdir(parents=True, exist_ok=True)
+            (storm_dir / "swath.geojson").write_bytes(b'{"type":"FeatureCollection"}')
+            (tmp_path / "site" / "data" / "storms.json").write_bytes(b'{"storms":["2024-05-28"]}')
+            return 1
+        return 0
+
+    rc = cloud.run_cloud("nightly", client=s3, root=tmp_path, env=VALID_ENV, run_cli=partial_cli)
+    assert rc == 1
+    assert ("hailprint-public", "storms/2024-05-28/swath.geojson") in s3.objects
+    assert ("hailprint-public", "storms.json") in s3.objects
+
+
+def test_nightly_calls_candidates_missing_days_directly_when_candidate_csv_exists(
+    tmp_path: Path,
+):
+    cand_dir = tmp_path / "data" / "derived" / "index"
+    cand_dir.mkdir(parents=True)
+    (cand_dir / "candidate-days.csv").write_text(
+        "storm_date,report_count,max_size_in,has_12z,report_source\n"
+        "2025-05-01,8,2.0,True,wcm\n"
+        "2024-05-28,5,1.5,True,wcm\n",
+        encoding="utf-8",
+    )
+    calls: list[list[str]] = []
+
+    def silent_cli(argv: list[str]) -> int:
+        calls.append(list(argv))
+        return 0
+
+    rc = cloud.nightly(silent_cli, tmp_path, env={"MAX_INGEST": "1"})
+    assert rc == 0
+    assert ["ingest", "2025-05-01"] in calls
+
+
+def test_trigger_tasks_share_pipeline_queue_and_pin_uv():
+    cfg = (paths.ROOT / "trigger.config.ts").read_text(encoding="utf-8")
+    assert "ghcr.io/astral-sh/uv:0.7.2" in cfg
+    assert "ghcr.io/astral-sh/uv:latest" not in cfg
+
+    nightly_ts = (paths.ROOT / "trigger" / "nightly.ts").read_text(encoding="utf-8")
+    backfill_ts = (paths.ROOT / "trigger" / "backfill.ts").read_text(encoding="utf-8")
+    assert 'name: "pipeline"' in nightly_ts
+    assert 'name: "pipeline"' in backfill_ts

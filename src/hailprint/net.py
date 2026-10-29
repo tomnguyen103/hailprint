@@ -10,6 +10,7 @@ from collections.abc import Callable
 TRIES = 3
 BACKOFF_S = (0.5, 1.0)
 CHUNK_BYTES = 1 << 20  # read-ahead buffer of a stream
+MAX_BYTES = 64 * 1024 * 1024  # 64 MB cap on whole-body responses
 
 
 def _retry[T](attempt_once: Callable[[], T]) -> T:
@@ -29,7 +30,7 @@ def _retry[T](attempt_once: Callable[[], T]) -> T:
     raise AssertionError("unreachable: the last try returns or raises")
 
 
-def get(url: str, timeout: float = 30) -> bytes:
+def get(url: str, timeout: float = 30, max_bytes: int = MAX_BYTES) -> bytes:
     """Return the body. Retry a network error, a short read, or an HTTP 5xx; a 4xx raises at once.
 
     After the last try the last error propagates.
@@ -37,7 +38,10 @@ def get(url: str, timeout: float = 30) -> bytes:
 
     def fetch() -> bytes:
         with urllib.request.urlopen(url, timeout=timeout) as response:
-            return response.read()
+            data = response.read(max_bytes + 1)
+            if len(data) > max_bytes:
+                raise RuntimeError(f"response exceeds {max_bytes} bytes: {url}")
+            return data
 
     return _retry(fetch)
 

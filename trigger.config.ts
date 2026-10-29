@@ -23,7 +23,7 @@ const copyPythonPackageLayer: BuildExtension = {
       image: {
         instructions: [
           "RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libeccodes0 libeccodes-data && rm -rf /var/lib/apt/lists/*",
-          "COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv",
+          "COPY --from=ghcr.io/astral-sh/uv:0.7.2 /uv /usr/local/bin/uv",
           "RUN uv python install 3.12 --install-dir /opt/python && rm -f /opt/python/*/lib/python3.12/EXTERNALLY-MANAGED && ln -sf $(find /opt/python -name python3.12 -type f | head -n 1) /usr/local/bin/python3",
           "COPY pyproject.toml .",
           "COPY src ./src",
