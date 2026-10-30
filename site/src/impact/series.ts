@@ -194,18 +194,15 @@ export function powerSeriesPeak(
   stormDate?: string,
 ): PowerPeakSummary | null {
   if (file === null || fips === null) return null;
-  const county = file.counties.find((c) => c.fips === fips);
-  if (county === undefined) return null;
-  let peakOut: number | null = null;
-  let peakStep: number | null = null;
-  for (let step = 0; step < county.out.length; step++) {
-    const val = county.out[step] ?? null;
-    if (val !== null && (peakOut === null || val > peakOut)) {
-      peakOut = val;
-      peakStep = val > 0 ? step : null;
-    }
-  }
-  const peakShare = peakOut === null ? null : shareOut(peakOut, county.customers);
+  const series = powerSeries(file, fips);
+  if (series === null) return null;
+  const { county, peak: peakShare, peakStep } = series;
+  const peakOut =
+    peakStep !== null
+      ? (county.out[peakStep] ?? null)
+      : county.out.some((v) => v !== null)
+        ? 0
+        : null;
   const date = stormDate ?? file.receipt.storm_date;
   const peakTimeUtc = peakStep !== null ? readout(date, peakStep).utc : null;
   return {
@@ -213,7 +210,7 @@ export function powerSeriesPeak(
     countyName: county.name,
     customers: county.customers,
     peakOut,
-    peakShare,
+    peakShare: peakOut === null ? null : peakShare,
     peakStep,
     peakTimeUtc,
     source: file.source,
@@ -228,19 +225,10 @@ export function internetSeriesTrough(
   stormDate?: string,
 ): InternetTroughSummary | null {
   if (file === null || fips === null) return null;
-  const county = file.counties.find((c) => c.fips === fips);
-  if (county === undefined) return null;
-  let minRatio: number | null = null;
-  let minStep: number | null = null;
-  for (let step = 0; step < county.ratio.length; step++) {
-    const val = county.ratio[step] ?? null;
-    if (val !== null && (minRatio === null || val < minRatio)) {
-      minRatio = val;
-      minStep = step;
-    }
-  }
+  const series = internetSeries(file, fips);
+  if (series === null) return null;
+  const { county, low: minRatio, lowStep: troughStep } = series;
   const maxDrop = dropOf(minRatio);
-  const troughStep = maxDrop !== null && maxDrop > 0 ? minStep : null;
   const date = stormDate ?? file.receipt.storm_date;
   const troughTimeUtc = troughStep !== null ? readout(date, troughStep).utc : null;
   return {

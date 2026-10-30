@@ -4,7 +4,17 @@ import { HARRIS_FIPS } from "../data/constants";
 import type { InternetFile, Phenomena, PowerFile, ReportProps, ReportsFile, Receipt, WarningProps, WarningsFile } from "../data/types";
 import { resolveStep } from "../time/step";
 import { shareOut } from "./power";
-import { harrisPeak, internetSeries, powerSeries, reportTicks, runsOf, stepAt, warningBars } from "./series";
+import {
+  harrisPeak,
+  internetSeries,
+  internetSeriesTrough,
+  powerSeries,
+  powerSeriesPeak,
+  reportTicks,
+  runsOf,
+  stepAt,
+  warningBars,
+} from "./series";
 
 const DATE = "2024-05-28";
 const RECEIPT: Receipt = { storm_date: DATE, sources: [], confidence: "Radar-estimated hail size.", run_time: "2024-06-01T00:00:00Z", package_version: "0.6.0" };
@@ -181,5 +191,22 @@ describe("the Harris peak", () => {
     expect(resolveStep(null, harrisPeak(file))).toBe(77);
     expect(resolveStep(null, harrisPeak(null))).toBe(48);
     expect(resolveStep(20, harrisPeak(file))).toBe(20);
+  });
+
+  it("delegates powerSeriesPeak and internetSeriesTrough to powerSeries and internetSeries (CR-02.3)", () => {
+    const pFile = power("odin", series({ 12: 250 }));
+    const peak = powerSeriesPeak(pFile, HARRIS_FIPS, DATE);
+    expect(peak?.peakOut).toBe(250);
+    expect(peak?.peakShare).toBe(0.125);
+    expect(peak?.peakStep).toBe(12);
+    expect(peak?.source).toBe("odin");
+    expect(powerSeriesPeak(pFile, "99999", DATE)).toBeNull();
+
+    const iFile = internet(series({ 20: 0.85 }, 1));
+    const trough = internetSeriesTrough(iFile, HARRIS_FIPS, DATE);
+    expect(trough?.minRatio).toBe(0.85);
+    expect(trough?.maxDrop).toBe(0.15);
+    expect(trough?.troughStep).toBe(20);
+    expect(internetSeriesTrough(iFile, "99999", DATE)).toBeNull();
   });
 });

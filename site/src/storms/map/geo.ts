@@ -154,7 +154,12 @@ export function reportsWithinRadius(
     if (nearest === null || dM < nearest.distanceM) nearest = hit;
     if (dM <= radiusM) within.push(hit);
   }
-  within.sort((a, b) => a.distanceM - b.distanceM || a.feature.properties.id - b.feature.properties.id);
+  within.sort(
+    (a, b) =>
+      a.distanceM - b.distanceM ||
+      b.feature.properties.size_in - a.feature.properties.size_in ||
+      a.feature.properties.id - b.feature.properties.id,
+  );
   let maxSizeIn: number | null = null;
   for (const hit of within) {
     if (maxSizeIn === null || hit.feature.properties.size_in > maxSizeIn) {
@@ -174,8 +179,13 @@ export interface DirectWarning {
   firstStep: number | null;
 }
 
+export interface NearbyWarning extends DirectWarning {
+  distanceKm: number;
+}
+
 export interface WarningsAtPoint {
   directWarnings: DirectWarning[];
+  nearbyWarnings: NearbyWarning[];
   warningCounts: Record<Phenomena, number>;
   firstWarningStep: number | null;
 }
@@ -194,51 +204,92 @@ function warningFirstStep(date: string, beginIso: string, endIso: string): numbe
   return Math.max(0, Math.min(LAST_STEP, Math.floor((beginMs - origin) / STEP_MS)));
 }
 
-/** NWS storm-based warning polygons covering `point`, deduplicated by `(phenomena, eventid)`. */
+/** NWS storm-based warning polygons covering `point` (plus nearby warnings within `radiusKm`), deduplicated by `(phenomena, eventid)`. */
 export function warningsAtPoint(
   point: [number, number],
   file: WarningsFile | null,
   stormDate?: string,
+  radiusKm = 0,
 ): WarningsAtPoint {
   const warningCounts: Record<Phenomena, number> = { SV: 0, TO: 0, FF: 0 };
   if (file === null) {
-    return { directWarnings: [], warningCounts, firstWarningStep: null };
+    return { directWarnings: [], nearbyWarnings: [], warningCounts, firstWarningStep: null };
   }
   const date = stormDate ?? file.receipt.storm_date;
+  const radiusM = radiusKm * 1000;
   const byKey = new Map<string, DirectWarning>();
+  const byNearbyKey = new Map<string, NearbyWarning>();
   let firstWarningStep: number | null = null;
 
   for (const feature of file.features) {
-    if (!pointInMultiPolygon(point, feature.geometry)) continue;
     const p = feature.properties;
     const step = warningFirstStep(date, p.polygon_begin, p.polygon_end);
-    if (step !== null && (firstWarningStep === null || step < firstWarningStep)) {
-      firstWarningStep = step;
-    }
     const key = `${p.phenomena}-${p.eventid}`;
-    const prev = byKey.get(key);
-    if (prev === undefined) {
-      byKey.set(key, {
-        phenomena: p.phenomena,
-        eventid: p.eventid,
-        event_label: p.event_label,
-        polygon_begin: p.polygon_begin,
-        polygon_end: p.polygon_end,
-        product_id: p.product_id,
-        firstStep: step,
-      });
-    } else {
-      const earlierBegin = Date.parse(p.polygon_begin) < Date.parse(prev.polygon_begin);
-      const laterEnd = Date.parse(p.polygon_end) > Date.parse(prev.polygon_end);
-      byKey.set(key, {
-        ...prev,
-        polygon_begin: earlierBegin ? p.polygon_begin : prev.polygon_begin,
-        polygon_end: laterEnd ? p.polygon_end : prev.polygon_end,
-        product_id: earlierBegin ? p.product_id : prev.product_id,
-        firstStep:
-          step !== null && (prev.firstStep === null || step < prev.firstStep) ? step : prev.firstStep,
-      });
+    if (pointInMultiPolygon(point, feature.geometry)) {
+      if (step !== null && (firstWarningStep === null || step < firstWarningStep)) {
+        firstWarningStep = step;
+      }
+      const prev = byKey.get(key);
+      if (prev === undefined) {
+        byKey.set(key, {
+          phenomena: p.phenomena,
+          eventid: p.eventid,
+          event_label: p.event_label,
+          polygon_begin: p.polygon_begin,
+          polygon_end: p.polygon_end,
+          product_id: p.product_id,
+          firstStep: step,
+        });
+      } else {
+        const earlierBegin = Date.parse(p.polygon_begin) < Date.parse(prev.polygon_begin);
+        const laterEnd = Date.parse(p.polygon_end) > Date.parse(prev.polygon_end);
+        byKey.set(key, {
+          ...prev,
+          polygon_begin: earlierBegin ? p.polygon_begin : prev.polygon_begin,
+          polygon_end: laterEnd ? p.polygon_end : prev.polygon_end,
+          product_id: earlierBegin ? p.product_id : prev.product_id,
+          firstStep:
+            step !== null && (prev.firstStep === null || step < prev.firstStep) ? step : prev.firstStep,
+        });
+      }
+      continue;
     }
+
+    if (radiusM > 0) {
+      const dM = pointToMultiPolygonDistanceM(point, feature.geometry);
+      if (dM !== null && dM > 0 && dM <= radiusM) {
+        const distanceKm = dM / 1000;
+        const prev = byNearbyKey.get(key);
+        if (prev === undefined) {
+          byNearbyKey.set(key, {
+            phenomena: p.phenomena,
+            eventid: p.eventid,
+            event_label: p.event_label,
+            polygon_begin: p.polygon_begin,
+            polygon_end: p.polygon_end,
+            product_id: p.product_id,
+            firstStep: step,
+            distanceKm,
+          });
+        } else {
+          const earlierBegin = Date.parse(p.polygon_begin) < Date.parse(prev.polygon_begin);
+          const laterEnd = Date.parse(p.polygon_end) > Date.parse(prev.polygon_end);
+          byNearbyKey.set(key, {
+            ...prev,
+            polygon_begin: earlierBegin ? p.polygon_begin : prev.polygon_begin,
+            polygon_end: laterEnd ? p.polygon_end : prev.polygon_end,
+            product_id: earlierBegin ? p.product_id : prev.product_id,
+            firstStep:
+              step !== null && (prev.firstStep === null || step < prev.firstStep) ? step : prev.firstStep,
+            distanceKm: Math.min(prev.distanceKm, distanceKm),
+          });
+        }
+      }
+    }
+  }
+
+  for (const key of byKey.keys()) {
+    byNearbyKey.delete(key);
   }
 
   const directWarnings = [...byKey.values()].sort(
@@ -247,10 +298,17 @@ export function warningsAtPoint(
       PHENOMENA.indexOf(a.phenomena) - PHENOMENA.indexOf(b.phenomena) ||
       a.eventid - b.eventid,
   );
+  const nearbyWarnings = [...byNearbyKey.values()].sort(
+    (a, b) =>
+      a.distanceKm - b.distanceKm ||
+      Date.parse(a.polygon_begin) - Date.parse(b.polygon_begin) ||
+      PHENOMENA.indexOf(a.phenomena) - PHENOMENA.indexOf(b.phenomena) ||
+      a.eventid - b.eventid,
+  );
   for (const w of directWarnings) {
     warningCounts[w.phenomena] += 1;
   }
-  return { directWarnings, warningCounts, firstWarningStep };
+  return { directWarnings, nearbyWarnings, warningCounts, firstWarningStep };
 }
 
 /** The bounds of every coordinate in the collection, or null when it holds none. */

@@ -65,7 +65,13 @@ function renderReportsCell(row: StormPinRow): string {
 }
 
 function renderWarningsCell(row: StormPinRow): string {
-  if (row.directWarnings.length === 0) return "none";
+  if (row.directWarnings.length === 0) {
+    if (row.nearbyWarnings.length > 0) {
+      const w = row.nearbyWarnings[0]!;
+      return `0 at pin (${w.phenomena} ${w.distanceKm.toFixed(1)} km)`;
+    }
+    return "none";
+  }
   return PHENOMENA.filter((p) => row.warningCounts[p] > 0)
     .map((p) => `${p} \u00d7${row.warningCounts[p]}`)
     .join(" \u00b7 ");
@@ -475,8 +481,8 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                           <td class="mono">{renderPowerCell(row)}</td>
                           <td class="mono">{renderInternetCell(row)}</td>
                           <td>
-                            {row.receipts.swath ? (
-                              <ReceiptChip receipt={row.receipts.swath} file={SWATH_FILE} />
+                            {row.swathReceipt ? (
+                              <ReceiptChip receipt={row.swathReceipt} file={SWATH_FILE} />
                             ) : null}
                           </td>
                         </tr>

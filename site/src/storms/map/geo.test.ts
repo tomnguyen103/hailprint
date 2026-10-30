@@ -45,6 +45,13 @@ describe("nearestReport and reportsWithinRadius", () => {
     expect(prox.count).toBe(2);
     expect(prox.maxSizeIn).toBe(2.0);
     expect(prox.nearest?.feature.properties.id).toBe(1);
+
+    // Equal-distance tie-break: descending size_in, then ascending id (CR-02.1)
+    const tieSmall = report(10, -95.51, 29.8, 1.0);
+    const tieLargeLaterId = report(20, -95.51, 29.8, 2.5);
+    const tieLargeEarlierId = report(5, -95.51, 29.8, 2.5);
+    const tieProx = reportsWithinRadius([-95.5, 29.8], [tieSmall, tieLargeLaterId, tieLargeEarlierId], 5);
+    expect(tieProx.within.map((h) => h.feature.properties.id)).toEqual([5, 20, 10]);
   });
 
   it("returns null with no features", () => {
@@ -166,7 +173,15 @@ describe("warningsAtPoint", () => {
 
     const res = warningsAtPoint([-95.4, 29.75], warnings, "2024-05-28");
     expect(res.directWarnings).toHaveLength(2);
+    expect(res.nearbyWarnings).toEqual([]);
     expect(res.warningCounts).toEqual({ SV: 1, TO: 1, FF: 0 });
     expect(res.firstWarningStep).toBe(46);
+
+    // Point ~0.97 km east of -95.3 boundary is outside polygon but within 5 km radiusKm (CR-02.2)
+    const nearby = warningsAtPoint([-95.29, 29.75], warnings, "2024-05-28", 5);
+    expect(nearby.directWarnings).toEqual([]);
+    expect(nearby.nearbyWarnings).toHaveLength(2);
+    expect(nearby.nearbyWarnings[0]?.phenomena).toBe("SV");
+    expect(nearby.nearbyWarnings[0]?.distanceKm).toBeCloseTo(0.966, 2);
   });
 });
