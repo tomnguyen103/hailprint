@@ -435,7 +435,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                       a.href = url;
                       a.download = `hailprint-point-${activePoint[1].toFixed(4)}_${activePoint[0].toFixed(4)}-r${radiusKm}km.csv`;
                       a.click();
-                      URL.revokeObjectURL(url);
+                      setTimeout(() => URL.revokeObjectURL(url), 1000);
                     }}
                   >
                     Download 25-storm point history CSV

@@ -164,7 +164,12 @@ describe("pointCsvOf", () => {
 
 describe("Compare helpers", () => {
   it("defaults to 2024-05-28 vs 2023-06-23 when present and computes A-vs-B deltas", async () => {
-    const { defaultComparePair, compareDelta } = await import("./compare");
+    const { COMPARE_PRESETS, defaultComparePair, compareDelta } = await import("./compare");
+    expect(COMPARE_PRESETS.map((p) => [p.dateA, p.dateB])).toEqual([
+      ["2024-05-28", "2023-06-23"],
+      ["2024-05-28", "2024-03-15"],
+      ["2024-12-24", "2024-03-21"],
+    ]);
     const storms = [
       {
         storm_date: "2026-03-27",
@@ -180,25 +185,31 @@ describe("Compare helpers", () => {
       },
       {
         storm_date: "2024-05-28",
-        report_count: 8,
+        report_count: 9,
         max_size_in: 1.75,
         report_source: "wcm",
         max_mesh_mm: 65.0,
         scored_reports: 8,
         excluded_reports: 0,
-        table: [{ threshold_mm: 19.05, threshold_in: 0.75, label: ">= 0.75 in", hits: 6, misses: 2, false_alarms: 1, correct_negatives: 0, pod: 0.75, far: 0.14, csi: 0.67, hss: 0.42, swath_km2: 850.5, unverifiable_km2: 400 }],
+        table: [
+          { threshold_mm: 19.05, threshold_in: 0.75, label: ">= 0.75 in", hits: 10, misses: 0, false_alarms: 0, correct_negatives: 0, pod: 1, far: 0, csi: 1, hss: null, swath_km2: 850.5, unverifiable_km2: 400 },
+          { threshold_mm: 38.1, threshold_in: 1.5, label: ">= 1.50 in", hits: 4, misses: 0, false_alarms: 5, correct_negatives: 1, pod: 1, far: 0.55, csi: 0.44, hss: 0.42, swath_km2: 118.9, unverifiable_km2: 63.7 },
+        ],
         parcel_total: 245000,
         files: { swath: "", reports: "", pairs: "", zip_counts: null, power: null, internet: null, warnings: null },
       },
       {
         storm_date: "2023-06-23",
-        report_count: 3,
-        max_size_in: 2.5,
+        report_count: 4,
+        max_size_in: 2.0,
         report_source: "wcm",
         max_mesh_mm: 72.0,
         scored_reports: 3,
         excluded_reports: 0,
-        table: [{ threshold_mm: 19.05, threshold_in: 0.75, label: ">= 0.75 in", hits: 2, misses: 1, false_alarms: 1, correct_negatives: 0, pod: 0.67, far: 0.33, csi: 0.5, hss: 0.31, swath_km2: 410.0, unverifiable_km2: 200 }],
+        table: [
+          { threshold_mm: 19.05, threshold_in: 0.75, label: ">= 0.75 in", hits: 13, misses: 0, false_alarms: 0, correct_negatives: 0, pod: 1, far: 0, csi: 1, hss: null, swath_km2: 410.0, unverifiable_km2: 200 },
+          { threshold_mm: 44.45, threshold_in: 1.75, label: ">= 1.75 in", hits: 2, misses: 3, false_alarms: 3, correct_negatives: 5, pod: 0.4, far: 0.6, csi: 0.25, hss: 0.31, swath_km2: 2.1, unverifiable_km2: 0 },
+        ],
         parcel_total: 95000,
         files: { swath: "", reports: "", pairs: "", zip_counts: null, power: null, internet: null, warnings: null },
       },

@@ -19,14 +19,14 @@ import { type Load, useLoad } from "../state/load";
 const FILE = "pairs.json";
 
 /** Full CLI sequence to reproduce every published file for `storm`. */
-export function reproduceCommands(storm: Storm, radiusKm = 8): string[] {
+export function reproduceCommands(storm: Storm, radiusKm = 5): string[] {
   const d = storm.storm_date;
   return [
     `uv run hailprint ingest ${d}`,
     ...(storm.files.zip_counts ? [`uv run hailprint parcels ${d}`] : []),
     `uv run hailprint score ${d} --radius-km ${radiusKm}`,
     ...(storm.files.warnings ? [`uv run hailprint warnings ${d}`] : []),
-    ...(storm.files.power ? [`uv run hailprint power ${d}`] : []),
+    ...(storm.files.power ? [`uv run hailprint eaglei ${d.slice(0, 4)}`, `uv run hailprint power ${d}`] : []),
     ...(storm.files.internet ? [`uv run hailprint internet ${d}`] : []),
     `uv run hailprint publish ${d}${storm.files.internet ? " --with-internet" : ""}`,
   ];
@@ -113,7 +113,7 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
         </ul>
         <h2>Reproduce</h2>
         <pre class="code-block">
-          <code>{reproduceCommands(storm).join("\n")}</code>
+          <code>{reproduceCommands(storm, pairs.status === "ready" ? pairs.data.radius_km_default : 5).join("\n")}</code>
         </pre>
       </section>
       <section>

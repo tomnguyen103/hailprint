@@ -353,10 +353,16 @@
 }
 
 .compare-presets-label {
-  font: 600 12px/1.2 var(--sans);
   color: var(--ink-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 0.85rem;
+}
+
+.compare-presets button[aria-pressed="true"],
+.compare-layer-toggle button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sheet-muted);
+  font-weight: 500;
 }
 
 .compare-layer-toggle {

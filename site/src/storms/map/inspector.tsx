@@ -282,7 +282,10 @@ export function formatPointFieldNote(pick: Pick, receipt: Receipt): string {
     pick.nearest === null
       ? "none"
       : `${pick.nearest.feature.properties.location} (${pick.nearest.feature.properties.size_in.toFixed(2)} in, ${pick.nearest.km.toFixed(1)} km)`;
-  const sources = receipt.sources.map((s) => `${s.source} ${s.product}`).join(", ");
+  const sources =
+    receipt.sources.length > 0
+      ? receipt.sources.map((s) => `${s.source} ${s.product}`).join(", ")
+      : "NOAA MRMS MESH_Max_1440min";
   return `Hailprint point note — ${receipt.storm_date} at (${lat.toFixed(4)}, ${lon.toFixed(4)}): radar-estimated hail size ${covering}; nearest SPC report ${nearReport}. Source: ${sources} (run ${receipt.run_time}, v${receipt.package_version}). ${receipt.confidence}`;
 }
 
@@ -350,7 +353,7 @@ export function InspectorView({
             onClick={() => {
               const text = formatPointFieldNote(pick, receipt);
               if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-                void navigator.clipboard.writeText(text);
+                void navigator.clipboard.writeText(text).catch(() => {});
               }
             }}
           >

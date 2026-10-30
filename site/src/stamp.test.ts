@@ -54,6 +54,38 @@ it("formats a plain-text storm field note with report count, max size, and recei
   );
   expect(note).toContain("Hailprint field note — 2024-05-28");
   expect(note).toContain("8 SPC hail reports (max 1.75 in)");
+  expect(note).toContain("245,000 parcels");
   expect(note).toContain("NOAA MRMS MESH_Max_1440min");
   expect(note).toContain("Radar-estimated hail size.");
+
+  const fallbackNote = formatStormFieldNote(
+    {
+      storm_date: "2024-05-28",
+      report_count: 9,
+      max_size_in: 1.75,
+      report_source: "wcm",
+      max_mesh_mm: 52.8,
+      scored_reports: 10,
+      excluded_reports: 0,
+      table: [],
+      parcel_total: null,
+      files: {
+        swath: "storms/2024-05-28/swath.geojson",
+        reports: "storms/2024-05-28/reports.geojson",
+        pairs: "storms/2024-05-28/pairs.json",
+        zip_counts: null,
+        power: null,
+        internet: null,
+        warnings: null,
+      },
+    },
+    {
+      storm_date: "2024-05-28",
+      sources: [],
+      confidence: "Radar-estimated hail size.",
+      run_time: "2026-04-20T00:00:00Z",
+      package_version: "0.1.0",
+    },
+  );
+  expect(fallbackNote).toContain("Source: NOAA MRMS MESH_Max_1440min, SPC hail");
 });

@@ -72,8 +72,10 @@ function ParcelsTable({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const ledgerItemError = allZipsLoad.itemErrors.find((e) => e !== null) ?? null;
+  const zipStormCount = index ? index.storms.filter((s) => s.files.zip_counts !== null).length : 25;
   const ledgerEntries =
-    pickedZip !== null && index !== undefined && allZipsLoad.status === "ready"
+    pickedZip !== null && index !== undefined && allZipsLoad.status === "ready" && ledgerItemError === null
       ? crossStormZipLedger(index.storms, allZipsLoad.data, pickedZip, selected)
       : null;
 
@@ -149,7 +151,7 @@ function ParcelsTable({
                 </button>
               </div>
               <p class="pane-note">
-                Click any 5-digit ZIP code to inspect its exposure across all {index?.storms.length ?? 25} storms.
+                Click any 5-digit ZIP code to inspect its exposure across all {zipStormCount} storms.
               </p>
               <div class="table-scroll">
                 <table class="table">
@@ -160,7 +162,7 @@ function ParcelsTable({
                         Parcels
                       </th>
                       <th scope="col" class="num">
-                        % of class
+                        % of storm parcels
                       </th>
                     </tr>
                   </thead>
@@ -215,18 +217,20 @@ function ParcelsTable({
           </div>
           {allZipsLoad.status === "error" ? (
             <ErrorState error={allZipsLoad.error} onRetry={allZipsLoad.retry} />
+          ) : ledgerItemError !== null ? (
+            <ErrorState error={ledgerItemError} onRetry={allZipsLoad.retry} />
           ) : allZipsLoad.status === "loading" || ledgerEntries === null ? (
             allZipsLoad.showLoading ? <LoadingState file={FILE} /> : null
           ) : ledgerEntries.length === 0 ? (
             <p class="pane-note">
               ZIP <span class="mono">{pickedZip}</span> has zero parcels at &ge; {formatInches(mark.threshold_in)} across
-              the {index.storms.length}-storm catalog.
+              the {zipStormCount}-storm catalog.
             </p>
           ) : (
             <>
               <p class="pane-note">
                 Exposed in <span class="mono">{ledgerEntries.length}</span> of{" "}
-                <span class="mono">{index.storms.length}</span> catalog storms at &ge; {formatInches(mark.threshold_in)}.
+                <span class="mono">{zipStormCount}</span> catalog storms at &ge; {formatInches(mark.threshold_in)}.
               </p>
               <div class="table-scroll">
                 <table class="table">
@@ -240,7 +244,7 @@ function ParcelsTable({
                         Storm class total
                       </th>
                       <th scope="col" class="num">
-                        % of storm class
+                        % of storm parcels
                       </th>
                       <th scope="col" class="num">
                         Peak MESH (mm)

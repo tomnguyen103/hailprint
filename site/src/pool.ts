@@ -147,7 +147,7 @@ export function filterCohort(
   return { storms: filteredStorms, pairs: filteredPairs };
 }
 
-export const SENSITIVITY_RADII_KM = [2, 4, 8, 12, 16, 20] as const;
+export const SENSITIVITY_RADII_KM = [2, 5, 8, 12, 16, 20] as const;
 
 export interface SensitivityCell {
   radiusKm: number;

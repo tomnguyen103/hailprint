@@ -27,7 +27,7 @@ export interface ComparePreset {
 export const COMPARE_PRESETS: readonly ComparePreset[] = [
   {
     id: "derecho-vs-hen-egg",
-    label: "2024-05-28 vs 2023-06-23 (Derecho vs 2.50 in Hen Egg)",
+    label: "2024-05-28 vs 2023-06-23 (Derecho vs 2.00 in Hen Egg)",
     dateA: "2024-05-28",
     dateB: "2023-06-23",
   },
@@ -38,10 +38,10 @@ export const COMPARE_PRESETS: readonly ComparePreset[] = [
     dateB: "2024-03-15",
   },
   {
-    id: "dense-reports",
-    label: "2023-05-09 vs 2021-10-01 (High Report Density)",
-    dateA: "2023-05-09",
-    dateB: "2021-10-01",
+    id: "skill-vs-dense",
+    label: "2024-12-24 vs 2024-03-21 (0.50 Peak HSS vs 10-Report Swath)",
+    dateA: "2024-12-24",
+    dateB: "2024-03-21",
   },
 ];
 
@@ -73,7 +73,13 @@ export interface CompareDelta {
   deltaHss: number | null;
 }
 
-/** Compute A-vs-B comparison values and signed (A - B) deltas at the 0.75 in (19.05 mm) threshold. */
+function peakHss(storm: Storm | undefined): number | null {
+  if (!storm) return null;
+  const values = storm.table.map((r) => r.hss).filter((v): v is number => v !== null);
+  return values.length > 0 ? Math.max(...values) : null;
+}
+
+/** Compute A-vs-B comparison values and signed (A - B) deltas (0.75 in swath/parcels and peak HSS across classes). */
 export function compareDelta(stormA: Storm | undefined, stormB: Storm | undefined): CompareDelta {
   const parcelsA = stormA?.parcel_total ?? null;
   const parcelsB = stormB?.parcel_total ?? null;
@@ -85,8 +91,8 @@ export function compareDelta(stormA: Storm | undefined, stormB: Storm | undefine
   const maxMeshMmB = stormB?.max_mesh_mm ?? null;
   const reportsA = stormA?.report_count ?? null;
   const reportsB = stormB?.report_count ?? null;
-  const hssA = rowA?.hss ?? null;
-  const hssB = rowB?.hss ?? null;
+  const hssA = peakHss(stormA);
+  const hssB = peakHss(stormB);
   return {
     parcelsA,
     parcelsB,
@@ -193,7 +199,14 @@ function useSide(
       map.handle.current.setClassVisible(m.threshold_mm, !hidden.has(m.threshold_mm));
     }
   }, [map.ready, showReports, hidden]);
-  const failed = load.status === "error" ? load : metro.status === "error" ? metro : null;
+  const failed =
+    load.status === "error"
+      ? load
+      : showReports && reportsLoad.status === "error"
+        ? reportsLoad
+        : metro.status === "error"
+          ? metro
+          : null;
   const error = map.error ?? failed?.error ?? null;
   const retry = map.error ? map.retry : failed ? failed.retry : load.retry;
   return { ...map, error, retry, loading: load.status !== "ready" && load.status !== "error" && load.showLoading };
@@ -272,7 +285,7 @@ export function Compare({ index }: { index: StormsIndex }) {
     <>
       {availablePresets.length > 0 ? (
         <div class="compare-presets" role="group" aria-label="Preset storm comparisons">
-          <span class="compare-presets-label">Preset pairs:</span>
+          <span class="compare-presets-label">Preset pairs</span>
           {availablePresets.map((preset) => {
             const active = dateA === preset.dateA && dateB === preset.dateB;
             return (
@@ -339,7 +352,7 @@ export function Compare({ index }: { index: StormsIndex }) {
           <span class="mono">{`\u0394 ${formatSignedInt(delta.deltaReports)}`}</span>
         </div>
         <div class="metric-cell">
-          <span>Skill (HSS at 0.75 in)</span>
+          <span>Peak skill (HSS)</span>
           <strong class="mono">
             {formatMetric(delta.hssA)} vs {formatMetric(delta.hssB)}
           </strong>

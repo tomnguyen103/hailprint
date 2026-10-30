@@ -184,6 +184,21 @@ describe("InspectorView out-of-metro guard", () => {
 
     const copyButtons = findAll(tree, (v) => v.type === "button" && textOf(v).includes("Copy field note"));
     expect(copyButtons).toHaveLength(1);
+    const copiedTexts: string[] = [];
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        clipboard: {
+          writeText: (t: string) => {
+            copiedTexts.push(t);
+            return Promise.reject(new Error("clipboard denied"));
+          },
+        },
+      },
+      configurable: true,
+    });
+    (copyButtons[0]!.props["onClick"] as () => void)();
+    expect(copiedTexts).toHaveLength(1);
+    expect(copiedTexts[0]).toContain("Hailprint point note — 2024-05-28");
   });
 
   it("formats a plain-text point field note with coordinate, radar-estimated hail size, and receipt", async () => {

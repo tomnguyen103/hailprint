@@ -206,4 +206,3 @@ def test_open_stream_enforces_max_bytes_boundary(server, sleeps):
     ):
         stream.read()
     assert sleeps == []
-

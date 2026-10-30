@@ -28,7 +28,12 @@ export function formatStormFieldNote(storm: Storm, receipt: Receipt): string {
   const maxPart = storm.max_size_in === null ? "no size" : `max ${storm.max_size_in.toFixed(2)} in`;
   const maxMeshPart =
     storm.max_mesh_mm === null ? "" : `, max radar MESH ${storm.max_mesh_mm.toFixed(1)} mm`;
-  const sources = receipt.sources.map((s) => `${s.source} ${s.product}`).join(", ");
-  return `Hailprint field note — ${storm.storm_date}: ${storm.report_count} SPC hail reports (${maxPart})${maxMeshPart}. Source: ${sources} (run ${receipt.run_time}, v${receipt.package_version}). ${receipt.confidence}`;
+  const parcelPart =
+    storm.parcel_total === null ? "" : `, ${storm.parcel_total.toLocaleString("en-US")} parcels`;
+  const sources =
+    receipt.sources.length > 0
+      ? receipt.sources.map((s) => `${s.source} ${s.product}`).join(", ")
+      : "NOAA MRMS MESH_Max_1440min, SPC hail";
+  return `Hailprint field note — ${storm.storm_date}: ${storm.report_count} SPC hail reports (${maxPart})${maxMeshPart}${parcelPart}. Source: ${sources} (run ${receipt.run_time}, v${receipt.package_version}). ${receipt.confidence}`;
 }
 

@@ -19,6 +19,7 @@ export function commandsFor(date: string, radius: number): string[] {
     `uv run hailprint parcels ${date}`,
     `uv run hailprint score ${date} --radius-km ${radius}`,
     `uv run hailprint warnings ${date}`,
+    `uv run hailprint eaglei ${date.slice(0, 4)}`,
     `uv run hailprint power ${date}`,
     `uv run hailprint internet ${date}`,
     `uv run hailprint publish ${date} --with-internet`,

@@ -201,12 +201,13 @@ describe("pooledReceipt, filterCohort, and sensitivityMatrix", () => {
   });
 
   it("filters cohorts by report_source and year and computes a sensitivity matrix", async () => {
-    const { filterCohort, sensitivityMatrix } = await import("./pool");
+    const { SENSITIVITY_RADII_KM, filterCohort, sensitivityMatrix } = await import("./pool");
+    expect(SENSITIVITY_RADII_KM).toContain(5);
     const s1 = { storm_date: "2024-05-28", report_source: "wcm" } as unknown as StormsIndex["storms"][number];
     const s2 = { storm_date: "2026-08-28", report_source: "spc-daily" } as unknown as StormsIndex["storms"][number];
     const doc1: Pairs = {
       receipt: { storm_date: "2024-05-28", sources: [], confidence: "c", run_time: "t", package_version: "0.1.0" },
-      radius_km_default: 8,
+      radius_km_default: 5,
       radius_km_max: 20,
       edge_margin_m: 1000,
       classes: RULER.map((m) => ({
@@ -226,10 +227,10 @@ describe("pooledReceipt, filterCohort, and sensitivityMatrix", () => {
     expect(filterCohort([s1, s2], [doc1, doc2], "spc-daily").storms.map((s) => s.storm_date)).toEqual(["2026-08-28"]);
     expect(filterCohort([s1, s2], [doc1, doc2], "year:2024").pairs).toHaveLength(1);
 
-    const matrix = sensitivityMatrix([doc1, doc2], [4, 8]);
+    const matrix = sensitivityMatrix([doc1, doc2], [5, 8]);
     expect(matrix).toHaveLength(2);
     expect(matrix[0]).toHaveLength(RULER.length);
-    expect(matrix[0]?.[0]?.radiusKm).toBe(4);
+    expect(matrix[0]?.[0]?.radiusKm).toBe(5);
     expect(matrix[1]?.[0]?.radiusKm).toBe(8);
   });
 });
