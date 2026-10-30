@@ -29,20 +29,22 @@ export async function fetchJson<T>(path: string, guard: (value: unknown) => T, b
   const run = impl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  let response: Response;
-  try {
-    response = await run(base + path, { signal: controller.signal });
-  } catch (error) {
-    throw new DataError(file, `network error, ${String(error)}`);
-  } finally {
-    clearTimeout(timer);
-  }
-  if (!response.ok) throw new DataError(file, `HTTP ${response.status}`);
   let body: unknown;
   try {
-    body = await response.json();
-  } catch {
-    throw new DataError(file, "body is not JSON");
+    let response: Response;
+    try {
+      response = await run(base + path, { signal: controller.signal });
+    } catch (error) {
+      throw new DataError(file, `network error, ${String(error)}`);
+    }
+    if (!response.ok) throw new DataError(file, `HTTP ${response.status}`);
+    try {
+      body = await response.json();
+    } catch {
+      throw new DataError(file, "body is not JSON");
+    }
+  } finally {
+    clearTimeout(timer);
   }
   return guard(body);
 }
