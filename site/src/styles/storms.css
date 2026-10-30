@@ -248,6 +248,41 @@
   font-size: 0.9rem;
 }
 
+/* Report contingency classifier */
+
+.report-classifier-section {
+  margin-top: 32px;
+}
+
+.classifier-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.classifier-pill[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sheet-muted);
+  font-weight: 500;
+}
+
+.outcome-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+.outcome-badge[data-outcome="hit"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.outcome-badge[data-outcome="excluded"] {
+  color: var(--ink-muted);
+}
+
 /* Data pane */
 
 .file-list {

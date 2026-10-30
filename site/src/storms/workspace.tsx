@@ -67,7 +67,7 @@ export function Workspace({ index, storm, tab }: Props) {
     );
   }
   else if (tab === "parcels") pane = <ParcelsPane storm={storm} />;
-  else if (tab === "score") pane = <ScorePane storm={storm} radiusKm={index.radius_km_default} />;
+  else if (tab === "score") pane = <ScorePane storm={storm} radiusKm={index.radius_km_default} reports={reports} />;
   else pane = <DataPane storm={storm} reports={reports} power={power} internet={internet} fips={fips} />;
 
   return (

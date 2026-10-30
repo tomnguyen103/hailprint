@@ -1,6 +1,6 @@
 // Port of hailprint.publish.rescore and hailprint.score.skill. The radius rule runs at
 // read time so the site and the Python scorer agree at every whole km.
-import type { Metric, Pairs, TableRow } from "./data/types";
+import type { Metric, Pairs, ReportsFile, TableRow } from "./data/types";
 import { DataError } from "./data/types";
 import { RULER } from "./ruler";
 
@@ -81,6 +81,103 @@ export function rescore(pairs: Pairs, radiusKm: number): TableRow[] {
       ...skill(hits, misses, falseAlarms, correctNegatives),
       swath_km2: cls.swath_km2,
       unverifiable_km2: unverifiable,
+    };
+  });
+}
+
+export type ReportOutcome = "hit" | "miss" | "false_alarm" | "correct_negative" | "excluded";
+
+export const OUTCOME_LABELS: Record<ReportOutcome, string> = {
+  hit: "Hit (a)",
+  miss: "Miss (c)",
+  false_alarm: "False alarm (b)",
+  correct_negative: "Correct negative (d)",
+  excluded: "Excluded near crop edge",
+};
+
+export interface ClassifiedReport {
+  id: number;
+  size_in: number;
+  edge_m: number;
+  dist_m: number | null;
+  observed: boolean;
+  forecast: boolean;
+  outcome: ReportOutcome;
+  time: string | null;
+  location: string | null;
+  county: string | null;
+  lngLat: [number, number] | null;
+}
+
+/**
+ * Classify each SPC report in `pairs.reports` at `(radiusKm, thresholdMm)` into
+ * hit, miss, false_alarm, correct_negative, or excluded, optionally joining metadata
+ * (`time`, `location`, `county`, `lngLat`) from `reportsGeo` (`reports.geojson`).
+ */
+export function classifyReports(
+  pairs: Pairs,
+  radiusKm: number,
+  thresholdMm: number,
+  reportsGeo?: ReportsFile | null,
+): ClassifiedReport[] {
+  if (!Number.isInteger(radiusKm) || radiusKm < 0 || radiusKm > pairs.radius_km_max) {
+    throw new RangeError(`radius ${radiusKm} km is not a whole number in 0..${pairs.radius_km_max}`);
+  }
+  const k = pairs.classes.findIndex((c) => c.threshold_mm === thresholdMm);
+  const cls = pairs.classes[k];
+  if (cls === undefined) throw new DataError("pairs.json", `missing size class ${thresholdMm} mm`);
+
+  const radiusM = radiusKm * 1000;
+  const edgeLimit = radiusM + pairs.edge_margin_m;
+  const event = hundredths(cls.threshold_mm / 25.4);
+
+  const byId = new Map<
+    number,
+    { time: string; location: string; county: string; lngLat: [number, number] }
+  >();
+  for (const feat of reportsGeo?.features ?? []) {
+    const p = feat.properties;
+    byId.set(p.id, {
+      time: p.time,
+      location: p.location,
+      county: p.county,
+      lngLat: feat.geometry.coordinates,
+    });
+  }
+
+  return pairs.reports.map((report) => {
+    if (report.dist_m.length !== pairs.classes.length) {
+      throw new DataError(
+        "pairs.json",
+        `reports[${report.id}].dist_m has ${report.dist_m.length} entries for ${pairs.classes.length} classes`,
+      );
+    }
+    const dist = report.dist_m[k] ?? null;
+    const observed = hundredths(report.size_in) >= event;
+    const forecast = dist !== null && dist <= radiusM;
+    const insideDomain = report.edge_m > edgeLimit;
+    const outcome: ReportOutcome = !insideDomain
+      ? "excluded"
+      : observed && forecast
+        ? "hit"
+        : observed
+          ? "miss"
+          : forecast
+            ? "false_alarm"
+            : "correct_negative";
+    const meta = byId.get(report.id);
+    return {
+      id: report.id,
+      size_in: report.size_in,
+      edge_m: report.edge_m,
+      dist_m: dist,
+      observed,
+      forecast,
+      outcome,
+      time: meta?.time ?? null,
+      location: meta?.location ?? null,
+      county: meta?.county ?? null,
+      lngLat: meta?.lngLat ?? null,
     };
   });
 }
