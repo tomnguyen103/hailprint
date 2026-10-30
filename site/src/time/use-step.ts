@@ -84,15 +84,19 @@ export function reconcile(state: StepState, routeStep: number): StepState & { ca
 /**
  * The map step of the storm date. The path holds it, but a move shows at once and the path write trails by `WRITE_MS`.
  * Back and Forward change the path step, and that change wins over a move that has not been written.
- * A path without a step opens at `peak`, the Harris power peak, else at step 48.
+ * A path without a step opens at `peak`, the Harris power peak, else at `reportFallback`, else at step 48.
  * A peak that arrives late changes the shown step but is no path change, so a held move stays.
  */
-export function useStep(date: string, peak: number | null = null): { step: number; setStep: (next: number) => void } {
+export function useStep(
+  date: string,
+  peak: number | null = null,
+  reportFallback: number | null = null,
+): { step: number; setStep: (next: number) => void } {
   const { route } = useRoute();
   const pathStep = route.kind === "storms" ? route.step : null;
-  const routeStep = resolveStep(pathStep, peak);
-  const peakRef = useRef(peak);
-  peakRef.current = peak;
+  const routeStep = resolveStep(pathStep, peak, reportFallback);
+  const fallbackRef = useRef({ peak, reportFallback });
+  fallbackRef.current = { peak, reportFallback };
   const [held, setHeld] = useState<Held | null>(null);
   // The effect reads refs: a move can land between a render and its effect, and state would be stale there.
   const pendingRef = useRef<number | null>(null);
@@ -120,7 +124,10 @@ export function useStep(date: string, peak: number | null = null): { step: numbe
   );
 
   useEffect(() => {
-    const result = reconcile({ pending: pendingRef.current, written: written.current }, resolveStep(pathStep, peakRef.current));
+    const result = reconcile(
+      { pending: pendingRef.current, written: written.current },
+      resolveStep(pathStep, fallbackRef.current.peak, fallbackRef.current.reportFallback),
+    );
     hold(result.pending);
     written.current = result.written;
     if (result.cancel) writer.cancel();

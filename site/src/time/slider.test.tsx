@@ -228,6 +228,85 @@ describe("the player", () => {
     expect(state.moves).toEqual([]);
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("advances by 1 step (15m) when stride returns 1", () => {
+    const state = { step: 40, playing: false, moves: [] as number[] };
+    const player = createPlayer({
+      step: () => state.step,
+      move: (next) => {
+        state.step = next;
+        state.moves.push(next);
+      },
+      playing: (on) => {
+        state.playing = on;
+      },
+      reduced: () => false,
+      stride: () => 1,
+    });
+    player.toggle();
+    vi.advanceTimersByTime(400);
+    expect(state.moves).toEqual([41]);
+    player.stop();
+  });
+});
+
+describe("eventJumpChips", () => {
+  it("derives First warning, First report, Peak power out, and Internet trough jump chips", async () => {
+    const { eventJumpChips } = await import("./slider");
+    const chips = eventJumpChips({
+      date: "2024-05-28",
+      warnings: {
+        type: "FeatureCollection",
+        receipt: {} as never,
+        features: [
+          {
+            type: "Feature",
+            properties: {
+              phenomena: "SV",
+              eventid: 1,
+              polygon_begin: "2024-05-28T23:30:00Z",
+              polygon_end: "2024-05-29T00:15:00Z",
+              hailtag: 1.5,
+              windtag: 60,
+            },
+            geometry: { type: "MultiPolygon", coordinates: [] },
+          },
+        ],
+      },
+      reports: {
+        type: "FeatureCollection",
+        receipt: {} as never,
+        features: [
+          {
+            type: "Feature",
+            properties: { id: 0, time: "2345", location: "HOUSTON", county: "HARRIS", state: "TX", size_in: 1.0 },
+            geometry: { type: "Point", coordinates: [-95.36, 29.76] },
+          },
+        ],
+      },
+      power: {
+        receipt: {} as never,
+        window: { start_utc: "2024-05-28T12:00:00Z", step_minutes: 15, steps: 192 },
+        source: "eaglei",
+        utilities: null,
+        counties: [{ fips: "48201", name: "Harris", customers: 1000, out: [0, 50, 200] }],
+      },
+      internet: {
+        receipt: {} as never,
+        window: { start_utc: "2024-05-28T12:00:00Z", step_minutes: 15, steps: 192 },
+        signal: "ping-slash24",
+        baseline_days: 7,
+        counties: [{ fips: "48201", name: "Harris", baseline: 100, ratio: [1.0, 0.95, 0.72] }],
+      },
+      fips: "48201",
+    });
+    expect(chips).toEqual([
+      { id: "warning", label: "First warning", step: 46 },
+      { id: "report", label: "First report", step: 47 },
+      { id: "power", label: "Peak power out", step: 2 },
+      { id: "internet", label: "Internet trough", step: 2 },
+    ]);
+  });
 });
 
 describe("replaceStep", () => {

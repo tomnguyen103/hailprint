@@ -1,5 +1,33 @@
 /* Storms workspace: stamp, sub-tabs, panes, tables. The scope sidebar lives in scope.css. */
 
+/* Case studies bar */
+
+.case-studies-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.case-studies-label {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.case-studies-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.case-study-pill[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sheet-muted);
+  font-weight: 500;
+}
+
 /* Stamp */
 
 .stamp {

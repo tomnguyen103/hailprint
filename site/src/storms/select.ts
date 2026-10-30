@@ -31,9 +31,63 @@ export function hasImpactLayer(storm: Pick<Storm, "files">): boolean {
   );
 }
 
-/** The newest storm date with an impact layer, or the newest storm date when none has one. */
+export interface CaseStudy {
+  storm_date: string;
+  title: string;
+  summary: string;
+}
+
+export const CASE_STUDIES: readonly CaseStudy[] = [
+  {
+    storm_date: "2024-05-28",
+    title: "2024-05-28 · Derecho & hail",
+    summary: "361,418 parcels · 44% peak power out · 8 SPC reports",
+  },
+  {
+    storm_date: "2024-12-24",
+    title: "2024-12-24 · 0.50 HSS peak skill",
+    summary: "68,537 parcels · 6 SPC reports · highest single-storm skill",
+  },
+  {
+    storm_date: "2023-06-23",
+    title: "2023-06-23 · 13 reports (up to 2.00 in)",
+    summary: "438,243 parcels · densest ground-truth report day",
+  },
+  {
+    storm_date: "2024-03-15",
+    title: "2024-03-15 · 76.6 mm peak MESH",
+    summary: "49,315 parcels · 5 SPC reports · intense core swath",
+  },
+];
+
+/** Case study presets whose storm date is present in the published catalog. */
+export function availableCaseStudies(storms: readonly Storm[]): CaseStudy[] {
+  const dates = new Set(storms.map((s) => s.storm_date));
+  return CASE_STUDIES.filter((cs) => dates.has(cs.storm_date));
+}
+
+/**
+ * The first-visit storm date:
+ * 1. Newest storm with power + internet + >= 5 SPC reports (2024-05-28 in the published catalog),
+ * 2. Else newest storm with power + internet,
+ * 3. Else newest storm with power,
+ * 4. Else newest storm with any impact layer,
+ * 5. Else newest storm in catalog.
+ */
 export function landingStorm(storms: readonly Storm[]): Storm | undefined {
-  return storms.find((s) => Boolean(s.files) && hasImpactLayer(s)) ?? storms[0];
+  return (
+    storms.find(
+      (s) =>
+        Boolean(s.files) &&
+        s.files.power !== null &&
+        s.files.internet !== null &&
+        (s.report_count ?? 0) >= 5,
+    ) ??
+    storms.find((s) => Boolean(s.files) && s.files.power !== null && s.files.internet !== null) ??
+    storms.find((s) => Boolean(s.files) && s.files.power !== null) ??
+    storms.find((s) => Boolean(s.files) && hasImpactLayer(s)) ??
+    storms[0]
+  );
 }
 
 /** Years newest first; dates newest first inside each year. */

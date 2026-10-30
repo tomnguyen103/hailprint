@@ -1,6 +1,8 @@
 import { expect, it } from "vitest";
 import type { Storm, StormFiles, ZipCounts } from "../data/types";
 import {
+  CASE_STUDIES,
+  availableCaseStudies,
   defaultFill,
   groupByYear,
   hasImpactLayer,
@@ -23,8 +25,8 @@ function makeFiles(overrides: Partial<StormFiles> = {}): StormFiles {
   };
 }
 
-function storm(date: string, files: Partial<StormFiles> = {}): Storm {
-  return { storm_date: date, files: makeFiles(files) } as Storm;
+function storm(date: string, files: Partial<StormFiles> = {}, reportCount = 0): Storm {
+  return { storm_date: date, report_count: reportCount, files: makeFiles(files) } as Storm;
 }
 
 it("groups storm dates by year, newest year first and newest date first", () => {
@@ -72,12 +74,33 @@ it("lists impact chips in power, internet, warnings order", () => {
 
 it("picks the newest storm date with an impact layer for the landing route and falls back to the newest date", () => {
   const withoutImpact = storm("2026-08-28");
+  const withWarningsOnly = storm("2025-05-02", { warnings: "storms/2025-05-02/warnings.geojson" });
   const withPower = storm("2025-05-01", { power: "storms/2025-05-01/power.json" });
-  const olderWithWarnings = storm("2024-05-28", { warnings: "storms/2024-05-28/warnings.geojson" });
+  const withPowerAndInternetZeroReports = storm(
+    "2024-05-16",
+    { power: "storms/2024-05-16/power.json", internet: "storms/2024-05-16/internet.json" },
+    0,
+  );
+  const fullShowcase = storm(
+    "2024-05-28",
+    { power: "storms/2024-05-28/power.json", internet: "storms/2024-05-28/internet.json", warnings: "storms/2024-05-28/warnings.geojson" },
+    8,
+  );
+  const olderWithWarnings = storm("2024-03-15", { warnings: "storms/2024-03-15/warnings.geojson" });
 
   expect(hasImpactLayer(withoutImpact)).toBe(false);
   expect(hasImpactLayer(withPower)).toBe(true);
-  expect(landingStorm([withoutImpact, withPower, olderWithWarnings])?.storm_date).toBe("2025-05-01");
+  expect(
+    landingStorm([withoutImpact, withWarningsOnly, withPower, withPowerAndInternetZeroReports, fullShowcase])?.storm_date,
+  ).toBe("2024-05-28");
+  expect(landingStorm([withoutImpact, withWarningsOnly, withPower, olderWithWarnings])?.storm_date).toBe("2025-05-01");
+  expect(landingStorm([withoutImpact, olderWithWarnings])?.storm_date).toBe("2024-03-15");
   expect(landingStorm([withoutImpact, storm("2026-06-02")])?.storm_date).toBe("2026-08-28");
   expect(landingStorm([])).toBeUndefined();
+});
+
+it("filters curated case studies against the published catalog", () => {
+  expect(CASE_STUDIES).toHaveLength(4);
+  const available = availableCaseStudies([storm("2024-05-28"), storm("2024-12-24")]);
+  expect(available.map((cs) => cs.storm_date)).toEqual(["2024-05-28", "2024-12-24"]);
 });

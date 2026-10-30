@@ -23,9 +23,13 @@ export function parseStep(text: string): number | null {
   return isStep(step) ? step : null;
 }
 
-/** The step the map opens at: the path step, else the Harris power peak, else step 48. */
-export function resolveStep(step: number | null, peak: number | null = null): number {
-  return step ?? peak ?? DEFAULT_STEP;
+/** The step the map opens at: the path step, else the Harris power peak, else the first report step, else step 48. */
+export function resolveStep(
+  step: number | null,
+  peak: number | null = null,
+  reportFallback: number | null = null,
+): number {
+  return step ?? peak ?? reportFallback ?? DEFAULT_STEP;
 }
 
 /** The start of a step as an instant. `date` is the storm date `YYYY-MM-DD`. */

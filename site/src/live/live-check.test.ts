@@ -159,4 +159,21 @@ describe("strict runtime schema validation (US-03.3)", () => {
 
     expect(() => iodaSignalUrl("__proto__", 0, 600)).toThrow(/ioda/);
   });
+
+  it("notes the IODA 2022-03 to 2024-05 county coverage window when latestValue is null", async () => {
+    const { LiveStatusList } = await import("./live-status-list");
+    const vnode = LiveStatusList({
+      data: {
+        fetchedAtUtc: "2026-10-27T12:00:00Z",
+        point: [-95.3698, 29.7604],
+        countyFips: "48201",
+        alerts: { status: "ready", alerts: [] },
+        power: { status: "ready", customersOut: 0, utilities: [], note: "0 utilities" },
+        internet: { status: "ready", latestValue: null, pointCount: 0 },
+      },
+      onRetry: () => {},
+    });
+    const text = JSON.stringify(vnode);
+    expect(text).toContain("IODA county series covers 2022-03 to 2024-05");
+  });
 });
