@@ -11,6 +11,8 @@
   --report: #b3261e;
   --note-bg: #f4eedc;
   --note-ink: #5c4a12;
+  --water: #e4eae8;
+  --road-major: #cfcbc0;
   --shadow: 0 8px 24px -8px rgb(31 30 27 / 0.28);
 
   /* hail ramp, data only, never chrome */
@@ -61,6 +63,8 @@
   --report: #ff8a80;
   --note-bg: #2b2618;
   --note-ink: #ebd9a0;
+  --water: #1b2224;
+  --road-major: #4a4842;
   --shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
   --ctrl-icon-filter: invert(1);
   --out-1: #1e3322;
@@ -92,6 +96,8 @@
     --report: #ff8a80;
     --note-bg: #2b2618;
     --note-ink: #ebd9a0;
+    --water: #1b2224;
+    --road-major: #4a4842;
     --shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
     --ctrl-icon-filter: invert(1);
     --out-1: #1e3322;

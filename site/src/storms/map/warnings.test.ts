@@ -81,6 +81,7 @@ const LAYER_IDS = [
 function stubMap(zoom = 8) {
   const layout: Record<string, Record<string, unknown>> = {};
   const paint: Record<string, Record<string, unknown>> = {};
+  const filters: Record<string, unknown> = {};
   const sources = Object.fromEntries(
     ["swath", "county", "reports", "point", "warnings"].map((id) => [
       id,
@@ -112,6 +113,10 @@ function stubMap(zoom = 8) {
       need(id);
       (paint[id] ??= {})[prop] = value;
     },
+    setFilter(id: string, filter: unknown) {
+      need(id);
+      filters[id] = filter;
+    },
     getStyle: () => ({ layers: [] }),
     removeLayer() {},
     addLayer() {},
@@ -120,6 +125,7 @@ function stubMap(zoom = 8) {
     handle: makeHandle(map as unknown as MapLibreMap, false),
     layout,
     paint,
+    filters,
     sources,
     zoomTo(next: number) {
       zoomNow = next;
@@ -308,16 +314,35 @@ describe("a toggle and a theme switch while the style loads", () => {
     expect(paint["warnings-to"]!["line-color"]).toBe("#ff7eb6");
     expect(paint["warnings-ff"]!["line-color"]).toBe("#4dd0be");
     expect(paint["report-points"]!["circle-color"]).toBe("dark--report");
+    expect(paint["swath-outline"]!["line-color"]).toEqual([
+      "case",
+      ...RULER.flatMap((m, i) => [["==", ["get", "threshold_mm"], m.threshold_mm], `dark--hail-${i + 1}`]),
+      "dark--rule",
+    ]);
   });
 
-  it("keeps a hidden size class hidden when the swath comes back", () => {
-    const { handle, layout } = stubMap();
+  it("keeps a hidden size class hidden when the swath comes back and filters swath-outline to visible classes", () => {
+    const { handle, layout, filters } = stubMap();
     handle.setClassVisible(19.05, false);
+    expect(filters["swath-outline"]).toEqual([
+      "in",
+      ["get", "threshold_mm"],
+      ["literal", RULER.filter((m) => m.threshold_mm !== 19.05).map((m) => m.threshold_mm)],
+    ]);
     handle.setLayerVisible("swath", false);
+    expect(layout["swath-outline"]!["visibility"]).toBe("none");
     handle.setLayerVisible("swath", true);
     expect(layout["swath-fill-19.05"]!["visibility"]).toBe("none");
     expect(layout["swath-fill-25.4"]!["visibility"]).toBe("visible");
     expect(layout["swath-outline"]!["visibility"]).toBe("visible");
+
+    for (const mark of RULER) handle.setClassVisible(mark.threshold_mm, false);
+    expect(layout["swath-outline"]!["visibility"]).toBe("none");
+    expect(filters["swath-outline"]).toEqual(["in", ["get", "threshold_mm"], ["literal", []]]);
+
+    handle.setClassVisible(63.5, true);
+    expect(layout["swath-outline"]!["visibility"]).toBe("visible");
+    expect(filters["swath-outline"]).toEqual(["in", ["get", "threshold_mm"], ["literal", [63.5]]]);
   });
 });
 

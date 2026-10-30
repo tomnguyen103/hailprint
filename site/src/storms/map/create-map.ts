@@ -18,13 +18,23 @@ import type { InternetFile, PowerFile, ReportsFile, SwathFile, WarningsFile } fr
 import { internetFeatures, isInternet } from "../../impact/internet";
 import { type Fill, countyFeatures, hatchPixels, hexRgb, percentText } from "../../impact/power";
 import type { FeatureCollection, MultiPolygon, Point } from "geojson";
-import { BASEMAP_FILE, BASEMAP_SOURCE, basemapLayers, probeBasemap } from "./basemap";
+import {
+  BASEMAP_FILE,
+  BASEMAP_SOURCE,
+  GLYPHS_URL,
+  basemapLabelLayers,
+  basemapLayers,
+  probeBasemap,
+  spriteUrl,
+} from "./basemap";
 import {
   COUNTY_SOURCE,
   POINT_SOURCE,
   POWER_FILL,
+  POWER_GAP,
   POWER_HATCH,
   POWER_LAYER_IDS,
+  POWER_OUTLINE,
   POWER_SOURCE,
   REPORTS_LAYER,
   REPORTS_SOURCE,
@@ -82,11 +92,13 @@ function style(theme: Theme, basemap: boolean): StyleSpecification {
   return {
     version: 8,
     sources,
+    ...(basemap ? { glyphs: GLYPHS_URL, sprite: spriteUrl(theme) } : {}),
     layers: [
       { id: "paper", type: "background", paint: { "background-color": token("--paper") } },
       ...(basemap ? basemapLayers(theme) : []),
       ...powerLayers(),
       ...fillLayers(),
+      ...(basemap ? basemapLabelLayers(theme) : []),
       ...warningLayers(),
       ...chromeLayers(),
     ],
@@ -184,9 +196,17 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
     const layer = countyLayer();
     if (layer === null) {
       if (powerShown) {
-        for (const id of POWER_LAYER_IDS) show(id, false);
+        show(POWER_FILL, false);
+        show(POWER_GAP, false);
         clearCountyTags();
         powerShown = false;
+      }
+      if (outlines !== null) {
+        map.setPaintProperty(POWER_OUTLINE, "line-color", token("--ink-muted"));
+        geojson(POWER_SOURCE)?.setData(outlines);
+        show(POWER_OUTLINE, true);
+      } else {
+        show(POWER_OUTLINE, false);
       }
       return;
     }
@@ -206,8 +226,10 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
   };
 
   const applySwath = () => {
+    const visibleClasses = RULER.filter((m) => !hiddenClasses.has(m.threshold_mm)).map((m) => m.threshold_mm);
     for (const mark of RULER) show(fillLayerId(mark.threshold_mm), swathOn && !hiddenClasses.has(mark.threshold_mm));
-    show("swath-outline", swathOn);
+    show("swath-outline", swathOn && visibleClasses.length > 0);
+    map.setFilter?.("swath-outline", ["in", ["get", "threshold_mm"], ["literal", visibleClasses]]);
   };
   const renderReports = () => geojson(REPORTS_SOURCE)?.setData(reportsAtStep(reportsFile, cutoff));
   const syncTags = () => {
@@ -232,10 +254,15 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
       }
       if (basemap) {
         // The basemap layers take their colours at build time, so swap them for the theme.
-        for (const layer of map.getStyle().layers) if ("source" in layer && layer.source === BASEMAP_SOURCE) map.removeLayer(layer.id);
+        for (const layer of map.getStyle().layers) {
+          if (layer.id === "background" || ("source" in layer && layer.source === BASEMAP_SOURCE)) map.removeLayer(layer.id);
+        }
+        map.setSprite?.(spriteUrl(nextTheme));
         for (const layer of basemapLayers(nextTheme)) map.addLayer(layer, POWER_FILL);
+        for (const layer of basemapLabelLayers(nextTheme)) map.addLayer(layer, warningLayerId("SV"));
       }
       if (powerShown) paintPower();
+      else if (outlines !== null) map.setPaintProperty(POWER_OUTLINE, "line-color", token("--ink-muted"));
     },
     setClassVisible(thresholdMm, visible) {
       if (visible) hiddenClasses.delete(thresholdMm);

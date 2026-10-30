@@ -1,4 +1,6 @@
+import { validateStyleMin, type StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
+import { GLYPHS_URL, basemapLabelLayers, basemapLayers, spriteUrl } from "./basemap";
 import { createMap } from "./create-map";
 import { LOAD_TIMEOUT_MS } from "./when-loaded";
 
@@ -35,7 +37,7 @@ const stub = vi.hoisted(() => {
       return this.listeners.get(type)?.size ?? 0;
     }
   }
-  return { FakeMap };
+  return { FakeMap, hasBasemap: false };
 });
 
 vi.mock("maplibre-gl", () => ({
@@ -46,10 +48,10 @@ vi.mock("maplibre-gl", () => ({
   setWorkerUrl() {},
 }));
 
-// The probe fetches the basemap file. The tests run with no basemap, so the style is the paper one.
+// The probe fetches the basemap file. Most tests run with no basemap, so the style is the paper one.
 vi.mock("./basemap", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./basemap")>()),
-  probeBasemap: async () => false,
+  probeBasemap: async () => stub.hasBasemap,
 }));
 
 /** The outcome of a promise, readable at any moment. */
@@ -84,9 +86,10 @@ describe("createMap", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     stub.FakeMap.instances.length = 0;
+    stub.hasBasemap = false;
     // A tile error logs one warning. The spy keeps it out of the test output.
     warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
+    vi.stubGlobal("window", { matchMedia: () => ({ matches: false }), setTimeout, clearTimeout });
     vi.stubGlobal("document", {
       hidden: false,
       documentElement: {},
@@ -145,5 +148,187 @@ describe("createMap", () => {
     expect(state.status).toBe("rejected");
     expect(state.error).toEqual(new Error(`map did not load in ${LOAD_TIMEOUT_MS} ms`));
     expect(map.remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("sandwiches thematic layers between basemap geometry and haloed labels when basemap is present", async () => {
+    expect(GLYPHS_URL).toBe("https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf");
+    expect(spriteUrl("light")).toBe("https://protomaps.github.io/basemaps-assets/sprites/v4/light");
+    expect(spriteUrl("dark")).toBe("https://protomaps.github.io/basemaps-assets/sprites/v4/dark");
+
+    const tokenValues: Record<string, string> = {
+      "--paper": "#f7f6f2",
+      "--sheet": "#ffffff",
+      "--sheet-muted": "#efede6",
+      "--rule": "#e2dfd5",
+      "--water": "#e4eae8",
+      "--road-major": "#cfcbc0",
+      "--ink": "#1f1e1b",
+      "--ink-muted": "#4a4840",
+      "--report": "#1f5a7a",
+      "--warn-sv": "#8a5300",
+      "--warn-to": "#a3175f",
+      "--warn-ff": "#0a6b73",
+      "--hail-1": "#c7e9b4",
+      "--hail-2": "#7fcdbb",
+      "--hail-3": "#41b6c4",
+      "--hail-4": "#1d91c0",
+      "--hail-5": "#225ea8",
+      "--hail-6": "#253494",
+      "--hail-7": "#081d58",
+      "--out-1": "#fee5d9",
+      "--out-2": "#fcae91",
+      "--out-3": "#fb6a4a",
+      "--out-4": "#de2d26",
+      "--out-5": "#a50f15",
+      "--net-1": "#eff3ff",
+      "--net-2": "#bdd7e7",
+      "--net-3": "#6baed6",
+      "--net-4": "#3182bd",
+      "--net-5": "#08519c",
+    };
+    vi.stubGlobal("getComputedStyle", () => ({
+      getPropertyValue: (name: string) => tokenValues[name] ?? "#000000",
+    }));
+
+    const geomLayers = basemapLayers("light");
+    const waterLayer = geomLayers.find((l) => l.id === "water") as { paint?: Record<string, unknown> } | undefined;
+    expect(waterLayer?.paint?.["fill-color"]).toBe("#e4eae8");
+    const highwayLayer = geomLayers.find((l) => l.id === "roads_highway") as { paint?: Record<string, unknown> } | undefined;
+    expect(highwayLayer?.paint?.["line-color"]).toBe("#cfcbc0");
+    expect(geomLayers.every((l) => l.type !== "symbol")).toBe(true);
+
+    const labelLayers = basemapLabelLayers("light") as { id: string; type: string; paint?: Record<string, unknown> }[];
+    expect(labelLayers.length).toBeGreaterThan(0);
+    expect(labelLayers.every((l) => l.type === "symbol")).toBe(true);
+    const labelIds = labelLayers.map((l) => l.id);
+    expect(labelIds).toContain("places_locality");
+    expect(labelIds).toContain("roads_shields");
+    for (const excluded of [
+      "pois",
+      "address_label",
+      "roads_oneway",
+      "roads_labels_minor",
+      "earth_label_islands",
+      "places_country",
+    ]) {
+      expect(labelIds).not.toContain(excluded);
+    }
+    const locality = labelLayers.find((l) => l.id === "places_locality");
+    expect(locality?.paint?.["text-color"]).toBe("#1f1e1b");
+    expect(locality?.paint?.["text-halo-color"]).toBe("#f7f6f2");
+
+    stub.hasBasemap = true;
+    const { state, map } = await start();
+    map.emit("load");
+    await advance(0);
+    expect(state.status).toBe("resolved");
+    expect(state.value?.basemap).toBe(true);
+
+    const style = (
+      map.options as { style: StyleSpecification }
+    ).style;
+    expect(validateStyleMin(style)).toEqual([]);
+    expect(style.glyphs).toBe("https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf");
+    expect(style.sprite).toBe("https://protomaps.github.io/basemaps-assets/sprites/v4/light");
+
+    const ids = style.layers.map((l) => l.id);
+    const waterIdx = ids.indexOf("water");
+    const powerFillIdx = ids.indexOf("power-fill");
+    const swathTopIdx = ids.indexOf("swath-fill-63.5");
+    const localityIdx = ids.indexOf("places_locality");
+    const warningsSvIdx = ids.indexOf("warnings-sv");
+    expect(waterIdx).toBeGreaterThan(0);
+    expect(waterIdx).toBeLessThan(powerFillIdx);
+    expect(powerFillIdx).toBeLessThan(swathTopIdx);
+    expect(swathTopIdx).toBeLessThan(localityIdx);
+    expect(localityIdx).toBeLessThan(warningsSvIdx);
+  });
+
+  it("preserves sandwiched basemap layer order and updates sprite on setTheme", async () => {
+    stub.hasBasemap = true;
+    const { state, map } = await start();
+    const style = (map.options as { style: { layers: { id: string; source?: string }[] } }).style;
+    const liveLayers = [...style.layers];
+    const setSprite = vi.fn();
+    Object.assign(map, {
+      setPaintProperty: vi.fn(),
+      getStyle: () => ({ layers: [...liveLayers] }),
+      removeLayer: (id: string) => {
+        const idx = liveLayers.findIndex((l) => l.id === id);
+        if (idx >= 0) liveLayers.splice(idx, 1);
+      },
+      addLayer: (layer: { id: string; source?: string }, beforeId?: string) => {
+        const idx = beforeId ? liveLayers.findIndex((l) => l.id === beforeId) : -1;
+        if (idx >= 0) liveLayers.splice(idx, 0, layer);
+        else liveLayers.push(layer);
+      },
+      setSprite,
+    });
+
+    map.emit("load");
+    await advance(0);
+    const handle = state.value!;
+    handle.setTheme("dark");
+    handle.setTheme("light");
+
+    expect(setSprite).toHaveBeenNthCalledWith(1, "https://protomaps.github.io/basemaps-assets/sprites/v4/dark");
+    expect(setSprite).toHaveBeenNthCalledWith(2, "https://protomaps.github.io/basemaps-assets/sprites/v4/light");
+
+    const ids = liveLayers.map((l) => l.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.indexOf("water")).toBeLessThan(ids.indexOf("power-fill"));
+    expect(ids.indexOf("swath-fill-63.5")).toBeLessThan(ids.indexOf("places_locality"));
+    expect(ids.indexOf("places_locality")).toBeLessThan(ids.indexOf("warnings-sv"));
+  });
+
+  it("omits glyphs, sprite, and basemap layers when probeBasemap resolves false", async () => {
+    stub.hasBasemap = false;
+    const { state, map } = await start();
+    map.emit("load");
+    await advance(0);
+    expect(state.value?.basemap).toBe(false);
+    const style = (
+      map.options as {
+        style: { glyphs?: string; sprite?: string; sources: Record<string, unknown>; layers: { id: string; source?: string }[] };
+      }
+    ).style;
+    expect(style.glyphs).toBeUndefined();
+    expect(style.sprite).toBeUndefined();
+    expect(style.sources["basemap"]).toBeUndefined();
+    expect(style.layers.some((l) => l.source === "basemap")).toBe(false);
+    expect(validateStyleMin(style as unknown as StyleSpecification)).toEqual([]);
+  });
+
+  it("probeBasemap returns true only for a non-HTML 200 response and false on 404, HTML fallback, or network failure", async () => {
+    const actual = await vi.importActual<typeof import("./basemap")>("./basemap");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => "application/octet-stream" },
+      }),
+    );
+    expect(await actual.probeBasemap()).toBe(true);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => "text/html; charset=utf-8" },
+      }),
+    );
+    expect(await actual.probeBasemap()).toBe(false);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({
+        ok: false,
+        headers: { get: () => "application/octet-stream" },
+      }),
+    );
+    expect(await actual.probeBasemap()).toBe(false);
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(new Error("network down")));
+    expect(await actual.probeBasemap()).toBe(false);
   });
 });

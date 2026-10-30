@@ -41,6 +41,8 @@ the size ruler, the storm stamp, the contingency grid, and the receipt chip.
 | `--on-accent` | `#FDFCF9` | `#151513` | text on accent |
 | `--report` | `#B3261E` | `#FF8A80` | SPC report markers only |
 | `--note-bg` / `--note-ink` | `#F4EEDC` / `#5C4A12` | `#2B2618` / `#EBD9A0` | caveat callout |
+| `--water` | `#E4EAE8` | `#1B2224` | basemap water bodies |
+| `--road-major` | `#CFCBC0` | `#4A4842` | basemap highways and major roads |
 
 Hail ramp (data only, never chrome). Each class carries its object name; colour never
 works alone.

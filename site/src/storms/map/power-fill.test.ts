@@ -2,8 +2,9 @@ import type { FeatureCollection, MultiPolygon } from "geojson";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { InternetFile, PowerFile } from "../../data/types";
+import { RULER } from "../../ruler";
 import { makeHandle } from "./create-map";
-import { countyTags, labelPoint, powerLayers } from "./layers";
+import { FILL_OPACITY, chromeLayers, countyTags, labelPoint, powerLayers, swathOutlineColor } from "./layers";
 
 const stub = vi.hoisted(() => {
   type Entry = { element: { className: string; textContent: string }; lngLat: number[] | null; removed: boolean };
@@ -168,11 +169,26 @@ const OUTLINES: FeatureCollection<MultiPolygon> = {
 
 const live = () => stub.list.filter((e) => !e.removed);
 
-describe("the power layers", () => {
+describe("the power layers and swath contours", () => {
   const layers = () => powerLayers() as unknown as { id: string; type: string; layout: Record<string, unknown>; filter?: unknown; paint: Record<string, unknown> }[];
 
-  it("start hidden, so a map without power draws nothing extra", () => {
+  it("start hidden, with a dashed metro county outline and contoured swath strokes", () => {
+    expect(FILL_OPACITY).toBe(0.78);
     expect(layers().map((l) => [l.id, l.layout["visibility"]])).toEqual(POWER_IDS.map((id) => [id, "none"]));
+    const outline = layers()[2]!;
+    expect(outline.paint["line-dasharray"]).toEqual([3, 2]);
+    expect(outline.paint["line-width"]).toBe(1);
+
+    const swathOutline = (chromeLayers() as unknown as { id: string; paint: Record<string, unknown> }[]).find(
+      (l) => l.id === "swath-outline",
+    )!;
+    expect(swathOutline.paint["line-width"]).toBe(1.25);
+    expect(swathOutline.paint["line-color"]).toEqual(swathOutlineColor());
+    expect(swathOutline.paint["line-color"]).toEqual([
+      "case",
+      ...RULER.flatMap((m, i) => [["==", ["get", "threshold_mm"], m.threshold_mm], `light--hail-${i + 1}`]),
+      "light--rule",
+    ]);
   });
 
   it("fill the five bins from tokens and leave the zero bin and the gap unfilled", () => {
@@ -197,6 +213,31 @@ describe("the power layers", () => {
 });
 
 describe("the county fill on the map handle", () => {
+  it("draws the 8 metro county outlines when setCounties receives outlines with fill none", () => {
+    const { handle, layout, paint, sources } = stubMap();
+    handle.setCounties(OUTLINES);
+    expect(layout["power-outline"]!["visibility"]).toBe("visible");
+    expect(paint["power-outline"]!["line-color"]).toBe("#5f6b7a");
+    expect(sources["power"]!.data).toBe(OUTLINES);
+    expect(layout["power-fill"]).toBeUndefined();
+    expect(layout["power-gap"]).toBeUndefined();
+    expect(live()).toEqual([]);
+
+    THEME.now = "dark";
+    handle.setTheme("dark");
+    expect(paint["power-outline"]!["line-color"]).toBe("#a3adba");
+  });
+
+  it("keeps power-outline hidden when setCounties receives null and fill is none", () => {
+    const { handle, layout } = stubMap();
+    handle.setCounties(null);
+    handle.setFill("none", null, 0);
+    expect(layout["power-outline"]!["visibility"]).toBe("none");
+    expect(layout["power-fill"]).toBeUndefined();
+    expect(layout["power-gap"]).toBeUndefined();
+    expect(live()).toEqual([]);
+  });
+
   it("draws the bins at the step and labels each county", () => {
     const { handle, layout, sources, images } = stubMap();
     handle.setCounties(OUTLINES);
@@ -239,21 +280,27 @@ describe("the county fill on the map handle", () => {
     expect(live()).toHaveLength(8);
   });
 
-  it("hides the layers and the labels with the fill off", () => {
-    const { handle, layout } = stubMap();
+  it("hides the fill and gap layers and labels with the fill off, while keeping the 8 metro outlines visible", () => {
+    const { handle, layout, sources } = stubMap();
     handle.setCounties(OUTLINES);
     handle.setFill("power", powerFile(), 10);
     handle.setFill("none", powerFile(), 10);
-    for (const id of POWER_IDS) expect(layout[id]!["visibility"]).toBe("none");
+    expect(layout["power-fill"]!["visibility"]).toBe("none");
+    expect(layout["power-gap"]!["visibility"]).toBe("none");
+    expect(layout["power-outline"]!["visibility"]).toBe("visible");
+    expect(sources["power"]!.data).toBe(OUTLINES);
     expect(live()).toEqual([]);
   });
 
-  it("hides the layers when the file failed, whatever the fill choice", () => {
-    const { handle, layout } = stubMap();
+  it("hides the fill and gap layers when the file failed, while keeping the 8 metro outlines visible", () => {
+    const { handle, layout, sources } = stubMap();
     handle.setCounties(OUTLINES);
     handle.setFill("power", powerFile(), 10);
     handle.setFill("power", null, 10);
-    for (const id of POWER_IDS) expect(layout[id]!["visibility"]).toBe("none");
+    expect(layout["power-fill"]!["visibility"]).toBe("none");
+    expect(layout["power-gap"]!["visibility"]).toBe("none");
+    expect(layout["power-outline"]!["visibility"]).toBe("visible");
+    expect(sources["power"]!.data).toBe(OUTLINES);
     expect(live()).toEqual([]);
   });
 
@@ -290,15 +337,20 @@ describe("the county fill on the map handle", () => {
     expect(live().map((e) => e.element.textContent).slice(0, 3)).toEqual(["Harris 20.0%", "Fort Bend no data", "Montgomery 0%"]);
   });
 
-  it("hides the layers when the file kind does not match the fill", () => {
-    const { handle, layout } = stubMap();
+  it("hides the fill and gap layers when the file kind does not match the fill, keeping metro outlines visible", () => {
+    const { handle, layout, sources } = stubMap();
     handle.setCounties(OUTLINES);
     handle.setFill("internet", internetFile(), 10);
     handle.setFill("internet", powerFile(), 10);
-    for (const id of POWER_IDS) expect(layout[id]!["visibility"]).toBe("none");
+    expect(layout["power-fill"]!["visibility"]).toBe("none");
+    expect(layout["power-gap"]!["visibility"]).toBe("none");
+    expect(layout["power-outline"]!["visibility"]).toBe("visible");
+    expect(sources["power"]!.data).toBe(OUTLINES);
     expect(live()).toEqual([]);
     handle.setFill("power", internetFile(), 10);
-    for (const id of POWER_IDS) expect(layout[id]!["visibility"]).toBe("none");
+    expect(layout["power-fill"]!["visibility"]).toBe("none");
+    expect(layout["power-gap"]!["visibility"]).toBe("none");
+    expect(layout["power-outline"]!["visibility"]).toBe("visible");
     expect(live()).toEqual([]);
   });
 
@@ -310,15 +362,6 @@ describe("the county fill on the map handle", () => {
     for (const id of POWER_IDS) expect(layout[id]!["visibility"]).toBe("visible");
     expect((sources["power"]!.data as FeatureCollection).features[0]!.properties).toMatchObject({ bin: "--net-4", drop: 0.1 });
     expect(live()).toHaveLength(8);
-  });
-
-  it("touches no power layer while the fill stays off", () => {
-    const { handle, layout } = stubMap(BASE_IDS);
-    handle.setCounties(OUTLINES);
-    handle.setFill("none", null, 48);
-    handle.setTheme("dark");
-    handle.setLayerVisible("warnings", false);
-    expect(Object.keys(layout).filter((id) => id.startsWith("power"))).toEqual([]);
   });
 });
 
