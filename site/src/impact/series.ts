@@ -11,7 +11,7 @@ import {
   type ReportsFile,
   type WarningsFile,
 } from "../data/types";
-import { LAST_STEP, STEP_MS, reportStep, stepTime } from "../time/step";
+import { LAST_STEP, STEP_MS, readout, reportStep, stepTime } from "../time/step";
 import { dropOf } from "./internet";
 import { shareOut } from "./power";
 
@@ -163,4 +163,93 @@ export function harrisPeak(file: PowerFile | null): number | null {
     }
   });
   return peak;
+}
+
+export interface PowerPeakSummary {
+  fips: string;
+  countyName: string;
+  customers: number;
+  peakOut: number | null;
+  peakShare: number | null;
+  peakStep: number | null;
+  peakTimeUtc: string | null;
+  source: "eaglei" | "odin";
+  utilities: string[] | null;
+}
+
+export interface InternetTroughSummary {
+  fips: string;
+  countyName: string;
+  baseline: number | null;
+  minRatio: number | null;
+  maxDrop: number | null;
+  troughStep: number | null;
+  troughTimeUtc: string | null;
+}
+
+/** Peak utility customer outage across the 192-step impact window for one Metro county. */
+export function powerSeriesPeak(
+  file: PowerFile | null,
+  fips: string | null,
+  stormDate?: string,
+): PowerPeakSummary | null {
+  if (file === null || fips === null) return null;
+  const county = file.counties.find((c) => c.fips === fips);
+  if (county === undefined) return null;
+  let peakOut: number | null = null;
+  let peakStep: number | null = null;
+  for (let step = 0; step < county.out.length; step++) {
+    const val = county.out[step] ?? null;
+    if (val !== null && (peakOut === null || val > peakOut)) {
+      peakOut = val;
+      peakStep = val > 0 ? step : null;
+    }
+  }
+  const peakShare = peakOut === null ? null : shareOut(peakOut, county.customers);
+  const date = stormDate ?? file.receipt.storm_date;
+  const peakTimeUtc = peakStep !== null ? readout(date, peakStep).utc : null;
+  return {
+    fips: county.fips,
+    countyName: county.name,
+    customers: county.customers,
+    peakOut,
+    peakShare,
+    peakStep,
+    peakTimeUtc,
+    source: file.source,
+    utilities: file.utilities,
+  };
+}
+
+/** Deepest internet reachability trough across the 192-step impact window for one Metro county. */
+export function internetSeriesTrough(
+  file: InternetFile | null,
+  fips: string | null,
+  stormDate?: string,
+): InternetTroughSummary | null {
+  if (file === null || fips === null) return null;
+  const county = file.counties.find((c) => c.fips === fips);
+  if (county === undefined) return null;
+  let minRatio: number | null = null;
+  let minStep: number | null = null;
+  for (let step = 0; step < county.ratio.length; step++) {
+    const val = county.ratio[step] ?? null;
+    if (val !== null && (minRatio === null || val < minRatio)) {
+      minRatio = val;
+      minStep = step;
+    }
+  }
+  const maxDrop = dropOf(minRatio);
+  const troughStep = maxDrop !== null && maxDrop > 0 ? minStep : null;
+  const date = stormDate ?? file.receipt.storm_date;
+  const troughTimeUtc = troughStep !== null ? readout(date, troughStep).utc : null;
+  return {
+    fips: county.fips,
+    countyName: county.name,
+    baseline: county.baseline,
+    minRatio,
+    maxDrop,
+    troughStep,
+    troughTimeUtc,
+  };
 }

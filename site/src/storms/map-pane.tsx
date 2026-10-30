@@ -3,19 +3,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { fetchCounties, harrisFeature } from "../county";
 import { fetchJson } from "../data/fetch";
 import { guardSwath, guardWarnings } from "../data/guard";
-import { DataError, type InternetFile, type PowerFile, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
+import { DataError, type InternetFile, type PowerFile, type ReportsFile, type Storm, type SwathFile, type WarningsFile } from "../data/types";
 import type { Fill } from "../impact/power";
 import { fillNotes, InternetLegend, PowerFillControl, PowerLegend } from "../impact/power-fill";
 import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
 import { countyAt } from "../state/county";
 import { type Load, useLoad } from "../state/load";
+import { usePin } from "../state/pin";
 import { useTheme } from "../state/theme";
 import "../styles/map.css";
 import { TimeSlider } from "../time/slider";
 import { LAYER_ROWS, LayersControl, type LayerState } from "./layers-control";
 import type { MapHandle } from "./map/create-map";
-import { boundsOf, coveringClass, nearestReport } from "./map/geo";
+import { boundsOf, coveringAt, coveringClass, nearestReport, swathExposureAt } from "./map/geo";
 import { Inspector, type Pick } from "./map/inspector";
 import { type LayerName, fillLayerId, warningsNote } from "./map/layers";
 import { RulerLegend } from "./map/ruler-legend";
@@ -54,6 +55,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     warningsFile === null ? Promise.resolve(null) : fetchJson(warningsFile, guardWarnings),
   );
   const { resolved: theme } = useTheme();
+  const { pin, geoStatus, message: geoMessage, clearPin, locateUser } = usePin();
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
   const [ready, setReady] = useState<{ basemap: boolean } | null>(null);
@@ -70,6 +72,8 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   }, [storm.storm_date, storm.files.power, storm.files.internet]);
   const stormDateRef = useRef(storm.storm_date);
   stormDateRef.current = storm.storm_date;
+  const swathRef = useRef<SwathFile | null>(null);
+  swathRef.current = swath.status === "ready" ? swath.data : null;
   const reportsRef = useRef<ReportsFile | null>(null);
   reportsRef.current = reports.status === "ready" ? reports.data : null;
   const outlinesRef = useRef<FeatureCollection<MultiPolygon> | null>(null);
@@ -98,11 +102,17 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
           const lngLat: [number, number] = [event.lngLat.lng, event.lngLat.lat];
           const clicked = countyAt(lngLat, outlinesRef.current);
           if (clicked !== null) onCountyRef.current(clicked);
+          const coveringMm = coveringClass(hits);
+          const nearestSwath =
+            coveringMm === null && swathRef.current !== null
+              ? swathExposureAt(swathRef.current, lngLat, 20).nearest
+              : null;
           setPick({
             date: stormDateRef.current,
             lngLat,
-            coveringMm: coveringClass(hits),
+            coveringMm,
             nearest: nearestReport(lngLat, reportsRef.current?.features ?? []),
+            nearestSwath,
           });
         });
         setReady({ basemap: next.basemap });
@@ -142,6 +152,11 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     handle.current.fit(boundsOf(swathData));
     setPick(null);
   }, [ready, swathData]);
+  const displayPoint = activePick?.lngLat ?? pin?.lngLat ?? null;
+  useEffect(() => {
+    if (!ready || !handle.current) return;
+    handle.current.setPoint(displayPoint);
+  }, [ready, displayPoint]);
   useEffect(() => {
     if (ready) handle.current?.setTheme(theme);
   }, [ready, theme]);
@@ -176,6 +191,29 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     container.current?.focus();
   }, []);
   const retryMap = useCallback(() => setAttempt((n) => n + 1), []);
+  const inspectCoordinate = useCallback((lngLat: [number, number]) => {
+    const clickedCounty = countyAt(lngLat, outlinesRef.current);
+    if (clickedCounty !== null) onCountyRef.current(clickedCounty);
+    const cov = swathRef.current ? (coveringAt(swathRef.current, lngLat)?.threshold_mm ?? null) : null;
+    const nearSwath =
+      cov === null && swathRef.current !== null
+        ? swathExposureAt(swathRef.current, lngLat, 20).nearest
+        : null;
+    setPick({
+      date: stormDateRef.current,
+      lngLat,
+      coveringMm: cov,
+      nearest: nearestReport(lngLat, reportsRef.current?.features ?? []),
+      nearestSwath: nearSwath,
+    });
+  }, []);
+  const onPinMyLocation = useCallback(() => {
+    void locateUser().then((next) => {
+      if (next.geoStatus === "ready" && next.pin !== null) {
+        inspectCoordinate(next.pin.lngLat);
+      }
+    });
+  }, [inspectCoordinate]);
 
   // One overlay slot: the map chunk error first, then the swath, reports, and county errors in that order.
   const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : metro.status === "error" ? metro : null;
@@ -212,6 +250,35 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
             </div>
           ) : null}
           <div class="map-controls">
+            <div class="map-pin-controls" role="group" aria-label="Location pin">
+              <button
+                type="button"
+                class="button button-small"
+                disabled={geoStatus === "locating"}
+                onClick={onPinMyLocation}
+              >
+                {geoStatus === "locating" ? "Locating\u2026" : "Pin my location"}
+              </button>
+              {pin !== null ? (
+                <>
+                  <button
+                    type="button"
+                    class="button button-small"
+                    onClick={() => inspectCoordinate(pin.lngLat)}
+                  >
+                    {pin.label ? `Inspect pin (${pin.label})` : "Inspect pin"}
+                  </button>
+                  <button type="button" class="button button-small" onClick={() => clearPin()}>
+                    Clear pin
+                  </button>
+                </>
+              ) : null}
+              {geoStatus === "error" && geoMessage !== null ? (
+                <p class="layers-note" role="alert">
+                  {geoMessage}
+                </p>
+              ) : null}
+            </div>
             <LayersControl layers={layers} warnings={{ available: warningsData !== null, note: warningsLine }} onToggle={toggleLayer} />
             <PowerFillControl
               fill={fill}
@@ -244,9 +311,12 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
         <Inspector
           pick={activePick}
           receipt={receipt}
+          swath={swathData}
+          warnings={warningsData}
           power={powerData}
           internet={internetData}
           step={step}
+          onStep={onStep}
           fips={fips}
           onCounty={onCounty}
           onClose={close}

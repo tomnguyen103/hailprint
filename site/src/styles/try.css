@@ -91,7 +91,8 @@
   font: 500 13px/1.3 var(--sans);
 }
 
-.point-form input {
+.point-form input[type="text"],
+.point-form input:not([type="range"]) {
   width: 10ch;
   height: 44px;
   padding: 0 12px;
@@ -107,7 +108,22 @@
 }
 
 .point-form .button {
-  height: 44px;
+  min-height: 40px;
+}
+
+.point-presets {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.point-presets .button[aria-pressed="true"],
+.point-filter-group .button[aria-pressed="true"],
+.point-date-cell .button[aria-pressed="true"] {
+  outline: 2px solid var(--ink);
+  font-weight: 600;
 }
 
 .point-hint {
@@ -118,6 +134,72 @@
 
 .point-map {
   margin-bottom: 24px;
+}
+
+.point-results {
+  display: grid;
+  gap: 16px;
+}
+
+.point-stamp {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.point-live-bar {
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+  background: var(--sheet);
+}
+
+.point-live-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.point-live-caption {
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+}
+
+.point-live-grid {
+  margin: 0;
+}
+
+.point-table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.point-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.point-preview-note {
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+}
+
+.point-table td,
+.point-table th {
+  font-variant-numeric: tabular-nums;
+}
+
+.point-date-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
 }
 
 /* Run it yourself */
