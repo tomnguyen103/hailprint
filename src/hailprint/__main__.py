@@ -329,7 +329,7 @@ def _swath_files(storm_dates: list[date]) -> list[tuple[date, Path]]:
 def score_days(storm_dates: list[date], radius_km: float) -> int:
     """Pairs and score files per storm date, then the pooled table. A 404 day is skipped."""
     meta = {"radius_km": f"{radius_km:.15g}", "report_source": score.REPORT_SOURCE}
-    tables, written = [], []
+    tables = []
     failed = False
     for storm_date, swath_path in _swath_files(storm_dates):
         try:
@@ -347,9 +347,7 @@ def score_days(storm_dates: list[date], radius_km: float) -> int:
             radius_km,
         )
         for name, frame in (("pairs", day.pairs), ("scores", day.table)):
-            written.append(
-                files.write_atomic(frame, SCORES_DIR / f"{name}-{storm_date}.parquet", meta)
-            )
+            files.write_atomic(frame, SCORES_DIR / f"{name}-{storm_date}.parquet", meta)
         tables.append(day.table)
         print(f"{storm_date}: {len(day.pairs)} scored reports, {day.excluded} excluded")
     if not tables:
