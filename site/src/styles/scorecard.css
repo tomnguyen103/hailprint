@@ -1,7 +1,44 @@
 /* Scorecard: the controls row and the class picker. The table and the grid reuse storms.css. */
 
 .scorecard-controls {
+  display: grid;
+  gap: 12px;
   margin-top: 8px;
+}
+
+.cohort-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.cohort-label {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.cohort-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cohort-pill[aria-pressed="true"],
+.sensitivity-cell[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sheet-muted);
+  font-weight: 500;
+}
+
+.sensitivity-section {
+  margin-top: 32px;
+}
+
+.sensitivity-cell {
+  min-width: 64px;
+  justify-content: flex-end;
 }
 
 .class-picker {

@@ -1,6 +1,15 @@
 import { DATA_BASE, fetchJson } from "../data/fetch";
-import { guardPairs, guardReports, guardWarnings } from "../data/guard";
-import type { InternetFile, PowerFile, Receipt, ReportsFile, Storm, WarningsFile } from "../data/types";
+import { guardPairs, guardReports, guardSwath, guardWarnings, guardZips } from "../data/guard";
+import type {
+  InternetFile,
+  PowerFile,
+  Receipt,
+  ReportsFile,
+  Storm,
+  SwathFile,
+  WarningsFile,
+  ZipCounts,
+} from "../data/types";
 import { InternetTable, PowerTable, TimelineTables } from "../impact/timeline-tables";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ReceiptList } from "../shell/receipt-list";
@@ -8,6 +17,20 @@ import { ErrorState, LoadingState } from "../shell/states";
 import { type Load, useLoad } from "../state/load";
 
 const FILE = "pairs.json";
+
+/** Full CLI sequence to reproduce every published file for `storm`. */
+export function reproduceCommands(storm: Storm, radiusKm = 8): string[] {
+  const d = storm.storm_date;
+  return [
+    `uv run hailprint ingest ${d}`,
+    ...(storm.files.zip_counts ? [`uv run hailprint parcels ${d}`] : []),
+    `uv run hailprint score ${d} --radius-km ${radiusKm}`,
+    ...(storm.files.warnings ? [`uv run hailprint warnings ${d}`] : []),
+    ...(storm.files.power ? [`uv run hailprint power ${d}`] : []),
+    ...(storm.files.internet ? [`uv run hailprint internet ${d}`] : []),
+    `uv run hailprint publish ${d}${storm.files.internet ? " --with-internet" : ""}`,
+  ];
+}
 
 /** One published file: a download link, with its receipt chip when the file carries a receipt, or "none". */
 export function FileItem({ name, path, receipt }: { name: string; path: string | null; receipt: Receipt | null }) {
@@ -35,6 +58,8 @@ export function FileItem({ name, path, receipt }: { name: string; path: string |
 
 interface Props {
   storm: Storm;
+  /** Optional reports file load from the workspace; fetched internally when omitted. */
+  reports?: Load<ReportsFile> & { retry: () => void };
   /** The power file load from the workspace, which also feeds the map. */
   power: Load<PowerFile | null> & { retry: () => void };
   /** The internet file load from the workspace, which also feeds the map. */
@@ -42,24 +67,38 @@ interface Props {
   fips: string;
 }
 
-export function DataPane({ storm, power, internet, fips }: Props) {
+export function DataPane({ storm, reports: reportsProp, power, internet, fips }: Props) {
+  const swath = useLoad<SwathFile>(`data:${storm.files.swath}`, () => fetchJson(storm.files.swath, guardSwath));
   const pairs = useLoad(`data:${storm.files.pairs}`, () => fetchJson(storm.files.pairs, guardPairs));
   const warningsFile = storm.files.warnings;
   const warnings = useLoad<WarningsFile | null>(`data:${warningsFile ?? "warnings:none"}`, () =>
     warningsFile === null ? Promise.resolve(null) : fetchJson(warningsFile, guardWarnings),
   );
-  const reports = useLoad<ReportsFile>(`data:${storm.files.reports}`, () => fetchJson(storm.files.reports, guardReports));
+  const zipFile = storm.files.zip_counts;
+  const zipCounts = useLoad<ZipCounts | null>(`data:${zipFile ?? "zips:none"}`, () =>
+    zipFile === null ? Promise.resolve(null) : fetchJson(zipFile, guardZips),
+  );
+  const internalReports = useLoad<ReportsFile>(
+    reportsProp ? "data:reports:external" : `data:${storm.files.reports}`,
+    () =>
+      reportsProp
+        ? Promise.resolve(null as unknown as ReportsFile)
+        : fetchJson(storm.files.reports, guardReports),
+  );
+  const reports = reportsProp ?? internalReports;
+  const swathReceipt = swath.status === "ready" && swath.data !== null ? swath.data.receipt : null;
   const warningsReceipt = warnings.status === "ready" && warnings.data !== null ? warnings.data.receipt : null;
+  const zipReceipt = zipCounts.status === "ready" && zipCounts.data !== null ? zipCounts.data.receipt : null;
   const powerData = power.status === "ready" ? power.data : null;
   const internetData = internet.status === "ready" ? internet.data : null;
   const files: [string, string | null, Receipt | null][] = [
-    ["swath.geojson", storm.files.swath, null],
-    ["reports.geojson", storm.files.reports, reports.status === "ready" ? reports.data.receipt : null],
+    ["swath.geojson", storm.files.swath, swathReceipt],
+    ["reports.geojson", storm.files.reports, reports.status === "ready" && reports.data ? reports.data.receipt : null],
     ["warnings.geojson", warningsFile, warningsReceipt],
     ["power.json", storm.files.power, powerData?.receipt ?? null],
     ["internet.json", storm.files.internet, internetData?.receipt ?? null],
     ["pairs.json", storm.files.pairs, pairs.status === "ready" ? pairs.data.receipt : null],
-    ["zip-counts.json", storm.files.zip_counts, null],
+    ["zip-counts.json", storm.files.zip_counts, zipReceipt],
   ];
   return (
     <div class="pane-grid">
@@ -74,13 +113,7 @@ export function DataPane({ storm, power, internet, fips }: Props) {
         </ul>
         <h2>Reproduce</h2>
         <pre class="code-block">
-          <code>
-            {[
-              `uv run hailprint ingest ${storm.storm_date}`,
-              ...(storm.files.zip_counts ? [`uv run hailprint parcels ${storm.storm_date}`] : []),
-              "uv run hailprint publish",
-            ].join("\n")}
-          </code>
+          <code>{reproduceCommands(storm).join("\n")}</code>
         </pre>
       </section>
       <section>

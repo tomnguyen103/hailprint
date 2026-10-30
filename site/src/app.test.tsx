@@ -398,6 +398,30 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(reportsItem?.receipt).toEqual(sampleReceipt);
     expect(pairsItem?.receipt).toEqual(sampleReceipt);
     setFetch(null);
+
+    const { reproduceCommands } = await import("./storms/data-pane");
+    const cliLines = reproduceCommands({
+      ...storm,
+      files: {
+        ...storm.files,
+        zip_counts: "storms/2024-05-28/zip-counts.json",
+        warnings: "storms/2024-05-28/warnings.geojson",
+        power: "storms/2024-05-28/power.json",
+        internet: "storms/2024-05-28/internet.json",
+      },
+    });
+    expect(cliLines).toContain("uv run hailprint score 2024-05-28 --radius-km 8");
+    expect(cliLines).toContain("uv run hailprint warnings 2024-05-28");
+    expect(cliLines).toContain("uv run hailprint power 2024-05-28");
+    expect(cliLines).toContain("uv run hailprint internet 2024-05-28");
+    expect(cliLines).toContain("uv run hailprint publish 2024-05-28 --with-internet");
+
+    const { commandsFor, runPublishedFiles } = await import("./try/run");
+    const runCmds = commandsFor("2024-05-28", 8);
+    expect(runCmds).toContain("uv run hailprint warnings 2024-05-28");
+    expect(runCmds).toContain("uv run hailprint power 2024-05-28");
+    expect(runCmds).toContain("uv run hailprint internet 2024-05-28");
+    expect(runPublishedFiles(storm)).toHaveLength(7);
   });
 });
 

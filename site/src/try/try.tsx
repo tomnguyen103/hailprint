@@ -2,7 +2,7 @@ import { useId, useMemo } from "preact/hooks";
 import "../styles/try.css";
 import { guardPairs } from "../data/guard";
 import type { Pairs, Storm, StormsIndex } from "../data/types";
-import { pooledRows } from "../pool";
+import { pooledReceipt, pooledRows } from "../pool";
 import { TRY_TOOLS, href, type TryTool } from "../router";
 import { PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
@@ -67,10 +67,14 @@ export function useScopeRows(index: StormsIndex, scope: string, radius: number) 
   const data = load.status === "ready" ? load.data : null;
   const table = useMemo(() => (data === null ? null : pooledRows(data, radius)), [data, radius]);
   const first = data?.[0];
+  const receipt = useMemo(
+    () => (data === null ? null : scope === ALL_SCOPE ? pooledReceipt(data, index) : (first?.receipt ?? null)),
+    [data, scope, index, first],
+  );
   return {
     load,
     table,
-    receipt: first?.receipt ?? null,
+    receipt,
     radiusMax: first?.radius_km_max ?? null,
     file: scope === ALL_SCOPE ? `pairs.json, pooled over ${storms.length} storm dates` : "pairs.json",
   };

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { DATA_BASE } from "../data/fetch";
 import { guardPairs } from "../data/guard";
-import type { Pairs, StormsIndex } from "../data/types";
+import type { Pairs, Storm, StormsIndex } from "../data/types";
 import { pool, scoredCount } from "../pool";
 import { rescore } from "../rescore";
 import { ReceiptChip } from "../shell/receipt-chip";
@@ -13,13 +13,29 @@ import { ScopeSelect, newestFirst } from "./try";
 const PAIRS_FILE = "pairs.json";
 const COPIED_MS = 1500;
 
-function commandsFor(date: string, radius: number): string[] {
+export function commandsFor(date: string, radius: number): string[] {
   return [
     `uv run hailprint ingest ${date}`,
     `uv run hailprint parcels ${date}`,
-    `uv run hailprint score --radius-km ${radius}`,
-    "uv run hailprint publish",
+    `uv run hailprint score ${date} --radius-km ${radius}`,
+    `uv run hailprint warnings ${date}`,
+    `uv run hailprint power ${date}`,
+    `uv run hailprint internet ${date}`,
+    `uv run hailprint publish ${date} --with-internet`,
     "cd site && npm run dev",
+  ];
+}
+
+export function runPublishedFiles(storm: Storm | undefined): [string, string | null][] {
+  if (!storm) return [];
+  return [
+    ["swath.geojson", storm.files.swath],
+    ["reports.geojson", storm.files.reports],
+    ["warnings.geojson", storm.files.warnings],
+    ["power.json", storm.files.power],
+    ["internet.json", storm.files.internet],
+    ["pairs.json", storm.files.pairs],
+    ["zip-counts.json", storm.files.zip_counts],
   ];
 }
 
@@ -73,14 +89,7 @@ export function Run({ index }: { index: StormsIndex }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const files: [string, string | null][] = storm
-    ? [
-        ["swath.geojson", storm.files.swath],
-        ["reports.geojson", storm.files.reports],
-        ["pairs.json", storm.files.pairs],
-        ["zip-counts.json", storm.files.zip_counts],
-      ]
-    : [];
+  const files = runPublishedFiles(storm);
 
   return (
     <>
