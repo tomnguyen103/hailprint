@@ -6,6 +6,8 @@ vi.mock("../state/theme", () => ({
   useTheme: () => ({ pref: "system", resolved: "light", set: () => {} }),
 }));
 
+const flyToCalls: Array<[[number, number], number]> = [];
+
 vi.mock("../storms/map/create-map", () => ({
   createMap: async () => ({
     basemap: false,
@@ -14,7 +16,9 @@ vi.mock("../storms/map/create-map", () => ({
     setCounties() {},
     setFill() {},
     setPoint() {},
-    flyTo() {},
+    flyTo(center: [number, number], zoom: number) {
+      flyToCalls.push([center, zoom]);
+    },
     fit() {},
     setTheme() {},
     setClassVisible() {},
@@ -40,6 +44,7 @@ import type {
 } from "../data/types";
 import { clearFileCache } from "../state/pairs-all";
 import { getPinState, resetPinStore, setPresetPin } from "../state/pin";
+import { MapPane } from "../storms/map-pane";
 import { Inspector, InspectorView } from "../storms/map/inspector";
 import { PointCheck } from "./point";
 
@@ -348,6 +353,7 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     storageWrites.length = 0;
+    flyToCalls.length = 0;
     resetPinStore();
     clearFileCache();
     resetCounties();
@@ -365,6 +371,7 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
     vi.stubGlobal("window", {
       setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
       clearTimeout: (id: number) => clearTimeout(id),
+      matchMedia: () => ({ matches: false }),
     });
     setFetch(async (input) => {
       const url = String(input);
@@ -443,10 +450,35 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
       await vi.advanceTimersByTimeAsync(20);
     });
     expect(domText(host)).toContain("0 active alerts at pinned point");
+    expect(domText(host)).toContain("2,400 active /24 blocks (2 points in last 2h)");
+
+    // Switching pin hides previous pin's live results synchronously on first render (CR-04.3)
+    setPresetPin("downtown");
+    render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement);
+    expect(domText(host)).not.toContain("0 active alerts at pinned point");
     expect(storageWrites).toEqual([]);
   });
 
-  it("renders ErrorState with a retry button when a lazy impact hook fails instead of false-negative 0 counts", async () => {
+  it("isolates a single failed impact file (e.g. 2024-05-28/power.json HTTP 500) to its cell with an inline Retry button while rendering hail, reports, warnings, and other storms normally (CR-03.1, CR-03.2)", async () => {
+    let failPower = true;
+    const storm2: Storm = {
+      ...stormRow,
+      storm_date: "2024-05-16",
+      files: {
+        swath: "storms/2024-05-16/swath.geojson",
+        reports: "storms/2024-05-16/reports.geojson",
+        pairs: "storms/2024-05-16/pairs.json",
+        zip_counts: null,
+        power: "storms/2024-05-16/power.json",
+        internet: "storms/2024-05-16/internet.json",
+        warnings: "storms/2024-05-16/warnings.geojson",
+      },
+    };
+    const twoStormIndex: StormsIndex = {
+      ...indexFixture,
+      storms: [stormRow, storm2],
+    };
+
     setFetch(async (input) => {
       const url = String(input);
       if (url.endsWith("/counties.geojson")) {
@@ -456,10 +488,13 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
         return new Response(JSON.stringify(swathFixture), { status: 200 });
       }
       if (url.endsWith("reports.geojson")) {
-        return new Response("upstream failure", { status: 500 });
+        return new Response(JSON.stringify(reportsFixture), { status: 200 });
       }
       if (url.endsWith("warnings.geojson")) {
         return new Response(JSON.stringify(warningsFixture), { status: 200 });
+      }
+      if (url.endsWith("2024-05-28/power.json") && failPower) {
+        return new Response("upstream failure", { status: 500 });
       }
       if (url.endsWith("power.json")) {
         return new Response(JSON.stringify(powerFixture), { status: 200 });
@@ -472,15 +507,33 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
 
     setPresetPin("memorial");
     const host = makeFakeElement("div");
-    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    await act(() => render(h(PointCheck, { index: twoStormIndex }), host as unknown as HTMLElement));
     await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
-    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    await act(() => render(h(PointCheck, { index: twoStormIndex }), host as unknown as HTMLElement));
 
     const text = domText(host);
-    expect(text).toContain("reports.geojson");
-    expect(text).toContain("HTTP 500");
+    // Hail swath, SPC reports, warnings, and the other storm row still render normally!
+    expect(text).toContain("Radar-estimated hail size (at pin / \u2264 5 km)");
+    expect(text).toContain("SPC reports \u2264 5 km");
+    expect(text).toContain("quarter");
+    expect(text).toContain("2024-05-16");
+    // Only the failed cell renders the isolated error + Retry button
+    expect(text).toContain("Power off (power.json: HTTP 500)");
     expect(text).toContain("Retry");
-    expect(text).not.toContain("SPC reports \u2264");
+
+    // Clicking Retry refetches the evicted 2024-05-28/power.json and resolves the cell
+    failPower = false;
+    const retryBtn = findDomNodes(
+      host,
+      (n) => n.tagName === "BUTTON" && domText(n).trim() === "Retry",
+    )[0]!;
+    await act(() => {
+      (retryBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
+    await act(() => render(h(PointCheck, { index: twoStormIndex }), host as unknown as HTMLElement));
+    expect(domText(host)).not.toContain("Power off (power.json: HTTP 500)");
+    expect(domText(host)).toContain("251,830");
   });
 
   it("ignores stale fetchLiveStatus response when the pin changes while live check is in flight", async () => {
@@ -554,5 +607,166 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
     });
     await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
     expect(domText(host)).not.toContain("0 active alerts at pinned point");
+  });
+
+  it("renders inline Retry inside a failed live feed row and recovers on retry (CR-04.3)", async () => {
+    let failIoda = true;
+    setFetch(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/counties.geojson")) {
+        return new Response(JSON.stringify(countiesFixture), { status: 200 });
+      }
+      if (url.endsWith("swath.geojson")) {
+        return new Response(JSON.stringify(swathFixture), { status: 200 });
+      }
+      if (url.endsWith("reports.geojson")) {
+        return new Response(JSON.stringify(reportsFixture), { status: 200 });
+      }
+      if (url.endsWith("warnings.geojson")) {
+        return new Response(JSON.stringify(warningsFixture), { status: 200 });
+      }
+      if (url.endsWith("power.json")) {
+        return new Response(JSON.stringify(powerFixture), { status: 200 });
+      }
+      if (url.endsWith("internet.json")) {
+        return new Response(JSON.stringify(internetFixture), { status: 200 });
+      }
+      if (url.startsWith("https://api.weather.gov/")) {
+        return new Response(JSON.stringify({ type: "FeatureCollection", features: [] }), { status: 200 });
+      }
+      if (url.startsWith("https://ornl.opendatasoft.com/")) {
+        return new Response(JSON.stringify({ total_count: 0, results: [] }), { status: 200 });
+      }
+      if (url.startsWith("https://api.ioda.inetintel.cc.gatech.edu/")) {
+        if (failIoda) return new Response("bad gateway", { status: 502 });
+        return new Response(
+          JSON.stringify({ error: null, data: [[{ from: 1000, step: 600, values: [2400, 2395] }]] }),
+          { status: 200 },
+        );
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    setPresetPin("memorial");
+    const host = makeFakeElement("div");
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+
+    const liveBtn = findDomNodes(
+      host,
+      (n) => n.tagName === "BUTTON" && domText(n).includes("Check live NWS & outage feeds"),
+    )[0]!;
+    await act(async () => {
+      (liveBtn["on_click"] as (e: { type: string; preventDefault(): void }) => void)({
+        type: "click",
+        preventDefault() {},
+      });
+      await vi.advanceTimersByTimeAsync(20);
+    });
+    expect(domText(host)).toContain("ioda: HTTP 502");
+
+    failIoda = false;
+    const retryBtn = findDomNodes(
+      host,
+      (n) => n.tagName === "BUTTON" && domText(n).trim() === "Retry",
+    )[0]!;
+    await act(async () => {
+      (retryBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+      await vi.advanceTimersByTimeAsync(20);
+    });
+    expect(domText(host)).not.toContain("ioda: HTTP 502");
+    expect(domText(host)).toContain("2,395 active /24 blocks");
+  });
+
+  it("auto-opens Inspector on MapPane mount with active pin, calls flyTo(pin.lngLat, 11), syncs county, and persists across storm date switches without manual Inspect pin button (CR-05.1)", async () => {
+    setPresetPin("memorial");
+    const pickedCounties: string[] = [];
+    const host = makeFakeElement("div");
+
+    await act(() =>
+      render(
+        h(MapPane, {
+          storm: stormRow,
+          reports: { status: "ready", data: reportsFixture, retry: () => {} },
+          power: { status: "ready", data: powerFixture },
+          internet: { status: "ready", data: internetFixture },
+          step: 46,
+          onStep: () => {},
+          fips: "48201",
+          onCounty: (f) => pickedCounties.push(f),
+        }),
+        host as unknown as HTMLElement,
+      ),
+    );
+    await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
+    await act(() =>
+      render(
+        h(MapPane, {
+          storm: stormRow,
+          reports: { status: "ready", data: reportsFixture, retry: () => {} },
+          power: { status: "ready", data: powerFixture },
+          internet: { status: "ready", data: internetFixture },
+          step: 46,
+          onStep: () => {},
+          fips: "48201",
+          onCounty: (f) => pickedCounties.push(f),
+        }),
+        host as unknown as HTMLElement,
+      ),
+    );
+
+    const text1 = domText(host);
+    expect(text1).toContain("Open in Point check");
+    expect(text1).toContain("within 5 km");
+    expect(text1).not.toContain("Inspect pin");
+    expect(flyToCalls.some(([center, zoom]) => center[0] === -95.518 && center[1] === 29.785 && zoom === 11)).toBe(
+      true,
+    );
+    expect(pickedCounties).toContain("48201");
+
+    // Switching storm date keeps Inspector open at the pinned coordinate
+    const storm2: Storm = {
+      ...stormRow,
+      storm_date: "2024-05-16",
+      files: {
+        ...stormRow.files,
+        swath: "storms/2024-05-16/swath.geojson",
+        warnings: "storms/2024-05-16/warnings.geojson",
+      },
+    };
+    await act(() =>
+      render(
+        h(MapPane, {
+          storm: storm2,
+          reports: { status: "ready", data: reportsFixture, retry: () => {} },
+          power: { status: "ready", data: powerFixture },
+          internet: { status: "ready", data: internetFixture },
+          step: 46,
+          onStep: () => {},
+          fips: "48201",
+          onCounty: (f) => pickedCounties.push(f),
+        }),
+        host as unknown as HTMLElement,
+      ),
+    );
+    await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
+    await act(() =>
+      render(
+        h(MapPane, {
+          storm: storm2,
+          reports: { status: "ready", data: reportsFixture, retry: () => {} },
+          power: { status: "ready", data: powerFixture },
+          internet: { status: "ready", data: internetFixture },
+          step: 46,
+          onStep: () => {},
+          fips: "48201",
+          onCounty: (f) => pickedCounties.push(f),
+        }),
+        host as unknown as HTMLElement,
+      ),
+    );
+
+    expect(domText(host)).toContain("Open in Point check");
   });
 });

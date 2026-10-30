@@ -18,10 +18,9 @@ import {
 } from "../impact/series";
 import {
   type DirectWarning,
+  type NearbyWarning,
   type ReportsProximity,
   type SwathDistance,
-  type SwathExposure,
-  type WarningsAtPoint,
   reportsWithinRadius,
   swathExposureAt,
   warningsAtPoint,
@@ -51,22 +50,15 @@ export interface StormPinRow {
   covering: SwathDistance | null;
   withinRadius: SwathDistance | null;
   nearest: SwathDistance | null;
-  swath: SwathExposure;
   reportsWithinRadius: ReportsProximity;
-  warningsAtPoint: WarningsAtPoint;
   directWarnings: DirectWarning[];
+  nearbyWarnings: NearbyWarning[];
   warningCounts: Record<Phenomena, number>;
   firstWarningStep: number | null;
   powerPeak: PowerPeakSummary | null;
   internetTrough: InternetTroughSummary | null;
   hasActivityNearPin: boolean;
-  receipts: {
-    swath: Receipt | null;
-    reports: Receipt | null;
-    warnings: Receipt | null;
-    power: Receipt | null;
-    internet: Receipt | null;
-  };
+  swathReceipt: Receipt | null;
 }
 
 /** Pure per-storm proximity & outage analysis for a pinned coordinate and Metro county FIPS. */
@@ -78,17 +70,16 @@ export function analyzeStormAtPin(input: AnalyzeStormInput): StormPinRow {
   const covering = cropStatus === "outside-crop" ? null : rawExposure.covering;
   const withinRadius = cropStatus === "outside-crop" ? null : rawExposure.withinRadius;
   const nearest = rawExposure.nearest;
-  const exposure: SwathExposure = {
-    ...rawExposure,
-    covering,
-    withinRadius,
-  };
   const reportsProx = reportsWithinRadius(point, reports, radiusKm);
-  const warnProx = warningsAtPoint(point, warnings, stormDate);
+  const warnProx = warningsAtPoint(point, warnings, stormDate, radiusKm);
   const powerPeak = powerSeriesPeak(power, fips, stormDate);
   const internetTrough = internetSeriesTrough(internet, fips, stormDate);
   const hasActivityNearPin =
-    withinRadius !== null || reportsProx.count > 0 || warnProx.directWarnings.length > 0;
+    withinRadius !== null ||
+    reportsProx.count > 0 ||
+    warnProx.directWarnings.length > 0 ||
+    (powerPeak?.peakShare ?? 0) >= 0.01 ||
+    (internetTrough?.maxDrop ?? 0) >= 0.02;
 
   return {
     storm,
@@ -100,22 +91,15 @@ export function analyzeStormAtPin(input: AnalyzeStormInput): StormPinRow {
     covering,
     withinRadius,
     nearest,
-    swath: exposure,
     reportsWithinRadius: reportsProx,
-    warningsAtPoint: warnProx,
     directWarnings: warnProx.directWarnings,
+    nearbyWarnings: warnProx.nearbyWarnings,
     warningCounts: warnProx.warningCounts,
     firstWarningStep: warnProx.firstWarningStep,
     powerPeak,
     internetTrough,
     hasActivityNearPin,
-    receipts: {
-      swath: swath?.receipt ?? null,
-      reports: reports?.receipt ?? null,
-      warnings: warnings?.receipt ?? null,
-      power: power?.receipt ?? null,
-      internet: internet?.receipt ?? null,
-    },
+    swathReceipt: swath?.receipt ?? null,
   };
 }
 

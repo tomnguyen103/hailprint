@@ -25,6 +25,7 @@ import { defaultFill } from "./select";
 
 const SWATH_FILE = "swath.geojson";
 const NO_BASEMAP = "No basemap file.";
+const PIN_ZOOM = 11;
 
 interface Props {
   storm: Storm;
@@ -80,6 +81,29 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   const onCountyRef = useRef(onCounty);
   onCountyRef.current = onCounty;
 
+  const pickCoordinate = useCallback((lngLat: [number, number], coveringOverride?: number | null) => {
+    const clickedCounty = countyAt(lngLat, outlinesRef.current);
+    if (clickedCounty !== null) onCountyRef.current(clickedCounty);
+    const cov =
+      coveringOverride !== undefined
+        ? coveringOverride
+        : swathRef.current
+          ? (coveringAt(swathRef.current, lngLat)?.threshold_mm ?? null)
+          : null;
+    const nearSwath =
+      cov === null && swathRef.current !== null
+        ? swathExposureAt(swathRef.current, lngLat, 20).nearest
+        : null;
+    setPick({
+      date: stormDateRef.current,
+      lngLat,
+      coveringMm: cov,
+      nearest: nearestReport(lngLat, reportsRef.current?.features ?? []),
+      nearestSwath: nearSwath,
+      countyFips: outlinesRef.current !== null ? clickedCounty : undefined,
+    });
+  }, []);
+
   // Create the map once; MapLibre arrives in its own chunk. Retry runs the import again.
   useEffect(() => {
     const node = container.current;
@@ -98,22 +122,11 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
         handle.current = next;
         next.map.on("click", (event) => {
           const layers = RULER.map((m) => fillLayerId(m.threshold_mm));
-          const hits = next.map.queryRenderedFeatures(event.point, { layers }) as unknown as { properties: { threshold_mm: number } }[];
+          const hits = next.map.queryRenderedFeatures(event.point, { layers }) as unknown as {
+            properties: { threshold_mm: number };
+          }[];
           const lngLat: [number, number] = [event.lngLat.lng, event.lngLat.lat];
-          const clicked = countyAt(lngLat, outlinesRef.current);
-          if (clicked !== null) onCountyRef.current(clicked);
-          const coveringMm = coveringClass(hits);
-          const nearestSwath =
-            coveringMm === null && swathRef.current !== null
-              ? swathExposureAt(swathRef.current, lngLat, 20).nearest
-              : null;
-          setPick({
-            date: stormDateRef.current,
-            lngLat,
-            coveringMm,
-            nearest: nearestReport(lngLat, reportsRef.current?.features ?? []),
-            nearestSwath,
-          });
+          pickCoordinate(lngLat, coveringClass(hits));
         });
         setReady({ basemap: next.basemap });
       })
@@ -126,7 +139,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
       handle.current = null;
       setReady(null);
     };
-  }, [attempt]);
+  }, [attempt, pickCoordinate]);
 
   // Data: the latest swath, reports, and county go to the sources; the camera fits the swath.
   const swathData = swath.status === "ready" ? swath.data : null;
@@ -149,9 +162,31 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   }, [ready, fill, powerData, internetData, step]);
   useEffect(() => {
     if (!ready || !handle.current || !swathData) return;
-    handle.current.fit(boundsOf(swathData));
-    setPick(null);
-  }, [ready, swathData]);
+    if (pin !== null) {
+      handle.current.setPoint(pin.lngLat);
+      handle.current.flyTo(pin.lngLat, PIN_ZOOM);
+      pickCoordinate(pin.lngLat);
+    } else {
+      handle.current.fit(boundsOf(swathData));
+      setPick(null);
+    }
+  }, [ready, swathData, pin?.lngLat[0], pin?.lngLat[1], pickCoordinate]);
+
+  useEffect(() => {
+    setPick((prev) => {
+      if (prev === null || prev.date !== storm.storm_date) return prev;
+      const resolvedCounty = outlines !== null ? countyAt(prev.lngLat, outlines) : prev.countyFips;
+      if (prev.countyFips === undefined && resolvedCounty !== undefined && resolvedCounty !== null) {
+        onCountyRef.current(resolvedCounty);
+      }
+      return {
+        ...prev,
+        nearest: nearestReport(prev.lngLat, reportsData?.features ?? []),
+        countyFips: resolvedCounty,
+      };
+    });
+  }, [reportsData, outlines, storm.storm_date]);
+
   const displayPoint = activePick?.lngLat ?? pin?.lngLat ?? null;
   useEffect(() => {
     if (!ready || !handle.current) return;
@@ -191,29 +226,15 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     container.current?.focus();
   }, []);
   const retryMap = useCallback(() => setAttempt((n) => n + 1), []);
-  const inspectCoordinate = useCallback((lngLat: [number, number]) => {
-    const clickedCounty = countyAt(lngLat, outlinesRef.current);
-    if (clickedCounty !== null) onCountyRef.current(clickedCounty);
-    const cov = swathRef.current ? (coveringAt(swathRef.current, lngLat)?.threshold_mm ?? null) : null;
-    const nearSwath =
-      cov === null && swathRef.current !== null
-        ? swathExposureAt(swathRef.current, lngLat, 20).nearest
-        : null;
-    setPick({
-      date: stormDateRef.current,
-      lngLat,
-      coveringMm: cov,
-      nearest: nearestReport(lngLat, reportsRef.current?.features ?? []),
-      nearestSwath: nearSwath,
-    });
-  }, []);
   const onPinMyLocation = useCallback(() => {
     void locateUser().then((next) => {
       if (next.geoStatus === "ready" && next.pin !== null) {
-        inspectCoordinate(next.pin.lngLat);
+        handle.current?.setPoint(next.pin.lngLat);
+        handle.current?.flyTo(next.pin.lngLat, PIN_ZOOM);
+        pickCoordinate(next.pin.lngLat);
       }
     });
-  }, [inspectCoordinate]);
+  }, [locateUser, pickCoordinate]);
 
   // One overlay slot: the map chunk error first, then the swath, reports, and county errors in that order.
   const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : metro.status === "error" ? metro : null;
@@ -255,23 +276,22 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
                 type="button"
                 class="button button-small"
                 disabled={geoStatus === "locating"}
+                aria-busy={geoStatus === "locating"}
                 onClick={onPinMyLocation}
               >
                 {geoStatus === "locating" ? "Locating\u2026" : "Pin my location"}
               </button>
               {pin !== null ? (
-                <>
-                  <button
-                    type="button"
-                    class="button button-small"
-                    onClick={() => inspectCoordinate(pin.lngLat)}
-                  >
-                    {pin.label ? `Inspect pin (${pin.label})` : "Inspect pin"}
-                  </button>
-                  <button type="button" class="button button-small" onClick={() => clearPin()}>
-                    Clear pin
-                  </button>
-                </>
+                <button
+                  type="button"
+                  class="button button-small"
+                  onClick={() => {
+                    clearPin();
+                    setPick(null);
+                  }}
+                >
+                  Clear pin
+                </button>
               ) : null}
               {geoStatus === "error" && geoMessage !== null ? (
                 <p class="layers-note" role="alert">
@@ -309,9 +329,16 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
       </div>
       {activePick !== null && receipt !== null ? (
         <Inspector
-          pick={activePick}
+          pick={
+            outlines !== null
+              ? activePick.countyFips !== undefined
+                ? activePick
+                : { ...activePick, countyFips: countyAt(activePick.lngLat, outlines) }
+              : { ...activePick, countyFips: null }
+          }
           receipt={receipt}
           swath={swathData}
+          reports={reportsData}
           warnings={warningsData}
           power={powerData}
           internet={internetData}

@@ -308,5 +308,53 @@ describe("analyzeStormAtPin and summarizeArchiveAtPin (US-02.3, US-02.4, US-02.5
     expect(row.internetTrough?.minRatio).toBe(0.912);
     expect(row.internetTrough?.maxDrop).toBe(0.088);
     expect(row.internetTrough?.troughStep).toBe(50);
+    expect(row.swathReceipt).toEqual(receipt);
+  });
+
+  it("sets hasActivityNearPin when county power peak >= 1% or internet drop >= 2% even with no local swath, report, or warning (CR-02.4)", () => {
+    const power = makePowerFixture();
+    const internet = makeInternetFixture();
+
+    // Point far from swath/reports/warnings in Harris (48201), where power peak is ~11.4% (>= 1%)
+    const activeByPower = analyzeStormAtPin({
+      storm: stormFixture,
+      point: [-95.9, 30.1],
+      radiusKm: 1,
+      fips: "48201",
+      swath: null,
+      reports: null,
+      warnings: null,
+      power,
+      internet: null,
+    });
+    expect(activeByPower.hasActivityNearPin).toBe(true);
+
+    // Point with only internet drop 3.9% (>= 2%)
+    const activeByInternet = analyzeStormAtPin({
+      storm: stormFixture,
+      point: [-95.9, 30.1],
+      radiusKm: 1,
+      fips: "48201",
+      swath: null,
+      reports: null,
+      warnings: null,
+      power: null,
+      internet,
+    });
+    expect(activeByInternet.hasActivityNearPin).toBe(true);
+
+    // County with 0% power and 0% internet drop has hasActivityNearPin = false
+    const quiet = analyzeStormAtPin({
+      storm: stormFixture,
+      point: [-95.9, 30.1],
+      radiusKm: 1,
+      fips: "48157",
+      swath: null,
+      reports: null,
+      warnings: null,
+      power,
+      internet,
+    });
+    expect(quiet.hasActivityNearPin).toBe(false);
   });
 });

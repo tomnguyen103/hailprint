@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { getFetch, setFetch } from "../data/fetch";
 import {
   IODA_COUNTY_CODES,
+  LIVE_IODA_WINDOW_S,
   ODIN_METRO_URL,
   fetchLiveStatus,
   iodaSignalUrl,
@@ -101,11 +102,11 @@ describe("fetchLiveStatus 3-feed snapshot and partial failure isolation (US-03.1
     }
 
     expect(res.internet.status).toBe("ready");
+    expect(LIVE_IODA_WINDOW_S).toBe(7200);
+    expect(requestedUrls[2]).toContain("?from=1715896800&until=1715904000&datasource=ping-slash24");
     if (res.internet.status === "ready") {
       expect(res.internet.latestValue).toBe(2388);
-      expect(res.internet.baselineMedian).toBe(2394);
-      expect(res.internet.ratio).toBe(0.997);
-      expect(res.internet.drop).toBe(0.003);
+      expect(res.internet.pointCount).toBe(2);
     }
   });
 

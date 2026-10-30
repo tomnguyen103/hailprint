@@ -5,6 +5,7 @@ import { DataError, PHENOMENA, type StormsIndex } from "../data/types";
 import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../format";
 import { ODIN_LABEL, percentText } from "../impact/power";
 import { type LiveStatusResult, fetchLiveStatus } from "../live/live-check";
+import { LiveStatusList } from "../live/live-status-list";
 import { href } from "../router";
 import { objectName } from "../ruler";
 import { Link } from "../shell/link";
@@ -26,9 +27,9 @@ const SWATH_FILE = "swath.geojson";
 const POINT_ZOOM = 11;
 
 type LiveCheckState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "ready"; data: LiveStatusResult };
+  | { key: string; status: "idle" }
+  | { key: string; status: "loading" }
+  | { key: string; status: "ready"; data: LiveStatusResult };
 
 function cropBadgeText(cropStatus: StormPinRow["cropStatus"], radiusKm: number): string {
   if (cropStatus === "outside-crop") {
@@ -65,7 +66,13 @@ function renderReportsCell(row: StormPinRow): string {
 }
 
 function renderWarningsCell(row: StormPinRow): string {
-  if (row.directWarnings.length === 0) return "none";
+  if (row.directWarnings.length === 0) {
+    if (row.nearbyWarnings.length > 0) {
+      const w = row.nearbyWarnings[0]!;
+      return `0 at pin (${w.phenomena} ${w.distanceKm.toFixed(1)} km)`;
+    }
+    return "none";
+  }
   return PHENOMENA.filter((p) => row.warningCounts[p] > 0)
     .map((p) => `${p} \u00d7${row.warningCounts[p]}`)
     .join(" \u00b7 ");
@@ -84,6 +91,17 @@ function renderInternetCell(row: StormPinRow): string {
   if (trough === null || trough.maxDrop === null || trough.minRatio === null) return "no data";
   if (trough.maxDrop === 0) return `0% below baseline (${trough.minRatio.toFixed(3)})`;
   return `${percentText(trough.maxDrop)} below baseline (${trough.minRatio.toFixed(3)})`;
+}
+
+function renderCellError(label: string, err: DataError, onRetry: () => void) {
+  return (
+    <span class="point-cell-error">
+      {label} off ({err.message}){" "}
+      <button type="button" class="button button-small" onClick={onRetry}>
+        Retry
+      </button>
+    </span>
+  );
 }
 
 export function PointCheck({ index }: { index: StormsIndex }) {
@@ -114,7 +132,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const [invalid, setInvalid] = useState(false);
   const [previewDate, setPreviewDate] = useState<string>(() => index.storms[0]?.storm_date ?? "");
   const [filterMode, setFilterMode] = useState<"all" | "active">("all");
-  const [liveState, setLiveState] = useState<LiveCheckState>({ status: "idle" });
+  const [liveState, setLiveState] = useState<LiveCheckState>({ key: "", status: "idle" });
 
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
@@ -214,10 +232,9 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     return feat?.properties?.["name"] ? `${String(feat.properties["name"])} County` : `County ${pinnedFips}`;
   }, [pinnedFips, outlines]);
 
-  useEffect(() => {
-    liveEpochRef.current += 1;
-    setLiveState({ status: "idle" });
-  }, [activePoint?.[0], activePoint?.[1], pinnedFips]);
+  const liveKey = activePoint !== null ? `${activePoint[0]},${activePoint[1]},${pinnedFips ?? ""}` : "";
+  const currentLive: LiveCheckState =
+    liveState.key === liveKey ? liveState : { key: liveKey, status: "idle" };
 
   const check = (event: Event) => {
     event.preventDefault();
@@ -232,16 +249,17 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     setLatText("");
     setLonText("");
     setInvalid(false);
-    setLiveState({ status: "idle" });
+    setLiveState({ key: "", status: "idle" });
   };
 
   const runLiveCheck = () => {
     if (!activePoint || metro.status !== "ready") return;
+    const reqKey = liveKey;
     const myEpoch = ++liveEpochRef.current;
-    setLiveState({ status: "loading" });
+    setLiveState({ key: reqKey, status: "loading" });
     void fetchLiveStatus(activePoint, pinnedFips).then((data) => {
       if (liveEpochRef.current === myEpoch) {
-        setLiveState({ status: "ready", data });
+        setLiveState({ key: reqKey, status: "ready", data });
       }
     });
   };
@@ -263,25 +281,32 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     );
   }, [activePoint, swathData, index.storms, radiusKm, pinnedFips, reportsData, warningsData, powerData, internetData]);
 
+  const stormIdxByDate = useMemo(
+    () => new Map(index.storms.map((s, i) => [s.storm_date, i])),
+    [index.storms],
+  );
   const summary = useMemo(() => summarizeArchiveAtPin(rows), [rows]);
   const visibleRows = useMemo(
-    () => (filterMode === "active" ? rows.filter((r) => r.hasActivityNearPin) : rows),
-    [rows, filterMode],
+    () =>
+      filterMode === "active"
+        ? rows.filter((r) => {
+            const idx = stormIdxByDate.get(r.stormDate) ?? -1;
+            const hasErr =
+              idx >= 0 &&
+              Boolean(
+                reportsAll.itemErrors[idx] ||
+                  warningsAll.itemErrors[idx] ||
+                  powerAll.itemErrors[idx] ||
+                  internetAll.itemErrors[idx],
+              );
+            return r.hasActivityNearPin || hasErr;
+          })
+        : rows,
+    [rows, filterMode, stormIdxByDate, reportsAll.itemErrors, warningsAll.itemErrors, powerAll.itemErrors, internetAll.itemErrors],
   );
   const activeCount = useMemo(() => rows.filter((r) => r.hasActivityNearPin).length, [rows]);
 
-  const impactError =
-    metro.status === "error"
-      ? metro
-      : reportsAll.status === "error"
-        ? reportsAll
-        : warningsAll.status === "error"
-          ? warningsAll
-          : powerAll.status === "error"
-            ? powerAll
-            : internetAll.status === "error"
-              ? internetAll
-              : null;
+  const countyError = metro.status === "error" ? metro : null;
   const impactLoading =
     activePoint !== null &&
     (metro.status === "loading" ||
@@ -300,8 +325,8 @@ export function PointCheck({ index }: { index: StormsIndex }) {
       const firstCropStatus = rows[0]?.cropStatus ?? "inside";
       resultsSection = (
         <section class="point-results point-analysis" aria-label="Pinned location archive analysis">
-          {impactError !== null ? (
-            <ErrorState error={impactError.error} onRetry={impactError.retry} />
+          {countyError !== null ? (
+            <ErrorState error={countyError.error} onRetry={countyError.retry} />
           ) : impactLoading ? (
             <LoadingState file="reports.geojson, warnings.geojson, power.json, internet.json" />
           ) : (
@@ -318,7 +343,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                 </span>
                 <span class="stamp-fact">{cropBadgeText(firstCropStatus, radiusKm)}</span>
                 <span class="stamp-fact">
-                  Swaths {"\u2264"} <span class="mono">{radiusKm} km</span>:{" "}
+                  Radar-estimated hail size {"\u2264"} <span class="mono">{radiusKm} km</span>:{" "}
                   <span class="mono">
                     {summary.stormsWithSwathWithinRadius}/{summary.totalStorms}
                   </span>
@@ -360,50 +385,23 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                   <button
                     type="button"
                     class="button button-small"
-                    disabled={liveState.status === "loading" || metro.status !== "ready"}
+                    disabled={currentLive.status === "loading" || metro.status !== "ready"}
                     onClick={runLiveCheck}
                   >
-                    {liveState.status === "loading" ? "Checking live feeds\u2026" : "Check live NWS & outage feeds"}
+                    {currentLive.status === "loading"
+                      ? "Checking live feeds\u2026"
+                      : "Check live NWS & outage feeds"}
                   </button>
                   <span class="point-live-caption">
                     On-demand check of NWS Active Alerts, ORNL ODIN utility outages, and IODA internet reachability.
                   </span>
                 </div>
-                {liveState.status === "ready" ? (
-                  <dl class="receipt-list point-live-grid">
-                    <dt>NWS active alerts</dt>
-                    <dd>
-                      {liveState.data.alerts.status === "error"
-                        ? liveState.data.alerts.message
-                        : liveState.data.alerts.alerts.length === 0
-                          ? "0 active alerts at pinned point"
-                          : liveState.data.alerts.alerts.map((a) => `${a.event} (${a.severity})`).join(" \u00b7 ")}
-                    </dd>
-                    <dt>ORNL ODIN utility outages</dt>
-                    <dd>
-                      {liveState.data.power.status === "error" ? (
-                        liveState.data.power.message
-                      ) : (
-                        <>
-                          <span class="mono">{formatCount(liveState.data.power.customersOut)}</span> customers out (
-                          {liveState.data.power.note})
-                        </>
-                      )}
-                    </dd>
-                    <dt>IODA internet reachability</dt>
-                    <dd>
-                      {liveState.data.internet.status === "error" ? (
-                        liveState.data.internet.message
-                      ) : liveState.data.internet.ratio === null ? (
-                        "no recent county signal points"
-                      ) : (
-                        <>
-                          <span class="mono">{percentText(liveState.data.internet.drop)}</span> below 24h median (ratio{" "}
-                          <span class="mono">{liveState.data.internet.ratio.toFixed(3)}</span>)
-                        </>
-                      )}
-                    </dd>
-                  </dl>
+                {currentLive.status === "ready" ? (
+                  <LiveStatusList
+                    data={currentLive.data}
+                    onRetry={runLiveCheck}
+                    className="receipt-list point-live-grid"
+                  />
                 ) : null}
               </div>
 
@@ -436,7 +434,9 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                   <thead>
                     <tr>
                       <th scope="col">Storm date</th>
-                      <th scope="col">Swath at pin / within {radiusKm} km</th>
+                      <th scope="col">
+                        Radar-estimated hail size (at pin / {"\u2264"} {radiusKm} km)
+                      </th>
                       <th scope="col">SPC reports {"\u2264"} {radiusKm} km</th>
                       <th scope="col">NWS warnings at pin</th>
                       <th scope="col">County power peak</th>
@@ -449,6 +449,11 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                   <tbody>
                     {visibleRows.map((row) => {
                       const jumpStep = row.firstWarningStep ?? row.powerPeak?.peakStep ?? undefined;
+                      const rowIdx = stormIdxByDate.get(row.stormDate) ?? -1;
+                      const reportsErr = rowIdx >= 0 ? (reportsAll.itemErrors[rowIdx] ?? null) : null;
+                      const warningsErr = rowIdx >= 0 ? (warningsAll.itemErrors[rowIdx] ?? null) : null;
+                      const powerErr = rowIdx >= 0 ? (powerAll.itemErrors[rowIdx] ?? null) : null;
+                      const internetErr = rowIdx >= 0 ? (internetAll.itemErrors[rowIdx] ?? null) : null;
                       return (
                         <tr key={row.stormDate} data-active={row.hasActivityNearPin}>
                           <td class="point-date-cell">
@@ -468,13 +473,29 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                             </button>
                           </td>
                           <td>{renderSwathCell(row)}</td>
-                          <td class="mono">{renderReportsCell(row)}</td>
-                          <td>{renderWarningsCell(row)}</td>
-                          <td class="mono">{renderPowerCell(row)}</td>
-                          <td class="mono">{renderInternetCell(row)}</td>
+                          <td class="mono">
+                            {reportsErr
+                              ? renderCellError("Reports", reportsErr, reportsAll.retry)
+                              : renderReportsCell(row)}
+                          </td>
                           <td>
-                            {row.receipts.swath ? (
-                              <ReceiptChip receipt={row.receipts.swath} file={SWATH_FILE} />
+                            {warningsErr
+                              ? renderCellError("Warnings", warningsErr, warningsAll.retry)
+                              : renderWarningsCell(row)}
+                          </td>
+                          <td class="mono">
+                            {powerErr
+                              ? renderCellError("Power", powerErr, powerAll.retry)
+                              : renderPowerCell(row)}
+                          </td>
+                          <td class="mono">
+                            {internetErr
+                              ? renderCellError("Internet", internetErr, internetAll.retry)
+                              : renderInternetCell(row)}
+                          </td>
+                          <td>
+                            {row.swathReceipt ? (
+                              <ReceiptChip receipt={row.swathReceipt} file={SWATH_FILE} />
                             ) : null}
                           </td>
                         </tr>
@@ -530,6 +551,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
           type="button"
           class="button"
           disabled={geoStatus === "locating"}
+          aria-busy={geoStatus === "locating"}
           onClick={() => void locateUser()}
         >
           {geoStatus === "locating" ? "Locating\u2026" : "Pin my location"}

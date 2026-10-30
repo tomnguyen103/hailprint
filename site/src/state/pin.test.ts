@@ -20,10 +20,17 @@ afterEach(() => {
 
 describe("pin store presets and manual coordinates (US-01.4)", () => {
   it("sets benchmark preset pins from METRO_PRESETS and updates radiusKm", () => {
-    expect(METRO_PRESETS).toHaveLength(6);
+    expect(METRO_PRESETS).toEqual([
+      { id: "downtown", label: "Downtown (77002)", zip: "77002", lngLat: [-95.3698, 29.7604] },
+      { id: "memorial", label: "Memorial (77024)", zip: "77024", lngLat: [-95.518, 29.785] },
+      { id: "cypress", label: "Cypress (77433)", zip: "77433", lngLat: [-95.698, 29.969] },
+      { id: "kingwood", label: "Kingwood (77339)", zip: "77339", lngLat: [-95.186, 30.056] },
+      { id: "katy", label: "Katy (77494)", zip: "77494", lngLat: [-95.824, 29.742] },
+      { id: "woodlands", label: "The Woodlands (77380)", zip: "77380", lngLat: [-95.461, 30.165] },
+    ]);
     expect(setPresetPin("memorial")).toBe(true);
     const state = getPinState();
-    expect(state.pin?.lngLat).toEqual([-95.5297, 29.7752]);
+    expect(state.pin?.lngLat).toEqual([-95.518, 29.785]);
     expect(state.pin?.source).toBe("preset");
     expect(state.pin?.label).toBe("Memorial (77024)");
 
@@ -39,9 +46,11 @@ describe("pin store presets and manual coordinates (US-01.4)", () => {
 describe("locateUser geolocation lifecycle and error handling (US-01.4, US-01.5)", () => {
   it("transitions idle -> locating -> ready on valid Metro GPS and ignores duplicate calls while locating", async () => {
     let successCb: ((pos: GeolocationPosition) => void) | null = null;
-    const getCurrentPosition = vi.fn((onSuccess: (pos: GeolocationPosition) => void) => {
-      successCb = onSuccess;
-    });
+    const getCurrentPosition = vi.fn(
+      (onSuccess: (pos: GeolocationPosition) => void, _onError?: unknown, _options?: PositionOptions) => {
+        successCb = onSuccess;
+      },
+    );
     vi.stubGlobal("navigator", { geolocation: { getCurrentPosition } });
 
     expect(getPinState().geoStatus).toBe("idle");
@@ -51,6 +60,11 @@ describe("locateUser geolocation lifecycle and error handling (US-01.4, US-01.5)
     // Rapid second invocation while locating must not call getCurrentPosition again
     const p2 = locateUser();
     expect(getCurrentPosition).toHaveBeenCalledTimes(1);
+    expect(getCurrentPosition.mock.calls[0]?.[2]).toEqual({
+      enableHighAccuracy: true,
+      timeout: 10_000,
+      maximumAge: 60_000,
+    });
 
     successCb!({
       coords: { latitude: 29.7604, longitude: -95.3698, accuracy: 18 } as GeolocationCoordinates,
