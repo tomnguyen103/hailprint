@@ -18,11 +18,11 @@ export interface MetroPreset {
 
 export const METRO_PRESETS: readonly MetroPreset[] = [
   { id: "downtown", label: "Downtown (77002)", zip: "77002", lngLat: [-95.3698, 29.7604] },
-  { id: "memorial", label: "Memorial (77024)", zip: "77024", lngLat: [-95.5297, 29.7752] },
-  { id: "cypress", label: "Cypress (77433)", zip: "77433", lngLat: [-95.6972, 29.9691] },
-  { id: "kingwood", label: "Kingwood (77339)", zip: "77339", lngLat: [-95.186, 30.0566] },
+  { id: "memorial", label: "Memorial (77024)", zip: "77024", lngLat: [-95.518, 29.785] },
+  { id: "cypress", label: "Cypress (77433)", zip: "77433", lngLat: [-95.698, 29.969] },
+  { id: "kingwood", label: "Kingwood (77339)", zip: "77339", lngLat: [-95.186, 30.056] },
   { id: "katy", label: "Katy (77494)", zip: "77494", lngLat: [-95.824, 29.742] },
-  { id: "woodlands", label: "The Woodlands (77380)", zip: "77380", lngLat: [-95.4613, 30.1658] },
+  { id: "woodlands", label: "The Woodlands (77380)", zip: "77380", lngLat: [-95.461, 30.165] },
 ] as const;
 
 export const DEFAULT_PIN_RADIUS_KM = 5;
@@ -200,7 +200,7 @@ export function locateUser(): Promise<PinState> {
           );
         }
       },
-      { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 },
+      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
     );
   });
 

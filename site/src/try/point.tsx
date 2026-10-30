@@ -318,7 +318,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                 </span>
                 <span class="stamp-fact">{cropBadgeText(firstCropStatus, radiusKm)}</span>
                 <span class="stamp-fact">
-                  Swaths {"\u2264"} <span class="mono">{radiusKm} km</span>:{" "}
+                  Radar-estimated hail size {"\u2264"} <span class="mono">{radiusKm} km</span>:{" "}
                   <span class="mono">
                     {summary.stormsWithSwathWithinRadius}/{summary.totalStorms}
                   </span>
@@ -436,7 +436,9 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                   <thead>
                     <tr>
                       <th scope="col">Storm date</th>
-                      <th scope="col">Swath at pin / within {radiusKm} km</th>
+                      <th scope="col">
+                        Radar-estimated hail size (at pin / {"\u2264"} {radiusKm} km)
+                      </th>
                       <th scope="col">SPC reports {"\u2264"} {radiusKm} km</th>
                       <th scope="col">NWS warnings at pin</th>
                       <th scope="col">County power peak</th>
@@ -530,6 +532,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
           type="button"
           class="button"
           disabled={geoStatus === "locating"}
+          aria-busy={geoStatus === "locating"}
           onClick={() => void locateUser()}
         >
           {geoStatus === "locating" ? "Locating\u2026" : "Pin my location"}

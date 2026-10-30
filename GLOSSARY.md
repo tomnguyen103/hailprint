@@ -92,3 +92,8 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Cloud task | One of the Trigger.dev tasks in `trigger/`: `nightly` (`30 13 * * *` UTC), `odin` (`0 * * * *` UTC), `backfill` (on demand), and `hello` (environment check). |
 | Tile error | A MapLibre `error` event that carries a `tile` field: one map tile failed to load. It leaves a gap, logs one console warning, and never fails the map load. An error without `tile`, or no `load` within `LOAD_TIMEOUT_MS` (15 000 ms), fails the load and releases the map. The timeout runs only while the tab is visible, and each return to visible restarts it. |
 | Area boundary | `AreaBoundary` in `site/src/shell/area-boundary.tsx`. It wraps the page body inside the layout. A render throw shows the error state with Retry under the top bar, not a blank page. A new route path renders the page again. |
+| Pinned location | The active `[lon, lat]` coordinate inside the 8-county Houston Metro in `site/src/state/pin.ts`. It stays in memory only and never writes to storage or URLs. |
+| Proximity radius | The radius in whole kilometres (`1` to `20`, default `5`) around the pinned location for `Point check` swath, report, and warning queries. |
+| Outage peak | The largest `shareOut` value and customer count for one Metro county across the 192 steps of `power.json`, with its UTC step time. |
+| Reachability trough | The lowest `ping-slash24` ratio and largest drop below baseline for one Metro county across the 192 steps of `internet.json`, with its UTC step time. |
+| Live status check | The on-demand query in `site/src/live/live-check.ts` that reads active NWS alerts, ORNL ODIN utility outages, and recent Georgia Tech IODA county signal counts. |

@@ -255,6 +255,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
                 type="button"
                 class="button button-small"
                 disabled={geoStatus === "locating"}
+                aria-busy={geoStatus === "locating"}
                 onClick={onPinMyLocation}
               >
                 {geoStatus === "locating" ? "Locating\u2026" : "Pin my location"}
