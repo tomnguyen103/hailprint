@@ -40,7 +40,10 @@ export async function fetchJson<T>(path: string, guard: (value: unknown) => T, b
     if (!response.ok) throw new DataError(file, `HTTP ${response.status}`);
     try {
       body = await response.json();
-    } catch {
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new DataError(file, `network error, ${String(error)}`);
+      }
       throw new DataError(file, "body is not JSON");
     }
   } finally {

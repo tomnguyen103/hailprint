@@ -182,7 +182,8 @@ def test_ensure_pmtiles_binary_rejects_archive_exceeding_max_bytes(
 
 def test_basemap_sh_delegates_to_basemap_py_and_glossary_matches_odin_schedule():
     sh_text = (ROOT / "site" / "scripts" / "basemap.sh").read_text(encoding="utf-8")
-    assert 'exec uv run python "$(dirname "$0")/basemap.py" "$@"' in sh_text
+    expected = 'exec uv run --no-project --python 3.12 python "$(dirname "$0")/basemap.py" "$@"'
+    assert expected in sh_text
 
     glossary = (ROOT / "GLOSSARY.md").read_text(encoding="utf-8")
     assert "trigger/odin.ts" in glossary

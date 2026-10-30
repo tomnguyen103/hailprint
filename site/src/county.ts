@@ -25,10 +25,16 @@ export function contains(bbox: Bbox, [lon, lat]: [number, number]): boolean {
 
 let counties: Promise<FeatureCollection<MultiPolygon>> | null = null;
 
+function guardCounties(value: unknown): FeatureCollection<MultiPolygon> {
+  const outlines = guardOutline(value);
+  harrisFeature(outlines);
+  return outlines;
+}
+
 /** The 8 metro outlines, copied verbatim from the Python package data. One request per page load. */
 export function fetchCounties(): Promise<FeatureCollection<MultiPolygon>> {
   if (counties) return counties;
-  const request = fetchJson(COUNTIES_FILE, guardOutline, "");
+  const request = fetchJson(COUNTIES_FILE, guardCounties, "");
   counties = request;
   // A failed request leaves the cache only while it still holds this promise; the caller still sees the error.
   request.catch(() => {

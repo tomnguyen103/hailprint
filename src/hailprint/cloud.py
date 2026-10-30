@@ -244,10 +244,12 @@ def sync_up(
     uploaded: list[str] = []
 
     for key in local_keys:
+        if (local_base / key).stat().st_size > MAX_BYTES:
+            raise RuntimeError(f"local file {key} exceeds {MAX_BYTES} bytes")
+
+    for key in local_keys:
         path = local_base / key
         body = path.read_bytes()
-        if len(body) > MAX_BYTES:
-            raise RuntimeError(f"local file {key} exceeds {MAX_BYTES} bytes")
         digest = hashlib.sha256(body).hexdigest()
         if state.digests.get((bucket, key)) == digest:
             continue

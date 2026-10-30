@@ -89,3 +89,26 @@ it("aborts a hung request after FETCH_TIMEOUT_MS and throws DataError", async ()
   }
 });
 
+it("reports a body-read abort from FETCH_TIMEOUT_MS as a network error instead of invalid JSON", async () => {
+  vi.useFakeTimers();
+  try {
+    setFetch(async (_input, init) => ({
+      ok: true,
+      status: 200,
+      json: () =>
+        new Promise<unknown>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        }),
+    } as Response));
+    const pending = fetchJson("storms.json", (v) => v);
+    const assertion = expect(pending).rejects.toThrow(/storms\.json: network error/);
+    await vi.advanceTimersByTimeAsync(FETCH_TIMEOUT_MS);
+    await assertion;
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+

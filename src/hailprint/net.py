@@ -11,7 +11,7 @@ TRIES = 3
 BACKOFF_S = (0.5, 1.0)
 CHUNK_BYTES = 1 << 20  # read-ahead buffer of a stream
 MAX_BYTES = 64 * 1024 * 1024  # 64 MB cap on whole-body responses
-MAX_STREAM_BYTES = 512 * 1024 * 1024  # 512 MB cap on chunked stream responses
+MAX_STREAM_BYTES = 2 * 1024 * 1024 * 1024  # 2 GiB cap on chunked stream responses
 
 
 def _retry[T](attempt_once: Callable[[], T]) -> T:

@@ -181,12 +181,20 @@ describe("fetchCounties and fetchCounty", () => {
     expect(metroRetries).toBe(2);
   });
 
-  it("harrisFeature extracts the Harris County feature synchronously and throws DataError when absent", () => {
+  it("harrisFeature extracts the Harris County feature synchronously and throws DataError when absent", async () => {
     const extracted = harrisFeature(counties);
     expect(extracted.features).toHaveLength(1);
     expect(extracted.features[0]?.properties?.["fips"]).toBe("48201");
 
     expect(() => harrisFeature({ type: "FeatureCollection", features: [] })).toThrow(DataError);
+
+    resetCounties();
+    const withoutHarris = {
+      ...counties,
+      features: counties.features.filter((f) => f.properties?.["fips"] !== "48201"),
+    };
+    setFetch(async () => new Response(JSON.stringify(withoutHarris), { status: 200 }));
+    await expect(fetchCounties()).rejects.toThrow("counties.geojson: missing 48201");
   });
 });
 

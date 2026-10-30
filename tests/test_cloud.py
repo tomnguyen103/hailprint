@@ -638,10 +638,12 @@ def test_sync_up_enforces_max_bytes_boundary(tmp_path: Path, monkeypatch):
     uploaded = cloud.sync_up(s3, "hailprint-state", ("raw/spc/",), data_dir, state)
     assert uploaded == ["raw/spc/exact.bin"]
 
+    (raw_dir / "a_small.bin").write_bytes(b"ok")
     (raw_dir / "big.bin").write_bytes(b"0123456789X")
     with pytest.raises(RuntimeError, match="local file raw/spc/big.bin exceeds 10 bytes"):
         cloud.sync_up(s3, "hailprint-state", ("raw/spc/",), data_dir, state)
     assert ("hailprint-state", "raw/spc/big.bin") not in s3.objects
+    assert ("hailprint-state", "raw/spc/a_small.bin") not in s3.objects
 
 
 def test_operations_doc_describes_user_token_fallback():
