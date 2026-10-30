@@ -173,9 +173,19 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   }, [ready, swathData, pin?.lngLat[0], pin?.lngLat[1], pickCoordinate]);
 
   useEffect(() => {
-    if (!ready || !swathData || pin === null) return;
-    pickCoordinate(pin.lngLat);
-  }, [ready, swathData, reportsData, outlines, pin?.lngLat[0], pin?.lngLat[1], pickCoordinate]);
+    setPick((prev) => {
+      if (prev === null || prev.date !== storm.storm_date) return prev;
+      const resolvedCounty = outlines !== null ? countyAt(prev.lngLat, outlines) : prev.countyFips;
+      if (prev.countyFips === undefined && resolvedCounty !== undefined && resolvedCounty !== null) {
+        onCountyRef.current(resolvedCounty);
+      }
+      return {
+        ...prev,
+        nearest: nearestReport(prev.lngLat, reportsData?.features ?? []),
+        countyFips: resolvedCounty,
+      };
+    });
+  }, [reportsData, outlines, storm.storm_date]);
 
   const displayPoint = activePick?.lngLat ?? pin?.lngLat ?? null;
   useEffect(() => {
