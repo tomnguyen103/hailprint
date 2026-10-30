@@ -3,7 +3,7 @@ import type { FeatureCollection, MultiPolygon } from "geojson";
 import { HARRIS_FIPS } from "./data/constants";
 import { fetchJson } from "./data/fetch";
 import { guardOutline } from "./data/guard";
-import type { DataError } from "./data/types";
+import { DataError } from "./data/types";
 import type { Load } from "./state/load";
 
 export type Bbox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
@@ -58,8 +58,18 @@ export function combineCountyFailure(
   };
 }
 
+/** Extract the Harris County feature from the 8 metro outlines. */
+export function harrisFeature(all: FeatureCollection<MultiPolygon>): FeatureCollection<MultiPolygon> {
+  const features = all.features.filter(
+    (f) => f.properties?.["fips"] === HARRIS_FIPS || f.properties?.["GEOID"] === HARRIS_FIPS,
+  );
+  if (features.length === 0) {
+    throw new DataError("counties.geojson", `missing ${HARRIS_FIPS}`);
+  }
+  return { ...all, features };
+}
+
 /** The Harris feature alone, so the single-outline map views stay unchanged. */
 export async function fetchCounty(): Promise<FeatureCollection<MultiPolygon>> {
-  const all = await fetchCounties();
-  return { ...all, features: all.features.filter((f) => f.properties?.["fips"] === HARRIS_FIPS) };
+  return harrisFeature(await fetchCounties());
 }

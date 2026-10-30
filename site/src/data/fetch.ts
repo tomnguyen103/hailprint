@@ -2,7 +2,9 @@
 // and a failed guard each become a DataError that names the file.
 import { DataError } from "./types";
 
-export type Fetch = typeof fetch;
+export const FETCH_TIMEOUT_MS = 15_000;
+
+export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 let impl: Fetch | null = null;
 
@@ -25,11 +27,15 @@ export const DATA_BASE = resolveDataBase(import.meta.env.VITE_DATA_BASE);
 export async function fetchJson<T>(path: string, guard: (value: unknown) => T, base = DATA_BASE): Promise<T> {
   const file = path.slice(path.lastIndexOf("/") + 1);
   const run = impl ?? fetch;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let response: Response;
   try {
-    response = await run(base + path);
+    response = await run(base + path, { signal: controller.signal });
   } catch (error) {
     throw new DataError(file, `network error, ${String(error)}`);
+  } finally {
+    clearTimeout(timer);
   }
   if (!response.ok) throw new DataError(file, `HTTP ${response.status}`);
   let body: unknown;

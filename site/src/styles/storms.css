@@ -232,6 +232,12 @@
   margin-top: 6px;
 }
 
+.file-list a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+}
+
 .code-block {
   margin: 0;
   padding: 12px 16px;

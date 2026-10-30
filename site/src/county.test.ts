@@ -4,7 +4,7 @@ import type { FeatureCollection, MultiPolygon } from "geojson";
 import { afterEach, describe, expect, it } from "vitest";
 import { setFetch, type Fetch } from "./data/fetch";
 import { DataError } from "./data/types";
-import { HARRIS_BBOX, METRO_BBOX, PAD_DEG, combineCountyFailure, contains, fetchCounties, fetchCounty, resetCounties } from "./county";
+import { HARRIS_BBOX, METRO_BBOX, PAD_DEG, combineCountyFailure, contains, fetchCounties, fetchCounty, harrisFeature, resetCounties } from "./county";
 
 const FILE = fileURLToPath(new URL("../public/counties.geojson", import.meta.url));
 const text = readFileSync(FILE, "utf8");
@@ -180,4 +180,13 @@ describe("fetchCounties and fetchCounty", () => {
     expect(countyRetries).toBe(2);
     expect(metroRetries).toBe(2);
   });
+
+  it("harrisFeature extracts the Harris County feature synchronously and throws DataError when absent", () => {
+    const extracted = harrisFeature(counties);
+    expect(extracted.features).toHaveLength(1);
+    expect(extracted.features[0]?.properties?.["fips"]).toBe("48201");
+
+    expect(() => harrisFeature({ type: "FeatureCollection", features: [] })).toThrow(DataError);
+  });
 });
+

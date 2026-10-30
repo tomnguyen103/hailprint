@@ -1,6 +1,6 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { useEffect, useId, useRef, useState } from "preact/hooks";
-import { combineCountyFailure, fetchCounties, fetchCounty } from "../county";
+import { useEffect, useId, useMemo, useRef, useState } from "preact/hooks";
+import { fetchCounties, harrisFeature } from "../county";
 import { guardSwath } from "../data/guard";
 import { DataError, type StormsIndex, type SwathFile } from "../data/types";
 import { ErrorState, LoadingState } from "../shell/states";
@@ -60,14 +60,13 @@ function useSide(
   index: StormsIndex,
   date: string,
   theme: Theme,
-  county: Load<FeatureCollection<MultiPolygon>> & { retry: () => void },
   metro: Load<FeatureCollection<MultiPolygon>> & { retry: () => void },
 ) {
   const storm = index.storms.find((s) => s.storm_date === date);
   const load = useAllFiles<SwathFile>(storm ? [storm.files.swath] : [], guardSwath, index.run_time);
   const swath = load.status === "ready" ? (load.data[0] ?? null) : null;
-  const countyData = county.status === "ready" ? county.data : null;
   const outlines = metro.status === "ready" ? metro.data : null;
+  const countyData = useMemo(() => (outlines !== null ? harrisFeature(outlines) : null), [outlines]);
   const map = useMap(theme);
   useEffect(() => {
     if (map.ready) map.handle.current?.setData(swath, null, countyData);
@@ -75,7 +74,7 @@ function useSide(
   useEffect(() => {
     if (map.ready) map.handle.current?.setCounties(outlines);
   }, [map.ready, outlines]);
-  const failed = load.status === "error" ? load : combineCountyFailure(county, metro);
+  const failed = load.status === "error" ? load : metro.status === "error" ? metro : null;
   const error = map.error ?? failed?.error ?? null;
   const retry = map.error ? map.retry : failed ? failed.retry : load.retry;
   return { ...map, error, retry, loading: load.status !== "ready" && load.status !== "error" && load.showLoading };
@@ -87,10 +86,9 @@ export function Compare({ index }: { index: StormsIndex }) {
   const [dateB, setDateB] = useState(dates[1] ?? dates[0] ?? "");
   const [split, setSplit] = useState(50);
   const { resolved: theme } = useTheme();
-  const county = useLoad("county", fetchCounty);
   const metro = useLoad("counties", fetchCounties);
-  const a = useSide(index, dateA, theme, county, metro);
-  const b = useSide(index, dateB, theme, county, metro);
+  const a = useSide(index, dateA, theme, metro);
+  const b = useSide(index, dateB, theme, metro);
   const swipeId = useId();
 
   // Each pan on one map moves the other once; the flag stops the echo from the second map's own move event.

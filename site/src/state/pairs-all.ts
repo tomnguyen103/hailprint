@@ -7,21 +7,19 @@ import { useLoad } from "./load";
 // so Retry refetches the failed files only.
 // shortcut: a file that passes guardPairs but fails rescore stays cached, so Retry re-reads it; evict the path on a rescore error when a published file first fails rescore
 const cache = new Map<string, Promise<unknown>>();
-let cachedRunTime = "";
+let cachedRunTime: string | null = null;
 
 /** Clear all cached file promises (used when index.run_time changes or in tests). */
 export function clearFileCache(): void {
   cache.clear();
-  cachedRunTime = "";
+  cachedRunTime = null;
 }
 
 function cached<T>(runTime: string, path: string, guard: (value: unknown) => T): Promise<T> {
-  if (runTime !== "" && cachedRunTime !== "" && cachedRunTime !== runTime) {
+  if (cachedRunTime !== null && cachedRunTime !== runTime) {
     cache.clear();
   }
-  if (runTime !== "") {
-    cachedRunTime = runTime;
-  }
+  cachedRunTime = runTime;
   const key = `${runTime}:${path}`;
   let promise = cache.get(key) as Promise<T> | undefined;
   if (promise === undefined) {

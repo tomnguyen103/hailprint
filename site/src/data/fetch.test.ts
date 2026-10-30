@@ -1,5 +1,5 @@
-import { afterEach, expect, it } from "vitest";
-import { DATA_BASE, STALE, fetchJson, latest, normalizeBase, resolveDataBase, setFetch } from "./fetch";
+import { afterEach, expect, it, vi } from "vitest";
+import { DATA_BASE, FETCH_TIMEOUT_MS, STALE, fetchJson, latest, normalizeBase, resolveDataBase, setFetch } from "./fetch";
 import { DataError } from "./types";
 
 afterEach(() => setFetch(null));
@@ -67,3 +67,25 @@ it("drops the error of a stale request", async () => {
   expect(await a).toBe(STALE);
   expect(await b).toBe("new");
 });
+
+it("aborts a hung request after FETCH_TIMEOUT_MS and throws DataError", async () => {
+  vi.useFakeTimers();
+  try {
+    expect(FETCH_TIMEOUT_MS).toBe(15_000);
+    setFetch(
+      (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        }),
+    );
+    const pending = fetchJson("storms.json", (v) => v);
+    const assertion = expect(pending).rejects.toThrow(/storms\.json: network error/);
+    await vi.advanceTimersByTimeAsync(FETCH_TIMEOUT_MS);
+    await assertion;
+  } finally {
+    vi.useRealTimers();
+  }
+});
+

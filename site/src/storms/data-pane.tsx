@@ -54,11 +54,11 @@ export function DataPane({ storm, power, internet, fips }: Props) {
   const internetData = internet.status === "ready" ? internet.data : null;
   const files: [string, string | null, Receipt | null][] = [
     ["swath.geojson", storm.files.swath, null],
-    ["reports.geojson", storm.files.reports, null],
+    ["reports.geojson", storm.files.reports, reports.status === "ready" ? reports.data.receipt : null],
     ["warnings.geojson", warningsFile, warningsReceipt],
     ["power.json", storm.files.power, powerData?.receipt ?? null],
     ["internet.json", storm.files.internet, internetData?.receipt ?? null],
-    ["pairs.json", storm.files.pairs, null],
+    ["pairs.json", storm.files.pairs, pairs.status === "ready" ? pairs.data.receipt : null],
     ["zip-counts.json", storm.files.zip_counts, null],
   ];
   return (

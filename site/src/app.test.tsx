@@ -272,4 +272,132 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(items.find((t: { id: string; href: string }) => t.id === "map")?.href).toBe("/storms/2024-05-28/map/64");
     expect(items.find((t: { id: string; href: string }) => t.id === "parcels")?.href).toBe("/storms/2024-05-28/parcels");
   });
+
+  it("invalidates pairs-all cache when runTime transitions from empty string and wires DataPane receipts", async () => {
+    const { setFetch } = await import("./data/fetch");
+    const { clearFileCache, useAllFiles } = await import("./state/pairs-all");
+    const { DataPane, FileItem } = await import("./storms/data-pane");
+    clearFileCache();
+
+    let fetches = 0;
+    const sampleReceipt = {
+      storm_date: "2024-05-28",
+      sources: [{ source: "spc", product: "daily", file: "240528.csv" }],
+      confidence: "radar-estimated hail size; literature skill HSS about 0.38 at 30 mm against dense ground truth (Ortega 2018)",
+      run_time: "2024-06-01T12:00:30Z",
+      package_version: "0.1.0",
+    };
+
+    setFetch(async (url) => {
+      fetches += 1;
+      if (String(url).endsWith("reports.geojson")) {
+        return new Response(
+          JSON.stringify({ type: "FeatureCollection", receipt: sampleReceipt, features: [] }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      if (String(url).endsWith("pairs.json")) {
+        return new Response(
+          JSON.stringify({
+            receipt: sampleReceipt,
+            storm_date: "2024-05-28",
+            radius_km_default: 5,
+            radius_km_max: 20,
+            edge_margin_m: 1110,
+            classes: [],
+            reports: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(JSON.stringify({ ok: fetches }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    vi.stubGlobal("document", {});
+    vi.stubGlobal("window", { setTimeout, clearTimeout });
+    const host = { firstChild: null, childNodes: [], namespaceURI: "http://www.w3.org/1999/xhtml" } as unknown as HTMLElement;
+
+    let currentRunTime = "";
+    function CacheProbe() {
+      useAllFiles(["storms/2024-05-28/swath.geojson"], (v) => v, currentRunTime);
+      return null;
+    }
+
+    await act(() => render(h(CacheProbe, null), host));
+    await act(async () => {});
+    expect(fetches).toBe(1);
+
+    // Transition from "" to a non-empty runTime must clear cache and refetch even for same path if re-requested,
+    // and transitioning back from non-empty to "" must also clear cache.
+    currentRunTime = "2024-06-01T12:00:30Z";
+    await act(() => render(h(CacheProbe, null), host));
+    await act(async () => {});
+    expect(fetches).toBe(2);
+
+    currentRunTime = "";
+    await act(() => render(h(CacheProbe, null), host));
+    await act(async () => {});
+    expect(fetches).toBe(3);
+
+    // Render DataPane and verify reports.geojson and pairs.json receive receipt chips once ready
+    const storm = {
+      storm_date: "2024-05-28",
+      report_count: 1,
+      max_size_in: 1.0,
+      report_source: "wcm" as const,
+      max_mesh_mm: 30,
+      scored_reports: 1,
+      excluded_reports: 0,
+      table: [],
+      parcel_total: null,
+      files: {
+        swath: "storms/2024-05-28/swath.geojson",
+        reports: "storms/2024-05-28/reports.geojson",
+        pairs: "storms/2024-05-28/pairs.json",
+        zip_counts: null,
+        warnings: null,
+        power: null,
+        internet: null,
+      },
+    };
+    const fileItems: { name: string; receipt: unknown }[] = [];
+    function DataProbe() {
+      const vnode = DataPane({
+        storm,
+        power: { status: "ready", data: null, retry: () => {} },
+        internet: { status: "ready", data: null, retry: () => {} },
+        fips: "48201",
+      }) as VNode;
+      const walk = (node: unknown) => {
+        if (!node || typeof node !== "object") return;
+        if (Array.isArray(node)) {
+          node.forEach(walk);
+          return;
+        }
+        const v = node as VNode<{ name?: string; receipt?: unknown; children?: unknown }>;
+        if (v.type === FileItem && v.props.name) {
+          fileItems.push({ name: v.props.name, receipt: v.props.receipt });
+        }
+        if (v.props?.children) walk(v.props.children);
+      };
+      walk(vnode);
+      return null;
+    }
+
+    await act(() => render(h(DataProbe, null), host));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    await act(() => render(h(DataProbe, null), host));
+
+    const reportsItem = fileItems.filter((item) => item.name === "reports.geojson").at(-1);
+    const pairsItem = fileItems.filter((item) => item.name === "pairs.json").at(-1);
+    expect(reportsItem?.receipt).toEqual(sampleReceipt);
+    expect(pairsItem?.receipt).toEqual(sampleReceipt);
+    setFetch(null);
+  });
 });
+
