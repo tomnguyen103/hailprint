@@ -134,7 +134,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
           <section class="sensitivity-section" aria-label="Radius by threshold HSS sensitivity matrix">
             <h2>Radius × threshold HSS sensitivity matrix</h2>
             <p class="pane-note">
-              Click any cell to set the neighbourhood radius and size threshold. Active cell:{" "}
+              Click any cell to set the scoring radius and size threshold. Active cell:{" "}
               <span class="mono">R = {radius} km</span>, <span class="mono">&ge; {classMm} mm</span>.
             </p>
             <div class="table-scroll">
