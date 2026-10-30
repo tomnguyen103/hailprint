@@ -71,7 +71,7 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Time slider | The native range under the map over the 192 steps of the impact window. The step in the path `/storms/<date>/map/<step>` is its value. |
 | Storm timeline | The chart under the time slider with strips on the 48-hour axis: power, the share out of the picked county; internet, the drop of the picked county; warnings, one bar per warning polygon; and report times, one tick per SPC report. A cursor marks the slider step, and a click on a strip moves it. |
 | EAGLE-I | The ORNL record of customers out per county, one CSV per year, every 15 minutes, in UTC. `hailprint eaglei <year>` stores the metro rows. |
-| ODIN | The ORNL open outage feed. It gives open incidents now and holds no history. `hailprint odin` stores one snapshot every 15 minutes. In the metro it holds CenterPoint customers only. |
+| ODIN | The ORNL open outage feed. It gives open incidents now and holds no history. `hailprint odin` stores one snapshot on each run (`trigger/odin.ts` runs hourly; `odin.slot_of` buckets to the 15-minute slot). In the metro it holds CenterPoint customers only. |
 | MCC | The EAGLE-I file `MCC.csv`: customers per county as of 2022. Its value is the denominator of the share out for every year. |
 | Customers out | The count of customers without power in one county at one step, from EAGLE-I or ODIN. A count, never a cause. |
 | Share out | Customers out divided by the MCC value of the county, at one step. A null step has no share. The share stops at 1, because the MCC is a modelled count that a utility count can pass. |
