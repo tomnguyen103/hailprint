@@ -122,7 +122,7 @@ export function setPin(
 export function clearPin(): void {
   locateEpoch += 1;
   activeLocatePromise = null;
-  state = INITIAL_STATE;
+  state = { ...INITIAL_STATE, radiusKm: state.radiusKm };
   notify();
 }
 

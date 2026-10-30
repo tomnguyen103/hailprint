@@ -32,6 +32,7 @@ describe("pin store presets and manual coordinates (US-01.4)", () => {
 
     clearPin();
     expect(getPinState().pin).toBeNull();
+    expect(getPinState().radiusKm).toBe(12);
   });
 });
 
