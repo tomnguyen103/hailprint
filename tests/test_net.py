@@ -200,7 +200,9 @@ def test_open_stream_enforces_max_bytes_boundary(server, sleeps):
 
     with (
         net.open_stream(url, max_bytes=5) as stream,
-        pytest.raises(ValueError, match=r"response from http://127\.0\.0\.1:\d+/ok exceeds 5 bytes"),
+        pytest.raises(
+            ValueError, match=r"response from http://127\.0\.0\.1:\d+/ok exceeds 5 bytes"
+        ),
     ):
         stream.read()
     assert sleeps == []

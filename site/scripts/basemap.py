@@ -37,12 +37,24 @@ PMTILES_ASSETS: dict[tuple[str, str], str] = {
     ("Windows", "x86_64"): f"go-pmtiles_{PMTILES_VERSION}_Windows_x86_64.zip",
 }
 PMTILES_SHA256: dict[str, str] = {
-    "go-pmtiles-1.31.2_Darwin_arm64.zip": "40528f7f616fcbf91207cd48c8fc023d213f6d86c0cbf1f748732803d1880f3d",
-    "go-pmtiles-1.31.2_Darwin_x86_64.zip": "1f0dc02eee6c58312dd6c509faee1b5c32f0596568af1bf51f1b034e7a88a65b",
-    "go-pmtiles_1.31.2_Linux_arm64.tar.gz": "f8bd47e7ea866863489cad588fbaf2f31f42e5821f7a03f009b3769f05801cb1",
-    "go-pmtiles_1.31.2_Linux_x86_64.tar.gz": "3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f",
-    "go-pmtiles_1.31.2_Windows_arm64.zip": "8780a17453c63af757917a694cbbb50b943db89cc3f1b07e6fd62c1ff8e6963b",
-    "go-pmtiles_1.31.2_Windows_x86_64.zip": "a658baa4d7e55020aef6ca17bd9ff9faa1582671266b36f58c52db0ac8e785a1",
+    "go-pmtiles-1.31.2_Darwin_arm64.zip": (
+        "40528f7f616fcbf91207cd48c8fc023d213f6d86c0cbf1f748732803d1880f3d"
+    ),
+    "go-pmtiles-1.31.2_Darwin_x86_64.zip": (
+        "1f0dc02eee6c58312dd6c509faee1b5c32f0596568af1bf51f1b034e7a88a65b"
+    ),
+    "go-pmtiles_1.31.2_Linux_arm64.tar.gz": (
+        "f8bd47e7ea866863489cad588fbaf2f31f42e5821f7a03f009b3769f05801cb1"
+    ),
+    "go-pmtiles_1.31.2_Linux_x86_64.tar.gz": (
+        "3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f"
+    ),
+    "go-pmtiles_1.31.2_Windows_arm64.zip": (
+        "8780a17453c63af757917a694cbbb50b943db89cc3f1b07e6fd62c1ff8e6963b"
+    ),
+    "go-pmtiles_1.31.2_Windows_x86_64.zip": (
+        "a658baa4d7e55020aef6ca17bd9ff9faa1582671266b36f58c52db0ac8e785a1"
+    ),
 }
 PMTILES_MAGIC = b"PMTiles"
 
