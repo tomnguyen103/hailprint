@@ -143,7 +143,7 @@ export function reportsWithinRadius(
   reports: ReportsFile | readonly Feature<Point, ReportProps>[] | null,
   radiusKm: number,
 ): ReportsProximity {
-  const features = reports === null ? [] : Array.isArray(reports) ? reports : reports.features;
+  const features = reports === null ? [] : "features" in reports ? reports.features : reports;
   const radiusM = radiusKm * 1000;
   const within: ReportHit[] = [];
   let nearest: ReportHit | null = null;

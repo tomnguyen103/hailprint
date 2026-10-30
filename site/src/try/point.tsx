@@ -1,33 +1,121 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useEffect, useId, useMemo, useRef, useState } from "preact/hooks";
-import { HARRIS_BBOX, contains, fetchCounties, harrisFeature } from "../county";
-import { DataError, type StormsIndex } from "../data/types";
-import { BELOW_FIRST_CLASS, formatInches } from "../format";
+import { METRO_BBOX, contains, fetchCounties, harrisFeature } from "../county";
+import { DataError, PHENOMENA, type StormsIndex } from "../data/types";
+import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../format";
+import { ODIN_LABEL, percentText } from "../impact/power";
+import { type LiveStatusResult, fetchLiveStatus } from "../live/live-check";
 import { href } from "../router";
 import { objectName } from "../ruler";
 import { Link } from "../shell/link";
+import { RADIUS_MAX_FALLBACK, RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
+import { countyAt } from "../state/county";
+import { useInternetAll, usePowerAll, useReportsAll, useWarningsAll } from "../state/impact-all";
 import { useLoad } from "../state/load";
+import { METRO_PRESETS, usePin } from "../state/pin";
 import { useSwathsAll } from "../state/swaths-all";
 import { useTheme } from "../state/theme";
 import type { MapHandle } from "../storms/map/create-map";
-import { coveringAt } from "../storms/map/geo";
 import "../styles/map.css";
+import { type StormPinRow, analyzeStormAtPin, summarizeArchiveAtPin } from "./point-analysis";
 import { POINT_HINT, parsePoint } from "./point-form";
 
 const SWATH_FILE = "swath.geojson";
 const POINT_ZOOM = 11;
 
-// shortcut: the point check takes lat and lon only, upgrade to ZIP when a ZIP geometry file is published
+type LiveCheckState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; data: LiveStatusResult };
+
+function cropBadgeText(cropStatus: StormPinRow["cropStatus"], radiusKm: number): string {
+  if (cropStatus === "outside-crop") {
+    return "Outside Harris MESH crop (county outage & warning feeds active)";
+  }
+  if (cropStatus === "near-edge") {
+    return `Near Harris MESH crop edge (\u2264 ${radiusKm + 1} km)`;
+  }
+  return "Inside Harris MESH crop";
+}
+
+function renderSwathCell(row: StormPinRow): string {
+  if (row.cropStatus === "outside-crop") {
+    return "outside Harris MESH crop";
+  }
+  if (row.covering !== null) {
+    return `${objectName(row.covering.threshold_mm)}, \u2265 ${formatInches(row.covering.threshold_in)} (at pin)`;
+  }
+  if (row.withinRadius !== null) {
+    return `${objectName(row.withinRadius.threshold_mm)}, \u2265 ${formatInches(row.withinRadius.threshold_in)} (${row.withinRadius.distanceKm.toFixed(1)} km)`;
+  }
+  if (row.nearest !== null) {
+    return `${BELOW_FIRST_CLASS} (nearest ${row.nearest.distanceKm.toFixed(1)} km)`;
+  }
+  return BELOW_FIRST_CLASS;
+}
+
+function renderReportsCell(row: StormPinRow): string {
+  const { count, maxSizeIn, nearest } = row.reportsWithinRadius;
+  if (count === 0) {
+    return nearest === null ? "0" : `0 (nearest ${nearest.km.toFixed(1)} km)`;
+  }
+  return `${count} (max ${formatInches(maxSizeIn!)}, ${nearest!.km.toFixed(1)} km)`;
+}
+
+function renderWarningsCell(row: StormPinRow): string {
+  if (row.directWarnings.length === 0) return "none";
+  return PHENOMENA.filter((p) => row.warningCounts[p] > 0)
+    .map((p) => `${p} \u00d7${row.warningCounts[p]}`)
+    .join(" \u00b7 ");
+}
+
+function renderPowerCell(row: StormPinRow): string {
+  const peak = row.powerPeak;
+  if (peak === null || peak.peakOut === null) return "no data";
+  if (peak.peakOut === 0) return "0%";
+  const sourceNote = peak.source === "odin" ? ` \u00b7 ${ODIN_LABEL}` : "";
+  return `${percentText(peak.peakShare)} (${formatCount(peak.peakOut)})${sourceNote}`;
+}
+
+function renderInternetCell(row: StormPinRow): string {
+  const trough = row.internetTrough;
+  if (trough === null || trough.maxDrop === null || trough.minRatio === null) return "no data";
+  if (trough.maxDrop === 0) return `0% below baseline (${trough.minRatio.toFixed(3)})`;
+  return `${percentText(trough.maxDrop)} below baseline (${trough.minRatio.toFixed(3)})`;
+}
+
 export function PointCheck({ index }: { index: StormsIndex }) {
+  const {
+    pin,
+    radiusKm,
+    geoStatus,
+    message: geoMessage,
+    setPin,
+    clearPin,
+    setPinRadiusKm,
+    setPresetPin,
+    locateUser,
+  } = usePin();
+  const activePoint = pin?.lngLat ?? null;
+  const hasPin = activePoint !== null;
+
   const swaths = useSwathsAll(index);
+  const reportsAll = useReportsAll(index, hasPin);
+  const warningsAll = useWarningsAll(index, hasPin);
+  const powerAll = usePowerAll(index, hasPin);
+  const internetAll = useInternetAll(index, hasPin);
   const metro = useLoad("counties", fetchCounties);
   const { resolved: theme } = useTheme();
-  const [latText, setLatText] = useState("");
-  const [lonText, setLonText] = useState("");
+
+  const [latText, setLatText] = useState(() => (pin ? pin.lngLat[1].toFixed(4) : ""));
+  const [lonText, setLonText] = useState(() => (pin ? pin.lngLat[0].toFixed(4) : ""));
   const [invalid, setInvalid] = useState(false);
-  const [point, setPoint] = useState<[number, number] | null>(null);
+  const [previewDate, setPreviewDate] = useState<string>(() => index.storms[0]?.storm_date ?? "");
+  const [filterMode, setFilterMode] = useState<"all" | "active">("all");
+  const [liveState, setLiveState] = useState<LiveCheckState>({ status: "idle" });
+
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
   const [ready, setReady] = useState(false);
@@ -36,6 +124,15 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const hintId = useId();
   const latId = useId();
   const lonId = useId();
+
+  useEffect(() => {
+    if (pin !== null) {
+      setLatText(pin.lngLat[1].toFixed(4));
+      setLonText(pin.lngLat[0].toFixed(4));
+      setInvalid(false);
+    }
+    setLiveState({ status: "idle" });
+  }, [pin?.lngLat[0], pin?.lngLat[1]]);
 
   useEffect(() => {
     const node = container.current;
@@ -54,11 +151,8 @@ export function PointCheck({ index }: { index: StormsIndex }) {
         handle.current = next;
         next.map.on("click", (event) => {
           const { lng, lat } = event.lngLat;
-          if (!contains(HARRIS_BBOX, [lng, lat])) return;
-          setLatText(lat.toFixed(4));
-          setLonText(lng.toFixed(4));
-          setInvalid(false);
-          setPoint([lng, lat]);
+          if (!contains(METRO_BBOX, [lng, lat])) return;
+          setPin([lng, lat], "map");
         });
         setReady(true);
       })
@@ -74,74 +168,287 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   }, [attempt]);
 
   const swathData = swaths.status === "ready" ? swaths.data : null;
-  const newest = swathData?.[0] ?? null;
+  const reportsData = reportsAll.status === "ready" ? reportsAll.data : null;
+  const warningsData = warningsAll.status === "ready" ? warningsAll.data : null;
+  const powerData = powerAll.status === "ready" ? powerAll.data : null;
+  const internetData = internetAll.status === "ready" ? internetAll.data : null;
   const outlines: FeatureCollection<MultiPolygon> | null = metro.status === "ready" ? metro.data : null;
   const countyData = useMemo(() => (outlines !== null ? harrisFeature(outlines) : null), [outlines]);
+
+  const previewIdx = useMemo(() => {
+    const idx = index.storms.findIndex((s) => s.storm_date === previewDate);
+    return idx >= 0 ? idx : 0;
+  }, [index.storms, previewDate]);
+
+  const previewSwath = swathData?.[previewIdx] ?? swathData?.[0] ?? null;
+  const previewReports = reportsData?.[previewIdx] ?? null;
+
   useEffect(() => {
-    if (ready) handle.current?.setData(newest, null, countyData);
-  }, [ready, newest, countyData]);
+    if (ready) handle.current?.setData(previewSwath, previewReports, countyData);
+  }, [ready, previewSwath, previewReports, countyData]);
+
   useEffect(() => {
     if (ready) handle.current?.setCounties(outlines);
   }, [ready, outlines]);
+
   useEffect(() => {
     if (!ready || !handle.current) return;
-    handle.current.setPoint(point);
-    if (point) handle.current.flyTo(point, POINT_ZOOM);
-  }, [ready, point]);
+    handle.current.setPoint(activePoint);
+    if (activePoint) handle.current.flyTo(activePoint, POINT_ZOOM);
+  }, [ready, activePoint]);
+
   useEffect(() => {
     if (ready) handle.current?.setTheme(theme);
   }, [ready, theme]);
+
+  const pinnedFips = useMemo(
+    () => (activePoint !== null ? countyAt(activePoint, outlines) : null),
+    [activePoint, outlines],
+  );
+
+  const pinnedCountyName = useMemo(() => {
+    if (pinnedFips === null || outlines === null) return null;
+    const feat = outlines.features.find(
+      (f) => String(f.properties?.["fips"] ?? f.properties?.["GEOID"]) === pinnedFips,
+    );
+    return feat?.properties?.["name"] ? `${String(feat.properties["name"])} County` : `County ${pinnedFips}`;
+  }, [pinnedFips, outlines]);
 
   const check = (event: Event) => {
     event.preventDefault();
     const next = parsePoint(latText, lonText);
     setInvalid(next === null);
-    if (next !== null) setPoint(next);
+    if (next !== null) setPin(next, "manual");
   };
 
-  let table = null;
-  if (point !== null) {
-    if (swaths.status === "error") table = <ErrorState error={swaths.error} onRetry={swaths.retry} />;
-    else if (swathData === null) table = swaths.showLoading ? <LoadingState file={SWATH_FILE} /> : null;
-    else {
-      table = (
-        <div class="table-scroll">
-          <table class="table">
-            <thead>
-              <tr>
-                <th scope="col">Storm date</th>
-                <th scope="col">Radar-estimated hail size at the point</th>
-                <th scope="col">
-                  <span class="visually-hidden">Receipt</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {index.storms.map((storm, i) => {
-                const swath = swathData[i];
-                if (swath === undefined) return null;
-                const covering = coveringAt(swath, point);
-                return (
-                  <tr key={storm.storm_date}>
-                    <td>
-                      <Link class="mono" href={href({ area: "storms", date: storm.storm_date, tab: "map" })}>
-                        {storm.storm_date}
-                      </Link>
-                    </td>
-                    <td>
-                      {covering === null
-                        ? BELOW_FIRST_CLASS
-                        : `${objectName(covering.threshold_mm)}, \u2265 ${formatInches(covering.threshold_in)}`}
-                    </td>
-                    <td>
-                      <ReceiptChip receipt={swath.receipt} file={SWATH_FILE} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+  const onClearPin = () => {
+    clearPin();
+    setLatText("");
+    setLonText("");
+    setInvalid(false);
+    setLiveState({ status: "idle" });
+  };
+
+  const runLiveCheck = () => {
+    if (activePoint === null) return;
+    setLiveState({ status: "loading" });
+    void fetchLiveStatus(activePoint, pinnedFips).then((data) => {
+      setLiveState({ status: "ready", data });
+    });
+  };
+
+  const rows = useMemo((): StormPinRow[] => {
+    if (activePoint === null || swathData === null) return [];
+    return index.storms.map((storm, i) =>
+      analyzeStormAtPin({
+        storm,
+        point: activePoint,
+        radiusKm,
+        fips: pinnedFips,
+        swath: swathData[i] ?? null,
+        reports: reportsData?.[i] ?? null,
+        warnings: warningsData?.[i] ?? null,
+        power: powerData?.[i] ?? null,
+        internet: internetData?.[i] ?? null,
+      }),
+    );
+  }, [activePoint, swathData, index.storms, radiusKm, pinnedFips, reportsData, warningsData, powerData, internetData]);
+
+  const summary = useMemo(() => summarizeArchiveAtPin(rows), [rows]);
+  const visibleRows = useMemo(
+    () => (filterMode === "active" ? rows.filter((r) => r.hasActivityNearPin) : rows),
+    [rows, filterMode],
+  );
+  const activeCount = useMemo(() => rows.filter((r) => r.hasActivityNearPin).length, [rows]);
+
+  let resultsSection = null;
+  if (activePoint !== null) {
+    if (swaths.status === "error") {
+      resultsSection = <ErrorState error={swaths.error} onRetry={swaths.retry} />;
+    } else if (swathData === null) {
+      resultsSection = swaths.showLoading ? <LoadingState file={SWATH_FILE} /> : null;
+    } else {
+      const firstCropStatus = rows[0]?.cropStatus ?? "inside";
+      resultsSection = (
+        <section class="point-results" aria-label="Pinned location archive analysis">
+          <div class="stamp point-stamp">
+            <span class="stamp-date mono">
+              {activePoint[1].toFixed(4)}, {activePoint[0].toFixed(4)}
+            </span>
+            {pin?.label ? <span class="stamp-fact">{pin.label}</span> : null}
+            <span class="stamp-fact">
+              {pinnedCountyName !== null && pinnedFips !== null
+                ? `${pinnedCountyName} (${pinnedFips})`
+                : "8-county Houston Metro"}
+            </span>
+            <span class="stamp-fact">{cropBadgeText(firstCropStatus, radiusKm)}</span>
+            <span class="stamp-fact">
+              Swaths {"\u2264"} <span class="mono">{radiusKm} km</span>:{" "}
+              <span class="mono">
+                {summary.stormsWithSwathWithinRadius}/{summary.totalStorms}
+              </span>
+              {summary.maxSwathWithinRadius
+                ? ` (max ${objectName(summary.maxSwathWithinRadius.threshold_mm)}, \u2265 ${formatInches(summary.maxSwathWithinRadius.threshold_in)})`
+                : ""}
+            </span>
+            <span class="stamp-fact">
+              SPC reports {"\u2264"} <span class="mono">{radiusKm} km</span>:{" "}
+              <span class="mono">{summary.totalReportsWithinRadius}</span> across{" "}
+              <span class="mono">{summary.stormsWithReportsWithinRadius}</span> storms
+            </span>
+            <span class="stamp-fact">
+              Direct NWS warnings: <span class="mono">{summary.totalDirectWarnings}</span> across{" "}
+              <span class="mono">{summary.stormsWithDirectWarnings}</span> storms
+            </span>
+            <span class="stamp-fact">
+              Worst county peak:{" "}
+              {summary.worstPowerPeak ? (
+                <>
+                  <span class="mono">{percentText(summary.worstPowerPeak.peakShare)}</span> (
+                  <span class="mono">{summary.worstPowerPeak.stormDate}</span>)
+                </>
+              ) : (
+                "none"
+              )}
+              {summary.deepestInternetTrough ? (
+                <>
+                  {" \u00b7 "}trough{" "}
+                  <span class="mono">{percentText(summary.deepestInternetTrough.maxDrop)}</span> below baseline (
+                  <span class="mono">{summary.deepestInternetTrough.stormDate}</span>)
+                </>
+              ) : null}
+            </span>
+          </div>
+
+          <div class="point-live-bar">
+            <div class="point-live-head">
+              <button
+                type="button"
+                class="button button-small"
+                disabled={liveState.status === "loading"}
+                onClick={runLiveCheck}
+              >
+                {liveState.status === "loading" ? "Checking live feeds\u2026" : "Check live NWS & outage feeds"}
+              </button>
+              <span class="point-live-caption">
+                On-demand check of NWS Active Alerts, ORNL ODIN utility outages, and IODA internet reachability.
+              </span>
+            </div>
+            {liveState.status === "ready" ? (
+              <dl class="receipt-list point-live-grid">
+                <dt>NWS active alerts</dt>
+                <dd>
+                  {liveState.data.alerts.status === "error"
+                    ? liveState.data.alerts.message
+                    : liveState.data.alerts.alerts.length === 0
+                      ? "0 active alerts at pinned point"
+                      : liveState.data.alerts.alerts.map((a) => `${a.event} (${a.severity})`).join(" \u00b7 ")}
+                </dd>
+                <dt>ORNL ODIN utility outages</dt>
+                <dd>
+                  {liveState.data.power.status === "error" ? (
+                    liveState.data.power.message
+                  ) : (
+                    <>
+                      <span class="mono">{formatCount(liveState.data.power.customersOut)}</span> customers out (
+                      {liveState.data.power.note})
+                    </>
+                  )}
+                </dd>
+                <dt>IODA internet reachability</dt>
+                <dd>
+                  {liveState.data.internet.status === "error" ? (
+                    liveState.data.internet.message
+                  ) : liveState.data.internet.ratio === null ? (
+                    "no recent county signal points"
+                  ) : (
+                    <>
+                      <span class="mono">{percentText(liveState.data.internet.drop)}</span> below 24h median (ratio{" "}
+                      <span class="mono">{liveState.data.internet.ratio.toFixed(3)}</span>)
+                    </>
+                  )}
+                </dd>
+              </dl>
+            ) : null}
+          </div>
+
+          <div class="point-table-toolbar">
+            <div class="point-filter-group" role="group" aria-label="Filter archive storm dates">
+              <button
+                type="button"
+                class="button button-small"
+                aria-pressed={filterMode === "all"}
+                onClick={() => setFilterMode("all")}
+              >
+                All <span class="mono">{rows.length}</span> storm dates
+              </button>
+              <button
+                type="button"
+                class="button button-small"
+                aria-pressed={filterMode === "active"}
+                onClick={() => setFilterMode("active")}
+              >
+                Activity near pin only (<span class="mono">{activeCount}</span>)
+              </button>
+            </div>
+            <span class="point-preview-note">
+              Map preview: <span class="mono">{previewSwath?.receipt.storm_date ?? previewDate}</span>
+            </span>
+          </div>
+
+          <div class="table-scroll">
+            <table class="table point-table">
+              <thead>
+                <tr>
+                  <th scope="col">Storm date</th>
+                  <th scope="col">Swath at pin / within {radiusKm} km</th>
+                  <th scope="col">SPC reports {"\u2264"} {radiusKm} km</th>
+                  <th scope="col">NWS warnings at pin</th>
+                  <th scope="col">County power peak</th>
+                  <th scope="col">County internet reachability</th>
+                  <th scope="col">
+                    <span class="visually-hidden">Receipt</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleRows.map((row) => {
+                  const jumpStep = row.firstWarningStep ?? row.powerPeak?.peakStep ?? undefined;
+                  return (
+                    <tr key={row.stormDate} data-active={row.hasActivityNearPin}>
+                      <td class="point-date-cell">
+                        <Link
+                          class="mono"
+                          href={href({ area: "storms", date: row.stormDate, tab: "map", step: jumpStep })}
+                        >
+                          {row.stormDate}
+                        </Link>
+                        <button
+                          type="button"
+                          class="button button-small"
+                          aria-pressed={previewDate === row.stormDate}
+                          onClick={() => setPreviewDate(row.stormDate)}
+                        >
+                          Preview
+                        </button>
+                      </td>
+                      <td>{renderSwathCell(row)}</td>
+                      <td class="mono">{renderReportsCell(row)}</td>
+                      <td>{renderWarningsCell(row)}</td>
+                      <td class="mono">{renderPowerCell(row)}</td>
+                      <td class="mono">{renderInternetCell(row)}</td>
+                      <td>
+                        {row.receipts.swath ? (
+                          <ReceiptChip receipt={row.receipts.swath} file={SWATH_FILE} />
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
       );
     }
   }
@@ -155,6 +462,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
           <label for={latId}>Latitude</label>
           <input
             id={latId}
+            name="latitude"
             class="mono"
             inputMode="decimal"
             autoComplete="off"
@@ -168,6 +476,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
           <label for={lonId}>Longitude</label>
           <input
             id={lonId}
+            name="longitude"
             class="mono"
             inputMode="decimal"
             autoComplete="off"
@@ -180,14 +489,58 @@ export function PointCheck({ index }: { index: StormsIndex }) {
         <button type="submit" class="button button-primary">
           Check
         </button>
+        <button
+          type="button"
+          class="button"
+          disabled={geoStatus === "locating"}
+          onClick={() => void locateUser()}
+        >
+          {geoStatus === "locating" ? "Locating\u2026" : "Pin my location"}
+        </button>
+        {hasPin ? (
+          <button type="button" class="button" onClick={onClearPin}>
+            Clear pin
+          </button>
+        ) : null}
+        <RadiusSlider value={radiusKm} max={RADIUS_MAX_FALLBACK} onChange={setPinRadiusKm} />
+        <div class="point-presets" role="group" aria-label="Houston Metro benchmark presets">
+          {METRO_PRESETS.map((preset) => {
+            const isSelected =
+              activePoint !== null &&
+              Math.abs(activePoint[0] - preset.lngLat[0]) < 1e-4 &&
+              Math.abs(activePoint[1] - preset.lngLat[1]) < 1e-4;
+            return (
+              <button
+                key={preset.id}
+                type="button"
+                class="button button-small"
+                aria-pressed={isSelected}
+                onClick={() => setPresetPin(preset.id)}
+              >
+                {preset.label}
+              </button>
+            );
+          })}
+        </div>
         {invalid ? (
           <p id={hintId} class="point-hint" role="alert">
             {POINT_HINT}
           </p>
         ) : null}
+        {geoStatus === "error" && geoMessage !== null ? (
+          <p class="point-hint" role="alert">
+            {geoMessage}
+          </p>
+        ) : null}
       </form>
       <div class="map-stage point-map">
-        <div ref={container} class="map-frame" role="region" aria-label="Map of the newest hail swath, click to check a point" tabIndex={-1} />
+        <div
+          ref={container}
+          class="map-frame"
+          role="region"
+          aria-label="Map of the previewed hail swath, click inside the 8-county Houston Metro to pin a location"
+          tabIndex={-1}
+        />
         {mapError ? (
           <div class="map-overlay">
             <ErrorState error={mapError} onRetry={() => setAttempt((n) => n + 1)} />
@@ -195,7 +548,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
         ) : null}
       </div>
       {countyFailure ? <ErrorState error={countyFailure.error} onRetry={countyFailure.retry} /> : null}
-      {table}
+      {resultsSection}
     </>
   );
 }

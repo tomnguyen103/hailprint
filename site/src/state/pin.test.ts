@@ -54,6 +54,7 @@ describe("locateUser geolocation lifecycle and error handling (US-01.4, US-01.5)
     successCb!({
       coords: { latitude: 29.7604, longitude: -95.3698, accuracy: 18 } as GeolocationCoordinates,
       timestamp: Date.now(),
+      toJSON: () => ({}),
     });
     await Promise.all([p1, p2]);
 
@@ -73,6 +74,7 @@ describe("locateUser geolocation lifecycle and error handling (US-01.4, US-01.5)
       onSuccess({
         coords: { latitude: 32.7767, longitude: -96.797, accuracy: 25 } as GeolocationCoordinates,
         timestamp: Date.now(),
+        toJSON: () => ({}),
       });
     });
     vi.stubGlobal("navigator", { geolocation: { getCurrentPosition } });
