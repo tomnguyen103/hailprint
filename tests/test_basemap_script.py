@@ -35,32 +35,49 @@ def test_validate_pmtiles_header_accepts_valid_magic_and_rejects_corrupt(tmp_pat
 
 
 def test_extract_basemap_writes_atomically_and_cleans_up_tmp_on_failure(tmp_path: Path):
+    """Verify atomic extraction, header and CLI verification, and temp-file cleanup on failure."""
     mod = load_basemap_module()
     out = tmp_path / "basemap.pmtiles"
+    out.write_bytes(b"existing-basemap")
 
-    def bad_runner(cmd: list[str], tmp_file: Path) -> None:
-        tmp_file.write_bytes(b"not-a-pmtiles-file")
+    def bad_header_runner(cmd: list[str], tmp_file: Path) -> None:
+        if "extract" in cmd:
+            tmp_file.write_bytes(b"not-a-pmtiles-file")
 
     with pytest.raises(RuntimeError, match="PMTiles"):
-        mod.extract_basemap(out_path=out, build="20260101.pmtiles", runner=bad_runner)
+        mod.extract_basemap(out_path=out, build="20260101.pmtiles", runner=bad_header_runner)
 
-    assert not out.exists()
+    assert out.read_bytes() == b"existing-basemap"
+    assert list(tmp_path.glob("*.tmp")) == []
+
+    def bad_verify_runner(cmd: list[str], tmp_file: Path) -> None:
+        if "extract" in cmd:
+            tmp_file.write_bytes(b"PMTiles\x03" + b"\x00" * 120)
+        elif "verify" in cmd:
+            raise RuntimeError("pmtiles verify failed: no root directory")
+
+    with pytest.raises(RuntimeError, match="verify failed"):
+        mod.extract_basemap(out_path=out, build="20260101.pmtiles", runner=bad_verify_runner)
+
+    assert out.read_bytes() == b"existing-basemap"
     assert list(tmp_path.glob("*.tmp")) == []
 
     recorded_cmds: list[list[str]] = []
 
     def good_runner(cmd: list[str], tmp_file: Path) -> None:
         recorded_cmds.append(cmd)
-        tmp_file.write_bytes(b"PMTiles\x03" + b"\x00" * 120)
+        if "extract" in cmd:
+            tmp_file.write_bytes(b"PMTiles\x03" + b"\x00" * 120)
 
     written = mod.extract_basemap(out_path=out, build="20260101.pmtiles", runner=good_runner)
     assert written == out
     assert out.exists()
     assert mod.validate_pmtiles_header(out) is True
     assert list(tmp_path.glob("*.tmp")) == []
-    assert len(recorded_cmds) == 1
+    assert len(recorded_cmds) == 2
     assert "--bbox=-96.242208,28.77556588,-94.303383,30.680284" in recorded_cmds[0]
     assert "--maxzoom=12" in recorded_cmds[0]
+    assert recorded_cmds[1][:2] == ["pmtiles", "verify"]
 
 
 def test_latest_build_rejects_invalid_protomaps_build_env(monkeypatch: pytest.MonkeyPatch):

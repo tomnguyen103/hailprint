@@ -18,6 +18,7 @@ const EXCLUDED_LABELS = new Set([
   "places_country",
 ]);
 
+/** Return the Protomaps v4 sprite URL for the active theme. */
 export function spriteUrl(theme: Theme): string {
   return `https://protomaps.github.io/basemaps-assets/sprites/v4/${theme}`;
 }
@@ -40,6 +41,7 @@ export async function probeBasemap(): Promise<boolean> {
   }
 }
 
+/** Build the Protomaps color flavor mapped to the Hailprint theme tokens. */
 function basemapFlavor(theme: Theme): Flavor {
   const paper = token("--paper");
   const muted = token("--sheet-muted");

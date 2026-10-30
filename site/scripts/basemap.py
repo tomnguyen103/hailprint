@@ -117,6 +117,7 @@ def ensure_pmtiles_binary(bin_dir: Path = BIN_DIR) -> str:
 
 
 def _default_runner(cmd: list[str], tmp_file: Path) -> None:
+    """Run a pmtiles CLI command and raise on a non-zero exit code."""
     subprocess.run(cmd, check=True)
 
 
@@ -125,12 +126,13 @@ def extract_basemap(
     build: str | None = None,
     runner: Callable[[list[str], Path], None] | None = None,
 ) -> Path:
-    """Extract the metro bbox PMTiles to a temp file, verify the header, and replace out_path."""
+    """Extract the metro bbox PMTiles to a temp file, verify the archive, and replace out_path."""
     target_build = build or latest_build()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = out_path.with_name(f"{out_path.name}.{os.getpid()}.tmp")
     try:
         binary = "pmtiles" if runner is not None else ensure_pmtiles_binary()
+        run_cmd = runner if runner is not None else _default_runner
         cmd = [
             binary,
             "extract",
@@ -139,12 +141,10 @@ def extract_basemap(
             f"--bbox={BBOX}",
             f"--maxzoom={MAXZOOM}",
         ]
-        if runner is not None:
-            runner(cmd, tmp_path)
-        else:
-            _default_runner(cmd, tmp_path)
+        run_cmd(cmd, tmp_path)
         if not validate_pmtiles_header(tmp_path):
             raise RuntimeError(f"invalid PMTiles magic header in {tmp_path}")
+        run_cmd([binary, "verify", str(tmp_path)], tmp_path)
         os.replace(tmp_path, out_path)
         return out_path
     except Exception:
@@ -153,6 +153,7 @@ def extract_basemap(
 
 
 def main() -> None:
+    """Resolve the newest Protomaps build and write the metro basemap archive."""
     build = latest_build()
     out = extract_basemap(OUT_PATH, build=build)
     print(f"basemap: wrote {out} from {build} ({out.stat().st_size} bytes)")
