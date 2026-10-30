@@ -1,6 +1,6 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
-import { HARRIS_BBOX, contains, fetchCounty } from "../county";
+import { HARRIS_BBOX, contains, fetchCounties, fetchCounty } from "../county";
 import { DataError, type StormsIndex } from "../data/types";
 import { BELOW_FIRST_CLASS, formatInches } from "../format";
 import { href } from "../router";
@@ -23,6 +23,7 @@ const POINT_ZOOM = 11;
 export function PointCheck({ index }: { index: StormsIndex }) {
   const swaths = useSwathsAll(index);
   const county = useLoad("county", fetchCounty);
+  const metro = useLoad("counties", fetchCounties);
   const { resolved: theme } = useTheme();
   const [latText, setLatText] = useState("");
   const [lonText, setLonText] = useState("");
@@ -76,9 +77,13 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const swathData = swaths.status === "ready" ? swaths.data : null;
   const newest = swathData?.[0] ?? null;
   const countyData: FeatureCollection<MultiPolygon> | null = county.status === "ready" ? county.data : null;
+  const outlines: FeatureCollection<MultiPolygon> | null = metro.status === "ready" ? metro.data : null;
   useEffect(() => {
     if (ready) handle.current?.setData(newest, null, countyData);
   }, [ready, newest, countyData]);
+  useEffect(() => {
+    if (ready) handle.current?.setCounties(outlines);
+  }, [ready, outlines]);
   useEffect(() => {
     if (!ready || !handle.current) return;
     handle.current.setPoint(point);

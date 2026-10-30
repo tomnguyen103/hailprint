@@ -24,7 +24,7 @@ export const POWER_OUTLINE = "power-outline";
 /** The id of the 45 degree hatch image that marks a county step with no source row. */
 export const POWER_HATCH = "power-hatch";
 export const POWER_LAYER_IDS = [POWER_FILL, POWER_GAP, POWER_OUTLINE] as const;
-export const FILL_OPACITY = 0.85;
+export const FILL_OPACITY = 0.78;
 /** The county fill lets the basemap show through. */
 export const POWER_OPACITY = 0.75;
 /** A report after the slider step draws at this opacity. */
@@ -59,6 +59,7 @@ export function fillLayers(): LayerSpecification[] {
 export const REPORTS_LAYER = "report-points";
 
 type FillColor = NonNullable<Extract<LayerSpecification, { type: "fill" }>["paint"]>["fill-color"];
+type LineColor = NonNullable<Extract<LayerSpecification, { type: "line" }>["paint"]>["line-color"];
 
 /** The bins that draw a county fill: the power ramp and the internet ramp. Their token names differ, so one layer serves both. */
 const COUNTY_BINS: readonly string[] = [...POWER_FILL_SPEC.bins, ...NET_FILL.bins];
@@ -67,6 +68,17 @@ const COUNTY_BINS: readonly string[] = [...POWER_FILL_SPEC.bins, ...NET_FILL.bin
 export function powerFillColor(): FillColor {
   const match = ["match", ["get", "bin"], ...COUNTY_BINS.flatMap((bin) => [bin, token(bin)]), "rgba(0,0,0,0)"];
   return match as unknown as FillColor;
+}
+
+/** The contour stroke colour of each swath size class from `--hail-1` to `--hail-7`. */
+export function swathOutlineColor(): LineColor {
+  const match = [
+    "match",
+    ["get", "threshold_mm"],
+    ...RULER.flatMap((mark, i) => [mark.threshold_mm, token(`--hail-${i + 1}`)]),
+    token("--rule"),
+  ];
+  return match as unknown as LineColor;
 }
 
 /** The power layers, all hidden: the fill for the five bins, the hatch for a gap, and the county outline. A zero bin draws nothing. */
@@ -93,7 +105,7 @@ export function powerLayers(): LayerSpecification[] {
       type: "line",
       source: POWER_SOURCE,
       layout: { visibility: "none" },
-      paint: { "line-color": token("--ink-muted"), "line-width": 1 },
+      paint: { "line-color": token("--ink-muted"), "line-width": 1, "line-dasharray": [3, 2] },
     },
   ];
 }
@@ -205,7 +217,7 @@ export function chromeLayers(): LayerSpecification[] {
       id: "swath-outline",
       type: "line",
       source: SWATH_SOURCE,
-      paint: { "line-color": token("--rule"), "line-width": 0.75 },
+      paint: { "line-color": swathOutlineColor(), "line-width": 1.25 },
     },
     {
       id: "county-line",
@@ -243,11 +255,11 @@ export function chromeLayers(): LayerSpecification[] {
 /** The paint properties that change with the theme, by layer id. */
 export type PaintName = "fill-color" | "line-color" | "circle-color" | "circle-stroke-color";
 
-export function themedPaint(): Record<string, Partial<Record<PaintName, string>>> {
-  const paint: Record<string, Partial<Record<PaintName, string>>> = {};
+export function themedPaint(): Record<string, Partial<Record<PaintName, unknown>>> {
+  const paint: Record<string, Partial<Record<PaintName, unknown>>> = {};
   for (const layer of [...fillLayers(), ...warningLayers(), ...chromeLayers()]) {
     const colours = Object.entries(layer.paint ?? {}).filter(([key]) => key.endsWith("-color"));
-    paint[layer.id] = Object.fromEntries(colours) as Partial<Record<PaintName, string>>;
+    paint[layer.id] = Object.fromEntries(colours) as Partial<Record<PaintName, unknown>>;
   }
   return paint;
 }

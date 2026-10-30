@@ -31,8 +31,10 @@ import {
   COUNTY_SOURCE,
   POINT_SOURCE,
   POWER_FILL,
+  POWER_GAP,
   POWER_HATCH,
   POWER_LAYER_IDS,
+  POWER_OUTLINE,
   POWER_SOURCE,
   REPORTS_LAYER,
   REPORTS_SOURCE,
@@ -194,9 +196,17 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
     const layer = countyLayer();
     if (layer === null) {
       if (powerShown) {
-        for (const id of POWER_LAYER_IDS) show(id, false);
+        show(POWER_FILL, false);
+        show(POWER_GAP, false);
         clearCountyTags();
         powerShown = false;
+      }
+      if (outlines !== null) {
+        map.setPaintProperty(POWER_OUTLINE, "line-color", token("--ink-muted"));
+        geojson(POWER_SOURCE)?.setData(outlines);
+        show(POWER_OUTLINE, true);
+      } else {
+        show(POWER_OUTLINE, false);
       }
       return;
     }
@@ -216,8 +226,10 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
   };
 
   const applySwath = () => {
+    const visibleClasses = RULER.filter((m) => !hiddenClasses.has(m.threshold_mm)).map((m) => m.threshold_mm);
     for (const mark of RULER) show(fillLayerId(mark.threshold_mm), swathOn && !hiddenClasses.has(mark.threshold_mm));
-    show("swath-outline", swathOn);
+    show("swath-outline", swathOn && visibleClasses.length > 0);
+    map.setFilter?.("swath-outline", ["in", ["get", "threshold_mm"], ["literal", visibleClasses]]);
   };
   const renderReports = () => geojson(REPORTS_SOURCE)?.setData(reportsAtStep(reportsFile, cutoff));
   const syncTags = () => {
@@ -250,6 +262,7 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
         for (const layer of basemapLabelLayers(nextTheme)) map.addLayer(layer, warningLayerId("SV"));
       }
       if (powerShown) paintPower();
+      else if (outlines !== null) map.setPaintProperty(POWER_OUTLINE, "line-color", token("--ink-muted"));
     },
     setClassVisible(thresholdMm, visible) {
       if (visible) hiddenClasses.delete(thresholdMm);
