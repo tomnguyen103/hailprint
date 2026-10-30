@@ -46,6 +46,8 @@ def latest_build(index_urls: tuple[str, ...] = BUILDS_INDEX_URLS) -> str:
     """Return the newest YYYYMMDD.pmtiles key from the Protomaps builds index."""
     env_build = os.environ.get("PROTOMAPS_BUILD", "").strip()
     if env_build:
+        if not re.fullmatch(r"[0-9]{8}\.pmtiles", env_build):
+            raise ValueError(f"invalid PROTOMAPS_BUILD {env_build!r}: expected YYYYMMDD.pmtiles")
         return env_build
     last_err: Exception | None = None
     for url in index_urls:
@@ -90,20 +92,22 @@ def ensure_pmtiles_binary(bin_dir: Path = BIN_DIR) -> str:
         is_archive = name.endswith(".zip") or name.endswith(".tar.gz")
         if sys_name in name and arch in name and is_archive:
             asset_url = asset.get("browser_download_url")
-            asset_name = name
+            asset_name = Path(name).name
             break
-    if not asset_url:
+    if not asset_url or not asset_name:
         raise RuntimeError(f"no go-pmtiles binary asset for {sys_name} {arch}")
 
     archive_path = bin_dir / asset_name
-    urllib.request.urlretrieve(asset_url, archive_path)
+    dl_req = urllib.request.Request(asset_url, headers={"User-Agent": "hailprint-basemap/0.1"})
+    with urllib.request.urlopen(dl_req, timeout=60) as resp, archive_path.open("wb") as out_file:
+        shutil.copyfileobj(resp, out_file)
     try:
         if asset_name.endswith(".zip"):
             with zipfile.ZipFile(archive_path) as zf:
                 zf.extract(exe_name, path=bin_dir)
         else:
             with tarfile.open(archive_path, "r:gz") as tf:
-                tf.extract(exe_name, path=bin_dir)
+                tf.extract(exe_name, path=bin_dir, filter="data")
     finally:
         archive_path.unlink(missing_ok=True)
 
@@ -126,19 +130,18 @@ def extract_basemap(
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = out_path.with_name(f"{out_path.name}.{os.getpid()}.tmp")
     try:
+        binary = "pmtiles" if runner is not None else ensure_pmtiles_binary()
+        cmd = [
+            binary,
+            "extract",
+            f"{BUILDS_URL}/{target_build}",
+            str(tmp_path),
+            f"--bbox={BBOX}",
+            f"--maxzoom={MAXZOOM}",
+        ]
         if runner is not None:
-            cmd = ["pmtiles", "extract", f"{BUILDS_URL}/{target_build}", str(tmp_path)]
             runner(cmd, tmp_path)
         else:
-            binary = ensure_pmtiles_binary()
-            cmd = [
-                binary,
-                "extract",
-                f"{BUILDS_URL}/{target_build}",
-                str(tmp_path),
-                f"--bbox={BBOX}",
-                f"--maxzoom={MAXZOOM}",
-            ]
             _default_runner(cmd, tmp_path)
         if not validate_pmtiles_header(tmp_path):
             raise RuntimeError(f"invalid PMTiles magic header in {tmp_path}")

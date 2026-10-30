@@ -315,9 +315,8 @@ describe("a toggle and a theme switch while the style loads", () => {
     expect(paint["warnings-ff"]!["line-color"]).toBe("#4dd0be");
     expect(paint["report-points"]!["circle-color"]).toBe("dark--report");
     expect(paint["swath-outline"]!["line-color"]).toEqual([
-      "match",
-      ["get", "threshold_mm"],
-      ...RULER.flatMap((m, i) => [m.threshold_mm, `dark--hail-${i + 1}`]),
+      "case",
+      ...RULER.flatMap((m, i) => [["==", ["get", "threshold_mm"], m.threshold_mm], `dark--hail-${i + 1}`]),
       "dark--rule",
     ]);
   });

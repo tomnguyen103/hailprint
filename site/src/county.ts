@@ -3,6 +3,8 @@ import type { FeatureCollection, MultiPolygon } from "geojson";
 import { HARRIS_FIPS } from "./data/constants";
 import { fetchJson } from "./data/fetch";
 import { guardOutline } from "./data/guard";
+import type { DataError } from "./data/types";
+import type { Load } from "./state/load";
 
 export type Bbox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
 
@@ -38,6 +40,22 @@ export function fetchCounties(): Promise<FeatureCollection<MultiPolygon>> {
 /** Clears the cached request, for tests. */
 export function resetCounties(): void {
   counties = null;
+}
+
+/** The first error across the Harris and metro county loads, with a retry callback that restarts both. */
+export function combineCountyFailure(
+  county: Load<FeatureCollection<MultiPolygon>> & { retry: () => void },
+  metro: Load<FeatureCollection<MultiPolygon>> & { retry: () => void },
+): { error: DataError; retry: () => void } | null {
+  const error = county.status === "error" ? county.error : metro.status === "error" ? metro.error : null;
+  if (error === null) return null;
+  return {
+    error,
+    retry: () => {
+      county.retry();
+      metro.retry();
+    },
+  };
 }
 
 /** The Harris feature alone, so the single-outline map views stay unchanged. */

@@ -11,6 +11,7 @@ from hailprint.county import bbox, metro, metro_bbox, outline
 
 FIXTURES = Path(__file__).parent / "fixtures"
 BASEMAP_SH = Path(__file__).parents[1] / "site" / "scripts" / "basemap.sh"
+BASEMAP_PY = Path(__file__).parents[1] / "site" / "scripts" / "basemap.py"
 
 # Census cb_2024_us_county_500k, GEOID 48201, EPSG:4269 bounds.
 ORACLE = (-95.960733, 29.49752, -94.908498, 30.170606)
@@ -81,12 +82,13 @@ def test_metro_bbox_is_the_8_outline_bounds_padded():
 
 
 def test_basemap_script_extracts_the_metro_bbox():
-    text = BASEMAP_SH.read_text(encoding="utf-8")
-    literal = re.search(r'^BBOX="([^"]+)"', text, re.MULTILINE)
-    assert literal is not None
-    got = tuple(float(v) for v in literal.group(1).split(","))
-    for g, w in zip(got, METRO_ORACLE, strict=True):
-        assert abs(g - w) < 1e-9
+    for script in (BASEMAP_SH, BASEMAP_PY):
+        text = script.read_text(encoding="utf-8")
+        literal = re.search(r'^BBOX\s*=\s*"([^"]+)"', text, re.MULTILINE)
+        assert literal is not None
+        got = tuple(float(v) for v in literal.group(1).split(","))
+        for g, w in zip(got, METRO_ORACLE, strict=True):
+            assert abs(g - w) < 1e-9
 
 
 def test_metro_with_7_features_raises_and_names_the_fips(tmp_path, monkeypatch):

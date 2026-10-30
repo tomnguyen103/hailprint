@@ -3,7 +3,8 @@ import { fileURLToPath } from "node:url";
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { afterEach, describe, expect, it } from "vitest";
 import { setFetch, type Fetch } from "./data/fetch";
-import { HARRIS_BBOX, METRO_BBOX, PAD_DEG, contains, fetchCounties, fetchCounty, resetCounties } from "./county";
+import { DataError } from "./data/types";
+import { HARRIS_BBOX, METRO_BBOX, PAD_DEG, combineCountyFailure, contains, fetchCounties, fetchCounty, resetCounties } from "./county";
 
 const FILE = fileURLToPath(new URL("../public/counties.geojson", import.meta.url));
 const text = readFileSync(FILE, "utf8");
@@ -145,5 +146,38 @@ describe("fetchCounties and fetchCounty", () => {
     expect(fetchCounties()).toBe(fresh);
     await fresh;
     expect(calls()).toBe(1);
+  });
+
+  it("combineCountyFailure catches either county or metro error and retries both on Retry", () => {
+    let countyRetries = 0;
+    let metroRetries = 0;
+    const err = new DataError("/counties.geojson", "HTTP 500");
+    const ready = { status: "ready" as const, data: counties };
+    const failed = { status: "error" as const, error: err };
+
+    expect(
+      combineCountyFailure(
+        { ...ready, retry: () => countyRetries++ },
+        { ...ready, retry: () => metroRetries++ },
+      ),
+    ).toBeNull();
+
+    const bothFail = combineCountyFailure(
+      { ...failed, retry: () => countyRetries++ },
+      { ...failed, retry: () => metroRetries++ },
+    );
+    expect(bothFail?.error).toBe(err);
+    bothFail?.retry();
+    expect(countyRetries).toBe(1);
+    expect(metroRetries).toBe(1);
+
+    const metroOnlyFails = combineCountyFailure(
+      { ...ready, retry: () => countyRetries++ },
+      { ...failed, retry: () => metroRetries++ },
+    );
+    expect(metroOnlyFails?.error).toBe(err);
+    metroOnlyFails?.retry();
+    expect(countyRetries).toBe(2);
+    expect(metroRetries).toBe(2);
   });
 });

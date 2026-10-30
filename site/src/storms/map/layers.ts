@@ -72,13 +72,12 @@ export function powerFillColor(): FillColor {
 
 /** The contour stroke colour of each swath size class from `--hail-1` to `--hail-7`. */
 export function swathOutlineColor(): LineColor {
-  const match = [
-    "match",
-    ["get", "threshold_mm"],
-    ...RULER.flatMap((mark, i) => [mark.threshold_mm, token(`--hail-${i + 1}`)]),
+  const expr = [
+    "case",
+    ...RULER.flatMap((mark, i) => [["==", ["get", "threshold_mm"], mark.threshold_mm], token(`--hail-${i + 1}`)]),
     token("--rule"),
   ];
-  return match as unknown as LineColor;
+  return expr as unknown as LineColor;
 }
 
 /** The power layers, all hidden: the fill for the five bins, the hatch for a gap, and the county outline. A zero bin draws nothing. */

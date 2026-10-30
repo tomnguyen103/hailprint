@@ -1,6 +1,6 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
-import { HARRIS_BBOX, contains, fetchCounties, fetchCounty } from "../county";
+import { HARRIS_BBOX, combineCountyFailure, contains, fetchCounties, fetchCounty } from "../county";
 import { DataError, type StormsIndex } from "../data/types";
 import { BELOW_FIRST_CLASS, formatInches } from "../format";
 import { href } from "../router";
@@ -147,6 +147,8 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     }
   }
 
+  const countyFailure = combineCountyFailure(county, metro);
+
   return (
     <>
       <form class="point-form" onSubmit={check} noValidate>
@@ -193,7 +195,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
           </div>
         ) : null}
       </div>
-      {county.status === "error" ? <ErrorState error={county.error} onRetry={county.retry} /> : null}
+      {countyFailure ? <ErrorState error={countyFailure.error} onRetry={countyFailure.retry} /> : null}
       {table}
     </>
   );

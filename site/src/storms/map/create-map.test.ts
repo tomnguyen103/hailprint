@@ -1,3 +1,4 @@
+import { validateStyleMin, type StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { GLYPHS_URL, basemapLabelLayers, basemapLayers, spriteUrl } from "./basemap";
 import { createMap } from "./create-map";
@@ -156,15 +157,37 @@ describe("createMap", () => {
 
     const tokenValues: Record<string, string> = {
       "--paper": "#f7f6f2",
+      "--sheet": "#ffffff",
       "--sheet-muted": "#efede6",
       "--rule": "#e2dfd5",
       "--water": "#e4eae8",
       "--road-major": "#cfcbc0",
       "--ink": "#1f1e1b",
       "--ink-muted": "#4a4840",
+      "--report": "#1f5a7a",
+      "--warn-sv": "#8a5300",
+      "--warn-to": "#a3175f",
+      "--warn-ff": "#0a6b73",
+      "--hail-1": "#c7e9b4",
+      "--hail-2": "#7fcdbb",
+      "--hail-3": "#41b6c4",
+      "--hail-4": "#1d91c0",
+      "--hail-5": "#225ea8",
+      "--hail-6": "#253494",
+      "--hail-7": "#081d58",
+      "--out-1": "#fee5d9",
+      "--out-2": "#fcae91",
+      "--out-3": "#fb6a4a",
+      "--out-4": "#de2d26",
+      "--out-5": "#a50f15",
+      "--net-1": "#eff3ff",
+      "--net-2": "#bdd7e7",
+      "--net-3": "#6baed6",
+      "--net-4": "#3182bd",
+      "--net-5": "#08519c",
     };
     vi.stubGlobal("getComputedStyle", () => ({
-      getPropertyValue: (name: string) => tokenValues[name] ?? `#tok-${name}`,
+      getPropertyValue: (name: string) => tokenValues[name] ?? "#000000",
     }));
 
     const geomLayers = basemapLayers("light");
@@ -202,8 +225,9 @@ describe("createMap", () => {
     expect(state.value?.basemap).toBe(true);
 
     const style = (
-      map.options as { style: { glyphs?: string; sprite?: string; layers: { id: string; source?: string }[] } }
+      map.options as { style: StyleSpecification }
     ).style;
+    expect(validateStyleMin(style)).toEqual([]);
     expect(style.glyphs).toBe("https://protomaps.github.io/basemaps-assets/fonts/{fontstack}/{range}.pbf");
     expect(style.sprite).toBe("https://protomaps.github.io/basemaps-assets/sprites/v4/light");
 
@@ -272,6 +296,7 @@ describe("createMap", () => {
     expect(style.sprite).toBeUndefined();
     expect(style.sources["basemap"]).toBeUndefined();
     expect(style.layers.some((l) => l.source === "basemap")).toBe(false);
+    expect(validateStyleMin(style as unknown as StyleSpecification)).toEqual([]);
   });
 
   it("probeBasemap returns true only for a non-HTML 200 response and false on 404, HTML fallback, or network failure", async () => {

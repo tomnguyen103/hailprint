@@ -1,6 +1,6 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useEffect, useId, useRef, useState } from "preact/hooks";
-import { fetchCounties, fetchCounty } from "../county";
+import { combineCountyFailure, fetchCounties, fetchCounty } from "../county";
 import { guardSwath } from "../data/guard";
 import { DataError, type StormsIndex, type SwathFile } from "../data/types";
 import { ErrorState, LoadingState } from "../shell/states";
@@ -75,7 +75,7 @@ function useSide(
   useEffect(() => {
     if (map.ready) map.handle.current?.setCounties(outlines);
   }, [map.ready, outlines]);
-  const failed = load.status === "error" ? load : county.status === "error" ? county : null;
+  const failed = load.status === "error" ? load : combineCountyFailure(county, metro);
   const error = map.error ?? failed?.error ?? null;
   const retry = map.error ? map.retry : failed ? failed.retry : load.retry;
   return { ...map, error, retry, loading: load.status !== "ready" && load.status !== "error" && load.showLoading };

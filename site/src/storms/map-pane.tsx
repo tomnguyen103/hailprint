@@ -1,6 +1,6 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import { fetchCounties, fetchCounty } from "../county";
+import { combineCountyFailure, fetchCounties, fetchCounty } from "../county";
 import { fetchJson } from "../data/fetch";
 import { guardSwath, guardWarnings } from "../data/guard";
 import { DataError, type InternetFile, type PowerFile, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
@@ -179,7 +179,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   const retryMap = useCallback(() => setAttempt((n) => n + 1), []);
 
   // One overlay slot: the map chunk error first, then the swath, reports, and county errors in that order.
-  const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : county.status === "error" ? county : null;
+  const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : combineCountyFailure(county, metro);
   const receipt = swathData?.receipt ?? null;
   const warningsLine = warningsNote(warningsFile, warnings);
   // A failed power file or county file hides the fill with one line; the hail map stays.
