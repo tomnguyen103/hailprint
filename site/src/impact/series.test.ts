@@ -208,5 +208,12 @@ describe("the Harris peak", () => {
     expect(trough?.maxDrop).toBe(0.15);
     expect(trough?.troughStep).toBe(20);
     expect(internetSeriesTrough(iFile, "99999", DATE)).toBeNull();
+
+    // When raw outage counts exceed county.customers (share clamped at 1.0), peakStep tracks the highest raw count
+    const cappedFile = power("odin", series({ 0: 2000, 1: 2500 }));
+    const cappedPeak = powerSeriesPeak(cappedFile, HARRIS_FIPS, DATE);
+    expect(cappedPeak?.peakOut).toBe(2500);
+    expect(cappedPeak?.peakShare).toBe(1);
+    expect(cappedPeak?.peakStep).toBe(1);
   });
 });

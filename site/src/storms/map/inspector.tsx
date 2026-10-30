@@ -37,6 +37,7 @@ export interface Pick {
   coveringMm: number | null;
   nearest: { feature: Feature<Point, ReportProps>; km: number } | null;
   nearestSwath?: SwathDistance | null;
+  countyFips?: string | null;
 }
 
 export interface CountyRow {
@@ -442,7 +443,8 @@ export function Inspector(props: InspectorProps) {
   const { pin } = usePin();
   const [liveState, setLiveState] = useState<InspectorLiveState>({ key: "", status: "idle" });
   const liveEpochRef = useRef(0);
-  const liveKey = `${props.pick.lngLat[0]},${props.pick.lngLat[1]},${props.fips}`;
+  const liveFips = props.pick.countyFips !== undefined ? props.pick.countyFips : props.fips;
+  const liveKey = `${props.pick.lngLat[0]},${props.pick.lngLat[1]},${liveFips ?? ""}`;
   const currentLive: InspectorLiveState =
     liveState.key === liveKey ? liveState : { key: liveKey, status: "idle" };
 
@@ -450,7 +452,7 @@ export function Inspector(props: InspectorProps) {
     const reqKey = liveKey;
     const myEpoch = ++liveEpochRef.current;
     setLiveState({ key: reqKey, status: "loading" });
-    void fetchLiveStatus(props.pick.lngLat, props.fips).then((data) => {
+    void fetchLiveStatus(props.pick.lngLat, liveFips).then((data) => {
       if (liveEpochRef.current === myEpoch) {
         setLiveState({ key: reqKey, status: "ready", data });
       }

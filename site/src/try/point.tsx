@@ -310,10 +310,10 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const impactLoading =
     activePoint !== null &&
     (metro.status === "loading" ||
-      (reportsAll.status === "loading" &&
-        warningsAll.status === "loading" &&
-        powerAll.status === "loading" &&
-        internetAll.status === "loading"));
+      reportsAll.status === "loading" ||
+      warningsAll.status === "loading" ||
+      powerAll.status === "loading" ||
+      internetAll.status === "loading");
 
   let resultsSection = null;
   if (activePoint !== null) {

@@ -107,11 +107,14 @@ export function powerSeries(file: PowerFile | null, fips: string): PowerSeries |
   const shares = county.out.map((out) => shareOut(out, county.customers));
   let peak: number | null = null;
   let peakStep: number | null = null;
+  let bestOut = 0;
   for (let i = 0; i < shares.length; i++) {
     const share = shares[i] ?? null;
-    if (share !== null && (peak === null || share > peak)) {
+    const out = county.out[i] ?? null;
+    if (share !== null && out !== null && (peak === null || out > bestOut)) {
       peak = share;
-      peakStep = share > 0 ? i : null;
+      bestOut = out;
+      peakStep = out > 0 ? i : null;
     }
   }
   return { county, shares, peak, peakStep, gapSteps: shares.filter((s) => s === null).length, scale: Math.max(peak ?? 0, SCALE_FLOOR) };

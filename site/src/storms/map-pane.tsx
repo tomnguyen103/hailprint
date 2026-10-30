@@ -100,6 +100,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
       coveringMm: cov,
       nearest: nearestReport(lngLat, reportsRef.current?.features ?? []),
       nearestSwath: nearSwath,
+      countyFips: outlinesRef.current !== null ? clickedCounty : undefined,
     });
   }, []);
 
@@ -318,7 +319,13 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
       </div>
       {activePick !== null && receipt !== null ? (
         <Inspector
-          pick={activePick}
+          pick={
+            outlines !== null
+              ? activePick.countyFips !== undefined
+                ? activePick
+                : { ...activePick, countyFips: countyAt(activePick.lngLat, outlines) }
+              : { ...activePick, countyFips: null }
+          }
           receipt={receipt}
           swath={swathData}
           reports={reportsData}
