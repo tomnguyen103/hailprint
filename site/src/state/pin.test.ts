@@ -46,9 +46,11 @@ describe("pin store presets and manual coordinates (US-01.4)", () => {
 describe("locateUser geolocation lifecycle and error handling (US-01.4, US-01.5)", () => {
   it("transitions idle -> locating -> ready on valid Metro GPS and ignores duplicate calls while locating", async () => {
     let successCb: ((pos: GeolocationPosition) => void) | null = null;
-    const getCurrentPosition = vi.fn((onSuccess: (pos: GeolocationPosition) => void) => {
-      successCb = onSuccess;
-    });
+    const getCurrentPosition = vi.fn(
+      (onSuccess: (pos: GeolocationPosition) => void, _onError?: unknown, _options?: PositionOptions) => {
+        successCb = onSuccess;
+      },
+    );
     vi.stubGlobal("navigator", { geolocation: { getCurrentPosition } });
 
     expect(getPinState().geoStatus).toBe("idle");

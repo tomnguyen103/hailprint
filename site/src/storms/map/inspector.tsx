@@ -1,11 +1,12 @@
 import type { Feature, Point } from "geojson";
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { METRO_BBOX } from "../../county";
 import type {
   InternetFile,
   PowerFile,
   Receipt,
   ReportProps,
+  ReportsFile,
   SwathFile,
   WarningsFile,
 } from "../../data/types";
@@ -14,12 +15,20 @@ import { contains, pointInMultiPolygon } from "../../geometry";
 import { dropOf } from "../../impact/internet";
 import { ODIN_LABEL, percentText, shareOut } from "../../impact/power";
 import { internetSeriesTrough, powerSeriesPeak } from "../../impact/series";
+import { type LiveStatusResult, fetchLiveStatus } from "../../live/live-check";
 import { href } from "../../router";
 import { objectName } from "../../ruler";
 import { Link } from "../../shell/link";
 import { ReceiptChip } from "../../shell/receipt-chip";
 import { clearPin, getPinState, setPin, usePin } from "../../state/pin";
-import { type DirectWarning, type SwathDistance, swathExposureAt, warningsAtPoint } from "./geo";
+import {
+  type DirectWarning,
+  type NearbyWarning,
+  type SwathDistance,
+  reportsWithinRadius,
+  swathExposureAt,
+  warningsAtPoint,
+} from "./geo";
 import { activeWarnings } from "./layers";
 
 export interface Pick {
@@ -171,7 +180,7 @@ interface WarningsSectionProps {
 export function WarningsSection({ point, file, step, onStep }: WarningsSectionProps) {
   const stormDate = file.receipt.storm_date;
   const activeAtStep = activeWarnings(file, stormDate, step).filter((f) => pointInMultiPolygon(point, f.geometry));
-  const stormWide = warningsAtPoint(point, file, stormDate);
+  const stormWide = warningsAtPoint(point, file, stormDate, 5);
   return (
     <section class="inspector-county" aria-labelledby="inspector-warnings-title">
       <h3 id="inspector-warnings-title">Warnings at point</h3>
@@ -207,6 +216,35 @@ export function WarningsSection({ point, file, step, onStep }: WarningsSectionPr
             </ul>
           )}
         </dd>
+        {stormWide.nearbyWarnings.length > 0 ? (
+          <>
+            <dt>Within 5 km</dt>
+            <dd>
+              <ul class="inspector-warning-list">
+                {stormWide.nearbyWarnings.map((w: NearbyWarning) => (
+                  <li key={`${w.phenomena}-${w.eventid}`} class="inspector-inline-action">
+                    <span>
+                      {w.event_label} (
+                      <span class="mono">
+                        {w.phenomena} #{w.eventid}, {w.distanceKm.toFixed(1)} km
+                      </span>
+                      )
+                    </span>
+                    {onStep !== undefined && w.firstStep !== null ? (
+                      <button
+                        type="button"
+                        class="button button-small inspector-jump"
+                        onClick={() => onStep(w.firstStep!)}
+                      >
+                        Jump
+                      </button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </>
+        ) : null}
         <dt>Receipt</dt>
         <dd>
           <ReceiptChip receipt={file.receipt} file="warnings.geojson" />
@@ -220,6 +258,7 @@ export interface InspectorProps {
   pick: Pick;
   receipt: Receipt;
   swath?: SwathFile | null;
+  reports?: ReportsFile | null;
   warnings?: WarningsFile | null;
   power: PowerFile | null;
   internet: InternetFile | null;
@@ -235,6 +274,7 @@ export function InspectorView({
   pick,
   receipt,
   swath = null,
+  reports = null,
   warnings = null,
   power,
   internet,
@@ -245,9 +285,15 @@ export function InspectorView({
   onClose,
   pinnedLngLat,
   panelRef,
+  liveStatus = "idle",
+  liveData = null,
+  onLiveCheck,
 }: InspectorProps & {
   pinnedLngLat?: [number, number] | null;
   panelRef?: { current: HTMLDivElement | null };
+  liveStatus?: "idle" | "loading" | "ready";
+  liveData?: LiveStatusResult | null;
+  onLiveCheck?: () => void;
 }) {
   const [lon, lat] = pick.lngLat;
   const inMetro = contains(METRO_BBOX, pick.lngLat);
@@ -262,6 +308,7 @@ export function InspectorView({
     pick.coveringMm === null
       ? (pick.nearestSwath ?? (swath ? swathExposureAt(swath, pick.lngLat, 20).nearest : null))
       : null;
+  const reportsWithin5Km = reports !== null ? reportsWithinRadius(pick.lngLat, reports, 5).count : null;
 
   return (
     <div ref={panelRef as never} class="inspector" role="dialog" aria-labelledby="inspector-title" tabIndex={-1}>
@@ -311,12 +358,25 @@ export function InspectorView({
         <dt>Nearest report</dt>
         <dd>
           {pick.nearest === null ? (
-            "none"
+            reportsWithin5Km !== null ? (
+              <>
+                none {"\u00b7 "}
+                <span class="mono">{reportsWithin5Km}</span> within 5 km
+              </>
+            ) : (
+              "none"
+            )
           ) : (
             <>
               {pick.nearest.feature.properties.location},{" "}
               <span class="mono">{pick.nearest.feature.properties.size_in.toFixed(2)} in</span>,{" "}
               <span class="mono">{pick.nearest.km.toFixed(1)} km</span>
+              {reportsWithin5Km !== null ? (
+                <>
+                  {" \u00b7 "}
+                  <span class="mono">{reportsWithin5Km}</span> within 5 km
+                </>
+              ) : null}
             </>
           )}
         </dd>
@@ -350,14 +410,103 @@ export function InspectorView({
       {internet === null ? null : (
         <InternetSection file={internet} step={step} fips={fips} onStep={onStep} />
       )}
+      {inMetro && onLiveCheck !== undefined ? (
+        <section class="inspector-county" aria-labelledby="inspector-live-title">
+          <h3 id="inspector-live-title">Live status check</h3>
+          <button
+            type="button"
+            class="button button-small"
+            disabled={liveStatus === "loading"}
+            onClick={onLiveCheck}
+          >
+            {liveStatus === "loading" ? "Checking live feeds\u2026" : "Check live NWS & outage feeds"}
+          </button>
+          {liveStatus === "ready" && liveData !== null ? (
+            <dl class="receipt-list">
+              <dt>NWS active alerts</dt>
+              <dd>
+                {liveData.alerts.status === "error" ? (
+                  <>
+                    {liveData.alerts.message}{" "}
+                    <button type="button" class="button button-small" onClick={onLiveCheck}>
+                      Retry
+                    </button>
+                  </>
+                ) : liveData.alerts.alerts.length === 0 ? (
+                  "0 active alerts at pinned point"
+                ) : (
+                  liveData.alerts.alerts.map((a) => `${a.event} (${a.severity})`).join(" \u00b7 ")
+                )}
+              </dd>
+              <dt>ORNL ODIN utility outages</dt>
+              <dd>
+                {liveData.power.status === "error" ? (
+                  <>
+                    {liveData.power.message}{" "}
+                    <button type="button" class="button button-small" onClick={onLiveCheck}>
+                      Retry
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span class="mono">{formatCount(liveData.power.customersOut)}</span> customers out (
+                    {liveData.power.note})
+                  </>
+                )}
+              </dd>
+              <dt>IODA internet reachability</dt>
+              <dd>
+                {liveData.internet.status === "error" ? (
+                  <>
+                    {liveData.internet.message}{" "}
+                    <button type="button" class="button button-small" onClick={onLiveCheck}>
+                      Retry
+                    </button>
+                  </>
+                ) : liveData.internet.latestValue === null ? (
+                  "no recent county signal points (last 2h)"
+                ) : (
+                  <>
+                    <span class="mono">{formatCount(Math.round(liveData.internet.latestValue))}</span>{" "}
+                    active /24 blocks (<span class="mono">{liveData.internet.pointCount}</span> points in
+                    last 2h)
+                  </>
+                )}
+              </dd>
+            </dl>
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }
+
+type InspectorLiveState =
+  | { key: string; status: "idle" }
+  | { key: string; status: "loading" }
+  | { key: string; status: "ready"; data: LiveStatusResult };
 
 /** The point inspector. Escape and Close call `onClose`; the caller returns focus. */
 export function Inspector(props: InspectorProps) {
   const panel = useRef<HTMLDivElement>(null);
   const { pin } = usePin();
+  const [liveState, setLiveState] = useState<InspectorLiveState>({ key: "", status: "idle" });
+  const liveEpochRef = useRef(0);
+  const liveKey = `${props.pick.lngLat[0]},${props.pick.lngLat[1]},${props.fips}`;
+  const currentLive: InspectorLiveState =
+    liveState.key === liveKey ? liveState : { key: liveKey, status: "idle" };
+
+  const runLiveCheck = () => {
+    const reqKey = liveKey;
+    const myEpoch = ++liveEpochRef.current;
+    setLiveState({ key: reqKey, status: "loading" });
+    void fetchLiveStatus(props.pick.lngLat, props.fips).then((data) => {
+      if (liveEpochRef.current === myEpoch) {
+        setLiveState({ key: reqKey, status: "ready", data });
+      }
+    });
+  };
+
   useEffect(() => {
     panel.current?.focus();
     const onKey = (event: KeyboardEvent) => {
@@ -367,5 +516,14 @@ export function Inspector(props: InspectorProps) {
     return () => document.removeEventListener("keydown", onKey);
   }, [props.onClose]);
 
-  return <InspectorView {...props} pinnedLngLat={pin?.lngLat ?? null} panelRef={panel} />;
+  return (
+    <InspectorView
+      {...props}
+      pinnedLngLat={pin?.lngLat ?? null}
+      panelRef={panel}
+      liveStatus={currentLive.status}
+      liveData={currentLive.status === "ready" ? currentLive.data : null}
+      onLiveCheck={runLiveCheck}
+    />
+  );
 }
