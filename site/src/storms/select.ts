@@ -105,12 +105,55 @@ export function groupByYear(storms: readonly Storm[]): { year: string; storms: S
     }));
 }
 
-/** The ZIP rows of one class, largest count first, ZIP ascending on a tie. */
+/** The ZIP rows of one class, largest count first, ZIP ascending on a tie, "unknown" last. */
 export function zipRows(zip: ZipCounts, thresholdMm: number): { zip: string; parcel_count: number }[] {
   return zip.zips
     .filter((row) => row.threshold_mm === thresholdMm)
     .map(({ zip, parcel_count }) => ({ zip, parcel_count }))
-    .sort((a, b) => b.parcel_count - a.parcel_count || a.zip.localeCompare(b.zip));
+    .sort((a, b) => {
+      if (a.zip === "unknown" && b.zip !== "unknown") return 1;
+      if (b.zip === "unknown" && a.zip !== "unknown") return -1;
+      return b.parcel_count - a.parcel_count || a.zip.localeCompare(b.zip);
+    });
+}
+
+export interface CrossStormZipEntry {
+  storm_date: string;
+  parcel_count: number;
+  storm_total: number;
+  share: number;
+  max_mesh_mm: number | null;
+}
+
+/**
+ * Build a cross-storm exposure ledger for a single 5-digit ZIP across all storms
+ * at `thresholdMm`, sorted by `parcel_count` descending then `storm_date` descending.
+ */
+export function crossStormZipLedger(
+  storms: readonly Storm[],
+  zipFiles: readonly (ZipCounts | null)[],
+  zipCode: string,
+  thresholdMm: number,
+): CrossStormZipEntry[] {
+  const entries: CrossStormZipEntry[] = [];
+  storms.forEach((storm, i) => {
+    const file = zipFiles[i] ?? null;
+    if (file === null) return;
+    const row = file.zips.find((z) => z.zip === zipCode && z.threshold_mm === thresholdMm);
+    const count = row?.parcel_count ?? 0;
+    if (count <= 0) return;
+    const classTotal = file.classes.find((c) => c.threshold_mm === thresholdMm)?.parcel_count ?? count;
+    entries.push({
+      storm_date: storm.storm_date,
+      parcel_count: count,
+      storm_total: classTotal,
+      share: classTotal > 0 ? count / classTotal : 0,
+      max_mesh_mm: storm.max_mesh_mm,
+    });
+  });
+  return entries.sort(
+    (a, b) => b.parcel_count - a.parcel_count || b.storm_date.localeCompare(a.storm_date),
+  );
 }
 
 /** The object name of the largest size class at or below `inches`. */

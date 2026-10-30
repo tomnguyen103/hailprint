@@ -57,3 +57,21 @@ describe("csvOf", () => {
     expect(csvOf([row({ label: "\r=cmd" })])).toContain('"\'\r=cmd"');
   });
 });
+
+describe("zipCsvOf", () => {
+  it("formats ZIP parcel rows with storm_date, threshold_mm, zip, parcel_count, and share_of_class", async () => {
+    const { zipCsvOf } = await import("./csv");
+    const csv = zipCsvOf(
+      [
+        { zip: "77002", parcel_count: 25, share: 0.25 },
+        { zip: "77003", parcel_count: 75, share: 0.75 },
+      ],
+      "2024-05-28",
+      19.05,
+    );
+    const lines = csv.trim().split("\n");
+    expect(lines[0]).toBe("storm_date,threshold_mm,zip,parcel_count,share_of_class");
+    expect(lines[1]).toBe("2024-05-28,19.05,77002,25,0.25");
+    expect(lines[2]).toBe("2024-05-28,19.05,77003,75,0.75");
+  });
+});

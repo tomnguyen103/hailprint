@@ -104,3 +104,23 @@ it("filters curated case studies against the published catalog", () => {
   const available = availableCaseStudies([storm("2024-05-28"), storm("2024-12-24")]);
   expect(available.map((cs) => cs.storm_date)).toEqual(["2024-05-28", "2024-12-24"]);
 });
+
+it("builds a cross-storm ZIP exposure ledger sorted by parcel count descending", async () => {
+  const { crossStormZipLedger } = await import("./select");
+  const s1 = { ...storm("2024-05-28"), max_mesh_mm: 55 };
+  const s2 = { ...storm("2023-06-23"), max_mesh_mm: 62 };
+  const z1 = {
+    receipt: {} as never,
+    classes: [{ threshold_mm: 19.05, threshold_in: 0.75, label: ">= 0.75 in", parcel_count: 100 }],
+    zips: [{ zip: "77002", threshold_mm: 19.05, parcel_count: 25 }],
+  } as ZipCounts;
+  const z2 = {
+    receipt: {} as never,
+    classes: [{ threshold_mm: 19.05, threshold_in: 0.75, label: ">= 0.75 in", parcel_count: 200 }],
+    zips: [{ zip: "77002", threshold_mm: 19.05, parcel_count: 80 }],
+  } as ZipCounts;
+  const ledger = crossStormZipLedger([s1, s2], [z1, z2], "77002", 19.05);
+  expect(ledger.map((e) => e.storm_date)).toEqual(["2023-06-23", "2024-05-28"]);
+  expect(ledger[0]?.parcel_count).toBe(80);
+  expect(ledger[0]?.share).toBeCloseTo(0.4, 5);
+});
