@@ -34,14 +34,25 @@ export function Stamp({ storm, reports, step, indexReceipt, datesOpen = false, o
   const label = `Storm window 12Z to 12Z, reports in ${hours.length} of ${CELLS} hours${marked === null ? "" : `, map time in the ${HOUR_LABELS[marked]} hour`}`;
   const copyFieldNote = () => {
     const baseReceipt = reports.status === "ready" ? reports.data.receipt : indexReceipt;
+    const mrmsSourceEntry = {
+      source: "NOAA MRMS",
+      product: "MESH_Max_1440min",
+      file: storm.files.swath,
+    };
     const reportSourceEntry = {
       source: "SPC",
       product: storm.report_source === "wcm" ? "WCM hail (wcm)" : "daily hail (spc-daily)",
       file: storm.report_source,
     };
+    const hasMrms = baseReceipt.sources.some((s) => s.source.includes("MRMS"));
+    const hasSpc = baseReceipt.sources.some((s) => s.source === "SPC");
     const activeReceipt: Receipt = {
       ...baseReceipt,
-      sources: [...baseReceipt.sources, reportSourceEntry],
+      sources: [
+        ...(hasMrms ? [] : [mrmsSourceEntry]),
+        ...baseReceipt.sources,
+        ...(hasSpc ? [] : [reportSourceEntry]),
+      ],
     };
     const text = formatStormFieldNote(storm, activeReceipt);
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {

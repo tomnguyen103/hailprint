@@ -48,29 +48,47 @@ export function odinSyncCommandFor(stormDate: string): string {
   return `uv run python -c "from hailprint import cloud, paths; c = cloud.Config.from_env(); cloud.sync_down(cloud.s3_client(c), c.state_bucket, (${keys},), paths.ROOT / 'data')"`;
 }
 
+/** Build the shared CLI command sequence for a storm date's resolved published files and power source. */
+export function cliSequence(o: {
+  date: string;
+  radius: number;
+  parcels: boolean;
+  warnings: boolean;
+  internet: boolean;
+  power: PowerFile["source"] | null;
+}): string[] {
+  const powerCommands =
+    o.power === "odin"
+      ? [odinSyncCommandFor(o.date), `uv run hailprint power ${o.date}`]
+      : o.power === "eaglei"
+        ? [`uv run hailprint eaglei ${eagleiYearsFor(o.date).join(" ")}`, `uv run hailprint power ${o.date}`]
+        : [];
+  return [
+    `uv run hailprint ingest ${o.date}`,
+    ...(o.parcels ? [`uv run hailprint parcels ${o.date}`] : []),
+    `uv run hailprint score ${o.date} --radius-km ${o.radius}`,
+    ...(o.warnings ? [`uv run hailprint warnings ${o.date}`] : []),
+    ...powerCommands,
+    ...(o.internet ? [`uv run hailprint internet ${o.date}`] : []),
+    `uv run hailprint publish ${o.date}${o.internet ? " --with-internet" : ""}`,
+  ];
+}
+
 /** Full CLI sequence to reproduce every published file for `storm`. */
 export function reproduceCommands(
   storm: Storm,
   radiusKm = 5,
-  powerSource: PowerFile["source"] | null = storm.files.power ? "eaglei" : null,
+  powerSource: PowerFile["source"] | null = null,
 ): string[] {
-  const d = storm.storm_date;
-  const effectiveSource = storm.files.power ? (powerSource ?? "eaglei") : null;
-  const powerCommands =
-    effectiveSource === "odin"
-      ? [odinSyncCommandFor(d), `uv run hailprint power ${d}`]
-      : effectiveSource === "eaglei"
-        ? [`uv run hailprint eaglei ${eagleiYearsFor(d).join(" ")}`, `uv run hailprint power ${d}`]
-        : [];
-  return [
-    `uv run hailprint ingest ${d}`,
-    ...(storm.files.zip_counts ? [`uv run hailprint parcels ${d}`] : []),
-    `uv run hailprint score ${d} --radius-km ${radiusKm}`,
-    ...(storm.files.warnings ? [`uv run hailprint warnings ${d}`] : []),
-    ...powerCommands,
-    ...(storm.files.internet ? [`uv run hailprint internet ${d}`] : []),
-    `uv run hailprint publish ${d}${storm.files.internet ? " --with-internet" : ""}`,
-  ];
+  const effectiveSource = storm.files.power ? powerSource : null;
+  return cliSequence({
+    date: storm.storm_date,
+    radius: radiusKm,
+    parcels: Boolean(storm.files.zip_counts),
+    warnings: Boolean(storm.files.warnings),
+    internet: Boolean(storm.files.internet),
+    power: effectiveSource,
+  });
 }
 
 /** One published file: a download link, with its receipt chip when the file carries a receipt, or "none". */

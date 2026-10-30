@@ -8,7 +8,7 @@ import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
 import { useAllFiles } from "../state/pairs-all";
-import { eagleiYearsFor, odinSyncCommandFor } from "../storms/data-pane";
+import { cliSequence } from "../storms/data-pane";
 import { csvOf } from "./csv";
 import { ScopeSelect, newestFirst } from "./try";
 
@@ -23,24 +23,19 @@ export function commandsFor(
   powerSource: PowerFile["source"] | null = null,
 ): string[] {
   const hasPower = storm === undefined ? true : storm.files.power !== null;
-  const effectiveSource = hasPower ? (powerSource ?? "eaglei") : null;
-  const powerCommands =
-    effectiveSource === "odin"
-      ? [odinSyncCommandFor(date), `uv run hailprint power ${date}`]
-      : effectiveSource === "eaglei"
-        ? [`uv run hailprint eaglei ${eagleiYearsFor(date).join(" ")}`, `uv run hailprint power ${date}`]
-        : [];
+  const effectiveSource = hasPower ? powerSource : null;
   const hasParcels = storm === undefined ? true : storm.files.zip_counts !== null;
   const hasWarnings = storm === undefined ? true : storm.files.warnings !== null;
   const hasInternet = storm === undefined ? true : storm.files.internet !== null;
   return [
-    `uv run hailprint ingest ${date}`,
-    ...(hasParcels ? [`uv run hailprint parcels ${date}`] : []),
-    `uv run hailprint score ${date} --radius-km ${radius}`,
-    ...(hasWarnings ? [`uv run hailprint warnings ${date}`] : []),
-    ...powerCommands,
-    ...(hasInternet ? [`uv run hailprint internet ${date}`] : []),
-    `uv run hailprint publish ${date}${hasInternet ? " --with-internet" : ""}`,
+    ...cliSequence({
+      date,
+      radius,
+      parcels: hasParcels,
+      warnings: hasWarnings,
+      internet: hasInternet,
+      power: effectiveSource,
+    }),
     "cd site && npm run dev",
   ];
 }

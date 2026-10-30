@@ -439,6 +439,20 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
       odinCliLines.some((line) => line.includes("derived/odin/odin-2026-04-04.parquet")),
     ).toBe(true);
 
+    const unknownPowerCli = reproduceCommands(
+      {
+        ...storm,
+        storm_date: "2026-04-04",
+        files: {
+          ...storm.files,
+          power: "storms/2026-04-04/power.json",
+        },
+      },
+      5,
+      null,
+    );
+    expect(unknownPowerCli).not.toContain("uv run hailprint power 2026-04-04");
+
     const { commandsFor, runPublishedFiles } = await import("./try/run");
     const runCmds = commandsFor("2024-05-28", 5, undefined, "eaglei");
     expect(runCmds).toContain("uv run hailprint warnings 2024-05-28");
@@ -455,6 +469,13 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(
       odinRunCmds.some((line) => line.includes("derived/odin/odin-2026-04-04.parquet")),
     ).toBe(true);
+    const unknownPowerRunCmds = commandsFor(
+      "2026-04-04",
+      5,
+      { ...storm, storm_date: "2026-04-04", files: { ...storm.files, power: "storms/2026-04-04/power.json" } },
+      null,
+    );
+    expect(unknownPowerRunCmds).not.toContain("uv run hailprint power 2026-04-04");
     expect(runPublishedFiles(storm)).toHaveLength(7);
   });
 });
