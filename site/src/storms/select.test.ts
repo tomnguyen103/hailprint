@@ -101,6 +101,9 @@ it("picks the newest storm date with an impact layer for the landing route and f
 
 it("filters curated case studies against the published catalog", () => {
   expect(CASE_STUDIES).toHaveLength(4);
+  expect(CASE_STUDIES[0]?.summary).toBe(
+    "361,418 parcels · 251,830 Harris customers out (13.8%) · 9 SPC reports",
+  );
   const available = availableCaseStudies([storm("2024-05-28"), storm("2024-12-24")]);
   expect(available.map((cs) => cs.storm_date)).toEqual(["2024-05-28", "2024-12-24"]);
 });

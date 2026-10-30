@@ -41,7 +41,7 @@ export const CASE_STUDIES: readonly CaseStudy[] = [
   {
     storm_date: "2024-05-28",
     title: "2024-05-28 · Derecho & hail",
-    summary: "361,418 parcels · 44% peak power out · 9 SPC reports",
+    summary: "361,418 parcels · 251,830 Harris customers out (13.8%) · 9 SPC reports",
   },
   {
     storm_date: "2024-12-24",
