@@ -1,14 +1,13 @@
 // On-demand live status check for NWS Active Alerts, ORNL ODIN power outages, and Georgia Tech IODA reachability.
 // Uses the shared injectable Fetch seam (`getFetch`) with a 15-second AbortController timeout.
-import { FETCH_TIMEOUT_MS, getFetch } from "../data/fetch";
+import { fetchUrlJson } from "../data/fetch";
 import { DataError } from "../data/types";
-import { dropOf } from "../impact/internet";
 import { ODIN_LABEL } from "../impact/power";
 
 const SIGNAL_STEP_S = 600;
 const MAX_IODA_COUNT = 2 ** 24;
 const ODIN_LIMIT = 100;
-const LIVE_IODA_WINDOW_S = 24 * 3600;
+export const LIVE_IODA_WINDOW_S = 7200;
 
 /** IODA v2 county codes matching `src/hailprint/internet.py:25-34`. */
 export const IODA_COUNTY_CODES: Readonly<Record<string, string>> = {
@@ -166,20 +165,7 @@ export function parseOdinSnapshot(value: unknown, fips: string): LivePowerSnapsh
 
 export interface LiveIodaSnapshot {
   latestValue: number | null;
-  baselineMedian: number | null;
-  ratio: number | null;
-  drop: number | null;
   pointCount: number;
-}
-
-function medianOf(values: readonly number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) {
-    return sorted[mid]!;
-  }
-  return (sorted[mid - 1]! + sorted[mid]!) / 2;
 }
 
 export function parseIodaSignal(value: unknown): LiveIodaSnapshot {
@@ -193,7 +179,7 @@ export function parseIodaSignal(value: unknown): LiveIodaSnapshot {
   }
   const series = list("ioda", outer[0], "data[0]");
   if (series.length === 0) {
-    return { latestValue: null, baselineMedian: null, ratio: null, drop: null, pointCount: 0 };
+    return { latestValue: null, pointCount: 0 };
   }
   if (series.length > 1) {
     throw new DataError("ioda", "expected one signal series");
@@ -216,51 +202,17 @@ export function parseIodaSignal(value: unknown): LiveIodaSnapshot {
   });
 
   if (valid.length === 0) {
-    return { latestValue: null, baselineMedian: null, ratio: null, drop: null, pointCount: 0 };
+    return { latestValue: null, pointCount: 0 };
   }
   const latestValue = valid[valid.length - 1]!;
-  const baselineMedian = medianOf(valid);
-  const ratio =
-    baselineMedian !== null && baselineMedian > 0
-      ? Math.round((latestValue / baselineMedian) * 1000) / 1000
-      : null;
-  const drop = dropOf(ratio);
   return {
     latestValue,
-    baselineMedian,
-    ratio,
-    drop,
     pointCount: valid.length,
   };
 }
 
-async function fetchLiveJson<T>(source: string, url: string, guard: (body: unknown) => T): Promise<T> {
-  const run = getFetch();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-  let body: unknown;
-  try {
-    let response: Response;
-    try {
-      response = await run(url, { signal: controller.signal, headers: { Accept: "application/json" } });
-    } catch (error) {
-      throw new DataError(source, `network error, ${String(error)}`);
-    }
-    if (!response.ok) {
-      throw new DataError(source, `HTTP ${response.status}`);
-    }
-    try {
-      body = await response.json();
-    } catch (error) {
-      if (controller.signal.aborted) {
-        throw new DataError(source, `network error, ${String(error)}`);
-      }
-      throw new DataError(source, "body is not JSON");
-    }
-  } finally {
-    clearTimeout(timer);
-  }
-  return guard(body);
+function fetchLiveJson<T>(source: string, url: string, guard: (body: unknown) => T): Promise<T> {
+  return fetchUrlJson(url, source, guard, { Accept: "application/json" });
 }
 
 export type LiveFeedBlock<T> = ({ status: "ready" } & T) | { status: "error"; message: string };

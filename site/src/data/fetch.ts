@@ -28,9 +28,13 @@ export function resolveDataBase(envBase: string | undefined): string {
 
 export const DATA_BASE = resolveDataBase(import.meta.env.VITE_DATA_BASE);
 
-/** Fetch `<base><path>` and pass the parsed body through `guard`. The default base is `/data/`. */
-export async function fetchJson<T>(path: string, guard: (value: unknown) => T, base = DATA_BASE): Promise<T> {
-  const file = path.slice(path.lastIndexOf("/") + 1);
+/** Fetch `url` with a 15-second timeout, map network/HTTP/JSON errors to `DataError(label, ...)`, and validate with `guard`. */
+export async function fetchUrlJson<T>(
+  url: string,
+  label: string,
+  guard: (value: unknown) => T,
+  headers?: HeadersInit,
+): Promise<T> {
   const run = impl ?? fetch;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -38,23 +42,29 @@ export async function fetchJson<T>(path: string, guard: (value: unknown) => T, b
   try {
     let response: Response;
     try {
-      response = await run(base + path, { signal: controller.signal });
+      response = await run(url, headers ? { signal: controller.signal, headers } : { signal: controller.signal });
     } catch (error) {
-      throw new DataError(file, `network error, ${String(error)}`);
+      throw new DataError(label, `network error, ${String(error)}`);
     }
-    if (!response.ok) throw new DataError(file, `HTTP ${response.status}`);
+    if (!response.ok) throw new DataError(label, `HTTP ${response.status}`);
     try {
       body = await response.json();
     } catch (error) {
       if (controller.signal.aborted) {
-        throw new DataError(file, `network error, ${String(error)}`);
+        throw new DataError(label, `network error, ${String(error)}`);
       }
-      throw new DataError(file, "body is not JSON");
+      throw new DataError(label, "body is not JSON");
     }
   } finally {
     clearTimeout(timer);
   }
   return guard(body);
+}
+
+/** Fetch `<base><path>` and pass the parsed body through `guard`. The default base is `/data/`. */
+export async function fetchJson<T>(path: string, guard: (value: unknown) => T, base = DATA_BASE): Promise<T> {
+  const file = path.slice(path.lastIndexOf("/") + 1);
+  return fetchUrlJson(base + path, file, guard);
 }
 
 export const STALE: unique symbol = Symbol("stale");

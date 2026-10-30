@@ -26,9 +26,9 @@ const SWATH_FILE = "swath.geojson";
 const POINT_ZOOM = 11;
 
 type LiveCheckState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "ready"; data: LiveStatusResult };
+  | { key: string; status: "idle" }
+  | { key: string; status: "loading" }
+  | { key: string; status: "ready"; data: LiveStatusResult };
 
 function cropBadgeText(cropStatus: StormPinRow["cropStatus"], radiusKm: number): string {
   if (cropStatus === "outside-crop") {
@@ -120,7 +120,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const [invalid, setInvalid] = useState(false);
   const [previewDate, setPreviewDate] = useState<string>(() => index.storms[0]?.storm_date ?? "");
   const [filterMode, setFilterMode] = useState<"all" | "active">("all");
-  const [liveState, setLiveState] = useState<LiveCheckState>({ status: "idle" });
+  const [liveState, setLiveState] = useState<LiveCheckState>({ key: "", status: "idle" });
 
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
@@ -220,10 +220,9 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     return feat?.properties?.["name"] ? `${String(feat.properties["name"])} County` : `County ${pinnedFips}`;
   }, [pinnedFips, outlines]);
 
-  useEffect(() => {
-    liveEpochRef.current += 1;
-    setLiveState({ status: "idle" });
-  }, [activePoint?.[0], activePoint?.[1], pinnedFips]);
+  const liveKey = activePoint !== null ? `${activePoint[0]},${activePoint[1]},${pinnedFips ?? ""}` : "";
+  const currentLive: LiveCheckState =
+    liveState.key === liveKey ? liveState : { key: liveKey, status: "idle" };
 
   const check = (event: Event) => {
     event.preventDefault();
@@ -238,16 +237,17 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     setLatText("");
     setLonText("");
     setInvalid(false);
-    setLiveState({ status: "idle" });
+    setLiveState({ key: "", status: "idle" });
   };
 
   const runLiveCheck = () => {
     if (!activePoint || metro.status !== "ready") return;
+    const reqKey = liveKey;
     const myEpoch = ++liveEpochRef.current;
-    setLiveState({ status: "loading" });
+    setLiveState({ key: reqKey, status: "loading" });
     void fetchLiveStatus(activePoint, pinnedFips).then((data) => {
       if (liveEpochRef.current === myEpoch) {
-        setLiveState({ status: "ready", data });
+        setLiveState({ key: reqKey, status: "ready", data });
       }
     });
   };
@@ -373,46 +373,70 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                   <button
                     type="button"
                     class="button button-small"
-                    disabled={liveState.status === "loading" || metro.status !== "ready"}
+                    disabled={currentLive.status === "loading" || metro.status !== "ready"}
                     onClick={runLiveCheck}
                   >
-                    {liveState.status === "loading" ? "Checking live feeds\u2026" : "Check live NWS & outage feeds"}
+                    {currentLive.status === "loading"
+                      ? "Checking live feeds\u2026"
+                      : "Check live NWS & outage feeds"}
                   </button>
                   <span class="point-live-caption">
                     On-demand check of NWS Active Alerts, ORNL ODIN utility outages, and IODA internet reachability.
                   </span>
                 </div>
-                {liveState.status === "ready" ? (
+                {currentLive.status === "ready" ? (
                   <dl class="receipt-list point-live-grid">
                     <dt>NWS active alerts</dt>
                     <dd>
-                      {liveState.data.alerts.status === "error"
-                        ? liveState.data.alerts.message
-                        : liveState.data.alerts.alerts.length === 0
-                          ? "0 active alerts at pinned point"
-                          : liveState.data.alerts.alerts.map((a) => `${a.event} (${a.severity})`).join(" \u00b7 ")}
+                      {currentLive.data.alerts.status === "error" ? (
+                        <>
+                          {currentLive.data.alerts.message}{" "}
+                          <button type="button" class="button button-small" onClick={runLiveCheck}>
+                            Retry
+                          </button>
+                        </>
+                      ) : currentLive.data.alerts.alerts.length === 0 ? (
+                        "0 active alerts at pinned point"
+                      ) : (
+                        currentLive.data.alerts.alerts
+                          .map((a) => `${a.event} (${a.severity})`)
+                          .join(" \u00b7 ")
+                      )}
                     </dd>
                     <dt>ORNL ODIN utility outages</dt>
                     <dd>
-                      {liveState.data.power.status === "error" ? (
-                        liveState.data.power.message
+                      {currentLive.data.power.status === "error" ? (
+                        <>
+                          {currentLive.data.power.message}{" "}
+                          <button type="button" class="button button-small" onClick={runLiveCheck}>
+                            Retry
+                          </button>
+                        </>
                       ) : (
                         <>
-                          <span class="mono">{formatCount(liveState.data.power.customersOut)}</span> customers out (
-                          {liveState.data.power.note})
+                          <span class="mono">{formatCount(currentLive.data.power.customersOut)}</span> customers out (
+                          {currentLive.data.power.note})
                         </>
                       )}
                     </dd>
                     <dt>IODA internet reachability</dt>
                     <dd>
-                      {liveState.data.internet.status === "error" ? (
-                        liveState.data.internet.message
-                      ) : liveState.data.internet.ratio === null ? (
-                        "no recent county signal points"
+                      {currentLive.data.internet.status === "error" ? (
+                        <>
+                          {currentLive.data.internet.message}{" "}
+                          <button type="button" class="button button-small" onClick={runLiveCheck}>
+                            Retry
+                          </button>
+                        </>
+                      ) : currentLive.data.internet.latestValue === null ? (
+                        "no recent county signal points (last 2h)"
                       ) : (
                         <>
-                          <span class="mono">{percentText(liveState.data.internet.drop)}</span> below 24h median (ratio{" "}
-                          <span class="mono">{liveState.data.internet.ratio.toFixed(3)}</span>)
+                          <span class="mono">
+                            {formatCount(Math.round(currentLive.data.internet.latestValue))}
+                          </span>{" "}
+                          active /24 blocks (
+                          <span class="mono">{currentLive.data.internet.pointCount}</span> points in last 2h)
                         </>
                       )}
                     </dd>
