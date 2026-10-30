@@ -110,8 +110,15 @@ export function navigate(path: string): void {
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
+/** Navigate to a typed Target route or path string. */
+export function go(target: Target | string): void {
+  navigate(typeof target === "string" ? target : href(target));
+}
+
 /** Replace the current path (redirects), so Back skips it. */
 export function replace(path: string): void {
   window.history.replaceState(null, "", path);
   window.dispatchEvent(new PopStateEvent("popstate"));
 }
+
+

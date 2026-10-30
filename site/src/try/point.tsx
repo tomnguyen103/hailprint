@@ -20,6 +20,7 @@ import { useSwathsAll } from "../state/swaths-all";
 import { useTheme } from "../state/theme";
 import type { MapHandle } from "../storms/map/create-map";
 import "../styles/map.css";
+import { pointCsvOf } from "./csv";
 import { type StormPinRow, analyzeStormAtPin, summarizeArchiveAtPin } from "./point-analysis";
 import { POINT_HINT, parsePoint } from "./point-form";
 
@@ -422,6 +423,22 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                     onClick={() => setFilterMode("active")}
                   >
                     Activity near pin only (<span class="mono">{activeCount}</span>)
+                  </button>
+                  <button
+                    type="button"
+                    class="button button-small"
+                    onClick={() => {
+                      const csv = pointCsvOf(rows, activePoint, radiusKm);
+                      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `hailprint-point-${activePoint[1].toFixed(4)}_${activePoint[0].toFixed(4)}-r${radiusKm}km.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                  >
+                    Download 25-storm point history CSV
                   </button>
                 </div>
                 <span class="point-preview-note">

@@ -164,12 +164,12 @@ describe("strict runtime schema validation (US-03.3)", () => {
     const { LiveStatusList } = await import("./live-status-list");
     const vnode = LiveStatusList({
       data: {
-        fetchedAtUtc: "2026-10-27T12:00:00Z",
+        checkedAtUtc: "2026-10-27T12:00:00Z",
         point: [-95.3698, 29.7604],
-        countyFips: "48201",
+        fips: "48201",
         alerts: { status: "ready", alerts: [] },
-        power: { status: "ready", customersOut: 0, utilities: [], note: "0 utilities" },
-        internet: { status: "ready", latestValue: null, pointCount: 0 },
+        power: { status: "ready", fips: "48201", customersOut: 0, utilities: [], note: "0 utilities" },
+        internet: { status: "ready", fips: "48201", latestValue: null, pointCount: 0 },
       },
       onRetry: () => {},
     });

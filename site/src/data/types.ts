@@ -16,9 +16,15 @@ export class DataError extends Error {
 
 export type Metric = number | null;
 
+export interface Source {
+  source: string;
+  product: string;
+  file: string;
+}
+
 export interface Receipt {
   storm_date: string;
-  sources: { source: string; product: string; file: string }[];
+  sources: Source[];
   confidence: string;
   run_time: string;
   package_version: string;

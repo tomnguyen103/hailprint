@@ -137,11 +137,12 @@ export function classifyReports(
   >();
   for (const feat of reportsGeo?.features ?? []) {
     const p = feat.properties;
+    const coords = feat.geometry.coordinates;
     byId.set(p.id, {
       time: p.time,
       location: p.location,
       county: p.county,
-      lngLat: feat.geometry.coordinates,
+      lngLat: [Number(coords[0] ?? 0), Number(coords[1] ?? 0)],
     });
   }
 

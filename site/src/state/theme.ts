@@ -2,9 +2,12 @@ import { useEffect, useState } from "preact/hooks";
 import { apply, read, resolve, store, type Resolved, type Selection } from "../theme";
 
 // One store for the page: one preference, one listener set, one matchMedia listener.
-const media = window.matchMedia("(prefers-color-scheme: dark)");
+const media =
+  typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia("(prefers-color-scheme: dark)")
+    : null;
 let pref: Selection = read();
-let systemDark = media.matches;
+let systemDark = media?.matches ?? false;
 const listeners = new Set<() => void>();
 
 function notify(): void {
@@ -12,7 +15,7 @@ function notify(): void {
   listeners.forEach((fn) => fn());
 }
 
-media.addEventListener("change", (event) => {
+media?.addEventListener("change", (event) => {
   systemDark = event.matches;
   notify();
 });

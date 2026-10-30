@@ -13,6 +13,14 @@ export function metricText(value: Metric): { text: string; hidden: string | null
   return value === null ? { text: "\u2013", hidden: NULL_METRIC_TEXT } : { text: value.toFixed(2), hidden: null };
 }
 
+export function formatMetric(value: Metric): string {
+  return metricText(value).text;
+}
+
+export function formatReportTime(time: string): string {
+  return time.length === 4 ? `${time.slice(0, 2)}:${time.slice(2)}Z` : time;
+}
+
 export function formatCount(n: number): string {
   return n.toLocaleString("en-US");
 }
@@ -20,3 +28,4 @@ export function formatCount(n: number): string {
 export function formatInches(inches: number): string {
   return `${inches.toFixed(2)} in`;
 }
+

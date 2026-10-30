@@ -1,5 +1,5 @@
 import { DATA_BASE, fetchJson } from "../data/fetch";
-import { guardPairs, guardReports, guardSwath, guardWarnings, guardZips } from "../data/guard";
+import { guardPairs, guardReports, guardSwath, guardWarnings, guardZipCounts } from "../data/guard";
 import type {
   InternetFile,
   PowerFile,
@@ -76,7 +76,7 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
   );
   const zipFile = storm.files.zip_counts;
   const zipCounts = useLoad<ZipCounts | null>(`data:${zipFile ?? "zips:none"}`, () =>
-    zipFile === null ? Promise.resolve(null) : fetchJson(zipFile, guardZips),
+    zipFile === null ? Promise.resolve(null) : fetchJson(zipFile, guardZipCounts),
   );
   const internalReports = useLoad<ReportsFile>(
     reportsProp ? "data:reports:external" : `data:${storm.files.reports}`,
