@@ -140,3 +140,39 @@ describe("golden: rescore at R = 5 equals the published table", () => {
     expect(readdirSync(join(dataDir, "storms")).length).toBe(index.storms.length);
   });
 });
+
+describe("classifyReports", () => {
+  it("classifies reports into hit, miss, false_alarm, correct_negative, and excluded and joins reports.geojson metadata", async () => {
+    const { classifyReports } = await import("./rescore");
+    const sample = doc([
+      { id: 0, size_in: 1.0, edge_m: 40000, dist_m: [0, 3000] },
+      { id: 1, size_in: 0.75, edge_m: 500, dist_m: [null, 6000] },
+      { id: 2, size_in: 2.0, edge_m: 9000, dist_m: [12000, null] },
+      { id: 3, size_in: 0.75, edge_m: 15000, dist_m: [0, 2000] },
+      { id: 4, size_in: 0.75, edge_m: 15000, dist_m: [0, 9000] },
+    ]);
+    const geo = {
+      type: "FeatureCollection" as const,
+      receipt,
+      features: [
+        {
+          type: "Feature" as const,
+          properties: { id: 0, time: "2130", location: "SPRING", county: "HARRIS", state: "TX", size_in: 1.0 },
+          geometry: { type: "Point" as const, coordinates: [-95.35, 30.05] as [number, number] },
+        },
+      ],
+    };
+    const classified = classifyReports(sample, 5, 25.4, geo);
+    expect(classified.map((c) => c.outcome)).toEqual([
+      "hit",
+      "excluded",
+      "miss",
+      "false_alarm",
+      "correct_negative",
+    ]);
+    expect(classified[0]?.location).toBe("SPRING");
+    expect(classified[0]?.time).toBe("2130");
+    expect(classified[0]?.lngLat).toEqual([-95.35, 30.05]);
+    expect(classified[2]?.location).toBeNull();
+  });
+});

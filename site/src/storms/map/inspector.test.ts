@@ -181,5 +181,69 @@ describe("InspectorView out-of-metro guard", () => {
     expect(retryButtons).toHaveLength(1);
     (retryButtons[0]!.props["onClick"] as () => void)();
     expect(liveChecked).toBe(1);
+
+    const copyButtons = findAll(tree, (v) => v.type === "button" && textOf(v).includes("Copy field note"));
+    expect(copyButtons).toHaveLength(1);
+    const copiedTexts: string[] = [];
+    Object.defineProperty(globalThis, "navigator", {
+      value: {
+        clipboard: {
+          writeText: (t: string) => {
+            copiedTexts.push(t);
+            return Promise.reject(new Error("clipboard denied"));
+          },
+        },
+      },
+      configurable: true,
+    });
+    (copyButtons[0]!.props["onClick"] as () => void)();
+    expect(copiedTexts).toHaveLength(1);
+    expect(copiedTexts[0]).toContain("Hailprint point note — 2024-05-28");
+  });
+
+  it("formats a plain-text point field note with coordinate, radar-estimated hail size, and receipt", async () => {
+    const { formatPointFieldNote } = await import("./inspector");
+    const note = formatPointFieldNote(
+      {
+        lngLat: [-95.3698, 29.7604],
+        coveringMm: 25.4,
+        nearest: null,
+      },
+      receipt,
+    );
+    expect(note).toContain("Hailprint point note — 2024-05-28 at (29.7604, -95.3698)");
+    expect(note).toContain("radar-estimated hail size quarter (1.00 in)");
+    expect(note).toContain("Radar-estimated hail size.");
+
+    const noteWithReport = formatPointFieldNote(
+      {
+        lngLat: [-95.3698, 29.7604],
+        coveringMm: 25.4,
+        nearest: {
+          km: 1.5,
+          feature: {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [-95.37, 29.76] },
+            properties: {
+              id: 1,
+              time: "2345",
+              location: "HOUSTON",
+              county: "HARRIS",
+              state: "TX",
+              size_in: 1.25,
+            },
+          },
+        },
+      },
+      receipt,
+      {
+        ...receipt,
+        sources: [
+          { source: "NOAA SPC", product: "Storm Events Database", file: "2024-05-28_hail.csv" },
+        ],
+      },
+    );
+    expect(noteWithReport).toContain("NOAA MRMS MESH_Max_1440min, NOAA SPC Storm Events Database");
   });
 });
+

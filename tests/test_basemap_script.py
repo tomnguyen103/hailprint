@@ -187,4 +187,3 @@ def test_basemap_sh_delegates_to_basemap_py_and_glossary_matches_odin_schedule()
 
     glossary = (ROOT / "GLOSSARY.md").read_text(encoding="utf-8")
     assert "trigger/odin.ts" in glossary
-

@@ -53,7 +53,7 @@ export function LiveStatusList({
             </button>
           </>
         ) : data.internet.latestValue === null ? (
-          "no recent county signal points (last 2h)"
+          "no recent county signal points (last 2h; IODA county series covers 2022-03 to 2024-05)"
         ) : (
           <>
             <span class="mono">{formatCount(Math.round(data.internet.latestValue))}</span> active

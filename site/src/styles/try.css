@@ -343,3 +343,41 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+
+.compare-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.compare-presets-label {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.compare-presets button[aria-pressed="true"],
+.compare-layer-toggle button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sheet-muted);
+  font-weight: 500;
+}
+
+.compare-layer-toggle {
+  display: flex;
+  align-items: end;
+}
+
+.compare-delta-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.compare-legend {
+  margin-top: 12px;
+}
+

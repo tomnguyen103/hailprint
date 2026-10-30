@@ -62,7 +62,9 @@ def test_vercel_json_serves_security_headers():
     assert "img-src 'self' data: blob: https://protomaps.github.io;" in csp
     assert (
         "connect-src 'self' https://*.supabase.co "
-        "https://*.protomaps.com https://protomaps.github.io;"
+        "https://*.protomaps.com https://protomaps.github.io "
+        "https://api.weather.gov https://ornl.opendatasoft.com "
+        "https://api.ioda.inetintel.cc.gatech.edu;"
     ) in csp
 
 

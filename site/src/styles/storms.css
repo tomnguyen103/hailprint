@@ -1,5 +1,33 @@
 /* Storms workspace: stamp, sub-tabs, panes, tables. The scope sidebar lives in scope.css. */
 
+/* Case studies bar */
+
+.case-studies-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.case-studies-label {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.case-studies-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.case-study-pill[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sheet-muted);
+  font-weight: 500;
+}
+
 /* Stamp */
 
 .stamp {
@@ -218,6 +246,87 @@
 .cgrid-label {
   color: var(--ink-muted);
   font-size: 0.9rem;
+}
+
+/* Report contingency classifier */
+
+.report-classifier-section {
+  margin-top: 32px;
+}
+
+.classifier-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.classifier-pill[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sheet-muted);
+  font-weight: 500;
+}
+
+.outcome-badge {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+.outcome-badge[data-outcome="hit"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.outcome-badge[data-outcome="excluded"] {
+  color: var(--ink-muted);
+}
+
+/* Parcels toolbar & cross-storm ZIP ledger */
+
+.parcels-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.zip-search {
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--sheet);
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.zip-pick[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sheet-muted);
+  font-weight: 500;
+}
+
+.zip-ledger-section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--rule);
+}
+
+.zip-ledger-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.zip-ledger-header h2 {
+  margin: 0;
 }
 
 /* Data pane */

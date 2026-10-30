@@ -13,7 +13,7 @@ import { type Load, useLoad } from "../state/load";
 import { usePin } from "../state/pin";
 import { useTheme } from "../state/theme";
 import "../styles/map.css";
-import { TimeSlider } from "../time/slider";
+import { TimeSlider, eventJumpChips } from "../time/slider";
 import { LAYER_ROWS, LayersControl, type LayerState } from "./layers-control";
 import type { MapHandle } from "./map/create-map";
 import { boundsOf, coveringAt, coveringClass, nearestReport, swathExposureAt } from "./map/geo";
@@ -313,7 +313,23 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
             <RulerLegend hidden={hidden} onToggle={toggle} />
           </div>
         </div>
-        <TimeSlider date={storm.storm_date} step={step} onStep={onStep} />
+        <TimeSlider
+          date={storm.storm_date}
+          step={step}
+          jumps={useMemo(
+            () =>
+              eventJumpChips({
+                date: storm.storm_date,
+                warnings: warningsData,
+                reports: reportsData,
+                power: powerData,
+                internet: internetData,
+                fips,
+              }),
+            [storm.storm_date, warningsData, reportsData, powerData, internetData, fips],
+          )}
+          onStep={onStep}
+        />
         <Timeline
           date={storm.storm_date}
           step={step}

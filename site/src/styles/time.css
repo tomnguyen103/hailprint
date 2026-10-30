@@ -40,8 +40,17 @@
   height: 20px;
 }
 
-.time-readout {
+.time-footer {
   grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 4px;
+}
+
+.time-readout {
   display: flex;
   flex-wrap: wrap;
   gap: 0 24px;
@@ -50,6 +59,22 @@
 
 .time-readout span {
   white-space: nowrap;
+}
+
+.time-stride,
+.time-jumps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-stride button[aria-pressed="true"],
+.time-jump-chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--sheet-muted);
+  font-weight: 500;
 }
 
 /* Storm timeline: one SVG on the 48-hour axis. Rows are 16 px each and the reports strip is 40 px, as in timeline.tsx. */

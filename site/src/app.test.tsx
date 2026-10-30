@@ -398,6 +398,85 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(reportsItem?.receipt).toEqual(sampleReceipt);
     expect(pairsItem?.receipt).toEqual(sampleReceipt);
     setFetch(null);
+
+    const { eagleiYearsFor, reproduceCommands } = await import("./storms/data-pane");
+    expect(eagleiYearsFor("2024-12-31")).toEqual(["2024", "2025"]);
+    const cliLines = reproduceCommands(
+      {
+        ...storm,
+        files: {
+          ...storm.files,
+          zip_counts: "storms/2024-05-28/zip-counts.json",
+          warnings: "storms/2024-05-28/warnings.geojson",
+          power: "storms/2024-05-28/power.json",
+          internet: "storms/2024-05-28/internet.json",
+        },
+      },
+      5,
+      "eaglei",
+    );
+    expect(cliLines).toContain("uv run hailprint score 2024-05-28 --radius-km 5");
+    expect(cliLines).toContain("uv run hailprint warnings 2024-05-28");
+    expect(cliLines).toContain("uv run hailprint eaglei 2024");
+    expect(cliLines).toContain("uv run hailprint power 2024-05-28");
+    expect(cliLines).toContain("uv run hailprint internet 2024-05-28");
+    expect(cliLines).toContain("uv run hailprint publish 2024-05-28 --with-internet");
+
+    const odinCliLines = reproduceCommands(
+      {
+        ...storm,
+        storm_date: "2026-04-04",
+        files: {
+          ...storm.files,
+          power: "storms/2026-04-04/power.json",
+        },
+      },
+      5,
+      "odin",
+    );
+    expect(odinCliLines).not.toContain("uv run hailprint eaglei 2026");
+    expect(
+      odinCliLines.some((line) => line.includes("derived/odin/odin-2026-04-04.parquet")),
+    ).toBe(true);
+
+    const unknownPowerCli = reproduceCommands(
+      {
+        ...storm,
+        storm_date: "2026-04-04",
+        files: {
+          ...storm.files,
+          power: "storms/2026-04-04/power.json",
+        },
+      },
+      5,
+      null,
+    );
+    expect(unknownPowerCli).not.toContain("uv run hailprint power 2026-04-04");
+
+    const { commandsFor, runPublishedFiles } = await import("./try/run");
+    const runCmds = commandsFor("2024-05-28", 5, undefined, "eaglei");
+    expect(runCmds).toContain("uv run hailprint warnings 2024-05-28");
+    expect(runCmds).toContain("uv run hailprint eaglei 2024");
+    expect(runCmds).toContain("uv run hailprint power 2024-05-28");
+    expect(runCmds).toContain("uv run hailprint internet 2024-05-28");
+    const odinRunCmds = commandsFor(
+      "2026-04-04",
+      5,
+      { ...storm, storm_date: "2026-04-04", files: { ...storm.files, power: "storms/2026-04-04/power.json" } },
+      "odin",
+    );
+    expect(odinRunCmds).not.toContain("uv run hailprint eaglei 2026");
+    expect(
+      odinRunCmds.some((line) => line.includes("derived/odin/odin-2026-04-04.parquet")),
+    ).toBe(true);
+    const unknownPowerRunCmds = commandsFor(
+      "2026-04-04",
+      5,
+      { ...storm, storm_date: "2026-04-04", files: { ...storm.files, power: "storms/2026-04-04/power.json" } },
+      null,
+    );
+    expect(unknownPowerRunCmds).not.toContain("uv run hailprint power 2026-04-04");
+    expect(runPublishedFiles(storm)).toHaveLength(7);
   });
 });
 

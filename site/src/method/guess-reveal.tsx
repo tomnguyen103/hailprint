@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from "preact/hooks";
 import type { Metric, StormsIndex } from "../data/types";
-import { pooledRows } from "../pool";
+import { pooledReceipt, pooledRows } from "../pool";
 import { RULER } from "../ruler";
 import { ClassPick } from "../scorecard/class-pick";
 import { MetricText } from "../scorecard/metric-text";
@@ -27,6 +27,7 @@ export function GuessReveal({ index }: { index: StormsIndex }) {
   const id = useId();
   const data = pairs.status === "ready" ? pairs.data : null;
   const table = useMemo(() => (data === null ? null : pooledRows(data, index.radius_km_default)), [data, index.radius_km_default]);
+  const receipt = useMemo(() => (data === null ? null : pooledReceipt(data, index)), [data, index]);
 
   const pick = (mm: number) => {
     setClassMm(mm);
@@ -58,10 +59,12 @@ export function GuessReveal({ index }: { index: StormsIndex }) {
               <dd class="mono">{difference(guess, actual)}</dd>
             </div>
           </dl>
-          <p class="pane-note">
-            Pooled at <span class="mono">{index.radius_km_default} km</span>:{" "}
-            <ReceiptChip receipt={data![0]!.receipt} file={`${FILE}, pooled over ${index.storms.length} storm dates`} />
-          </p>
+          {receipt ? (
+            <p class="pane-note">
+              Pooled at <span class="mono">{index.radius_km_default} km</span>:{" "}
+              <ReceiptChip receipt={receipt} file={`${FILE}, pooled over ${index.storms.length} storm dates`} />
+            </p>
+          ) : null}
         </>
       );
     }

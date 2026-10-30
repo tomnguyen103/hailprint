@@ -2034,4 +2034,3 @@ def test_write_swaths_passes_explicit_source_and_product_metadata(tmp_path, monk
             "max_mesh_mm": str(MAX_MESH_MM),
         }
     ]
-

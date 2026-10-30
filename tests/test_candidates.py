@@ -557,4 +557,3 @@ def test_all_days_keeps_max_size_from_winning_source_row_not_hybrid_max(tmp_path
     assert days.loc[WCM_END, "report_count"] == 3
     assert days.loc[WCM_END, "report_source"] == "wcm"
     assert days.loc[WCM_END, "max_size_in"] == 1.75
-

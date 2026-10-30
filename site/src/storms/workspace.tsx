@@ -4,8 +4,8 @@ import { HARRIS_FIPS } from "../data/constants";
 import { fetchJson } from "../data/fetch";
 import { guardInternet, guardPower, guardReports } from "../data/guard";
 import type { InternetFile, PowerFile, Receipt, Storm, StormsIndex } from "../data/types";
-import { harrisPeak } from "../impact/series";
-import { TABS, TAB_LABELS, href, type Tab } from "../router";
+import { harrisPeak, reportTicks } from "../impact/series";
+import { TABS, TAB_LABELS, go, href, type Tab } from "../router";
 import { SubTabs } from "../shell/sub-tabs";
 import { useLoad } from "../state/load";
 import { useStep } from "../time/use-step";
@@ -14,6 +14,7 @@ import { MapPane } from "./map-pane";
 import { ParcelsPane } from "./parcels-pane";
 import { ScopeSidebar } from "./scope-sidebar";
 import { ScorePane } from "./score-pane";
+import { availableCaseStudies } from "./select";
 import { Stamp } from "./stamp";
 
 interface Props {
@@ -42,9 +43,14 @@ export function Workspace({ index, storm, tab }: Props) {
   const internet = useLoad<InternetFile | null>(internetFile ?? "internet:none", () =>
     internetFile === null ? Promise.resolve(null) : fetchJson(internetFile, guardInternet),
   );
-  // The map opens at the Harris power peak when the file is valid; a failed file leaves step 48.
-  const { step, setStep } = useStep(storm.storm_date, harrisPeak(power.status === "ready" ? power.data : null));
   const reports = useLoad(storm.files.reports, () => fetchJson(storm.files.reports, guardReports));
+  const firstReportStep = reports.status === "ready" ? (reportTicks(reports.data)[0]?.step ?? null) : null;
+  // The map opens at the Harris power peak when the file is valid, else the earliest SPC report step, else step 48.
+  const { step, setStep } = useStep(
+    storm.storm_date,
+    harrisPeak(power.status === "ready" ? power.data : null),
+    firstReportStep,
+  );
   const indexReceipt: Receipt = {
     storm_date: storm.storm_date,
     sources: [],
@@ -52,6 +58,7 @@ export function Workspace({ index, storm, tab }: Props) {
     run_time: index.run_time,
     package_version: index.package_version,
   };
+  const caseStudies = availableCaseStudies(index.storms);
 
   let pane;
   if (tab === "map") {
@@ -59,9 +66,9 @@ export function Workspace({ index, storm, tab }: Props) {
       <MapPane storm={storm} reports={reports} power={power} internet={internet} step={step} onStep={setStep} fips={fips} onCounty={setFips} />
     );
   }
-  else if (tab === "parcels") pane = <ParcelsPane storm={storm} />;
-  else if (tab === "score") pane = <ScorePane storm={storm} radiusKm={index.radius_km_default} />;
-  else pane = <DataPane storm={storm} power={power} internet={internet} fips={fips} />;
+  else if (tab === "parcels") pane = <ParcelsPane storm={storm} index={index} />;
+  else if (tab === "score") pane = <ScorePane storm={storm} radiusKm={index.radius_km_default} reports={reports} />;
+  else pane = <DataPane storm={storm} reports={reports} power={power} internet={internet} fips={fips} />;
 
   return (
     <div class="workspace">
@@ -80,6 +87,28 @@ export function Workspace({ index, storm, tab }: Props) {
       <ScopeSidebar storms={index.storms} current={storm} open={datesOpen} onClose={() => setDatesOpen(false)} />
       <div class="workspace-main">
         <h1 class="visually-hidden">Storms, {storm.storm_date}</h1>
+        {caseStudies.length > 0 ? (
+          <div class="case-studies-bar" role="group" aria-label="Field-note case studies">
+            <span class="case-studies-label">Case studies</span>
+            <div class="case-studies-pills">
+              {caseStudies.map((cs) => {
+                const active = cs.storm_date === storm.storm_date;
+                return (
+                  <button
+                    key={cs.storm_date}
+                    type="button"
+                    class="button button-small case-study-pill"
+                    aria-pressed={active}
+                    title={cs.summary}
+                    onClick={() => go(href({ area: "storms", date: cs.storm_date, tab }))}
+                  >
+                    <span class="mono">{cs.title}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
         <Stamp
           storm={storm}
           reports={reports}

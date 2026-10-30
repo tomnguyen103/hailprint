@@ -36,13 +36,14 @@ describe("parseStep", () => {
 describe("resolveStep", () => {
   it("keeps a valid step", () => {
     expect(resolveStep(37)).toBe(37);
-    expect(resolveStep(0, 60)).toBe(0);
+    expect(resolveStep(0, 60, 62)).toBe(0);
   });
 
-  it("falls back to the peak, then to step 48", () => {
-    expect(resolveStep(null, 60)).toBe(60);
+  it("falls back to the peak, then to the first report step, then to step 48", () => {
+    expect(resolveStep(null, 60, 62)).toBe(60);
+    expect(resolveStep(null, null, 62)).toBe(62);
     expect(resolveStep(null)).toBe(48);
-    expect(resolveStep(null, null)).toBe(48);
+    expect(resolveStep(null, null, null)).toBe(48);
   });
 });
 

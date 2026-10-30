@@ -21,7 +21,7 @@
         var resolved =
           stored === "light" || stored === "dark"
             ? stored
-            : matchMedia("(prefers-color-scheme: dark)").matches
+            : typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches
               ? "dark"
               : "light";
         var root = document.documentElement;

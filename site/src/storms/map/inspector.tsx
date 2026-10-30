@@ -271,6 +271,35 @@ export interface InspectorProps {
   onClose: () => void;
 }
 
+/** Plain-text field note citation for a picked coordinate on a storm map. */
+export function formatPointFieldNote(
+  pick: Pick,
+  receipt: Receipt,
+  reportsReceipt?: Receipt | null,
+): string {
+  const [lon, lat] = pick.lngLat;
+  const covering =
+    pick.coveringMm === null
+      ? BELOW_FIRST_CLASS
+      : `${objectName(pick.coveringMm)} (${(pick.coveringMm / 25.4).toFixed(2)} in)`;
+  const nearReport =
+    pick.nearest === null
+      ? "none"
+      : `${pick.nearest.feature.properties.location} (${pick.nearest.feature.properties.size_in.toFixed(2)} in, ${pick.nearest.km.toFixed(1)} km)`;
+  const baseSources =
+    receipt.sources.length > 0
+      ? receipt.sources.map((s) => `${s.source} ${s.product}`)
+      : ["NOAA MRMS MESH_Max_1440min"];
+  const reportSources =
+    pick.nearest === null
+      ? []
+      : reportsReceipt && reportsReceipt.sources.length > 0
+        ? reportsReceipt.sources.map((s) => `${s.source} ${s.product}`)
+        : ["SPC hail"];
+  const sources = [...new Set([...baseSources, ...reportSources])].join(", ");
+  return `Hailprint point note — ${receipt.storm_date} at (${lat.toFixed(4)}, ${lon.toFixed(4)}): radar-estimated hail size ${covering}; nearest SPC report ${nearReport}. Source: ${sources} (run ${receipt.run_time}, v${receipt.package_version}). ${receipt.confidence}`;
+}
+
 /** Pure view of the point inspector, usable in node unit tests without a DOM host. */
 export function InspectorView({
   pick,
@@ -328,6 +357,18 @@ export function InspectorView({
             }}
           >
             {isPinned ? "Unpin" : "Pin point"}
+          </button>
+          <button
+            type="button"
+            class="button button-small"
+            onClick={() => {
+              const text = formatPointFieldNote(pick, receipt, reports?.receipt ?? null);
+              if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+                void navigator.clipboard.writeText(text).catch(() => {});
+              }
+            }}
+          >
+            Copy field note
           </button>
           <button type="button" class="button button-small" onClick={onClose}>
             Close
