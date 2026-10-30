@@ -1,6 +1,6 @@
 import { useMemo, useState } from "preact/hooks";
 import { fetchJson } from "../data/fetch";
-import { guardPairs, guardReports } from "../data/guard";
+import { guardPairs } from "../data/guard";
 import { DataError, type ReportsFile, type Storm, type TableRow } from "../data/types";
 import { METRICS, METRIC_LABELS, formatInches, metricText } from "../format";
 import { scoredCount } from "../pool";
@@ -15,24 +15,17 @@ import { ReportClassifierTable } from "./report-classifier-table";
 
 const FILE = "pairs.json";
 
+/** Render the per-class contingency table, contingency grid, and per-report classifier table for one storm date. */
 export function ScorePane({
   storm,
   radiusKm: defaultRadiusKm,
-  reports: reportsProp,
+  reports,
 }: {
   storm: Storm;
   radiusKm: number;
-  reports?: Load<ReportsFile> & { retry: () => void };
+  reports: Load<ReportsFile>;
 }) {
   const pairs = useLoad(storm.files.pairs, () => fetchJson(storm.files.pairs, guardPairs));
-  const internalReports = useLoad<ReportsFile>(
-    reportsProp ? "score:reports:external" : `score:${storm.files.reports}`,
-    () =>
-      reportsProp
-        ? Promise.resolve(null as unknown as ReportsFile)
-        : fetchJson(storm.files.reports, guardReports),
-  );
-  const reports = reportsProp ?? internalReports;
   const [selected, setSelected] = useState(RULER[0]!.threshold_mm);
   const [radiusKm, setRadiusKm] = useState(defaultRadiusKm);
 

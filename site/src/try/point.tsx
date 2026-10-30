@@ -438,7 +438,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                       setTimeout(() => URL.revokeObjectURL(url), 1000);
                     }}
                   >
-                    Download 25-storm point history CSV
+                    Download {rows.length}-storm point history CSV
                   </button>
                 </div>
                 <span class="point-preview-note">

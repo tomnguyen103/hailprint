@@ -189,12 +189,18 @@ describe("pooledReceipt, filterCohort, and sensitivityMatrix", () => {
           { source: "spc", product: "WCM severe hail", file: "1955-2025_hail.csv" },
         ],
         confidence: "c",
-        run_time: "2026-10-26T00:00:00Z",
-        package_version: "0.1.0",
+        run_time: "2026-10-25T00:00:00Z",
+        package_version: "0.0.9",
       },
     } as unknown as Pairs;
-    const rcpt = pooledReceipt([p1, p2]);
+    const rcpt = pooledReceipt([p1, p2], {
+      confidence: "c",
+      run_time: "2026-10-30T00:00:00Z",
+      package_version: "0.2.0",
+    });
     expect(rcpt?.storm_date).toBe("2021-03-17 to 2024-05-28");
+    expect(rcpt?.run_time).toBe("2026-10-25T00:00:00Z, 2026-10-26T00:00:00Z");
+    expect(rcpt?.package_version).toBe("0.0.9, 0.1.0");
     expect(rcpt?.sources).toHaveLength(2);
     expect(rcpt?.sources[0]?.file).toContain("2 files");
     expect(rcpt?.sources[1]?.file).toBe("1955-2025_hail.csv");

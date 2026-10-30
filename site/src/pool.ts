@@ -79,7 +79,7 @@ export function pooledRows(pairs: Pairs[], radius: number): { rows: PooledRow[];
   }
 }
 
-/** Aggregate receipt over a set of pairs files: date range and deduplicated source list. */
+/** Aggregate receipt over a set of pairs files: date range, deduplicated source list, and distinct run times and package versions. */
 export function pooledReceipt(
   pairs: readonly Pairs[],
   index?: Pick<StormsIndex, "confidence" | "run_time" | "package_version">,
@@ -89,6 +89,31 @@ export function pooledReceipt(
   const dates = [...new Set(pairs.map((p) => p.receipt?.storm_date).filter((d): d is string => Boolean(d)))].sort();
   const stormDate =
     dates.length === 0 ? "" : dates.length === 1 ? dates[0]! : `${dates[0]} to ${dates[dates.length - 1]}`;
+  const runTimes = [...new Set(pairs.map((p) => p.receipt?.run_time).filter((t): t is string => Boolean(t)))].sort();
+  const runTime =
+    runTimes.length === 0
+      ? (index?.run_time ?? first?.run_time ?? "")
+      : runTimes.length === 1
+        ? runTimes[0]!
+        : runTimes.join(", ");
+  const versions = [
+    ...new Set(pairs.map((p) => p.receipt?.package_version).filter((v): v is string => Boolean(v))),
+  ].sort();
+  const packageVersion =
+    versions.length === 0
+      ? (index?.package_version ?? first?.package_version ?? "")
+      : versions.length === 1
+        ? versions[0]!
+        : versions.join(", ");
+  const confidences = [
+    ...new Set(pairs.map((p) => p.receipt?.confidence).filter((c): c is string => Boolean(c))),
+  ];
+  const confidence =
+    confidences.length === 0
+      ? (index?.confidence ?? first?.confidence ?? "")
+      : confidences.length === 1
+        ? confidences[0]!
+        : confidences.join(" | ");
   const byKey = new Map<string, { source: string; product: string; files: Set<string> }>();
   for (const p of pairs) {
     for (const s of p.receipt?.sources ?? []) {
@@ -109,9 +134,9 @@ export function pooledReceipt(
   return {
     storm_date: stormDate,
     sources,
-    confidence: index?.confidence ?? first.confidence,
-    run_time: index?.run_time ?? first.run_time,
-    package_version: index?.package_version ?? first.package_version,
+    confidence,
+    run_time: runTime,
+    package_version: packageVersion,
   };
 }
 

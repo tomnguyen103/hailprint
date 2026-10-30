@@ -54,6 +54,7 @@ it("formats a plain-text storm field note with report count, max size, and recei
   );
   expect(note).toContain("Hailprint field note — 2024-05-28");
   expect(note).toContain("8 SPC hail reports (max 1.75 in)");
+  expect(note).toContain("report source wcm");
   expect(note).toContain("245,000 parcels");
   expect(note).toContain("NOAA MRMS MESH_Max_1440min");
   expect(note).toContain("Radar-estimated hail size.");

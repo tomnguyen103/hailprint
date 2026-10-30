@@ -100,6 +100,6 @@ Domain terms for Hailprint. Code, tests, docs, commits, and chat use these names
 | Case study | One of the four named storm dates in the Storms header bar (`2024-05-28`, `2024-12-24`, `2023-06-23`, `2024-03-15`) with a one-click scenario switch. |
 | Pooled receipt | The aggregated `Receipt` built across every loaded `pairs.json` file for the Scorecard, Guess-then-reveal, and Try it pooled views. |
 | Report classifier | The per-report verification table (`hit`, `miss`, `false_alarm`, `correct_negative`, `excluded`) in `site/src/rescore.ts` at a chosen radius and size threshold. |
-| ZIP exposure ledger | The cross-storm table in `site/src/storms/select.ts` that lists parcel counts for one 5-digit Houston ZIP across all 25 published storm dates. |
+| ZIP exposure ledger | The cross-storm table in `site/src/storms/select.ts` that lists parcel counts for one 5-digit Houston ZIP on storm dates with ZIP-count data where the selected ZIP has positive exposure. |
 | Field note | The plain-text citation string with storm date, coordinates or report count, radar-estimated hail size, and receipt provenance copied from the Storm stamp or Point inspector. |
 

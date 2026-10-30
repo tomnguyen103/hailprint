@@ -59,7 +59,7 @@ export function zipCsvOf(
 export const POINT_CSV_HEADER =
   "storm_date,lat,lon,radius_km,crop_status,covering_mm,within_radius_mm,nearest_swath_km,reports_within_radius,direct_warnings,power_peak_share,power_peak_out,internet_max_drop";
 
-/** Format the 25-storm point history ledger at a pinned coordinate as CSV. */
+/** Format the point history ledger at a pinned coordinate across published storm dates as CSV. */
 export function pointCsvOf(
   rows: readonly StormPinRow[],
   lngLat: [number, number],

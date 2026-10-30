@@ -77,7 +77,7 @@ describe("zipCsvOf", () => {
 });
 
 describe("pointCsvOf", () => {
-  it("formats 25-storm point history rows with coordinate, swath, reports, warnings, power, and internet columns", async () => {
+  it("formats point history rows with coordinate, swath, reports, warnings, power, and internet columns", async () => {
     const { pointCsvOf } = await import("./csv");
     const csv = pointCsvOf(
       [

@@ -1,32 +1,51 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { DATA_BASE } from "../data/fetch";
-import { guardPairs } from "../data/guard";
-import type { Pairs, Storm, StormsIndex } from "../data/types";
+import { DATA_BASE, fetchJson } from "../data/fetch";
+import { guardPairs, guardPower } from "../data/guard";
+import type { Pairs, PowerFile, Storm, StormsIndex } from "../data/types";
 import { pool, scoredCount } from "../pool";
 import { rescore } from "../rescore";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
+import { useLoad } from "../state/load";
 import { useAllFiles } from "../state/pairs-all";
+import { eagleiYearsFor, odinSyncCommandFor } from "../storms/data-pane";
 import { csvOf } from "./csv";
 import { ScopeSelect, newestFirst } from "./try";
 
 const PAIRS_FILE = "pairs.json";
 const COPIED_MS = 1500;
 
-export function commandsFor(date: string, radius: number): string[] {
+/** Build the CLI command sequence to reproduce `date` according to its published files and power source. */
+export function commandsFor(
+  date: string,
+  radius: number,
+  storm?: Storm,
+  powerSource: PowerFile["source"] | null = null,
+): string[] {
+  const hasPower = storm === undefined ? true : storm.files.power !== null;
+  const effectiveSource = hasPower ? (powerSource ?? "eaglei") : null;
+  const powerCommands =
+    effectiveSource === "odin"
+      ? [odinSyncCommandFor(date), `uv run hailprint power ${date}`]
+      : effectiveSource === "eaglei"
+        ? [`uv run hailprint eaglei ${eagleiYearsFor(date).join(" ")}`, `uv run hailprint power ${date}`]
+        : [];
+  const hasParcels = storm === undefined ? true : storm.files.zip_counts !== null;
+  const hasWarnings = storm === undefined ? true : storm.files.warnings !== null;
+  const hasInternet = storm === undefined ? true : storm.files.internet !== null;
   return [
     `uv run hailprint ingest ${date}`,
-    `uv run hailprint parcels ${date}`,
+    ...(hasParcels ? [`uv run hailprint parcels ${date}`] : []),
     `uv run hailprint score ${date} --radius-km ${radius}`,
-    `uv run hailprint warnings ${date}`,
-    `uv run hailprint eaglei ${date.slice(0, 4)}`,
-    `uv run hailprint power ${date}`,
-    `uv run hailprint internet ${date}`,
-    `uv run hailprint publish ${date} --with-internet`,
+    ...(hasWarnings ? [`uv run hailprint warnings ${date}`] : []),
+    ...powerCommands,
+    ...(hasInternet ? [`uv run hailprint internet ${date}`] : []),
+    `uv run hailprint publish ${date}${hasInternet ? " --with-internet" : ""}`,
     "cd site && npm run dev",
   ];
 }
 
+/** Return the ordered `[filename, path]` pairs for a storm date's published files. */
 export function runPublishedFiles(storm: Storm | undefined): [string, string | null][] {
   if (!storm) return [];
   return [
@@ -53,6 +72,11 @@ export function Run({ index }: { index: StormsIndex }) {
   const [date, setDate] = useState(newestFirst(index.storms)[0]?.storm_date ?? "");
   const storm = index.storms.find((s) => s.storm_date === date);
   const pairs = useAllFiles<Pairs>(storm ? [storm.files.pairs] : [], guardPairs, index.run_time);
+  const powerPath = storm?.files.power ?? null;
+  const powerLoad = useLoad<PowerFile | null>(powerPath ? `run:${powerPath}` : "run:power:none", () =>
+    powerPath === null ? Promise.resolve(null) : fetchJson(powerPath, guardPower),
+  );
+  const powerSource = powerLoad.status === "ready" && powerLoad.data !== null ? powerLoad.data.source : null;
   const [copied, setCopied] = useState<number | null>(null);
   const [fallback, setFallback] = useState(false);
   const timer = useRef<number | undefined>(undefined);
@@ -101,7 +125,7 @@ export function Run({ index }: { index: StormsIndex }) {
         <section>
           <h2>Commands</h2>
           <ol class="command-list">
-            {commandsFor(date, defaultRadius).map((text, i) => (
+            {commandsFor(date, defaultRadius, storm, powerSource).map((text, i) => (
               <li key={text} class="command-row">
                 <pre class="code-block">
                   <code

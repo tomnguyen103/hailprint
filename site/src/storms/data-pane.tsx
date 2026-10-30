@@ -18,15 +18,56 @@ import { type Load, useLoad } from "../state/load";
 
 const FILE = "pairs.json";
 
+/** Distinct calendar years touched by the 48-hour impact window (192 steps of 15 min from 12:00 UTC on `stormDate`). */
+export function eagleiYearsFor(stormDate: string): string[] {
+  const start = new Date(`${stormDate}T12:00:00Z`);
+  if (Number.isNaN(start.getTime())) return [stormDate.slice(0, 4)];
+  const last = new Date(start.getTime() + 191 * 15 * 60 * 1000);
+  return [...new Set([String(start.getUTCFullYear()), String(last.getUTCFullYear())])].sort();
+}
+
+/** Distinct UTC calendar days touched by the 48-hour impact window (`D`, `D+1`, `D+2`). */
+export function odinWindowDays(stormDate: string): string[] {
+  const start = new Date(`${stormDate}T12:00:00Z`);
+  if (Number.isNaN(start.getTime())) return [stormDate];
+  const last = new Date(start.getTime() + 191 * 15 * 60 * 1000);
+  const startDayMs = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  const lastDayMs = Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), last.getUTCDate());
+  const days: string[] = [];
+  for (let ms = startDayMs; ms <= lastDayMs; ms += 86_400_000) {
+    days.push(new Date(ms).toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+/** CLI command to pull the historical ODIN day files of a storm date's impact window from the state bucket. */
+export function odinSyncCommandFor(stormDate: string): string {
+  const keys = odinWindowDays(stormDate)
+    .map((day) => `'derived/odin/odin-${day}.parquet'`)
+    .join(", ");
+  return `uv run python -c "from hailprint import cloud, paths; c = cloud.Config.from_env(); cloud.sync_down(cloud.s3_client(c), c.state_bucket, (${keys},), paths.ROOT / 'data')"`;
+}
+
 /** Full CLI sequence to reproduce every published file for `storm`. */
-export function reproduceCommands(storm: Storm, radiusKm = 5): string[] {
+export function reproduceCommands(
+  storm: Storm,
+  radiusKm = 5,
+  powerSource: PowerFile["source"] | null = storm.files.power ? "eaglei" : null,
+): string[] {
   const d = storm.storm_date;
+  const effectiveSource = storm.files.power ? (powerSource ?? "eaglei") : null;
+  const powerCommands =
+    effectiveSource === "odin"
+      ? [odinSyncCommandFor(d), `uv run hailprint power ${d}`]
+      : effectiveSource === "eaglei"
+        ? [`uv run hailprint eaglei ${eagleiYearsFor(d).join(" ")}`, `uv run hailprint power ${d}`]
+        : [];
   return [
     `uv run hailprint ingest ${d}`,
     ...(storm.files.zip_counts ? [`uv run hailprint parcels ${d}`] : []),
     `uv run hailprint score ${d} --radius-km ${radiusKm}`,
     ...(storm.files.warnings ? [`uv run hailprint warnings ${d}`] : []),
-    ...(storm.files.power ? [`uv run hailprint eaglei ${d.slice(0, 4)}`, `uv run hailprint power ${d}`] : []),
+    ...powerCommands,
     ...(storm.files.internet ? [`uv run hailprint internet ${d}`] : []),
     `uv run hailprint publish ${d}${storm.files.internet ? " --with-internet" : ""}`,
   ];
@@ -113,7 +154,13 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
         </ul>
         <h2>Reproduce</h2>
         <pre class="code-block">
-          <code>{reproduceCommands(storm, pairs.status === "ready" ? pairs.data.radius_km_default : 5).join("\n")}</code>
+          <code>
+            {reproduceCommands(
+              storm,
+              pairs.status === "ready" ? pairs.data.radius_km_default : 5,
+              powerData?.source ?? null,
+            ).join("\n")}
+          </code>
         </pre>
       </section>
       <section>

@@ -272,7 +272,11 @@ export interface InspectorProps {
 }
 
 /** Plain-text field note citation for a picked coordinate on a storm map. */
-export function formatPointFieldNote(pick: Pick, receipt: Receipt): string {
+export function formatPointFieldNote(
+  pick: Pick,
+  receipt: Receipt,
+  reportsReceipt?: Receipt | null,
+): string {
   const [lon, lat] = pick.lngLat;
   const covering =
     pick.coveringMm === null
@@ -282,10 +286,17 @@ export function formatPointFieldNote(pick: Pick, receipt: Receipt): string {
     pick.nearest === null
       ? "none"
       : `${pick.nearest.feature.properties.location} (${pick.nearest.feature.properties.size_in.toFixed(2)} in, ${pick.nearest.km.toFixed(1)} km)`;
-  const sources =
+  const baseSources =
     receipt.sources.length > 0
-      ? receipt.sources.map((s) => `${s.source} ${s.product}`).join(", ")
-      : "NOAA MRMS MESH_Max_1440min";
+      ? receipt.sources.map((s) => `${s.source} ${s.product}`)
+      : ["NOAA MRMS MESH_Max_1440min"];
+  const reportSources =
+    pick.nearest === null
+      ? []
+      : reportsReceipt && reportsReceipt.sources.length > 0
+        ? reportsReceipt.sources.map((s) => `${s.source} ${s.product}`)
+        : ["SPC hail"];
+  const sources = [...new Set([...baseSources, ...reportSources])].join(", ");
   return `Hailprint point note — ${receipt.storm_date} at (${lat.toFixed(4)}, ${lon.toFixed(4)}): radar-estimated hail size ${covering}; nearest SPC report ${nearReport}. Source: ${sources} (run ${receipt.run_time}, v${receipt.package_version}). ${receipt.confidence}`;
 }
 
@@ -351,7 +362,7 @@ export function InspectorView({
             type="button"
             class="button button-small"
             onClick={() => {
-              const text = formatPointFieldNote(pick, receipt);
+              const text = formatPointFieldNote(pick, receipt, reports?.receipt ?? null);
               if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
                 void navigator.clipboard.writeText(text).catch(() => {});
               }

@@ -214,6 +214,36 @@ describe("InspectorView out-of-metro guard", () => {
     expect(note).toContain("Hailprint point note — 2024-05-28 at (29.7604, -95.3698)");
     expect(note).toContain("radar-estimated hail size quarter (1.00 in)");
     expect(note).toContain("Radar-estimated hail size.");
+
+    const noteWithReport = formatPointFieldNote(
+      {
+        lngLat: [-95.3698, 29.7604],
+        coveringMm: 25.4,
+        nearest: {
+          km: 1.5,
+          feature: {
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [-95.37, 29.76] },
+            properties: {
+              id: 1,
+              time: "2345",
+              location: "HOUSTON",
+              county: "HARRIS",
+              state: "TX",
+              size_in: 1.25,
+            },
+          },
+        },
+      },
+      receipt,
+      {
+        ...receipt,
+        sources: [
+          { source: "NOAA SPC", product: "Storm Events Database", file: "2024-05-28_hail.csv" },
+        ],
+      },
+    );
+    expect(noteWithReport).toContain("NOAA MRMS MESH_Max_1440min, NOAA SPC Storm Events Database");
   });
 });
 

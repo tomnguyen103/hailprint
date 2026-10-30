@@ -34,13 +34,45 @@ function hundredths(inches: number): number {
   return Math.round(inches * 100);
 }
 
+export type ReportOutcome = "hit" | "miss" | "false_alarm" | "correct_negative" | "excluded";
+
+/** Classify a single report at class index `k`, radius `radiusM`, edge margin `edgeMarginM`, and threshold `event`. */
+export function classifyOne(
+  report: Pairs["reports"][number],
+  classCount: number,
+  k: number,
+  radiusM: number,
+  edgeMarginM: number,
+  event: number,
+): { dist: number | null; observed: boolean; forecast: boolean; outcome: ReportOutcome } {
+  if (report.dist_m.length !== classCount) {
+    throw new DataError(
+      "pairs.json",
+      `reports[${report.id}].dist_m has ${report.dist_m.length} entries for ${classCount} classes`,
+    );
+  }
+  const dist = report.dist_m[k] ?? null;
+  const observed = hundredths(report.size_in) >= event;
+  const forecast = dist !== null && dist <= radiusM;
+  const insideDomain = report.edge_m > radiusM + edgeMarginM;
+  const outcome: ReportOutcome = !insideDomain
+    ? "excluded"
+    : observed && forecast
+      ? "hit"
+      : observed
+        ? "miss"
+        : forecast
+          ? "false_alarm"
+          : "correct_negative";
+  return { dist, observed, forecast, outcome };
+}
+
 /** The contingency table at a whole-km radius, one row per size class in RULER order. */
 export function rescore(pairs: Pairs, radiusKm: number): TableRow[] {
   if (!Number.isInteger(radiusKm) || radiusKm < 0 || radiusKm > pairs.radius_km_max) {
     throw new RangeError(`radius ${radiusKm} km is not a whole number in 0..${pairs.radius_km_max}`);
   }
   const radiusM = radiusKm * 1000;
-  const scored = pairs.reports.filter((r) => r.edge_m > radiusM + pairs.edge_margin_m);
   return RULER.map((mark) => {
     // dist_m follows the classes order of the file, so the class index comes from the file.
     const k = pairs.classes.findIndex((c) => c.threshold_mm === mark.threshold_mm);
@@ -55,20 +87,12 @@ export function rescore(pairs: Pairs, radiusKm: number): TableRow[] {
     let misses = 0;
     let falseAlarms = 0;
     let correctNegatives = 0;
-    for (const report of scored) {
-      if (report.dist_m.length !== pairs.classes.length) {
-        throw new DataError(
-          "pairs.json",
-          `reports[${report.id}].dist_m has ${report.dist_m.length} entries for ${pairs.classes.length} classes`,
-        );
-      }
-      const dist = report.dist_m[k];
-      const observed = hundredths(report.size_in) >= event;
-      const forecast = dist !== null && dist !== undefined && dist <= radiusM;
-      if (observed && forecast) hits += 1;
-      else if (observed) misses += 1;
-      else if (forecast) falseAlarms += 1;
-      else correctNegatives += 1;
+    for (const report of pairs.reports) {
+      const { outcome } = classifyOne(report, pairs.classes.length, k, radiusM, pairs.edge_margin_m, event);
+      if (outcome === "hit") hits += 1;
+      else if (outcome === "miss") misses += 1;
+      else if (outcome === "false_alarm") falseAlarms += 1;
+      else if (outcome === "correct_negative") correctNegatives += 1;
     }
     return {
       threshold_mm: cls.threshold_mm,
@@ -84,8 +108,6 @@ export function rescore(pairs: Pairs, radiusKm: number): TableRow[] {
     };
   });
 }
-
-export type ReportOutcome = "hit" | "miss" | "false_alarm" | "correct_negative" | "excluded";
 
 export const OUTCOME_LABELS: Record<ReportOutcome, string> = {
   hit: "Hit (a)",
@@ -128,7 +150,6 @@ export function classifyReports(
   if (cls === undefined) throw new DataError("pairs.json", `missing size class ${thresholdMm} mm`);
 
   const radiusM = radiusKm * 1000;
-  const edgeLimit = radiusM + pairs.edge_margin_m;
   const event = hundredths(cls.threshold_mm / 25.4);
 
   const byId = new Map<
@@ -147,25 +168,14 @@ export function classifyReports(
   }
 
   return pairs.reports.map((report) => {
-    if (report.dist_m.length !== pairs.classes.length) {
-      throw new DataError(
-        "pairs.json",
-        `reports[${report.id}].dist_m has ${report.dist_m.length} entries for ${pairs.classes.length} classes`,
-      );
-    }
-    const dist = report.dist_m[k] ?? null;
-    const observed = hundredths(report.size_in) >= event;
-    const forecast = dist !== null && dist <= radiusM;
-    const insideDomain = report.edge_m > edgeLimit;
-    const outcome: ReportOutcome = !insideDomain
-      ? "excluded"
-      : observed && forecast
-        ? "hit"
-        : observed
-          ? "miss"
-          : forecast
-            ? "false_alarm"
-            : "correct_negative";
+    const { dist, observed, forecast, outcome } = classifyOne(
+      report,
+      pairs.classes.length,
+      k,
+      radiusM,
+      pairs.edge_margin_m,
+      event,
+    );
     const meta = byId.get(report.id);
     return {
       id: report.id,
