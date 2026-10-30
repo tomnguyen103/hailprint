@@ -16,6 +16,7 @@ import { dropOf } from "../../impact/internet";
 import { ODIN_LABEL, percentText, shareOut } from "../../impact/power";
 import { internetSeriesTrough, powerSeriesPeak } from "../../impact/series";
 import { type LiveStatusResult, fetchLiveStatus } from "../../live/live-check";
+import { LiveStatusList } from "../../live/live-status-list";
 import { href } from "../../router";
 import { objectName } from "../../ruler";
 import { Link } from "../../shell/link";
@@ -421,60 +422,9 @@ export function InspectorView({
           >
             {liveStatus === "loading" ? "Checking live feeds\u2026" : "Check live NWS & outage feeds"}
           </button>
-          {liveStatus === "ready" && liveData !== null ? (
-            <dl class="receipt-list">
-              <dt>NWS active alerts</dt>
-              <dd>
-                {liveData.alerts.status === "error" ? (
-                  <>
-                    {liveData.alerts.message}{" "}
-                    <button type="button" class="button button-small" onClick={onLiveCheck}>
-                      Retry
-                    </button>
-                  </>
-                ) : liveData.alerts.alerts.length === 0 ? (
-                  "0 active alerts at pinned point"
-                ) : (
-                  liveData.alerts.alerts.map((a) => `${a.event} (${a.severity})`).join(" \u00b7 ")
-                )}
-              </dd>
-              <dt>ORNL ODIN utility outages</dt>
-              <dd>
-                {liveData.power.status === "error" ? (
-                  <>
-                    {liveData.power.message}{" "}
-                    <button type="button" class="button button-small" onClick={onLiveCheck}>
-                      Retry
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span class="mono">{formatCount(liveData.power.customersOut)}</span> customers out (
-                    {liveData.power.note})
-                  </>
-                )}
-              </dd>
-              <dt>IODA internet reachability</dt>
-              <dd>
-                {liveData.internet.status === "error" ? (
-                  <>
-                    {liveData.internet.message}{" "}
-                    <button type="button" class="button button-small" onClick={onLiveCheck}>
-                      Retry
-                    </button>
-                  </>
-                ) : liveData.internet.latestValue === null ? (
-                  "no recent county signal points (last 2h)"
-                ) : (
-                  <>
-                    <span class="mono">{formatCount(Math.round(liveData.internet.latestValue))}</span>{" "}
-                    active /24 blocks (<span class="mono">{liveData.internet.pointCount}</span> points in
-                    last 2h)
-                  </>
-                )}
-              </dd>
-            </dl>
-          ) : null}
+          {liveStatus === "ready" && liveData !== null
+            ? LiveStatusList({ data: liveData, onRetry: onLiveCheck })
+            : null}
         </section>
       ) : null}
     </div>

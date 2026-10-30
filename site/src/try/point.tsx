@@ -5,6 +5,7 @@ import { DataError, PHENOMENA, type StormsIndex } from "../data/types";
 import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../format";
 import { ODIN_LABEL, percentText } from "../impact/power";
 import { type LiveStatusResult, fetchLiveStatus } from "../live/live-check";
+import { LiveStatusList } from "../live/live-status-list";
 import { href } from "../router";
 import { objectName } from "../ruler";
 import { Link } from "../shell/link";
@@ -90,6 +91,17 @@ function renderInternetCell(row: StormPinRow): string {
   if (trough === null || trough.maxDrop === null || trough.minRatio === null) return "no data";
   if (trough.maxDrop === 0) return `0% below baseline (${trough.minRatio.toFixed(3)})`;
   return `${percentText(trough.maxDrop)} below baseline (${trough.minRatio.toFixed(3)})`;
+}
+
+function renderCellError(label: string, err: DataError, onRetry: () => void) {
+  return (
+    <span class="point-cell-error">
+      {label} off ({err.message}){" "}
+      <button type="button" class="button button-small" onClick={onRetry}>
+        Retry
+      </button>
+    </span>
+  );
 }
 
 export function PointCheck({ index }: { index: StormsIndex }) {
@@ -385,62 +397,11 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                   </span>
                 </div>
                 {currentLive.status === "ready" ? (
-                  <dl class="receipt-list point-live-grid">
-                    <dt>NWS active alerts</dt>
-                    <dd>
-                      {currentLive.data.alerts.status === "error" ? (
-                        <>
-                          {currentLive.data.alerts.message}{" "}
-                          <button type="button" class="button button-small" onClick={runLiveCheck}>
-                            Retry
-                          </button>
-                        </>
-                      ) : currentLive.data.alerts.alerts.length === 0 ? (
-                        "0 active alerts at pinned point"
-                      ) : (
-                        currentLive.data.alerts.alerts
-                          .map((a) => `${a.event} (${a.severity})`)
-                          .join(" \u00b7 ")
-                      )}
-                    </dd>
-                    <dt>ORNL ODIN utility outages</dt>
-                    <dd>
-                      {currentLive.data.power.status === "error" ? (
-                        <>
-                          {currentLive.data.power.message}{" "}
-                          <button type="button" class="button button-small" onClick={runLiveCheck}>
-                            Retry
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <span class="mono">{formatCount(currentLive.data.power.customersOut)}</span> customers out (
-                          {currentLive.data.power.note})
-                        </>
-                      )}
-                    </dd>
-                    <dt>IODA internet reachability</dt>
-                    <dd>
-                      {currentLive.data.internet.status === "error" ? (
-                        <>
-                          {currentLive.data.internet.message}{" "}
-                          <button type="button" class="button button-small" onClick={runLiveCheck}>
-                            Retry
-                          </button>
-                        </>
-                      ) : currentLive.data.internet.latestValue === null ? (
-                        "no recent county signal points (last 2h)"
-                      ) : (
-                        <>
-                          <span class="mono">
-                            {formatCount(Math.round(currentLive.data.internet.latestValue))}
-                          </span>{" "}
-                          active /24 blocks (
-                          <span class="mono">{currentLive.data.internet.pointCount}</span> points in last 2h)
-                        </>
-                      )}
-                    </dd>
-                  </dl>
+                  <LiveStatusList
+                    data={currentLive.data}
+                    onRetry={runLiveCheck}
+                    className="receipt-list point-live-grid"
+                  />
                 ) : null}
               </div>
 
@@ -513,52 +474,24 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                           </td>
                           <td>{renderSwathCell(row)}</td>
                           <td class="mono">
-                            {reportsErr ? (
-                              <span class="point-cell-error">
-                                Reports off ({reportsErr.message}){" "}
-                                <button type="button" class="button button-small" onClick={reportsAll.retry}>
-                                  Retry
-                                </button>
-                              </span>
-                            ) : (
-                              renderReportsCell(row)
-                            )}
+                            {reportsErr
+                              ? renderCellError("Reports", reportsErr, reportsAll.retry)
+                              : renderReportsCell(row)}
                           </td>
                           <td>
-                            {warningsErr ? (
-                              <span class="point-cell-error">
-                                Warnings off ({warningsErr.message}){" "}
-                                <button type="button" class="button button-small" onClick={warningsAll.retry}>
-                                  Retry
-                                </button>
-                              </span>
-                            ) : (
-                              renderWarningsCell(row)
-                            )}
+                            {warningsErr
+                              ? renderCellError("Warnings", warningsErr, warningsAll.retry)
+                              : renderWarningsCell(row)}
                           </td>
                           <td class="mono">
-                            {powerErr ? (
-                              <span class="point-cell-error">
-                                Power off ({powerErr.message}){" "}
-                                <button type="button" class="button button-small" onClick={powerAll.retry}>
-                                  Retry
-                                </button>
-                              </span>
-                            ) : (
-                              renderPowerCell(row)
-                            )}
+                            {powerErr
+                              ? renderCellError("Power", powerErr, powerAll.retry)
+                              : renderPowerCell(row)}
                           </td>
                           <td class="mono">
-                            {internetErr ? (
-                              <span class="point-cell-error">
-                                Internet off ({internetErr.message}){" "}
-                                <button type="button" class="button button-small" onClick={internetAll.retry}>
-                                  Retry
-                                </button>
-                              </span>
-                            ) : (
-                              renderInternetCell(row)
-                            )}
+                            {internetErr
+                              ? renderCellError("Internet", internetErr, internetAll.retry)
+                              : renderInternetCell(row)}
                           </td>
                           <td>
                             {row.swathReceipt ? (
