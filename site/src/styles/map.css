@@ -401,6 +401,12 @@
   border-top-color: var(--rule);
 }
 
+.map-frame .maplibregl-ctrl-group button,
+.map-canvas .maplibregl-ctrl-group button {
+  width: 36px;
+  height: 36px;
+}
+
 /* MapLibre ships black SVG icons; the dark tokens invert them */
 .map-frame .maplibregl-ctrl button .maplibregl-ctrl-icon {
   filter: var(--ctrl-icon-filter);

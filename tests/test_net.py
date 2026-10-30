@@ -191,3 +191,19 @@ def test_open_stream_raises_on_the_read_after_a_body_that_stops_early(server, sl
             stream.read(1)
     assert server.hits["/short"] == 1  # the body is never retried
     assert sleeps == []
+
+
+def test_open_stream_enforces_max_bytes_boundary(server, sleeps):
+    url = server.url("/ok")
+    with net.open_stream(url, max_bytes=6) as stream:
+        assert stream.read() == b"abcdef"
+
+    with (
+        net.open_stream(url, max_bytes=5) as stream,
+        pytest.raises(
+            ValueError, match=r"response from http://127\.0\.0\.1:\d+/ok exceeds 5 bytes"
+        ),
+    ):
+        stream.read()
+    assert sleeps == []
+

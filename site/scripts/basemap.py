@@ -4,7 +4,7 @@ Output: site/public/basemap.pmtiles. The site builds and runs without it.
 Override the build with PROTOMAPS_BUILD=YYYYMMDD.pmtiles.
 """
 
-import json
+import hashlib
 import os
 import platform
 import re
@@ -26,7 +26,36 @@ BUILDS_INDEX_URLS = (
     "https://build-metadata.protomaps.dev/builds.json",
     "https://build.protomaps.com/builds.json",
 )
-GITHUB_API_LATEST = "https://api.github.com/repos/protomaps/go-pmtiles/releases/latest"
+PMTILES_VERSION = "1.31.2"
+MAX_ARCHIVE_BYTES = 64 * 1024 * 1024
+PMTILES_ASSETS: dict[tuple[str, str], str] = {
+    ("Darwin", "arm64"): f"go-pmtiles-{PMTILES_VERSION}_Darwin_arm64.zip",
+    ("Darwin", "x86_64"): f"go-pmtiles-{PMTILES_VERSION}_Darwin_x86_64.zip",
+    ("Linux", "arm64"): f"go-pmtiles_{PMTILES_VERSION}_Linux_arm64.tar.gz",
+    ("Linux", "x86_64"): f"go-pmtiles_{PMTILES_VERSION}_Linux_x86_64.tar.gz",
+    ("Windows", "arm64"): f"go-pmtiles_{PMTILES_VERSION}_Windows_arm64.zip",
+    ("Windows", "x86_64"): f"go-pmtiles_{PMTILES_VERSION}_Windows_x86_64.zip",
+}
+PMTILES_SHA256: dict[str, str] = {
+    "go-pmtiles-1.31.2_Darwin_arm64.zip": (
+        "40528f7f616fcbf91207cd48c8fc023d213f6d86c0cbf1f748732803d1880f3d"
+    ),
+    "go-pmtiles-1.31.2_Darwin_x86_64.zip": (
+        "1f0dc02eee6c58312dd6c509faee1b5c32f0596568af1bf51f1b034e7a88a65b"
+    ),
+    "go-pmtiles_1.31.2_Linux_arm64.tar.gz": (
+        "f8bd47e7ea866863489cad588fbaf2f31f42e5821f7a03f009b3769f05801cb1"
+    ),
+    "go-pmtiles_1.31.2_Linux_x86_64.tar.gz": (
+        "3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f"
+    ),
+    "go-pmtiles_1.31.2_Windows_arm64.zip": (
+        "8780a17453c63af757917a694cbbb50b943db89cc3f1b07e6fd62c1ff8e6963b"
+    ),
+    "go-pmtiles_1.31.2_Windows_x86_64.zip": (
+        "a658baa4d7e55020aef6ca17bd9ff9faa1582671266b36f58c52db0ac8e785a1"
+    ),
+}
 PMTILES_MAGIC = b"PMTiles"
 
 
@@ -74,34 +103,37 @@ def ensure_pmtiles_binary(bin_dir: Path = BIN_DIR) -> str:
         return str(local_bin)
 
     bin_dir.mkdir(parents=True, exist_ok=True)
-    req = urllib.request.Request(
-        GITHUB_API_LATEST,
-        headers={"User-Agent": "hailprint-basemap/0.1"},
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        release = json.loads(resp.read().decode("utf-8"))
-
     sys_name = platform.system()
     machine = platform.machine().lower()
     arch = "arm64" if machine in ("arm64", "aarch64") else "x86_64"
-    assets = release.get("assets", [])
-    asset_url = None
-    asset_name = ""
-    for asset in assets:
-        name = asset.get("name", "")
-        is_archive = name.endswith(".zip") or name.endswith(".tar.gz")
-        if sys_name in name and arch in name and is_archive:
-            asset_url = asset.get("browser_download_url")
-            asset_name = Path(name).name
-            break
-    if not asset_url or not asset_name:
+    asset_name = PMTILES_ASSETS.get((sys_name, arch))
+    expected_sha256 = PMTILES_SHA256.get(asset_name or "")
+    if not asset_name or not expected_sha256:
         raise RuntimeError(f"no go-pmtiles binary asset for {sys_name} {arch}")
 
+    asset_url = (
+        f"https://github.com/protomaps/go-pmtiles/releases/download/v{PMTILES_VERSION}/{asset_name}"
+    )
     archive_path = bin_dir / asset_name
     dl_req = urllib.request.Request(asset_url, headers={"User-Agent": "hailprint-basemap/0.1"})
-    with urllib.request.urlopen(dl_req, timeout=60) as resp, archive_path.open("wb") as out_file:
-        shutil.copyfileobj(resp, out_file)
     try:
+        hasher = hashlib.sha256()
+        total = 0
+        with (
+            urllib.request.urlopen(dl_req, timeout=60) as resp,
+            archive_path.open("wb") as out_file,
+        ):
+            while True:
+                chunk = resp.read(65536)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > MAX_ARCHIVE_BYTES:
+                    raise RuntimeError(f"archive exceeds {MAX_ARCHIVE_BYTES} bytes")
+                hasher.update(chunk)
+                out_file.write(chunk)
+        if hasher.hexdigest() != expected_sha256:
+            raise RuntimeError(f"SHA-256 mismatch for {asset_name}")
         if asset_name.endswith(".zip"):
             with zipfile.ZipFile(archive_path) as zf:
                 zf.extract(exe_name, path=bin_dir)

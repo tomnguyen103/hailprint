@@ -1,6 +1,6 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import { combineCountyFailure, fetchCounties, fetchCounty } from "../county";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { fetchCounties, harrisFeature } from "../county";
 import { fetchJson } from "../data/fetch";
 import { guardSwath, guardWarnings } from "../data/guard";
 import { DataError, type InternetFile, type PowerFile, type ReportsFile, type Storm, type WarningsFile } from "../data/types";
@@ -48,7 +48,6 @@ export function isPickForStorm(pick: DatedPick | null, stormDate: string): pick 
 
 export function MapPane({ storm, reports, power, internet, step, onStep, fips, onCounty }: Props) {
   const swath = useLoad(storm.files.swath, () => fetchJson(storm.files.swath, guardSwath));
-  const county = useLoad("county", fetchCounty);
   const metro = useLoad("counties", fetchCounties);
   const warningsFile = storm.files.warnings;
   const warnings = useLoad<WarningsFile | null>(warningsFile ?? "warnings:none", () =>
@@ -122,11 +121,11 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   // Data: the latest swath, reports, and county go to the sources; the camera fits the swath.
   const swathData = swath.status === "ready" ? swath.data : null;
   const reportsData = reports.status === "ready" ? reports.data : null;
-  const countyData: FeatureCollection<MultiPolygon> | null = county.status === "ready" ? county.data : null;
   const warningsData = warnings.status === "ready" ? warnings.data : null;
   const powerData = power.status === "ready" ? power.data : null;
   const internetData = internet.status === "ready" ? internet.data : null;
   const outlines: FeatureCollection<MultiPolygon> | null = metro.status === "ready" ? metro.data : null;
+  const countyData = useMemo(() => (outlines !== null ? harrisFeature(outlines) : null), [outlines]);
   outlinesRef.current = outlines;
   useEffect(() => {
     if (!ready || !handle.current) return;
@@ -179,7 +178,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   const retryMap = useCallback(() => setAttempt((n) => n + 1), []);
 
   // One overlay slot: the map chunk error first, then the swath, reports, and county errors in that order.
-  const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : combineCountyFailure(county, metro);
+  const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : metro.status === "error" ? metro : null;
   const receipt = swathData?.receipt ?? null;
   const warningsLine = warningsNote(warningsFile, warnings);
   // A failed power file or county file hides the fill with one line; the hail map stays.

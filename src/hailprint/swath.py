@@ -83,6 +83,8 @@ def write_swaths(
 ) -> Path:
     """Write the swath file as GeoParquet with the source and confidence metadata."""
     metadata = {
+        "source": files.SOURCE,
+        "product": files.PRODUCT,
         "file_count": str(file_count),
         "max_mesh_mm": "" if max_mesh_mm is None else str(max_mesh_mm),
     }

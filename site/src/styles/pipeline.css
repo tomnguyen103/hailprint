@@ -71,6 +71,12 @@
   list-style: none;
 }
 
+.date-list a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+}
+
 /* Archive coverage: the bar is at most 96 px wide, so 0 % and 100 % stay inside the cell. */
 
 .share-bar {

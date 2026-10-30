@@ -199,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.command == "parcels":
             count_parcels(args.storm_date)
         elif args.command == "score":
-            score_days(args.storm_dates, args.radius_km)
+            return score_days(args.storm_dates, args.radius_km)
         elif args.command == "warnings":
             warn_days(args.storm_dates, args.missing)
         elif args.command == "eaglei":
@@ -326,12 +326,18 @@ def _swath_files(storm_dates: list[date]) -> list[tuple[date, Path]]:
     return found
 
 
-def score_days(storm_dates: list[date], radius_km: float) -> list[Path]:
+def score_days(storm_dates: list[date], radius_km: float) -> int:
     """Pairs and score files per storm date, then the pooled table. A 404 day is skipped."""
     meta = {"radius_km": f"{radius_km:.15g}", "report_source": score.REPORT_SOURCE}
-    tables, written = [], []
+    tables = []
+    failed = False
     for storm_date, swath_path in _swath_files(storm_dates):
-        text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, _utc_now().date())
+        try:
+            text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, _utc_now().date())
+        except RuntimeError as exc:
+            print(f"score {storm_date}: {exc}", file=sys.stderr)
+            failed = True
+            continue
         if text is None:
             continue
         day = score.score_day(
@@ -341,9 +347,7 @@ def score_days(storm_dates: list[date], radius_km: float) -> list[Path]:
             radius_km,
         )
         for name, frame in (("pairs", day.pairs), ("scores", day.table)):
-            written.append(
-                files.write_atomic(frame, SCORES_DIR / f"{name}-{storm_date}.parquet", meta)
-            )
+            files.write_atomic(frame, SCORES_DIR / f"{name}-{storm_date}.parquet", meta)
         tables.append(day.table)
         print(f"{storm_date}: {len(day.pairs)} scored reports, {day.excluded} excluded")
     if not tables:
@@ -369,7 +373,7 @@ def score_days(storm_dates: list[date], radius_km: float) -> list[Path]:
             "so its FAR, CSI, and HSS hold by construction"
         )
     print(f"confidence: {swath.CONFIDENCE}")
-    return written
+    return 1 if failed else 0
 
 
 def _utc_now() -> datetime:

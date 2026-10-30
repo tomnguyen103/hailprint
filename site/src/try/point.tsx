@@ -1,6 +1,6 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { useEffect, useId, useRef, useState } from "preact/hooks";
-import { HARRIS_BBOX, combineCountyFailure, contains, fetchCounties, fetchCounty } from "../county";
+import { useEffect, useId, useMemo, useRef, useState } from "preact/hooks";
+import { HARRIS_BBOX, contains, fetchCounties, harrisFeature } from "../county";
 import { DataError, type StormsIndex } from "../data/types";
 import { BELOW_FIRST_CLASS, formatInches } from "../format";
 import { href } from "../router";
@@ -22,7 +22,6 @@ const POINT_ZOOM = 11;
 // shortcut: the point check takes lat and lon only, upgrade to ZIP when a ZIP geometry file is published
 export function PointCheck({ index }: { index: StormsIndex }) {
   const swaths = useSwathsAll(index);
-  const county = useLoad("county", fetchCounty);
   const metro = useLoad("counties", fetchCounties);
   const { resolved: theme } = useTheme();
   const [latText, setLatText] = useState("");
@@ -76,8 +75,8 @@ export function PointCheck({ index }: { index: StormsIndex }) {
 
   const swathData = swaths.status === "ready" ? swaths.data : null;
   const newest = swathData?.[0] ?? null;
-  const countyData: FeatureCollection<MultiPolygon> | null = county.status === "ready" ? county.data : null;
   const outlines: FeatureCollection<MultiPolygon> | null = metro.status === "ready" ? metro.data : null;
+  const countyData = useMemo(() => (outlines !== null ? harrisFeature(outlines) : null), [outlines]);
   useEffect(() => {
     if (ready) handle.current?.setData(newest, null, countyData);
   }, [ready, newest, countyData]);
@@ -147,7 +146,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     }
   }
 
-  const countyFailure = combineCountyFailure(county, metro);
+  const countyFailure = metro.status === "error" ? metro : null;
 
   return (
     <>
