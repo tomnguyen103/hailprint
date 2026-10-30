@@ -37,7 +37,7 @@ every whole radius; `src/pool.test.ts` checks the browser pool against it and sk
 `scripts/basemap.sh` extracts the 8-county metro bbox (`hailprint.county.metro_bbox()`) at
 maxzoom 12 from the Protomaps daily build into `public/basemap.pmtiles` with the `pmtiles`
 CLI. The file is optional: the map draws paper and the county outlines when it is absent.
-The file is gitignored. The impact layers (warnings, power, and internet) draw across the 8 counties.
+Git tracks `public/basemap.pmtiles` (`!site/public/basemap.pmtiles`) so Vercel deployments serve the basemap. The impact layers (warnings, power, and internet) draw across the 8 counties.
 Rerun `scripts/basemap.sh` after a change to the metro bbox, and on a new host, so the extract covers all 8 counties.
 
 ## Vercel

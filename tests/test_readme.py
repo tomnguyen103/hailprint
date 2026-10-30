@@ -59,3 +59,20 @@ def test_vercel_json_serves_security_headers():
     assert "object-src 'none'" in csp
     assert "https://*.supabase.co" in csp
     assert "blob:" in csp
+    assert "img-src 'self' data: blob: https://protomaps.github.io;" in csp
+    assert (
+        "connect-src 'self' https://*.supabase.co "
+        "https://*.protomaps.com https://protomaps.github.io;"
+    ) in csp
+
+
+def test_basemap_pmtiles_exists_and_has_valid_magic_header():
+    basemap = paths.ROOT / "site" / "public" / "basemap.pmtiles"
+    assert basemap.exists()
+    with basemap.open("rb") as fh:
+        assert fh.read(8) == b"PMTiles\x03"
+    gitignore = (paths.ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "!site/public/basemap.pmtiles" in gitignore.splitlines()
+    site_readme = (paths.ROOT / "site" / "README.md").read_text(encoding="utf-8")
+    assert "!site/public/basemap.pmtiles" in site_readme
+    assert "The file is gitignored." not in site_readme

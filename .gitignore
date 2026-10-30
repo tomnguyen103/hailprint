@@ -8,6 +8,7 @@ site/data/
 *.parquet
 !tests/fixtures/*.parquet
 *.pmtiles
+!site/public/basemap.pmtiles
 *.shp
 *.shx
 *.dbf
