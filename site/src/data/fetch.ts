@@ -13,6 +13,11 @@ export function setFetch(next: Fetch | null): void {
   impl = next;
 }
 
+/** Return the active fetch implementation (injected fake or global `fetch`). */
+export function getFetch(): Fetch {
+  return impl ?? fetch;
+}
+
 export function normalizeBase(base: string): string {
   return base.endsWith("/") ? base : `${base}/`;
 }
