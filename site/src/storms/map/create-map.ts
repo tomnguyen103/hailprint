@@ -18,7 +18,15 @@ import type { InternetFile, PowerFile, ReportsFile, SwathFile, WarningsFile } fr
 import { internetFeatures, isInternet } from "../../impact/internet";
 import { type Fill, countyFeatures, hatchPixels, hexRgb, percentText } from "../../impact/power";
 import type { FeatureCollection, MultiPolygon, Point } from "geojson";
-import { BASEMAP_FILE, BASEMAP_SOURCE, basemapLayers, probeBasemap } from "./basemap";
+import {
+  BASEMAP_FILE,
+  BASEMAP_SOURCE,
+  GLYPHS_URL,
+  basemapLabelLayers,
+  basemapLayers,
+  probeBasemap,
+  spriteUrl,
+} from "./basemap";
 import {
   COUNTY_SOURCE,
   POINT_SOURCE,
@@ -82,11 +90,13 @@ function style(theme: Theme, basemap: boolean): StyleSpecification {
   return {
     version: 8,
     sources,
+    ...(basemap ? { glyphs: GLYPHS_URL, sprite: spriteUrl(theme) } : {}),
     layers: [
       { id: "paper", type: "background", paint: { "background-color": token("--paper") } },
       ...(basemap ? basemapLayers(theme) : []),
       ...powerLayers(),
       ...fillLayers(),
+      ...(basemap ? basemapLabelLayers(theme) : []),
       ...warningLayers(),
       ...chromeLayers(),
     ],
@@ -232,8 +242,12 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
       }
       if (basemap) {
         // The basemap layers take their colours at build time, so swap them for the theme.
-        for (const layer of map.getStyle().layers) if ("source" in layer && layer.source === BASEMAP_SOURCE) map.removeLayer(layer.id);
+        for (const layer of map.getStyle().layers) {
+          if (layer.id === "background" || ("source" in layer && layer.source === BASEMAP_SOURCE)) map.removeLayer(layer.id);
+        }
+        map.setSprite?.(spriteUrl(nextTheme));
         for (const layer of basemapLayers(nextTheme)) map.addLayer(layer, POWER_FILL);
+        for (const layer of basemapLabelLayers(nextTheme)) map.addLayer(layer, warningLayerId("SV"));
       }
       if (powerShown) paintPower();
     },
