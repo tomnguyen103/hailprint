@@ -446,7 +446,26 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
     expect(storageWrites).toEqual([]);
   });
 
-  it("renders ErrorState with a retry button when a lazy impact hook fails instead of false-negative 0 counts", async () => {
+  it("isolates a single failed impact file (e.g. 2024-05-28/power.json HTTP 500) to its cell with an inline Retry button while rendering hail, reports, warnings, and other storms normally (CR-03.1, CR-03.2)", async () => {
+    let failPower = true;
+    const storm2: Storm = {
+      ...stormRow,
+      storm_date: "2024-05-16",
+      files: {
+        swath: "storms/2024-05-16/swath.geojson",
+        reports: "storms/2024-05-16/reports.geojson",
+        pairs: "storms/2024-05-16/pairs.json",
+        zip_counts: null,
+        power: "storms/2024-05-16/power.json",
+        internet: "storms/2024-05-16/internet.json",
+        warnings: "storms/2024-05-16/warnings.geojson",
+      },
+    };
+    const twoStormIndex: StormsIndex = {
+      ...indexFixture,
+      storms: [stormRow, storm2],
+    };
+
     setFetch(async (input) => {
       const url = String(input);
       if (url.endsWith("/counties.geojson")) {
@@ -456,10 +475,13 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
         return new Response(JSON.stringify(swathFixture), { status: 200 });
       }
       if (url.endsWith("reports.geojson")) {
-        return new Response("upstream failure", { status: 500 });
+        return new Response(JSON.stringify(reportsFixture), { status: 200 });
       }
       if (url.endsWith("warnings.geojson")) {
         return new Response(JSON.stringify(warningsFixture), { status: 200 });
+      }
+      if (url.endsWith("2024-05-28/power.json") && failPower) {
+        return new Response("upstream failure", { status: 500 });
       }
       if (url.endsWith("power.json")) {
         return new Response(JSON.stringify(powerFixture), { status: 200 });
@@ -472,15 +494,33 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
 
     setPresetPin("memorial");
     const host = makeFakeElement("div");
-    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    await act(() => render(h(PointCheck, { index: twoStormIndex }), host as unknown as HTMLElement));
     await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
-    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    await act(() => render(h(PointCheck, { index: twoStormIndex }), host as unknown as HTMLElement));
 
     const text = domText(host);
-    expect(text).toContain("reports.geojson");
-    expect(text).toContain("HTTP 500");
+    // Hail swath, SPC reports, warnings, and the other storm row still render normally!
+    expect(text).toContain("Radar-estimated hail size (at pin / \u2264 5 km)");
+    expect(text).toContain("SPC reports \u2264 5 km");
+    expect(text).toContain("quarter");
+    expect(text).toContain("2024-05-16");
+    // Only the failed cell renders the isolated error + Retry button
+    expect(text).toContain("Power off (power.json: HTTP 500)");
     expect(text).toContain("Retry");
-    expect(text).not.toContain("SPC reports \u2264");
+
+    // Clicking Retry refetches the evicted 2024-05-28/power.json and resolves the cell
+    failPower = false;
+    const retryBtn = findDomNodes(
+      host,
+      (n) => n.tagName === "BUTTON" && domText(n).trim() === "Retry",
+    )[0]!;
+    await act(() => {
+      (retryBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
+    await act(() => render(h(PointCheck, { index: twoStormIndex }), host as unknown as HTMLElement));
+    expect(domText(host)).not.toContain("Power off (power.json: HTTP 500)");
+    expect(domText(host)).toContain("251,830");
   });
 
   it("ignores stale fetchLiveStatus response when the pin changes while live check is in flight", async () => {

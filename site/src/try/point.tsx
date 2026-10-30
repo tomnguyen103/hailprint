@@ -269,32 +269,39 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     );
   }, [activePoint, swathData, index.storms, radiusKm, pinnedFips, reportsData, warningsData, powerData, internetData]);
 
+  const stormIdxByDate = useMemo(
+    () => new Map(index.storms.map((s, i) => [s.storm_date, i])),
+    [index.storms],
+  );
   const summary = useMemo(() => summarizeArchiveAtPin(rows), [rows]);
   const visibleRows = useMemo(
-    () => (filterMode === "active" ? rows.filter((r) => r.hasActivityNearPin) : rows),
-    [rows, filterMode],
+    () =>
+      filterMode === "active"
+        ? rows.filter((r) => {
+            const idx = stormIdxByDate.get(r.stormDate) ?? -1;
+            const hasErr =
+              idx >= 0 &&
+              Boolean(
+                reportsAll.itemErrors[idx] ||
+                  warningsAll.itemErrors[idx] ||
+                  powerAll.itemErrors[idx] ||
+                  internetAll.itemErrors[idx],
+              );
+            return r.hasActivityNearPin || hasErr;
+          })
+        : rows,
+    [rows, filterMode, stormIdxByDate, reportsAll.itemErrors, warningsAll.itemErrors, powerAll.itemErrors, internetAll.itemErrors],
   );
   const activeCount = useMemo(() => rows.filter((r) => r.hasActivityNearPin).length, [rows]);
 
-  const impactError =
-    metro.status === "error"
-      ? metro
-      : reportsAll.status === "error"
-        ? reportsAll
-        : warningsAll.status === "error"
-          ? warningsAll
-          : powerAll.status === "error"
-            ? powerAll
-            : internetAll.status === "error"
-              ? internetAll
-              : null;
+  const countyError = metro.status === "error" ? metro : null;
   const impactLoading =
     activePoint !== null &&
     (metro.status === "loading" ||
-      reportsAll.status === "loading" ||
-      warningsAll.status === "loading" ||
-      powerAll.status === "loading" ||
-      internetAll.status === "loading");
+      (reportsAll.status === "loading" &&
+        warningsAll.status === "loading" &&
+        powerAll.status === "loading" &&
+        internetAll.status === "loading"));
 
   let resultsSection = null;
   if (activePoint !== null) {
@@ -306,8 +313,8 @@ export function PointCheck({ index }: { index: StormsIndex }) {
       const firstCropStatus = rows[0]?.cropStatus ?? "inside";
       resultsSection = (
         <section class="point-results point-analysis" aria-label="Pinned location archive analysis">
-          {impactError !== null ? (
-            <ErrorState error={impactError.error} onRetry={impactError.retry} />
+          {countyError !== null ? (
+            <ErrorState error={countyError.error} onRetry={countyError.retry} />
           ) : impactLoading ? (
             <LoadingState file="reports.geojson, warnings.geojson, power.json, internet.json" />
           ) : (
@@ -457,6 +464,11 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                   <tbody>
                     {visibleRows.map((row) => {
                       const jumpStep = row.firstWarningStep ?? row.powerPeak?.peakStep ?? undefined;
+                      const rowIdx = stormIdxByDate.get(row.stormDate) ?? -1;
+                      const reportsErr = rowIdx >= 0 ? (reportsAll.itemErrors[rowIdx] ?? null) : null;
+                      const warningsErr = rowIdx >= 0 ? (warningsAll.itemErrors[rowIdx] ?? null) : null;
+                      const powerErr = rowIdx >= 0 ? (powerAll.itemErrors[rowIdx] ?? null) : null;
+                      const internetErr = rowIdx >= 0 ? (internetAll.itemErrors[rowIdx] ?? null) : null;
                       return (
                         <tr key={row.stormDate} data-active={row.hasActivityNearPin}>
                           <td class="point-date-cell">
@@ -476,10 +488,54 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                             </button>
                           </td>
                           <td>{renderSwathCell(row)}</td>
-                          <td class="mono">{renderReportsCell(row)}</td>
-                          <td>{renderWarningsCell(row)}</td>
-                          <td class="mono">{renderPowerCell(row)}</td>
-                          <td class="mono">{renderInternetCell(row)}</td>
+                          <td class="mono">
+                            {reportsErr ? (
+                              <span class="point-cell-error">
+                                Reports off ({reportsErr.message}){" "}
+                                <button type="button" class="button button-small" onClick={reportsAll.retry}>
+                                  Retry
+                                </button>
+                              </span>
+                            ) : (
+                              renderReportsCell(row)
+                            )}
+                          </td>
+                          <td>
+                            {warningsErr ? (
+                              <span class="point-cell-error">
+                                Warnings off ({warningsErr.message}){" "}
+                                <button type="button" class="button button-small" onClick={warningsAll.retry}>
+                                  Retry
+                                </button>
+                              </span>
+                            ) : (
+                              renderWarningsCell(row)
+                            )}
+                          </td>
+                          <td class="mono">
+                            {powerErr ? (
+                              <span class="point-cell-error">
+                                Power off ({powerErr.message}){" "}
+                                <button type="button" class="button button-small" onClick={powerAll.retry}>
+                                  Retry
+                                </button>
+                              </span>
+                            ) : (
+                              renderPowerCell(row)
+                            )}
+                          </td>
+                          <td class="mono">
+                            {internetErr ? (
+                              <span class="point-cell-error">
+                                Internet off ({internetErr.message}){" "}
+                                <button type="button" class="button button-small" onClick={internetAll.retry}>
+                                  Retry
+                                </button>
+                              </span>
+                            ) : (
+                              renderInternetCell(row)
+                            )}
+                          </td>
                           <td>
                             {row.swathReceipt ? (
                               <ReceiptChip receipt={row.swathReceipt} file={SWATH_FILE} />
