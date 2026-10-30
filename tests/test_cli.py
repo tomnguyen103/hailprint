@@ -1993,3 +1993,45 @@ def test_internet_missing_fetches_a_file_that_raises_arrow_type_error_again(env,
     assert cli.main(["internet", "--missing"]) == 0
 
     assert len(ioda.urls) == before + 8
+
+
+def test_score_isolates_single_date_runtime_error_and_scores_remaining_dates(
+    env, tmp_path, monkeypatch, capsys
+):
+    scores_dir = tmp_path / "scores"
+    monkeypatch.setattr(cli, "SCORES_DIR", scores_dir)
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    env.served[EARLIER] = RuntimeError("SPC 503")
+
+    rc = cli.main(["score"])
+
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "score 2023-06-23: SPC 503" in err
+    assert not (scores_dir / "pairs-2023-06-23.parquet").exists()
+    assert (scores_dir / "pairs-2024-05-28.parquet").exists()
+    assert (scores_dir / "scores-2024-05-28.parquet").exists()
+
+
+def test_write_swaths_passes_explicit_source_and_product_metadata(tmp_path, monkeypatch):
+    captured: list[dict[str, str] | None] = []
+    real_write = files.write_atomic
+
+    def spy_write(frame, path, metadata=None):
+        captured.append(metadata)
+        return real_write(frame, path, metadata)
+
+    monkeypatch.setattr(files, "write_atomic", spy_write)
+    frame = gpd.read_parquet(FIXTURES / f"score_swaths_{LATER}.parquet")
+    swath.write_swaths(frame, tmp_path / "swaths.parquet", 1, MAX_MESH_MM)
+
+    assert captured == [
+        {
+            "source": files.SOURCE,
+            "product": files.PRODUCT,
+            "file_count": "1",
+            "max_mesh_mm": str(MAX_MESH_MM),
+        }
+    ]
+

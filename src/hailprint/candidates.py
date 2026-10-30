@@ -176,7 +176,7 @@ def all_days(
         ordered.groupby("storm_date", as_index=False, sort=False)
         .agg(
             report_count=("report_count", "max"),
-            max_size_in=("max_size_in", "max"),
+            max_size_in=("max_size_in", "first"),
             report_source=("report_source", "first"),
         )
         .loc[:, list(wcm.columns)]

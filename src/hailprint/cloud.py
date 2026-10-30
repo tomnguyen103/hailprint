@@ -246,6 +246,8 @@ def sync_up(
     for key in local_keys:
         path = local_base / key
         body = path.read_bytes()
+        if len(body) > MAX_BYTES:
+            raise RuntimeError(f"local file {key} exceeds {MAX_BYTES} bytes")
         digest = hashlib.sha256(body).hexdigest()
         if state.digests.get((bucket, key)) == digest:
             continue
@@ -447,7 +449,7 @@ def run_cloud(
         slot = odin.slot_of(pre_now)
         odin_key = f"{ODIN_PREFIX}{odin.file_name(slot.date())}"
         next_day_key = f"{ODIN_PREFIX}{odin.file_name((slot + timedelta(days=1)).date())}"
-        state = sync_down(s3, config.state_bucket, (odin_key,), data_dir)
+        state = sync_down(s3, config.state_bucket, (odin_key, next_day_key), data_dir)
         rc = odin_run(runner)
         if rc != 0:
             return rc
@@ -480,7 +482,7 @@ def run_cloud(
         if task == "nightly"
         else backfill(runner, resolved_root, env)
     )
-    if rc != 0 and not (site_dir / "storms.json").exists():
+    if rc != 0:
         return rc
 
     sync_up(

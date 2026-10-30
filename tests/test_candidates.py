@@ -544,3 +544,17 @@ def test_read_facts_types_the_filled_cells_and_gives_none_for_a_blank_one(tmp_pa
     }
     assert type(facts["2023-06-23"]["report_count"]) is int
     assert type(facts["2023-06-23"]["max_size_in"]) is float
+
+
+def test_all_days_keeps_max_size_from_winning_source_row_not_hybrid_max(tmp_path, monkeypatch):
+    # WCM on WCM_END has 3 reports, max_size_in = 1.75.
+    # Daily CSV on WCM_END has 1 report, max_size_in = 3.00.
+    one_huge_harris = SPC_HEADER + "1800,300,A,Harris,TX,29.9,-95.4,x\n"
+    _serve(monkeypatch, {WCM_END: one_huge_harris})
+
+    days = _all_days(tmp_path, _index(WCM_END)).set_index("storm_date")
+
+    assert days.loc[WCM_END, "report_count"] == 3
+    assert days.loc[WCM_END, "report_source"] == "wcm"
+    assert days.loc[WCM_END, "max_size_in"] == 1.75
+

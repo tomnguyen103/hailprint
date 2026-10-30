@@ -28,8 +28,8 @@ Configure these variables in the Trigger.dev environment (never commit values to
 
 - `SUPABASE_S3_ENDPOINT`: Supabase Storage S3 endpoint URL.
 - `SUPABASE_S3_REGION`: Supabase region string.
-- `SUPABASE_S3_ACCESS_KEY_ID`: S3 access key ID.
-- `SUPABASE_S3_SECRET_ACCESS_KEY`: S3 secret access key.
+- `SUPABASE_S3_ACCESS_KEY_ID`: S3 access key ID (or `project_ref:email:password` for user-token exchange).
+- `SUPABASE_S3_SECRET_ACCESS_KEY`: S3 secret access key (or the project `anon_key` when `SUPABASE_S3_ACCESS_KEY_ID` uses `project_ref:email:password`).
 - `HAILPRINT_STATE_BUCKET`: private state bucket name (`hailprint-state`).
 - `HAILPRINT_PUBLIC_BUCKET`: public-read bucket name (`hailprint-public`).
 - `MAX_INGEST`: maximum missing candidate days per nightly run (default `5`).

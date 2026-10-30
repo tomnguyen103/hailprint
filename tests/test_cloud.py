@@ -580,25 +580,30 @@ def test_run_cloud_odin_syncs_both_days_across_midnight(tmp_path: Path):
     pre_now = datetime(2026, 10, 29, 23, 59, 59, tzinfo=UTC)
     day1_key = "derived/odin/odin-2026-10-29.parquet"
     day2_key = "derived/odin/odin-2026-10-30.parquet"
-    s3 = FakeS3({("hailprint-state", day1_key): b"day1"})
+    s3 = FakeS3(
+        {
+            ("hailprint-state", day1_key): b"day1",
+            ("hailprint-state", day2_key): b"existing-day2",
+        }
+    )
 
     def midnight_cli(argv: list[str]) -> int:
         assert argv == ["odin"]
-        (tmp_path / "data" / day2_key).parent.mkdir(parents=True, exist_ok=True)
-        (tmp_path / "data" / day2_key).write_bytes(b"day2-midnight")
+        assert (tmp_path / "data" / day2_key).read_bytes() == b"existing-day2"
+        (tmp_path / "data" / day2_key).write_bytes(b"existing-day2+midnight")
         return 0
 
     rc = cloud.run_cloud(
         "odin", client=s3, root=tmp_path, env=VALID_ENV, run_cli=midnight_cli, now=pre_now
     )
     assert rc == 0
-    assert s3.objects.get(("hailprint-state", day2_key)) == b"day2-midnight"
+    assert s3.objects.get(("hailprint-state", day2_key)) == b"existing-day2+midnight"
 
 
-def test_run_cloud_nightly_syncs_up_healthy_published_files_when_cli_returns_nonzero(
+def test_run_cloud_nightly_skips_sync_up_when_cli_returns_nonzero_even_with_existing_storms_json(
     tmp_path: Path,
 ):
-    s3 = FakeS3()
+    s3 = FakeS3({("hailprint-public", "storms.json"): b'{"storms":[]}'})
 
     def partial_cli(argv: list[str]) -> int:
         if argv[:2] == ["candidates", "--missing"]:
@@ -612,14 +617,36 @@ def test_run_cloud_nightly_syncs_up_healthy_published_files_when_cli_returns_non
             storm_dir = tmp_path / "site" / "data" / "storms" / "2024-05-28"
             storm_dir.mkdir(parents=True, exist_ok=True)
             (storm_dir / "swath.geojson").write_bytes(b'{"type":"FeatureCollection"}')
-            (tmp_path / "site" / "data" / "storms.json").write_bytes(b'{"storms":["2024-05-28"]}')
             return 1
         return 0
 
     rc = cloud.run_cloud("nightly", client=s3, root=tmp_path, env=VALID_ENV, run_cli=partial_cli)
     assert rc == 1
-    assert ("hailprint-public", "storms/2024-05-28/swath.geojson") in s3.objects
-    assert ("hailprint-public", "storms.json") in s3.objects
+    assert s3.puts == []
+    assert ("hailprint-public", "storms/2024-05-28/swath.geojson") not in s3.objects
+
+
+def test_sync_up_enforces_max_bytes_boundary(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(cloud, "MAX_BYTES", 10)
+    s3 = FakeS3()
+    data_dir = tmp_path / "data"
+    state = cloud.SyncState()
+    raw_dir = data_dir / "raw" / "spc"
+    raw_dir.mkdir(parents=True)
+
+    (raw_dir / "exact.bin").write_bytes(b"0123456789")
+    uploaded = cloud.sync_up(s3, "hailprint-state", ("raw/spc/",), data_dir, state)
+    assert uploaded == ["raw/spc/exact.bin"]
+
+    (raw_dir / "big.bin").write_bytes(b"0123456789X")
+    with pytest.raises(RuntimeError, match="local file raw/spc/big.bin exceeds 10 bytes"):
+        cloud.sync_up(s3, "hailprint-state", ("raw/spc/",), data_dir, state)
+    assert ("hailprint-state", "raw/spc/big.bin") not in s3.objects
+
+
+def test_operations_doc_describes_user_token_fallback():
+    ops_text = (paths.ROOT / "docs" / "operations.md").read_text(encoding="utf-8")
+    assert "project_ref:email:password" in ops_text
 
 
 def test_nightly_calls_candidates_missing_days_directly_when_candidate_csv_exists(
