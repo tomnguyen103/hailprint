@@ -61,8 +61,8 @@ def load_parcels(
 
 
 def zip5(values: pd.Series) -> pd.Series:
-    """The first five digits of each HCAD zip value; any other value becomes `unknown`."""
-    digits = values.astype("string").str.strip().str.extract(r"^(\d{5})", expand=False)
+    """The first five digits of each HCAD 77xxx zip value; any other value becomes `unknown`."""
+    digits = values.astype("string").str.strip().str.extract(r"^(77\d{3})", expand=False)
     return digits.fillna(UNKNOWN_ZIP).astype(object)
 
 

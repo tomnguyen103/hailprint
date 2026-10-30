@@ -181,6 +181,20 @@ def test_count_parcels_zip_is_the_first_five_digits_and_else_unknown(tmp_path):
     assert result.classes["parcel_count"].tolist() == [5]
 
 
+def test_count_parcels_non_houston_five_digit_zip_maps_to_unknown(tmp_path):
+    path = _gpkg_with_zips(tmp_path, ["77002", "77494-1111", "74752", "75001", "90210"])
+    swaths = _swath_frame([shapely.box(*_parcels_4326().total_bounds)], thresholds=(19.05,))
+
+    result = count_parcels(swaths, path)
+
+    assert _zip_rows(result) == {
+        ("77002", 19.05): 1,
+        ("77494", 19.05): 1,
+        ("unknown", 19.05): 3,
+    }
+    assert result.classes["parcel_count"].tolist() == [5]
+
+
 def test_count_parcels_a_parcel_in_two_classes_counts_once_in_each_class_and_zip(tmp_path):
     path = _gpkg_with_zips(tmp_path, ["77002"] * 5)
     parcels = _parcels_4326()

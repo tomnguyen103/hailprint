@@ -77,6 +77,18 @@ def test_published_impact_files_stay_under_their_size_ceiling():
             assert path.stat().st_size < ceiling, path
 
 
+@pytest.mark.skipif(not paths.SITE_DATA_DIR.exists(), reason="no published files yet")
+def test_published_zip_counts_only_hold_houston_77xxx_or_unknown():
+    bad = []
+    for path in sorted(paths.SITE_DATA_DIR.rglob("zip-counts.json")):
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        for row in doc.get("zips", []):
+            z = row["zip"]
+            if z != "unknown" and not (len(z) == 5 and z.startswith("77") and z.isdigit()):
+                bad.append((path.name, z))
+    assert bad == []
+
+
 def test_site_source_holds_no_forbidden_word():
     hits = [
         path
