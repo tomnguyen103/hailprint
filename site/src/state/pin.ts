@@ -42,17 +42,17 @@ export interface PinState {
   geoStatus: GeoStatusName;
   reason: GeoFailureReason | null;
   message: string | null;
-  geoError: { reason: GeoFailureReason; message: string } | null;
 }
 
-let state: PinState = {
+const INITIAL_STATE: PinState = {
   pin: null,
   radiusKm: DEFAULT_PIN_RADIUS_KM,
   geoStatus: "idle",
   reason: null,
   message: null,
-  geoError: null,
 };
+
+let state: PinState = INITIAL_STATE;
 
 let activeLocatePromise: Promise<PinState> | null = null;
 let locateEpoch = 0;
@@ -68,7 +68,6 @@ function setGeoFailure(reason: GeoFailureReason, message: string): PinState {
     geoStatus: "error",
     reason,
     message,
-    geoError: { reason, message },
   };
   notify();
   return state;
@@ -84,14 +83,22 @@ export function setPin(
 ): boolean {
   const isTuple = Array.isArray(input);
   const lngLat: [number, number] = isTuple ? [input[0], input[1]] : [input.lngLat[0], input.lngLat[1]];
-  if (!Number.isFinite(lngLat[0]) || !Number.isFinite(lngLat[1]) || !contains(METRO_BBOX, lngLat)) {
-    return false;
-  }
   const opts =
     typeof sourceOrOptions === "string"
       ? { source: sourceOrOptions }
       : sourceOrOptions ?? (isTuple ? {} : { source: input.source, label: input.label, accuracyM: input.accuracyM });
   const source: PinSource = opts.source ?? (isTuple ? "manual" : input.source);
+  if (source !== "gps") {
+    locateEpoch += 1;
+    activeLocatePromise = null;
+  }
+  if (!Number.isFinite(lngLat[0]) || !Number.isFinite(lngLat[1]) || !contains(METRO_BBOX, lngLat)) {
+    if (source !== "gps" && state.geoStatus !== "idle") {
+      state = { ...state, geoStatus: "idle" };
+      notify();
+    }
+    return false;
+  }
   const label = opts.label ?? (!isTuple ? input.label : undefined);
   const accuracyM = opts.accuracyM ?? (!isTuple ? input.accuracyM : undefined);
 
@@ -104,10 +111,9 @@ export function setPin(
   state = {
     ...state,
     pin: nextPin,
-    geoStatus: source === "gps" ? "ready" : state.geoStatus === "error" ? "idle" : state.geoStatus,
+    geoStatus: source === "gps" ? "ready" : "idle",
     reason: null,
     message: null,
-    geoError: null,
   };
   notify();
   return true;
@@ -116,14 +122,7 @@ export function setPin(
 export function clearPin(): void {
   locateEpoch += 1;
   activeLocatePromise = null;
-  state = {
-    ...state,
-    pin: null,
-    geoStatus: "idle",
-    reason: null,
-    message: null,
-    geoError: null,
-  };
+  state = INITIAL_STATE;
   notify();
 }
 
@@ -158,7 +157,6 @@ export function locateUser(): Promise<PinState> {
     geoStatus: "locating",
     reason: null,
     message: null,
-    geoError: null,
   };
   notify();
 
@@ -213,14 +211,7 @@ export function locateUser(): Promise<PinState> {
 export function resetPinStore(): void {
   locateEpoch += 1;
   activeLocatePromise = null;
-  state = {
-    pin: null,
-    radiusKm: DEFAULT_PIN_RADIUS_KM,
-    geoStatus: "idle",
-    reason: null,
-    message: null,
-    geoError: null,
-  };
+  state = INITIAL_STATE;
   notify();
 }
 
@@ -237,7 +228,6 @@ export function usePin() {
     ...state,
     setPin,
     clearPin,
-    setRadiusKm: setPinRadiusKm,
     setPinRadiusKm,
     setPresetPin,
     locateUser,

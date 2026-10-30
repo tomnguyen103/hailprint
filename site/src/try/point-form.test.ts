@@ -19,7 +19,7 @@ describe("parsePoint (US-01.6)", () => {
 describe("POINT_HINT", () => {
   it("names the 8-county Houston Metro bounds", () => {
     expect(POINT_HINT).toBe(
-      "Enter a latitude between 28.82 and 30.63 and a longitude between -96.30 and -94.35 (8-county Houston Metro).",
+      "Enter a latitude between 28.78 and 30.68 and a longitude between -96.24 and -94.30 (8-county Houston Metro).",
     );
   });
 });

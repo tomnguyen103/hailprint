@@ -145,5 +145,17 @@ describe("strict runtime schema validation (US-03.3)", () => {
         data: [[{ from: 1000, step: 600, values: [-1] }]],
       }),
     ).toThrow(/ioda/);
+
+    expect(() =>
+      parseOdinSnapshot(
+        {
+          total_count: 5,
+          results: [{ communitydescriptor: "48201", name: "CENTERPOINT,1", customers_out: 10 }],
+        },
+        "48201",
+      ),
+    ).toThrow(/odin/);
+
+    expect(() => iodaSignalUrl("__proto__", 0, 600)).toThrow(/ioda/);
   });
 });

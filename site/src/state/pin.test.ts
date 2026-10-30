@@ -114,4 +114,48 @@ describe("locateUser geolocation lifecycle and error handling (US-01.4, US-01.5)
       expect(state.pin?.lngLat).toEqual([-95.5297, 29.7752]);
     }
   });
+
+  it("cancels in-flight locateUser when setPin or clearPin is called, resetting geoStatus to idle and ignoring late GPS callbacks", async () => {
+    let successCb: ((pos: GeolocationPosition) => void) | null = null;
+    let errorCb: ((err: GeolocationPositionError) => void) | null = null;
+    const getCurrentPosition = vi.fn(
+      (onSuccess: (pos: GeolocationPosition) => void, onError: (err: GeolocationPositionError) => void) => {
+        successCb = onSuccess;
+        errorCb = onError;
+      },
+    );
+    vi.stubGlobal("navigator", { geolocation: { getCurrentPosition } });
+
+    const p1 = locateUser();
+    expect(getPinState().geoStatus).toBe("locating");
+
+    setPin(METRO_PRESETS[0]!.lngLat, "preset");
+    expect(getPinState().geoStatus).toBe("idle");
+    expect(getPinState().pin?.lngLat).toEqual(METRO_PRESETS[0]!.lngLat);
+    expect(getPinState().pin?.source).toBe("preset");
+
+    // Late GPS callback must not overwrite the preset pin
+    successCb!({
+      coords: { latitude: 29.9691, longitude: -95.6972, accuracy: 12 } as GeolocationCoordinates,
+      timestamp: Date.now(),
+      toJSON: () => ({}),
+    });
+    await p1;
+    expect(getPinState().geoStatus).toBe("idle");
+    expect(getPinState().pin?.lngLat).toEqual(METRO_PRESETS[0]!.lngLat);
+    expect(getPinState().pin?.source).toBe("preset");
+
+    // Also test clearPin while locateUser is pending
+    const p2 = locateUser();
+    expect(getPinState().geoStatus).toBe("locating");
+    clearPin();
+    expect(getPinState().geoStatus).toBe("idle");
+    expect(getPinState().pin).toBeNull();
+
+    errorCb!({ code: 1, message: "denied", PERMISSION_DENIED: 1, POSITION_UNAVAILABLE: 2, TIMEOUT: 3 });
+    await p2;
+    expect(getPinState().geoStatus).toBe("idle");
+    expect(getPinState().reason).toBeNull();
+    expect(getPinState().pin).toBeNull();
+  });
 });

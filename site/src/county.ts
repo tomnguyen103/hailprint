@@ -4,24 +4,18 @@ import { HARRIS_FIPS } from "./data/constants";
 import { fetchJson } from "./data/fetch";
 import { guardOutline } from "./data/guard";
 import { DataError } from "./data/types";
+import { type Bbox, HARRIS_BBOX, contains } from "./geometry";
 import type { Load } from "./state/load";
 
-export type Bbox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
+export { type Bbox, HARRIS_BBOX, contains };
 
 /** The pad the Python `county.bbox()` adds around the outline, in degrees. */
 export const PAD_DEG = 0.05;
-
-/** `uv run python -c "from hailprint.county import bbox; print(bbox())"`, already padded. */
-export const HARRIS_BBOX: Bbox = [-96.010733, 29.44752, -94.858498, 30.220606];
 
 /** `uv run python -c "from hailprint.county import metro_bbox; print(metro_bbox())"`, already padded. */
 export const METRO_BBOX: Bbox = [-96.242208, 28.77556588, -94.303383, 30.680284];
 
 export const COUNTIES_FILE = "/counties.geojson";
-
-export function contains(bbox: Bbox, [lon, lat]: [number, number]): boolean {
-  return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
-}
 
 let counties: Promise<FeatureCollection<MultiPolygon>> | null = null;
 

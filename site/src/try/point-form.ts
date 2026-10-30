@@ -2,7 +2,7 @@
 import { METRO_BBOX, contains } from "../county";
 
 export const POINT_HINT =
-  "Enter a latitude between 28.82 and 30.63 and a longitude between -96.30 and -94.35 (8-county Houston Metro).";
+  "Enter a latitude between 28.78 and 30.68 and a longitude between -96.24 and -94.30 (8-county Houston Metro).";
 
 /** `[lon, lat]` for two finite numbers inside the 8-county Houston Metro bbox, else null. */
 export function parsePoint(latText: string, lonText: string): [number, number] | null {

@@ -6,10 +6,16 @@ export const WGS84_E2 = 0.0066943799901413165;
 export const UTM15N_K0 = 0.99969;
 export const CROP_EDGE_M = 1000;
 
+export type Bbox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
+
 export type CropStatus = "inside" | "near-edge" | "outside-crop";
 
-/** Harris County padded bbox from `county.ts` (`[-96.010733, 29.44752, -94.858498, 30.220606]`). */
-const HARRIS_CROP_BBOX: readonly [number, number, number, number] = [-96.010733, 29.44752, -94.858498, 30.220606];
+/** `uv run python -c "from hailprint.county import bbox; print(bbox())"`, already padded. */
+export const HARRIS_BBOX: Bbox = [-96.010733, 29.44752, -94.858498, 30.220606];
+
+export function contains(bbox: Bbox, [lon, lat]: [number, number]): boolean {
+  return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
+}
 
 /** Even-odd ray cast over one ring with the half-open edge test, so a vertex gives one fixed answer. */
 function inRing(ring: Position[], [x, y]: [number, number]): boolean {
@@ -118,7 +124,7 @@ export function pointToMultiPolygonDistanceM(p: [number, number], geometry: Mult
 
 /** Signed distance in metres to `HARRIS_BBOX`: positive inside, negative outside. */
 export function cropEdgeDistanceM([lon, lat]: [number, number]): number {
-  const [minLon, minLat, maxLon, maxLat] = HARRIS_CROP_BBOX;
+  const [minLon, minLat, maxLon, maxLat] = HARRIS_BBOX;
   const [mx, my] = metersPerDegree(lat);
   if (lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat) {
     return Math.min((lon - minLon) * mx, (maxLon - lon) * mx, (lat - minLat) * my, (maxLat - lat) * my);

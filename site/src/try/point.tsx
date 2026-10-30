@@ -118,6 +118,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
 
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
+  const liveEpochRef = useRef(0);
   const [ready, setReady] = useState(false);
   const [mapError, setMapError] = useState<DataError | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -131,7 +132,6 @@ export function PointCheck({ index }: { index: StormsIndex }) {
       setLonText(pin.lngLat[0].toFixed(4));
       setInvalid(false);
     }
-    setLiveState({ status: "idle" });
   }, [pin?.lngLat[0], pin?.lngLat[1]]);
 
   useEffect(() => {
@@ -214,6 +214,11 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     return feat?.properties?.["name"] ? `${String(feat.properties["name"])} County` : `County ${pinnedFips}`;
   }, [pinnedFips, outlines]);
 
+  useEffect(() => {
+    liveEpochRef.current += 1;
+    setLiveState({ status: "idle" });
+  }, [activePoint?.[0], activePoint?.[1], pinnedFips]);
+
   const check = (event: Event) => {
     event.preventDefault();
     const next = parsePoint(latText, lonText);
@@ -222,6 +227,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   };
 
   const onClearPin = () => {
+    liveEpochRef.current += 1;
     clearPin();
     setLatText("");
     setLonText("");
@@ -230,10 +236,13 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   };
 
   const runLiveCheck = () => {
-    if (activePoint === null) return;
+    if (!activePoint || metro.status !== "ready") return;
+    const myEpoch = ++liveEpochRef.current;
     setLiveState({ status: "loading" });
     void fetchLiveStatus(activePoint, pinnedFips).then((data) => {
-      setLiveState({ status: "ready", data });
+      if (liveEpochRef.current === myEpoch) {
+        setLiveState({ status: "ready", data });
+      }
     });
   };
 
@@ -261,6 +270,26 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   );
   const activeCount = useMemo(() => rows.filter((r) => r.hasActivityNearPin).length, [rows]);
 
+  const impactError =
+    metro.status === "error"
+      ? metro
+      : reportsAll.status === "error"
+        ? reportsAll
+        : warningsAll.status === "error"
+          ? warningsAll
+          : powerAll.status === "error"
+            ? powerAll
+            : internetAll.status === "error"
+              ? internetAll
+              : null;
+  const impactLoading =
+    activePoint !== null &&
+    (metro.status === "loading" ||
+      reportsAll.status === "loading" ||
+      warningsAll.status === "loading" ||
+      powerAll.status === "loading" ||
+      internetAll.status === "loading");
+
   let resultsSection = null;
   if (activePoint !== null) {
     if (swaths.status === "error") {
@@ -270,190 +299,198 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     } else {
       const firstCropStatus = rows[0]?.cropStatus ?? "inside";
       resultsSection = (
-        <section class="point-results" aria-label="Pinned location archive analysis">
-          <div class="stamp point-stamp">
-            <span class="stamp-date mono">
-              {activePoint[1].toFixed(4)}, {activePoint[0].toFixed(4)}
-            </span>
-            {pin?.label ? <span class="stamp-fact">{pin.label}</span> : null}
-            <span class="stamp-fact">
-              {pinnedCountyName !== null && pinnedFips !== null
-                ? `${pinnedCountyName} (${pinnedFips})`
-                : "8-county Houston Metro"}
-            </span>
-            <span class="stamp-fact">{cropBadgeText(firstCropStatus, radiusKm)}</span>
-            <span class="stamp-fact">
-              Swaths {"\u2264"} <span class="mono">{radiusKm} km</span>:{" "}
-              <span class="mono">
-                {summary.stormsWithSwathWithinRadius}/{summary.totalStorms}
-              </span>
-              {summary.maxSwathWithinRadius
-                ? ` (max ${objectName(summary.maxSwathWithinRadius.threshold_mm)}, \u2265 ${formatInches(summary.maxSwathWithinRadius.threshold_in)})`
-                : ""}
-            </span>
-            <span class="stamp-fact">
-              SPC reports {"\u2264"} <span class="mono">{radiusKm} km</span>:{" "}
-              <span class="mono">{summary.totalReportsWithinRadius}</span> across{" "}
-              <span class="mono">{summary.stormsWithReportsWithinRadius}</span> storms
-            </span>
-            <span class="stamp-fact">
-              Direct NWS warnings: <span class="mono">{summary.totalDirectWarnings}</span> across{" "}
-              <span class="mono">{summary.stormsWithDirectWarnings}</span> storms
-            </span>
-            <span class="stamp-fact">
-              Worst county peak:{" "}
-              {summary.worstPowerPeak ? (
-                <>
-                  <span class="mono">{percentText(summary.worstPowerPeak.peakShare)}</span> (
-                  <span class="mono">{summary.worstPowerPeak.stormDate}</span>)
-                </>
-              ) : (
-                "none"
-              )}
-              {summary.deepestInternetTrough ? (
-                <>
-                  {" \u00b7 "}trough{" "}
-                  <span class="mono">{percentText(summary.deepestInternetTrough.maxDrop)}</span> below baseline (
-                  <span class="mono">{summary.deepestInternetTrough.stormDate}</span>)
-                </>
-              ) : null}
-            </span>
-          </div>
-
-          <div class="point-live-bar">
-            <div class="point-live-head">
-              <button
-                type="button"
-                class="button button-small"
-                disabled={liveState.status === "loading"}
-                onClick={runLiveCheck}
-              >
-                {liveState.status === "loading" ? "Checking live feeds\u2026" : "Check live NWS & outage feeds"}
-              </button>
-              <span class="point-live-caption">
-                On-demand check of NWS Active Alerts, ORNL ODIN utility outages, and IODA internet reachability.
-              </span>
-            </div>
-            {liveState.status === "ready" ? (
-              <dl class="receipt-list point-live-grid">
-                <dt>NWS active alerts</dt>
-                <dd>
-                  {liveState.data.alerts.status === "error"
-                    ? liveState.data.alerts.message
-                    : liveState.data.alerts.alerts.length === 0
-                      ? "0 active alerts at pinned point"
-                      : liveState.data.alerts.alerts.map((a) => `${a.event} (${a.severity})`).join(" \u00b7 ")}
-                </dd>
-                <dt>ORNL ODIN utility outages</dt>
-                <dd>
-                  {liveState.data.power.status === "error" ? (
-                    liveState.data.power.message
-                  ) : (
+        <section class="point-results point-analysis" aria-label="Pinned location archive analysis">
+          {impactError !== null ? (
+            <ErrorState error={impactError.error} onRetry={impactError.retry} />
+          ) : impactLoading ? (
+            <LoadingState file="reports.geojson, warnings.geojson, power.json, internet.json" />
+          ) : (
+            <>
+              <div class="stamp point-stamp">
+                <span class="stamp-date mono">
+                  {activePoint[1].toFixed(4)}, {activePoint[0].toFixed(4)}
+                </span>
+                {pin?.label ? <span class="stamp-fact">{pin.label}</span> : null}
+                <span class="stamp-fact">
+                  {pinnedCountyName !== null && pinnedFips !== null
+                    ? `${pinnedCountyName} (${pinnedFips})`
+                    : "8-county Houston Metro"}
+                </span>
+                <span class="stamp-fact">{cropBadgeText(firstCropStatus, radiusKm)}</span>
+                <span class="stamp-fact">
+                  Swaths {"\u2264"} <span class="mono">{radiusKm} km</span>:{" "}
+                  <span class="mono">
+                    {summary.stormsWithSwathWithinRadius}/{summary.totalStorms}
+                  </span>
+                  {summary.maxSwathWithinRadius
+                    ? ` (max ${objectName(summary.maxSwathWithinRadius.threshold_mm)}, \u2265 ${formatInches(summary.maxSwathWithinRadius.threshold_in)})`
+                    : ""}
+                </span>
+                <span class="stamp-fact">
+                  SPC reports {"\u2264"} <span class="mono">{radiusKm} km</span>:{" "}
+                  <span class="mono">{summary.totalReportsWithinRadius}</span> across{" "}
+                  <span class="mono">{summary.stormsWithReportsWithinRadius}</span> storms
+                </span>
+                <span class="stamp-fact">
+                  Direct NWS warnings: <span class="mono">{summary.totalDirectWarnings}</span> across{" "}
+                  <span class="mono">{summary.stormsWithDirectWarnings}</span> storms
+                </span>
+                <span class="stamp-fact">
+                  Worst county peak:{" "}
+                  {summary.worstPowerPeak ? (
                     <>
-                      <span class="mono">{formatCount(liveState.data.power.customersOut)}</span> customers out (
-                      {liveState.data.power.note})
+                      <span class="mono">{percentText(summary.worstPowerPeak.peakShare)}</span> (
+                      <span class="mono">{summary.worstPowerPeak.stormDate}</span>)
                     </>
-                  )}
-                </dd>
-                <dt>IODA internet reachability</dt>
-                <dd>
-                  {liveState.data.internet.status === "error" ? (
-                    liveState.data.internet.message
-                  ) : liveState.data.internet.ratio === null ? (
-                    "no recent county signal points"
                   ) : (
-                    <>
-                      <span class="mono">{percentText(liveState.data.internet.drop)}</span> below 24h median (ratio{" "}
-                      <span class="mono">{liveState.data.internet.ratio.toFixed(3)}</span>)
-                    </>
+                    "none"
                   )}
-                </dd>
-              </dl>
-            ) : null}
-          </div>
+                  {summary.deepestInternetTrough ? (
+                    <>
+                      {" \u00b7 "}trough{" "}
+                      <span class="mono">{percentText(summary.deepestInternetTrough.maxDrop)}</span> below baseline (
+                      <span class="mono">{summary.deepestInternetTrough.stormDate}</span>)
+                    </>
+                  ) : null}
+                </span>
+              </div>
 
-          <div class="point-table-toolbar">
-            <div class="point-filter-group" role="group" aria-label="Filter archive storm dates">
-              <button
-                type="button"
-                class="button button-small"
-                aria-pressed={filterMode === "all"}
-                onClick={() => setFilterMode("all")}
-              >
-                All <span class="mono">{rows.length}</span> storm dates
-              </button>
-              <button
-                type="button"
-                class="button button-small"
-                aria-pressed={filterMode === "active"}
-                onClick={() => setFilterMode("active")}
-              >
-                Activity near pin only (<span class="mono">{activeCount}</span>)
-              </button>
-            </div>
-            <span class="point-preview-note">
-              Map preview: <span class="mono">{previewSwath?.receipt.storm_date ?? previewDate}</span>
-            </span>
-          </div>
+              <div class="point-live-bar">
+                <div class="point-live-head">
+                  <button
+                    type="button"
+                    class="button button-small"
+                    disabled={liveState.status === "loading" || metro.status !== "ready"}
+                    onClick={runLiveCheck}
+                  >
+                    {liveState.status === "loading" ? "Checking live feeds\u2026" : "Check live NWS & outage feeds"}
+                  </button>
+                  <span class="point-live-caption">
+                    On-demand check of NWS Active Alerts, ORNL ODIN utility outages, and IODA internet reachability.
+                  </span>
+                </div>
+                {liveState.status === "ready" ? (
+                  <dl class="receipt-list point-live-grid">
+                    <dt>NWS active alerts</dt>
+                    <dd>
+                      {liveState.data.alerts.status === "error"
+                        ? liveState.data.alerts.message
+                        : liveState.data.alerts.alerts.length === 0
+                          ? "0 active alerts at pinned point"
+                          : liveState.data.alerts.alerts.map((a) => `${a.event} (${a.severity})`).join(" \u00b7 ")}
+                    </dd>
+                    <dt>ORNL ODIN utility outages</dt>
+                    <dd>
+                      {liveState.data.power.status === "error" ? (
+                        liveState.data.power.message
+                      ) : (
+                        <>
+                          <span class="mono">{formatCount(liveState.data.power.customersOut)}</span> customers out (
+                          {liveState.data.power.note})
+                        </>
+                      )}
+                    </dd>
+                    <dt>IODA internet reachability</dt>
+                    <dd>
+                      {liveState.data.internet.status === "error" ? (
+                        liveState.data.internet.message
+                      ) : liveState.data.internet.ratio === null ? (
+                        "no recent county signal points"
+                      ) : (
+                        <>
+                          <span class="mono">{percentText(liveState.data.internet.drop)}</span> below 24h median (ratio{" "}
+                          <span class="mono">{liveState.data.internet.ratio.toFixed(3)}</span>)
+                        </>
+                      )}
+                    </dd>
+                  </dl>
+                ) : null}
+              </div>
 
-          <div class="table-scroll">
-            <table class="table point-table">
-              <thead>
-                <tr>
-                  <th scope="col">Storm date</th>
-                  <th scope="col">Swath at pin / within {radiusKm} km</th>
-                  <th scope="col">SPC reports {"\u2264"} {radiusKm} km</th>
-                  <th scope="col">NWS warnings at pin</th>
-                  <th scope="col">County power peak</th>
-                  <th scope="col">County internet reachability</th>
-                  <th scope="col">
-                    <span class="visually-hidden">Receipt</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRows.map((row) => {
-                  const jumpStep = row.firstWarningStep ?? row.powerPeak?.peakStep ?? undefined;
-                  return (
-                    <tr key={row.stormDate} data-active={row.hasActivityNearPin}>
-                      <td class="point-date-cell">
-                        <Link
-                          class="mono"
-                          href={href({ area: "storms", date: row.stormDate, tab: "map", step: jumpStep })}
-                        >
-                          {row.stormDate}
-                        </Link>
-                        <button
-                          type="button"
-                          class="button button-small"
-                          aria-pressed={previewDate === row.stormDate}
-                          onClick={() => setPreviewDate(row.stormDate)}
-                        >
-                          Preview
-                        </button>
-                      </td>
-                      <td>{renderSwathCell(row)}</td>
-                      <td class="mono">{renderReportsCell(row)}</td>
-                      <td>{renderWarningsCell(row)}</td>
-                      <td class="mono">{renderPowerCell(row)}</td>
-                      <td class="mono">{renderInternetCell(row)}</td>
-                      <td>
-                        {row.receipts.swath ? (
-                          <ReceiptChip receipt={row.receipts.swath} file={SWATH_FILE} />
-                        ) : null}
-                      </td>
+              <div class="point-table-toolbar">
+                <div class="point-filter-group" role="group" aria-label="Filter archive storm dates">
+                  <button
+                    type="button"
+                    class="button button-small"
+                    aria-pressed={filterMode === "all"}
+                    onClick={() => setFilterMode("all")}
+                  >
+                    All <span class="mono">{rows.length}</span> storm dates
+                  </button>
+                  <button
+                    type="button"
+                    class="button button-small"
+                    aria-pressed={filterMode === "active"}
+                    onClick={() => setFilterMode("active")}
+                  >
+                    Activity near pin only (<span class="mono">{activeCount}</span>)
+                  </button>
+                </div>
+                <span class="point-preview-note">
+                  Map preview: <span class="mono">{previewSwath?.receipt.storm_date ?? previewDate}</span>
+                </span>
+              </div>
+
+              <div class="table-scroll">
+                <table class="table point-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Storm date</th>
+                      <th scope="col">Swath at pin / within {radiusKm} km</th>
+                      <th scope="col">SPC reports {"\u2264"} {radiusKm} km</th>
+                      <th scope="col">NWS warnings at pin</th>
+                      <th scope="col">County power peak</th>
+                      <th scope="col">County internet reachability</th>
+                      <th scope="col">
+                        <span class="visually-hidden">Receipt</span>
+                      </th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {visibleRows.map((row) => {
+                      const jumpStep = row.firstWarningStep ?? row.powerPeak?.peakStep ?? undefined;
+                      return (
+                        <tr key={row.stormDate} data-active={row.hasActivityNearPin}>
+                          <td class="point-date-cell">
+                            <Link
+                              class="mono"
+                              href={href({ area: "storms", date: row.stormDate, tab: "map", step: jumpStep })}
+                            >
+                              {row.stormDate}
+                            </Link>
+                            <button
+                              type="button"
+                              class="button button-small"
+                              aria-pressed={previewDate === row.stormDate}
+                              onClick={() => setPreviewDate(row.stormDate)}
+                            >
+                              Preview
+                            </button>
+                          </td>
+                          <td>{renderSwathCell(row)}</td>
+                          <td class="mono">{renderReportsCell(row)}</td>
+                          <td>{renderWarningsCell(row)}</td>
+                          <td class="mono">{renderPowerCell(row)}</td>
+                          <td class="mono">{renderInternetCell(row)}</td>
+                          <td>
+                            {row.receipts.swath ? (
+                              <ReceiptChip receipt={row.receipts.swath} file={SWATH_FILE} />
+                            ) : null}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </section>
       );
     }
   }
 
-  const countyFailure = metro.status === "error" ? metro : null;
+  const countyFailure = activePoint === null && metro.status === "error" ? metro : null;
 
   return (
     <>

@@ -37,7 +37,7 @@ export function nwsAlertsUrl([lon, lat]: [number, number]): string {
 }
 
 export function iodaSignalUrl(fips: string, fromSec: number, untilSec: number): string {
-  const code = IODA_COUNTY_CODES[fips];
+  const code = Object.hasOwn(IODA_COUNTY_CODES, fips) ? IODA_COUNTY_CODES[fips] : undefined;
   if (!code) {
     throw new DataError("ioda", `unknown metro county fips ${fips}`);
   }
@@ -121,7 +121,13 @@ export function parseOdinSnapshot(value: unknown, fips: string): LivePowerSnapsh
     if (results.length >= ODIN_LIMIT) {
       throw new DataError("odin", "response may be truncated");
     }
-  } else if (typeof total !== "number" || !Number.isInteger(total) || total < 0 || total > ODIN_LIMIT) {
+  } else if (
+    typeof total !== "number" ||
+    !Number.isInteger(total) ||
+    total < 0 ||
+    total > ODIN_LIMIT ||
+    total > results.length
+  ) {
     throw new DataError("odin", "invalid or truncated total_count");
   }
 

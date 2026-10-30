@@ -445,4 +445,114 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
     expect(domText(host)).toContain("0 active alerts at pinned point");
     expect(storageWrites).toEqual([]);
   });
+
+  it("renders ErrorState with a retry button when a lazy impact hook fails instead of false-negative 0 counts", async () => {
+    setFetch(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/counties.geojson")) {
+        return new Response(JSON.stringify(countiesFixture), { status: 200 });
+      }
+      if (url.endsWith("swath.geojson")) {
+        return new Response(JSON.stringify(swathFixture), { status: 200 });
+      }
+      if (url.endsWith("reports.geojson")) {
+        return new Response("upstream failure", { status: 500 });
+      }
+      if (url.endsWith("warnings.geojson")) {
+        return new Response(JSON.stringify(warningsFixture), { status: 200 });
+      }
+      if (url.endsWith("power.json")) {
+        return new Response(JSON.stringify(powerFixture), { status: 200 });
+      }
+      if (url.endsWith("internet.json")) {
+        return new Response(JSON.stringify(internetFixture), { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    setPresetPin("memorial");
+    const host = makeFakeElement("div");
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+
+    const text = domText(host);
+    expect(text).toContain("reports.geojson");
+    expect(text).toContain("HTTP 500");
+    expect(text).toContain("Retry");
+    expect(text).not.toContain("SPC reports \u2264");
+  });
+
+  it("ignores stale fetchLiveStatus response when the pin changes while live check is in flight", async () => {
+    let resolveFirstNws: ((res: Response) => void) | null = null;
+    setFetch(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/counties.geojson")) {
+        return new Response(JSON.stringify(countiesFixture), { status: 200 });
+      }
+      if (url.endsWith("swath.geojson")) {
+        return new Response(JSON.stringify(swathFixture), { status: 200 });
+      }
+      if (url.endsWith("reports.geojson")) {
+        return new Response(JSON.stringify(reportsFixture), { status: 200 });
+      }
+      if (url.endsWith("warnings.geojson")) {
+        return new Response(JSON.stringify(warningsFixture), { status: 200 });
+      }
+      if (url.endsWith("power.json")) {
+        return new Response(JSON.stringify(powerFixture), { status: 200 });
+      }
+      if (url.endsWith("internet.json")) {
+        return new Response(JSON.stringify(internetFixture), { status: 200 });
+      }
+      if (url.startsWith("https://api.weather.gov/")) {
+        return new Promise<Response>((resolve) => {
+          resolveFirstNws = resolve;
+        });
+      }
+      if (url.startsWith("https://ornl.opendatasoft.com/")) {
+        return new Response(JSON.stringify({ total_count: 0, results: [] }), { status: 200 });
+      }
+      if (url.startsWith("https://api.ioda.inetintel.cc.gatech.edu/")) {
+        return new Response(
+          JSON.stringify({ error: null, data: [[{ from: 1000, step: 600, values: [2400, 2400] }]] }),
+          { status: 200 },
+        );
+      }
+      return new Response("not found", { status: 404 });
+    });
+
+    setPresetPin("memorial");
+    const host = makeFakeElement("div");
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+
+    const liveBtn = findDomNodes(
+      host,
+      (n) => n.tagName === "BUTTON" && domText(n).includes("Check live NWS & outage feeds"),
+    )[0]!;
+    await act(async () => {
+      (liveBtn["on_click"] as (e: { type: string; preventDefault(): void }) => void)({
+        type: "click",
+        preventDefault() {},
+      });
+    });
+    expect(domText(host)).toContain("Checking live feeds");
+
+    // Switch pin while fetchLiveStatus is in flight
+    await act(() => {
+      setPresetPin("downtown");
+    });
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    expect(domText(host)).toContain("Check live NWS & outage feeds");
+
+    // Resolve stale first request; it must be ignored
+    await act(async () => {
+      resolveFirstNws!(new Response(JSON.stringify({ type: "FeatureCollection", features: [] }), { status: 200 }));
+      await vi.advanceTimersByTimeAsync(20);
+    });
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    expect(domText(host)).not.toContain("0 active alerts at pinned point");
+  });
 });

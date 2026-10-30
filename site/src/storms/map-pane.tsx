@@ -16,7 +16,7 @@ import "../styles/map.css";
 import { TimeSlider } from "../time/slider";
 import { LAYER_ROWS, LayersControl, type LayerState } from "./layers-control";
 import type { MapHandle } from "./map/create-map";
-import { boundsOf, coveringClass, nearestReport, swathExposureAt } from "./map/geo";
+import { boundsOf, coveringAt, coveringClass, nearestReport, swathExposureAt } from "./map/geo";
 import { Inspector, type Pick } from "./map/inspector";
 import { type LayerName, fillLayerId, warningsNote } from "./map/layers";
 import { RulerLegend } from "./map/ruler-legend";
@@ -191,26 +191,29 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     container.current?.focus();
   }, []);
   const retryMap = useCallback(() => setAttempt((n) => n + 1), []);
-  const onPinMyLocation = useCallback(() => {
-    void locateUser().then((next) => {
-      if (next.pin) {
-        const clickedCounty = countyAt(next.pin.lngLat, outlinesRef.current);
-        if (clickedCounty !== null) onCountyRef.current(clickedCounty);
-        const cov = swathRef.current ? coveringAtPoint(swathRef.current, next.pin.lngLat) : null;
-        const nearSwath =
-          cov === null && swathRef.current !== null
-            ? swathExposureAt(swathRef.current, next.pin.lngLat, 20).nearest
-            : null;
-        setPick({
-          date: stormDateRef.current,
-          lngLat: next.pin.lngLat,
-          coveringMm: cov,
-          nearest: nearestReport(next.pin.lngLat, reportsRef.current?.features ?? []),
-          nearestSwath: nearSwath,
-        });
-      }
+  const inspectCoordinate = useCallback((lngLat: [number, number]) => {
+    const clickedCounty = countyAt(lngLat, outlinesRef.current);
+    if (clickedCounty !== null) onCountyRef.current(clickedCounty);
+    const cov = swathRef.current ? (coveringAt(swathRef.current, lngLat)?.threshold_mm ?? null) : null;
+    const nearSwath =
+      cov === null && swathRef.current !== null
+        ? swathExposureAt(swathRef.current, lngLat, 20).nearest
+        : null;
+    setPick({
+      date: stormDateRef.current,
+      lngLat,
+      coveringMm: cov,
+      nearest: nearestReport(lngLat, reportsRef.current?.features ?? []),
+      nearestSwath: nearSwath,
     });
   }, []);
+  const onPinMyLocation = useCallback(() => {
+    void locateUser().then((next) => {
+      if (next.geoStatus === "ready" && next.pin !== null) {
+        inspectCoordinate(next.pin.lngLat);
+      }
+    });
+  }, [inspectCoordinate]);
 
   // One overlay slot: the map chunk error first, then the swath, reports, and county errors in that order.
   const failed = swath.status === "error" ? swath : reports.status === "error" ? reports : metro.status === "error" ? metro : null;
@@ -257,12 +260,21 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
                 {geoStatus === "locating" ? "Locating\u2026" : "Pin my location"}
               </button>
               {pin !== null ? (
-                <button type="button" class="button button-small" onClick={() => clearPin()}>
-                  Clear pin
-                </button>
+                <>
+                  <button
+                    type="button"
+                    class="button button-small"
+                    onClick={() => inspectCoordinate(pin.lngLat)}
+                  >
+                    {pin.label ? `Inspect pin (${pin.label})` : "Inspect pin"}
+                  </button>
+                  <button type="button" class="button button-small" onClick={() => clearPin()}>
+                    Clear pin
+                  </button>
+                </>
               ) : null}
               {geoStatus === "error" && geoMessage !== null ? (
-                <p class="layers-note" role="status">
+                <p class="layers-note" role="alert">
                   {geoMessage}
                 </p>
               ) : null}
@@ -312,8 +324,4 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
       ) : null}
     </div>
   );
-}
-
-function coveringAtPoint(swath: SwathFile, lngLat: [number, number]): number | null {
-  return swathExposureAt(swath, lngLat, 0).covering?.threshold_mm ?? null;
 }

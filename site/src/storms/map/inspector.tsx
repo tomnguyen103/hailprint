@@ -1,5 +1,6 @@
 import type { Feature, Point } from "geojson";
 import { useEffect, useRef } from "preact/hooks";
+import { METRO_BBOX } from "../../county";
 import type {
   InternetFile,
   PowerFile,
@@ -9,15 +10,15 @@ import type {
   WarningsFile,
 } from "../../data/types";
 import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../../format";
-import { pointInMultiPolygon } from "../../geometry";
+import { contains, pointInMultiPolygon } from "../../geometry";
 import { dropOf } from "../../impact/internet";
 import { ODIN_LABEL, percentText, shareOut } from "../../impact/power";
+import { internetSeriesTrough, powerSeriesPeak } from "../../impact/series";
 import { href } from "../../router";
 import { objectName } from "../../ruler";
 import { Link } from "../../shell/link";
 import { ReceiptChip } from "../../shell/receipt-chip";
 import { clearPin, getPinState, setPin, usePin } from "../../state/pin";
-import { internetSeriesTrough, powerSeriesPeak } from "../../try/point-analysis";
 import { type DirectWarning, type SwathDistance, swathExposureAt, warningsAtPoint } from "./geo";
 import { activeWarnings } from "./layers";
 
@@ -249,6 +250,7 @@ export function InspectorView({
   panelRef?: { current: HTMLDivElement | null };
 }) {
   const [lon, lat] = pick.lngLat;
+  const inMetro = contains(METRO_BBOX, pick.lngLat);
   const activePin = pinnedLngLat !== undefined ? pinnedLngLat : (getPinState().pin?.lngLat ?? null);
   const isPinned =
     activePin !== null && Math.abs(activePin[0] - lon) < 1e-5 && Math.abs(activePin[1] - lat) < 1e-5;
@@ -270,9 +272,10 @@ export function InspectorView({
             type="button"
             class="button button-small"
             aria-pressed={isPinned}
+            disabled={!inMetro && !isPinned}
             onClick={() => {
               if (isPinned) clearPin();
-              else setPin(pick.lngLat, "map");
+              else if (inMetro) setPin(pick.lngLat, "map");
             }}
           >
             {isPinned ? "Unpin" : "Pin point"}
@@ -319,15 +322,19 @@ export function InspectorView({
         </dd>
         <dt>Archive analyzer</dt>
         <dd>
-          <Link
-            class="inspector-try-link"
-            href={href({ area: "try", tool: "point" })}
-            onClick={() => {
-              if (!isPinned) setPin(pick.lngLat, "map");
-            }}
-          >
-            Open in Point check
-          </Link>
+          {inMetro ? (
+            <Link
+              class="inspector-try-link"
+              href={href({ area: "try", tool: "point" })}
+              onClick={() => {
+                if (!isPinned) setPin(pick.lngLat, "map");
+              }}
+            >
+              Open in Point check
+            </Link>
+          ) : (
+            "Outside 8-county metro"
+          )}
         </dd>
         <dt>Receipt</dt>
         <dd>
