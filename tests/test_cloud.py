@@ -677,6 +677,7 @@ def test_trigger_tasks_share_pipeline_queue_and_pin_uv():
     cfg = (paths.ROOT / "trigger.config.ts").read_text(encoding="utf-8")
     assert "ghcr.io/astral-sh/uv:0.7.2" in cfg
     assert "ghcr.io/astral-sh/uv:latest" not in cfg
+    assert "cp -a /opt/python/cpython-*/* /usr/local/" in cfg
 
     nightly_ts = (paths.ROOT / "trigger" / "nightly.ts").read_text(encoding="utf-8")
     backfill_ts = (paths.ROOT / "trigger" / "backfill.ts").read_text(encoding="utf-8")
