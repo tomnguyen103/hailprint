@@ -15,18 +15,6 @@ import {
 import { containsPoint, distanceM, pointInMultiPolygon, pointToMultiPolygonDistanceM } from "../../geometry";
 import { LAST_STEP, STEP_MS, stepTime } from "../../time/step";
 
-const EARTH_RADIUS_KM = 6371.0088;
-
-export function haversineKm(a: Position, b: Position): number {
-  const rad = Math.PI / 180;
-  const dLat = ((b[1] ?? 0) - (a[1] ?? 0)) * rad;
-  const dLon = ((b[0] ?? 0) - (a[0] ?? 0)) * rad;
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((a[1] ?? 0) * rad) * Math.cos((b[1] ?? 0) * rad) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_KM * Math.asin(Math.sqrt(h));
-}
-
 /** Ellipsoidal tangent-plane distance in kilometres between two coordinates. */
 export function distanceKm(a: Position, b: Position): number {
   return distanceM([a[0] ?? 0, a[1] ?? 0], [b[0] ?? 0, b[1] ?? 0]) / 1000;

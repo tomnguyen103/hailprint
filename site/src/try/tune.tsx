@@ -7,7 +7,7 @@ import { RULER, diameterPx } from "../ruler";
 import { MetricText } from "../scorecard/metric-text";
 import { ThresholdCurve } from "../scorecard/threshold-curve";
 import { ContingencyGrid } from "../shell/contingency-grid";
-import { RADIUS_MAX_FALLBACK, RadiusSlider } from "../shell/radius-slider";
+import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
@@ -21,9 +21,7 @@ export function Tune({ index }: { index: StormsIndex }) {
   const [radius, setRadius] = useState(index.radius_km_default);
   const [classIdx, setClassIdx] = useState(DEFAULT_CLASS);
   const [metric, setMetric] = useState<MetricKey>("hss");
-  const { load, table, receipt, radiusMax, file } = useScopeRows(index, scope, radius);
-  const maxRadiusKm = radiusMax ?? RADIUS_MAX_FALLBACK;
-  const activeRadius = Math.max(0, Math.min(maxRadiusKm, Math.round(radius)));
+  const { load, table, receipt, maxRadiusKm, activeRadius, file } = useScopeRows(index, scope, radius);
   const selectedStorm = scope === ALL_SCOPE ? undefined : index.storms.find((s) => s.storm_date === scope);
   const reportsLoad = useLoad<ReportsFile | null>(
     selectedStorm ? `tune:${selectedStorm.files.reports}` : "tune:reports:none",

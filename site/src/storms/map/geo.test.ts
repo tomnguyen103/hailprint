@@ -5,7 +5,6 @@ import {
   coveringAt,
   coveringClass,
   distanceKm,
-  haversineKm,
   nearestReport,
   reportsWithinRadius,
   swathExposureAt,
@@ -20,14 +19,12 @@ function report(id: number, lon: number, lat: number, size_in = 1.5): Feature<Po
   };
 }
 
-describe("haversineKm and distanceKm", () => {
+describe("distanceKm", () => {
   it("is 0 for the same point", () => {
-    expect(haversineKm([-95.5, 29.8], [-95.5, 29.8])).toBe(0);
     expect(distanceKm([-95.5, 29.8], [-95.5, 29.8])).toBe(0);
   });
 
-  it("is about 96.5 km for one degree of longitude at 29.5 N", () => {
-    expect(Math.abs(haversineKm([-95.0, 29.5], [-96.0, 29.5]) - 96.5)).toBeLessThan(0.5);
+  it("is about 96.8 km for one degree of longitude at 29.5 N", () => {
     expect(Math.abs(distanceKm([-95.0, 29.5], [-96.0, 29.5]) - 96.8)).toBeLessThan(0.5);
   });
 });
