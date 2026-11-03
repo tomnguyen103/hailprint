@@ -19,7 +19,7 @@ This guide covers the Trigger.dev tasks, the Supabase Storage buckets, and the e
   3. Uploads only `derived/odin/odin-<YYYY-MM-DD>.parquet`. Because `nightly` never uploads `derived/odin/`, the two schedules never race.
 - `hailprint cloud backfill` (`trigger/backfill.ts`, on-demand task on `medium-1x`, queue concurrency 1):
   1. Downloads state and public buckets.
-  2. Runs `warnings --missing`, `eaglei` for any of `2021`, `2023`, `2025` not yet in `derived/eaglei/`, `power --missing`, `internet --missing`, and `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`). A failed `warnings`, `eaglei`, `power`, or `internet` step logs `<step> failed; publish goes on`.
+  2. Runs `warnings --missing`, `eaglei` for any of `2020`, `2021`, `2022`, `2023`, `2024`, `2025` not yet in `derived/eaglei/`, `power --missing`, `internet --missing`, and `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`). A failed `warnings`, `eaglei`, `power`, or `internet` step logs `<step> failed; publish goes on`.
   3. Uploads changed state and public files.
 
 ## Environment variables

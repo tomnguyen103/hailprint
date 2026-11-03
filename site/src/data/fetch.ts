@@ -51,7 +51,24 @@ export async function fetchUrlJson<T>(
     const len = response.headers?.get?.("content-length");
     if (len && Number(len) > MAX_JSON_BYTES) throw new DataError(label, "response exceeds 16 MiB");
     try {
-      if (typeof response.text === "function") {
+      if (typeof response.body?.getReader === "function") {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        const parts: string[] = [];
+        let totalBytes = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          totalBytes += value.byteLength;
+          if (totalBytes > MAX_JSON_BYTES) {
+            await reader.cancel().catch(() => {});
+            throw new DataError(label, "response exceeds 16 MiB");
+          }
+          parts.push(decoder.decode(value, { stream: true }));
+        }
+        parts.push(decoder.decode());
+        body = JSON.parse(parts.join(""));
+      } else if (typeof response.text === "function") {
         const text = await response.text();
         if (text.length > MAX_JSON_BYTES) throw new DataError(label, "response exceeds 16 MiB");
         body = JSON.parse(text);
