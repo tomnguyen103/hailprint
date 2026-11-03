@@ -414,13 +414,23 @@ export function guardOutline(value: unknown): FeatureCollection<MultiPolygon> {
 
 /** The three layer names `now.json` may name; the site builds a fetch path from them, so each is exact. */
 const LIVE_FILES = { swath: "swath.geojson", reports: "reports.geojson", warnings: "warnings.geojson" } as const;
+const FIPS = /^\d{5}$/;
+const MESSAGE_MAX = 200;
 
 function bool(file: string, value: unknown, path: string): void {
   if (typeof value !== "boolean") throw new DataError(file, `${path} is not a boolean`);
 }
 
-function strOrNull(file: string, value: unknown, path: string): void {
-  if (value !== null) str(file, value, path);
+function nonEmptyStr(file: string, value: unknown, path: string): string {
+  const s = str(file, value, path);
+  if (s.length === 0) throw new DataError(file, `${path} is empty`);
+  return s;
+}
+
+function nonNegativeOrNull(file: string, value: unknown, path: string): void {
+  if (value === null) return;
+  const n = num(file, value, path);
+  if (n < 0) throw new DataError(file, `${path} is below 0`);
 }
 
 /** `live/now.json`: every key the Live page reads, with the counts whole and never negative. */
@@ -432,46 +442,62 @@ export function guardLive(value: unknown): LiveFile {
   const window = rec(file, root["window"], "window");
   for (const key of ["start", "end"]) runTime(file, window[key], `window.${key}`);
   const mesh = rec(file, root["mesh"], "mesh");
-  str(file, mesh["key"], "mesh.key");
+  nonEmptyStr(file, mesh["key"], "mesh.key");
   runTime(file, mesh["valid_time"], "mesh.valid_time");
-  numOrNull(file, mesh["max_mesh_mm"], "mesh.max_mesh_mm");
+  nonNegativeOrNull(file, mesh["max_mesh_mm"], "mesh.max_mesh_mm");
   count(file, mesh["class_count"], "mesh.class_count");
   if ((mesh["class_count"] as number) > 7) throw new DataError(file, "mesh.class_count is not a class count");
   if (root["last_hour"] !== null) {
     const hour = rec(file, root["last_hour"], "last_hour");
-    str(file, hour["key"], "last_hour.key");
+    nonEmptyStr(file, hour["key"], "last_hour.key");
     runTime(file, hour["valid_time"], "last_hour.valid_time");
-    numOrNull(file, hour["max_mesh_mm"], "last_hour.max_mesh_mm");
+    nonNegativeOrNull(file, hour["max_mesh_mm"], "last_hour.max_mesh_mm");
   }
   const reports = rec(file, root["reports"], "reports");
   count(file, reports["count"], "reports.count");
-  numOrNull(file, reports["max_size_in"], "reports.max_size_in");
+  nonNegativeOrNull(file, reports["max_size_in"], "reports.max_size_in");
   const warnings = rec(file, root["warnings"], "warnings");
   for (const key of ["count", "active"]) count(file, warnings[key], `warnings.${key}`);
+  if ((warnings["active"] as number) > (warnings["count"] as number)) {
+    throw new DataError(file, "warnings.active exceeds warnings.count");
+  }
   if (root["power"] !== null) {
     const power = rec(file, root["power"], "power");
     count(file, power["customers_out"], "power.customers_out");
-    list(file, power["counties"], "power.counties").forEach((item, i) => {
+    const counties = list(file, power["counties"], "power.counties");
+    if (counties.length > METRO_FIPS.length) {
+      throw new DataError(file, "power.counties has more than 8 entries");
+    }
+    counties.forEach((item, i) => {
       const at = `power.counties[${i}]`;
       const row = rec(file, item, at);
-      for (const key of ["fips", "name"]) str(file, row[key], `${at}.${key}`);
+      if (!FIPS.test(str(file, row["fips"], `${at}.fips`))) {
+        throw new DataError(file, `${at}.fips is not a 5-digit FIPS`);
+      }
+      nonEmptyStr(file, row["name"], `${at}.name`);
       count(file, row["customers_out"], `${at}.customers_out`);
-      num(file, row["share_out"], `${at}.share_out`);
+      const share = num(file, row["share_out"], `${at}.share_out`);
+      if (share < 0 || share > 1) throw new DataError(file, `${at}.share_out is not in [0, 1]`);
     });
   }
-  list(file, root["sources"], "sources").forEach((item, i) => {
+  const sources = list(file, root["sources"], "sources");
+  if (sources.length === 0) throw new DataError(file, "sources is empty");
+  sources.forEach((item, i) => {
     const at = `sources[${i}]`;
     const source = rec(file, item, at);
-    for (const key of ["source", "product"]) str(file, source[key], `${at}.${key}`);
+    for (const key of ["source", "product"]) nonEmptyStr(file, source[key], `${at}.${key}`);
     bool(file, source["ok"], `${at}.ok`);
     runTime(file, source["fetched_at"], `${at}.fetched_at`);
     if (source["valid_time"] !== null) runTime(file, source["valid_time"], `${at}.valid_time`);
-    strOrNull(file, source["message"], `${at}.message`);
+    if (source["message"] !== null) {
+      const msg = str(file, source["message"], `${at}.message`);
+      if (msg.length > MESSAGE_MAX) throw new DataError(file, `${at}.message exceeds 200 characters`);
+    }
   });
   const files = rec(file, root["files"], "files");
   for (const [key, name] of Object.entries(LIVE_FILES)) {
     if (files[key] !== name) throw new DataError(file, `files.${key} is not ${name}`);
   }
-  str(file, root["confidence"], "confidence");
+  nonEmptyStr(file, root["confidence"], "confidence");
   return value as LiveFile;
 }

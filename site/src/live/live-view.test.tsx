@@ -75,6 +75,17 @@ describe("LiveViewContent", () => {
     expect(text).toContain("0 / 5");
     expect(text).toContain("735");
     expect(text).toContain("CenterPoint customers only");
+    expect(text).toContain("Harris");
+    expect(text).toContain("714 (0.0%)");
+    expect(text).toContain("Brazoria");
+    expect(text).toContain("13 (0.0%)");
+
+    const mapNode = findAll(tree, (v) => typeof v.type === "function" && v.type.name === "LiveMap")[0]!;
+    expect(mapNode.props).toEqual({
+      swath: data.swath,
+      reports: data.reports,
+      warnings: data.warnings,
+    });
 
     const sourceRows = findAll(tree, (v) => v.type === "tr");
     expect(sourceRows).toHaveLength(6); // 1 header + 5 sources

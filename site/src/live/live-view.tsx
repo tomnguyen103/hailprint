@@ -1,5 +1,6 @@
 import "../styles/storms.css";
 import "../styles/pipeline.css";
+import "../styles/live.css";
 import type { LiveFile } from "../data/types";
 import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../format";
 import { href } from "../router";
@@ -130,6 +131,17 @@ export function LiveViewContent({
         </div>
       </section>
 
+      {live.power !== null && live.power.counties.length > 0 ? (
+        <dl class="live-counties" aria-label="Metro county customers out">
+          {live.power.counties.map((county) => (
+            <div key={county.fips} class="live-county">
+              <dt>{county.name}</dt>
+              <dd class="mono">{`${formatCount(county.customers_out)} (${(county.share_out * 100).toFixed(1)}%)`}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
       <section class="live-map-section" aria-label="Live map">
         <LiveMap swath={data.swath} reports={data.reports} warnings={data.warnings} />
       </section>
@@ -179,5 +191,5 @@ export function LiveView({ newest }: { newest: string | null }) {
   const live = useLive();
   if (live.status === "error") return <ErrorState error={live.error} onRetry={live.retry} />;
   if (live.status === "loading") return live.showLoading ? <LoadingState file={LIVE_FILE} /> : null;
-  return <LiveViewContent data={live.data} newest={newest} />;
+  return <LiveViewContent data={live.data} newest={newest} now={live.now} />;
 }

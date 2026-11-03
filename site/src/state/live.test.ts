@@ -4,6 +4,7 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setFetch } from "../data/fetch";
+import { ageMinutes, freshness } from "../live/freshness";
 import { LIVE_REFRESH_MS, type LiveData, useLive } from "./live";
 
 const fixture = (name: string): Record<string, unknown> =>
@@ -19,11 +20,11 @@ describe("useLive", () => {
   let host: HTMLElement;
   let urls: string[];
   let answer: (url: string, call: number) => Response;
-  let states: { status: string; data: LiveData | undefined; showLoading: boolean }[];
+  let states: { status: string; data: LiveData | undefined; showLoading: boolean; now: Date }[];
 
   function Probe() {
     const live = useLive();
-    states.push({ status: live.status, data: live.data, showLoading: live.showLoading });
+    states.push({ status: live.status, data: live.data, showLoading: live.showLoading, now: live.now });
     return null;
   }
 
@@ -120,15 +121,23 @@ describe("useLive", () => {
     expect(states.some((s) => s.showLoading)).toBe(false);
   });
 
-  it("keeps the last good data when a background refresh fails", async () => {
+  it("keeps the last good data when a background refresh fails and advances now into aging and stale", async () => {
+    vi.setSystemTime(new Date("2024-05-29T12:14:00Z"));
     await act(() => render(h(Probe, null), host));
     await settle();
+    expect(freshness(states.at(-1)!.data!.now.run_time, states.at(-1)!.now)).toBe("fresh");
+
     answer = () => jsonResponse(null, 500);
 
-    await act(async () => void (await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS)));
-
+    await act(async () => void (await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS * 10)));
     expect(states.at(-1)?.status).toBe("ready");
     expect(states.at(-1)?.data?.now.run_time).toBe("2024-05-29T12:14:00Z");
+    expect(ageMinutes(states.at(-1)!.data!.now.run_time, states.at(-1)!.now)).toBe(20);
+    expect(freshness(states.at(-1)!.data!.now.run_time, states.at(-1)!.now)).toBe("aging");
+
+    await act(async () => void (await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS * 20)));
+    expect(ageMinutes(states.at(-1)!.data!.now.run_time, states.at(-1)!.now)).toBe(60);
+    expect(freshness(states.at(-1)!.data!.now.run_time, states.at(-1)!.now)).toBe("stale");
   });
 
   it("skips a layer file that fails its guard with one note, and keeps the others", async () => {

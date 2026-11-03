@@ -113,8 +113,8 @@ export interface MapHandle {
   setClassVisible(thresholdMm: number, visible: boolean): void;
   /** Switch the swath, the reports, or the warnings. A hidden size class stays hidden when the swath returns. */
   setLayerVisible(name: LayerName, visible: boolean): void;
-  /** Draw the warnings in force at the step, each with its text label. */
-  setWarnings(file: WarningsFile | null, date: string, step: number): void;
+  /** Draw the warnings in force at the step (or every warning in the file when `date` and `step` are omitted), each with its text label. */
+  setWarnings(file: WarningsFile | null, date?: string, step?: number): void;
   /** Keep the metro county outlines the power fill draws on; the fill redraws when they arrive. */
   setCounties(outlines: FeatureCollection<MultiPolygon> | null): void;
   /** Draw the county fill at the step, with a label per county. Fill none, a null file, or a file of the other kind hides the layers and the labels. */
@@ -285,7 +285,10 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
       }
     },
     setWarnings(file, date, step) {
-      const active = activeWarnings(file, date, step);
+      const active =
+        date !== undefined && step !== undefined
+          ? activeWarnings(file, date, step)
+          : (file?.features ?? []);
       geojson(WARNINGS_SOURCE)?.setData({ type: "FeatureCollection", features: active });
       for (const tag of tags) tag.remove();
       tags = warningTags(active).map((tag) => {

@@ -438,4 +438,11 @@ describe("the storm stamp marks the slider hour", () => {
   ])("step %i marks cell %s", (step, cell) => {
     expect(sliderCell(step)).toBe(cell);
   });
+
+  it("draws every warning and its Marker tag when setWarnings omits date and step (live map)", () => {
+    const { handle, sources } = stubMap(10);
+    handle.setWarnings(WARNINGS);
+    expect(sources["warnings"]?.data).toEqual({ type: "FeatureCollection", features: WARNINGS.features });
+    expect(stub.list.filter((m) => !m.removed).map((m) => m.element.textContent)).toEqual(["SV", "TO", "FF"]);
+  });
 });

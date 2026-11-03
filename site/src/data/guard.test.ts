@@ -782,6 +782,12 @@ describe("guardLive", () => {
     ["reports.count", (d) => ((d["reports"] as Record<string, unknown>)["count"] = -1), "reports.count is not a count"],
     ["warnings.active", (d) => ((d["warnings"] as Record<string, unknown>)["active"] = 1.5), "warnings.active is not a count"],
     ["sources.ok", (d) => (((d["sources"] as Record<string, unknown>[])[0]!)["ok"] = "yes"), "sources[0].ok is not a boolean"],
+    ["sources.empty", (d) => (d["sources"] = []), "sources is empty"],
+    ["sources.message", (d) => (((d["sources"] as Record<string, unknown>[])[0]!)["message"] = "x".repeat(201)), "sources[0].message exceeds 200 characters"],
+    ["mesh.max_mesh_mm", (d) => ((d["mesh"] as Record<string, unknown>)["max_mesh_mm"] = -1), "mesh.max_mesh_mm is below 0"],
+    ["warnings.active>count", (d) => ((d["warnings"] as Record<string, unknown>)["active"] = 99), "warnings.active exceeds warnings.count"],
+    ["power.share_out", (d) => ((((d["power"] as Record<string, unknown>)["counties"] as Record<string, unknown>[])[0]!)["share_out"] = 1.5), "power.counties[0].share_out is not in [0, 1]"],
+    ["power.fips", (d) => ((((d["power"] as Record<string, unknown>)["counties"] as Record<string, unknown>[])[0]!)["fips"] = "201"), "power.counties[0].fips is not a 5-digit FIPS"],
     ["files", (d) => ((d["files"] as Record<string, unknown>)["swath"] = "../storms.json"), "files.swath is not swath.geojson"],
     ["power", (d) => ((d["power"] as Record<string, unknown>)["counties"] = {}), "power.counties is not an array"],
   ];

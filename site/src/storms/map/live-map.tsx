@@ -1,19 +1,17 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import type { GeoJSONSource } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { fetchCounties, harrisFeature } from "../../county";
 import { DataError, type ReportsFile, type SwathFile, type WarningsFile } from "../../data/types";
+import { RULER } from "../../ruler";
 import { ErrorState } from "../../shell/states";
 import { useLoad } from "../../state/load";
 import { useTheme } from "../../state/theme";
 import "../../styles/map.css";
 import type { MapHandle } from "./create-map";
 import { boundsOf } from "./geo";
-import { WARNINGS_SOURCE } from "./layers";
 import { RulerLegend } from "./ruler-legend";
 
 const NO_BASEMAP = "No basemap file.";
-const EMPTY: FeatureCollection = { type: "FeatureCollection", features: [] };
 
 interface Props {
   swath: SwathFile | null;
@@ -81,9 +79,7 @@ export function LiveMap({ swath, reports, warnings }: Props) {
   }, [ready, outlines]);
 
   useEffect(() => {
-    if (!ready || !handle.current) return;
-    const source = handle.current.map.getSource(WARNINGS_SOURCE) as GeoJSONSource | undefined;
-    source?.setData(warnings ?? EMPTY);
+    if (ready) handle.current?.setWarnings(warnings);
   }, [ready, warnings]);
 
   useEffect(() => {
@@ -95,13 +91,16 @@ export function LiveMap({ swath, reports, warnings }: Props) {
     if (ready) handle.current?.setTheme(theme);
   }, [ready, theme]);
 
+  useEffect(() => {
+    if (!ready || !handle.current) return;
+    for (const m of RULER) handle.current.setClassVisible(m.threshold_mm, !hidden.has(m.threshold_mm));
+  }, [ready, hidden]);
+
   const toggleClass = (thresholdMm: number) => {
     setHidden((prev) => {
       const next = new Set(prev);
-      const visible = next.has(thresholdMm);
-      if (visible) next.delete(thresholdMm);
+      if (next.has(thresholdMm)) next.delete(thresholdMm);
       else next.add(thresholdMm);
-      handle.current?.setClassVisible(thresholdMm, visible);
       return next;
     });
   };
