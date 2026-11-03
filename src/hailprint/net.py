@@ -5,11 +5,12 @@ import io
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 TRIES = 3
 BACKOFF_S = (0.5, 1.0)
+DEFAULT_TIMEOUT = 30
 CHUNK_BYTES = 1 << 20  # read-ahead buffer of a stream
 MAX_BYTES = 64 * 1024 * 1024  # 64 MB cap on whole-body responses
 MAX_STREAM_BYTES = 2 * 1024 * 1024 * 1024  # 2 GiB cap on chunked stream responses
@@ -64,7 +65,7 @@ def _retry[T](attempt_once: Callable[[], T]) -> T:
     raise AssertionError("unreachable: the last try returns or raises")
 
 
-def get(url: str, timeout: float = 30, max_bytes: int = MAX_BYTES) -> bytes:
+def get(url: str, timeout: float = DEFAULT_TIMEOUT, max_bytes: int = MAX_BYTES) -> bytes:
     """Return the body. Retry a network error, a short read, or an HTTP 5xx; a 4xx raises at once.
 
     After the last try the last error propagates.
@@ -80,6 +81,30 @@ def get(url: str, timeout: float = 30, max_bytes: int = MAX_BYTES) -> bytes:
             return data
 
     return _retry(fetch)
+
+
+def post(
+    url: str,
+    data: bytes,
+    headers: Mapping[str, str],
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+    max_bytes: int = 65536,
+) -> bytes:
+    """Send an HTTP POST and return the body with bounded retries and redirect checks."""
+    _check_url(url)
+    req_headers = dict(headers)
+
+    def attempt() -> bytes:
+        req = urllib.request.Request(url, data=data, headers=req_headers, method="POST")  # noqa: S310
+        with urllib.request.urlopen(req, timeout=timeout) as response:  # noqa: S310
+            _check_redirect(url, response)
+            raw = response.read(max_bytes + 1)
+            if len(raw) > max_bytes:
+                raise RuntimeError("Supabase Auth token response exceeds 64 KiB")
+            return raw
+
+    return _retry(attempt)
 
 
 class _Body(io.RawIOBase):

@@ -1,7 +1,6 @@
 """Candidate days: Harris County hail days from the SPC WCM database, ranked by report count."""
 
 import http.client
-import os
 import sys
 import urllib.error
 import zipfile
@@ -58,22 +57,18 @@ def fetch_database(path: Path | None = None) -> Path:
     path = Path(WCM_PATH if path is None else path)
     if path.exists():
         return path
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
-        tmp.write_bytes(net.get(WCM_URL, timeout=60))
+        files.write_bytes_atomic(net.get(WCM_URL, timeout=60), path)
     except (OSError, http.client.HTTPException) as exc:
-        tmp.unlink(missing_ok=True)
         raise RuntimeError(f"WCM download failed: {exc}") from exc
-    if not zipfile.is_zipfile(tmp):
-        tmp.unlink()
+    if not zipfile.is_zipfile(path):
+        path.unlink(missing_ok=True)
         raise RuntimeError(f"WCM download is not a zip archive: {WCM_URL}")
     try:
-        _check_wcm_zip(tmp)
+        _check_wcm_zip(path)
     except Exception:
-        tmp.unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
         raise
-    tmp.replace(path)
     return path
 
 

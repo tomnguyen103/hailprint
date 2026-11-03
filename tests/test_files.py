@@ -117,3 +117,20 @@ def test_lock_refuses_a_second_holder_and_is_gone_after_an_exception(tmp_path):
             raise OSError("disk full")
 
     assert not path.exists()
+
+
+def test_write_atomic_rejects_owner_columns_and_forbidden_word_in_metadata(tmp_path):
+    path = tmp_path / "x.parquet"
+    with pytest.raises(ValueError, match="owner"):
+        files.write_atomic(pd.DataFrame({"CurrOwner": ["A"]}), path)
+    with pytest.raises(ValueError, match="damage"):
+        files.write_atomic(pd.DataFrame({"n": [1]}), path, metadata={"note": "hail damage"})
+    assert not path.exists()
+
+
+def test_write_bytes_atomic_writes_bytes_and_leaves_no_tmp_sibling(tmp_path):
+    path = tmp_path / "b" / "raw.bin"
+    files.write_bytes_atomic(b"payload", path)
+    assert path.read_bytes() == b"payload"
+    assert list(path.parent.glob("*.tmp")) == []
+

@@ -266,8 +266,8 @@ def build(now: datetime, client, fetchers: Fetchers) -> LiveResult:
         storm_date = storm_date_of(end)
         try:
             swaths, max_mm = build_swath(_fetch(client, key, raw_dir), storm_date)
-        except ValueError as exc:
-            raise RuntimeError(f"{key}: {exc}") from exc
+        except (ValueError, RuntimeError) as exc:
+            raise RuntimeError(_clean_message(f"{key}: {exc}")) from exc
         last_hour, hour_source = _last_hour(client, now, raw_dir)
     name = key.rsplit("/", 1)[1]
     sources = [_source(mesh.BUCKET, mesh.PRODUCT, True, end, None, fetched_at=now), hour_source]

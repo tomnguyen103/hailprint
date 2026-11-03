@@ -53,7 +53,14 @@ export function Workspace({ index, storm, tab }: Props) {
   );
   const indexReceipt: Receipt = {
     storm_date: storm.storm_date,
-    sources: [],
+    sources: [
+      { source: "NOAA MRMS", product: "MESH_Max_1440min", file: storm.files.swath },
+      {
+        source: "SPC",
+        product: storm.report_source === "wcm" ? "WCM hail (wcm)" : "daily hail (spc-daily)",
+        file: storm.report_source ?? "spc-daily",
+      },
+    ],
     confidence: index.confidence,
     run_time: index.run_time,
     package_version: index.package_version,

@@ -344,7 +344,7 @@
 .file-list a {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
+  min-height: 40px;
 }
 
 .code-block {

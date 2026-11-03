@@ -58,8 +58,9 @@ def pipeline_doc(
 ) -> dict:
     """Build the pipeline document: this run, the archive coverage, the sources.
 
-    `storm_dates` are the dates of this run. `receipts` are the pairs and ZIP count receipts of
-    every published storm date, so the sources cover the whole index and not this run alone.
+    `storm_dates` are the dates of this run. `receipts` are the per-date receipts (pairs, ZIP
+    counts, power, internet, and warnings) of every published storm date, so the sources cover
+    the whole index and not this run alone.
     """
     run = publish.run_entry(storm_dates, file_count, run_time)
     return publish.pipeline_doc(
@@ -76,13 +77,13 @@ _LAYER_SOURCE = {
 
 def impact_layer(
     kind: publish.LayerKind, path: Path, storm_date: date, run_time: datetime
-) -> tuple[pd.DataFrame, publish.Doc] | None:
-    """The frame and the source entry of one impact layer, or None for a missing or bad file.
+) -> str | None:
+    """The serialised JSON text of one impact layer, or None for a missing or bad file.
 
     An internet file without a ratio also gives None. A bad file is one that cannot be read,
     lacks the source metadata, or fails the document build (a missing column, a wrong column
-    type, a county whose steps differ from the window). A dry run of `publish.layer_doc`,
-    `validate`, and `dumps` runs here, so such a file skips only the layer of its date.
+    type, a county whose steps differ from the window). `publish.layer_doc`, `validate`, and
+    `dumps` run once here, so a bad file skips only the layer of its date.
     """
     if not path.exists():
         return None
@@ -93,11 +94,10 @@ def impact_layer(
         source = _LAYER_SOURCE[kind](path)
         doc = publish.layer_doc(kind, frame, source, storm_date, run_time)
         publish.validate(doc, kind)
-        publish.dumps(doc, kind)
+        return publish.dumps(doc, kind)
     except runs.UNREADABLE as exc:  # an explicit `<kind> <date>` run rebuilds the file
         print(f"{path.name}: unreadable, {kind} layer skipped: {exc!r}", file=sys.stderr)
         return None
-    return frame, source
 
 
 def stale_files(written: list[Path], with_internet: bool, site: Path) -> set[Path]:

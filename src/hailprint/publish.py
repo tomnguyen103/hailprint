@@ -711,9 +711,9 @@ def build_day(
     hcad: Doc | None,
     facts: Doc | None,
     run_time: datetime,
-    warnings: tuple[pd.DataFrame, Doc] | None = None,
-    power: tuple[pd.DataFrame, Doc] | None = None,
-    internet: tuple[pd.DataFrame, Doc] | None = None,
+    warnings: tuple[pd.DataFrame, Doc] | str | None = None,
+    power: tuple[pd.DataFrame, Doc] | str | None = None,
+    internet: tuple[pd.DataFrame, Doc] | str | None = None,
 ) -> tuple[dict[str, str], Doc]:
     """The serialised files of one storm date, by file name, and its entry for the storms index.
 
@@ -722,11 +722,13 @@ def build_day(
     the pairs file. `facts` holds the report_count, max_size_in, and report_source of the
     candidate file, or None when the date is absent there. `zips` and `hcad` are both None
     when the date has no parcel counts. `warnings` holds the warnings frame and its IEM source
-    entry, or None when the date has no warnings file; an empty frame gives an empty
-    FeatureCollection. `power` holds the power frame and its source entry (the output of
-    `power_source`), or None when the date has no power file; the `utilities` key of the entry
-    goes to the document and not to the receipt. `internet` holds the internet frame and its IODA
-    source entry (the output of `internet_source`), or None when the date has no internet layer.
+    entry (or a pre-validated serialised JSON string), or None when the date has no warnings file;
+    an empty frame gives an empty FeatureCollection. `power` holds the power frame and its source
+    entry (the output of `power_source`, or a pre-validated serialised JSON string), or None when
+    the date has no power file; the `utilities` key of the entry goes to the document and not to
+    the receipt. `internet` holds the internet frame and its IODA source entry (the output of
+    `internet_source`, or a pre-validated serialised JSON string), or None when the date has no
+    internet layer.
     """
     day = score.score_day(swaths, nearby, storm_date, score.DEFAULT_RADIUS_KM)
 
@@ -743,19 +745,20 @@ def build_day(
         zip_counts = zip_doc(zips, stamp(mrms, hcad))
         documents[ZIPS_FILE] = ("zip-counts", zip_counts)
         parcel_total = zip_counts["classes"][0]["parcel_count"] if zip_counts["classes"] else 0
-    if warnings is not None:
-        documents[WARNINGS_FILE] = (
-            "warnings",
-            layer_doc("warnings", *warnings, storm_date, run_time),
-        )
-    if power is not None:
-        documents[POWER_FILE] = ("power", layer_doc("power", *power, storm_date, run_time))
-    if internet is not None:
-        documents[INTERNET_FILE] = (
-            "internet",
-            layer_doc("internet", *internet, storm_date, run_time),
-        )
-    texts = {}
+    texts: dict[str, str] = {}
+    layers: tuple[tuple[str, LayerKind, tuple[pd.DataFrame, Doc] | str | None], ...] = (
+        (WARNINGS_FILE, "warnings", warnings),
+        (POWER_FILE, "power", power),
+        (INTERNET_FILE, "internet", internet),
+    )
+    for file_name, layer_kind, arg in layers:
+        if isinstance(arg, str):
+            texts[file_name] = arg
+        elif arg is not None:
+            documents[file_name] = (
+                layer_kind,
+                layer_doc(layer_kind, *arg, storm_date, run_time),
+            )
     for name, (kind, doc) in documents.items():
         validate(doc, kind)
         texts[name] = dumps(doc, kind)
