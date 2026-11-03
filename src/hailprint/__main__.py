@@ -35,7 +35,6 @@ from hailprint import (
     score,
     swath,
 )
-from hailprint import plot as plot_mod
 
 RAW_DIR = paths.RAW_DIR / "mesh"
 DERIVED_DIR = paths.DERIVED_DIR / "swaths"
@@ -128,7 +127,7 @@ def build_parser() -> argparse.ArgumentParser:
     warnings_cmd.add_argument(
         "--missing",
         action="store_true",
-        help="fetch each swath date with a closed impact window and no warnings file",
+        help="fetch storm dates whose file is not settled and whose impact window has closed",
     )
     eaglei_cmd = commands.add_parser(
         "eaglei", help="store the EAGLE-I customers out of the metro counties per year"
@@ -143,7 +142,7 @@ def build_parser() -> argparse.ArgumentParser:
     power_cmd.add_argument(
         "--missing",
         action="store_true",
-        help="build each swath date with a closed window, an EAGLE-I file, and no power file",
+        help="build storm dates whose file is not settled and whose impact window has closed",
     )
     commands.add_parser(
         "odin", help="store one ODIN snapshot of the customers out of the metro counties"
@@ -241,6 +240,8 @@ def ingest(storm_dates: list[date], *, plot: bool = False) -> list[Path]:
         print(f"storm date: {storm_date}")
         print(f"max MESH in bbox: {max_text}")
         if plot:
+            from hailprint import plot as plot_mod
+
             try:
                 points = reports.harris_reports(storm_date)
                 report_count = str(len(points))
@@ -559,7 +560,8 @@ def live_now() -> list[Path]:
     A missing or broken MESH file writes nothing and exits 1, so the old live files stay.
     """
     result = live.build(_utc_now(), mesh.s3_client(), live.Fetchers())
-    written = live.write(result, SITE_DATA_DIR / live.DIR)
+    with files.lock(DERIVED_DIR / "live.lock"):
+        written = live.write(result, SITE_DATA_DIR / live.DIR)
     now = result.docs[live.NOW_FILE]
     max_mm = now["mesh"]["max_mesh_mm"]
     print(

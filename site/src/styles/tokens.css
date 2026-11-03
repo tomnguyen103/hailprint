@@ -1,5 +1,6 @@
 /* Hailprint design tokens: design.md (locked). */
 :root {
+  color-scheme: light;
   --paper: #f7f6f2;
   --sheet: #fdfcf9;
   --sheet-muted: #efede6;
@@ -52,6 +53,7 @@
 }
 
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --paper: #151513;
   --sheet: #1c1c19;
   --sheet-muted: #262622;
@@ -85,6 +87,7 @@
 /* no-script case: the head script did not run, so the OS scheme decides */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --paper: #151513;
     --sheet: #1c1c19;
     --sheet-muted: #262622;

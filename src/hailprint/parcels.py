@@ -1,5 +1,6 @@
 """HCAD parcel loader and the per-class parcel count. Owner fields never load."""
 
+import gc
 from pathlib import Path
 from typing import NamedTuple, cast
 
@@ -56,7 +57,13 @@ def load_parcels(
         if layer_crs is None:
             raise ValueError(f"{path.name} layer {layer} has no CRS")
         mask = gpd.GeoSeries([mask], crs="EPSG:4326").to_crs(layer_crs).iloc[0]
-    gdf = gpd.read_file(path, layer=layer, columns=list(ALLOWED), mask=mask, engine="pyogrio")
+    was_enabled = gc.isenabled()
+    gc.disable()
+    try:
+        gdf = gpd.read_file(path, layer=layer, columns=list(ALLOWED), mask=mask, engine="pyogrio")
+    finally:
+        if was_enabled:
+            gc.enable()
     return cast(gpd.GeoDataFrame, gdf.rename(columns=ALLOWED))
 
 

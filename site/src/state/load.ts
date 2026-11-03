@@ -65,5 +65,5 @@ export function useLoad<T>(
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const load: Load<T> = state.key === key ? state.load : { status: "loading" };
-  return { ...load, showLoading, retry };
+  return { ...load, showLoading: state.key === key ? showLoading : false, retry };
 }

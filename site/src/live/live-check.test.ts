@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { getFetch, setFetch } from "../data/fetch";
+import { FORBIDDEN_WORD } from "../method/prose";
 import {
   IODA_COUNTY_CODES,
   LIVE_IODA_WINDOW_S,
   ODIN_METRO_URL,
+  cleanLiveText,
   fetchLiveStatus,
   iodaSignalUrl,
   nwsAlertsUrl,
@@ -175,5 +177,18 @@ describe("strict runtime schema validation (US-03.3)", () => {
     });
     const text = JSON.stringify(vnode);
     expect(text).toContain("IODA county series covers 2022-03 to 2024-05");
+  });
+
+  it("redacts banned words and owner fields in cleanLiveText and handles Object.prototype fips safely", async () => {
+    const cleaned = cleanLiveText(`Hail ${FORBIDDEN_WORD} near CurrOwner parcel`);
+    expect(cleaned.toLowerCase()).not.toContain(FORBIDDEN_WORD);
+    expect(cleaned).not.toContain("CurrOwner");
+
+    setFetch(async () => new Response(JSON.stringify({ type: "FeatureCollection", features: [] })));
+    const res = await fetchLiveStatus([-95.3698, 29.7604], "toString", 1715904000000);
+    expect(res.internet).toEqual({
+      status: "error",
+      message: "ioda: no metro county resolved for point",
+    });
   });
 });

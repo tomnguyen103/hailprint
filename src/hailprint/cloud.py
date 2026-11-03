@@ -8,7 +8,6 @@ import json
 import os
 import re
 import sys
-import urllib.request
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -18,7 +17,7 @@ from typing import Any
 import boto3
 import pandas as pd
 
-from hailprint import candidates, net, odin, paths
+from hailprint import candidates, files, net, odin, paths
 
 ENV_VARS: tuple[str, ...] = (
     "SUPABASE_S3_ENDPOINT",
@@ -49,8 +48,8 @@ _PUBLIC_KEY_RE = re.compile(
 class Config:
     endpoint: str
     region: str
-    access_key_id: str
-    secret_access_key: str
+    access_key_id: str = field(repr=False)
+    secret_access_key: str = field(repr=False)
     state_bucket: str
     public_bucket: str
 
@@ -83,21 +82,14 @@ def _fetch_session_token(project_ref: str, anon_key: str, email: str, password: 
         raise ValueError(f"invalid Supabase project_ref: {project_ref!r}")
     url = f"https://{project_ref}.supabase.co/auth/v1/token?grant_type=password"
     payload = json.dumps({"email": email, "password": password}).encode("utf-8")
-
-    def attempt() -> bytes:
-        req = urllib.request.Request(
-            url,
-            data=payload,
-            headers={"apikey": anon_key, "Content-Type": "application/json"},
-            method="POST",
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
-            raw = resp.read(65537)
-            if len(raw) > 65536:
-                raise RuntimeError("Supabase Auth token response exceeds 64 KiB")
-            return raw
-
-    data = json.loads(net._retry(attempt).decode("utf-8"))
+    raw = net.post(
+        url,
+        payload,
+        {"apikey": anon_key, "Content-Type": "application/json"},
+        timeout=30,
+        max_bytes=65536,
+    )
+    data = json.loads(raw.decode("utf-8"))
     token = data.get("access_token") if isinstance(data, dict) else None
     if not isinstance(token, str) or not token:
         raise ValueError("missing access_token from Supabase auth")
@@ -106,7 +98,7 @@ def _fetch_session_token(project_ref: str, anon_key: str, email: str, password: 
 
 def s3_client(config: Config) -> Any:
     if ":" in config.access_key_id:
-        if config.access_key_id.count(":") != 2:
+        if config.access_key_id.count(":") < 2:
             raise ValueError(
                 "SUPABASE_S3_ACCESS_KEY_ID with ':' must have format project_ref:email:password"
             )
@@ -137,6 +129,11 @@ def _validate_key(key: str, local_base: Path | None = None, *, public: bool = Fa
     if public and not _PUBLIC_KEY_RE.fullmatch(key):
         raise ValueError("unsafe S3 key")
     if local_base is not None:
+        cur = local_base / key
+        while cur != local_base and cur != cur.parent:
+            if cur.is_symlink():
+                raise ValueError("unsafe S3 key")
+            cur = cur.parent
         base_resolved = local_base.resolve()
         dest_resolved = (local_base / key).resolve()
         if not dest_resolved.is_relative_to(base_resolved) or dest_resolved == base_resolved:
@@ -180,20 +177,22 @@ def sync_down(
 ) -> SyncState:
     state = SyncState()
     seen: set[str] = set()
+    prefix_tuple = tuple(prefixes)
     exclude_tuple = tuple(exclude_prefixes)
-    for prefix in prefixes:
+    for prefix in prefix_tuple:
         for key in _list_keys(client, bucket, prefix, max_bytes=max_bytes):
             if key in seen or any(key.startswith(ex) for ex in exclude_tuple):
                 continue
             seen.add(key)
+            if not _matches_prefix(key, prefix_tuple):
+                raise ValueError("unsafe S3 key")
             _validate_key(key, local_base, public=public)
             resp = client.get_object(Bucket=bucket, Key=key)
             body: bytes = resp["Body"].read(max_bytes + 1)
             if len(body) > max_bytes:
                 raise RuntimeError(f"S3 object {key} exceeds {max_bytes} bytes")
             dest = local_base / key
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_bytes(body)
+            files.write_bytes_atomic(body, dest)
             state.digests[(bucket, key)] = hashlib.sha256(body).hexdigest()
             state.remote_keys.add((bucket, key))
     return state
@@ -315,29 +314,7 @@ def _log(msg: str) -> None:
 
 
 def _root_paths(root: Path) -> dict[str, Path]:
-    raw = root / "data" / "raw"
-    derived = root / "data" / "derived"
-    return {
-        "root": root,
-        "raw": raw,
-        "derived": derived,
-        "out": root / "out",
-        "site_data": root / "site" / "data",
-        "mesh_raw": raw / "mesh",
-        "swaths": derived / "swaths",
-        "parcels_gdb": raw / "hcad" / "extracted" / "Parcels.gdb",
-        "parcels": derived / "parcels",
-        "scores": derived / "scores",
-        "warnings": derived / "warnings",
-        "eaglei": derived / "eaglei",
-        "power": derived / "power",
-        "odin": derived / "odin",
-        "internet": derived / "internet",
-        "archive_index": derived / "index" / "mesh-archive.parquet",
-        "wcm": raw / "spc" / "1955-2025_hail.csv.zip",
-        "candidates": derived / "index" / "candidate-days.csv",
-        "daily": raw / "spc" / "daily",
-    }
+    return paths.root_paths(root)
 
 
 def nightly(

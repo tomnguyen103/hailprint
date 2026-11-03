@@ -1,7 +1,7 @@
 """Candidate days: Harris County hail days from the SPC WCM database, ranked by report count."""
 
 import http.client
-import os
+import io
 import sys
 import urllib.error
 import zipfile
@@ -35,16 +35,19 @@ def _utc_today() -> date:
     return datetime.now(UTC).date()
 
 
-def _check_wcm_zip(path: Path) -> None:
-    if not zipfile.is_zipfile(path):
+def _check_wcm_zip(source: Path | io.BytesIO, label: Path | str | None = None) -> None:
+    name = source if label is None else label
+    if not zipfile.is_zipfile(source):
         return
-    with zipfile.ZipFile(path) as zf:
+    if isinstance(source, io.BytesIO):
+        source.seek(0)
+    with zipfile.ZipFile(source) as zf:
         infos = zf.infolist()
         if not infos:
-            raise RuntimeError(f"{path}: empty zip archive")
+            raise RuntimeError(f"{name}: empty zip archive")
         if sum(info.file_size for info in infos) > MAX_WCM_UNCOMPRESSED_BYTES:
             raise RuntimeError(
-                f"{path}: zip uncompressed size exceeds {MAX_WCM_UNCOMPRESSED_BYTES} bytes"
+                f"{name}: zip uncompressed size exceeds {MAX_WCM_UNCOMPRESSED_BYTES} bytes"
             )
 
 
@@ -58,22 +61,18 @@ def fetch_database(path: Path | None = None) -> Path:
     path = Path(WCM_PATH if path is None else path)
     if path.exists():
         return path
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     try:
-        tmp.write_bytes(net.get(WCM_URL, timeout=60))
+        raw = net.get(WCM_URL, timeout=60)
     except (OSError, http.client.HTTPException) as exc:
-        tmp.unlink(missing_ok=True)
         raise RuntimeError(f"WCM download failed: {exc}") from exc
-    if not zipfile.is_zipfile(tmp):
-        tmp.unlink()
+    buf = io.BytesIO(raw)
+    if not zipfile.is_zipfile(buf):
         raise RuntimeError(f"WCM download is not a zip archive: {WCM_URL}")
+    _check_wcm_zip(buf, label=path)
     try:
-        _check_wcm_zip(tmp)
-    except Exception:
-        tmp.unlink(missing_ok=True)
-        raise
-    tmp.replace(path)
+        files.write_bytes_atomic(raw, path)
+    except OSError as exc:
+        raise RuntimeError(f"WCM download failed: {exc}") from exc
     return path
 
 

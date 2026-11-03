@@ -18,6 +18,17 @@ CONFIDENCE = (
 )
 METADATA = {"source": SOURCE, "product": PRODUCT, "confidence": CONFIDENCE}
 FORBIDDEN_WORD = "damage"
+OWNER_FIELDS: tuple[str, ...] = (
+    "CurrOwner",
+    "mail_addr_1",
+    "mail_addr_2",
+    "mail_city",
+    "mail_state",
+    "mail_zip",
+    "LocAddr",
+    "LocNum",
+    "LocName",
+)
 
 
 @contextmanager
@@ -57,12 +68,17 @@ def lock(path: Path) -> Iterator[None]:
         path.unlink(missing_ok=True)
 
 
-def write_text_atomic(text: str, path: Path) -> Path:
-    """Write UTF-8 text through a .tmp sibling; a failed write leaves the old target intact."""
+def write_bytes_atomic(data: bytes, path: Path) -> Path:
+    """Write raw bytes through a .tmp sibling; a failed write leaves the old target intact."""
     path = Path(path)
     with _atomic(path) as tmp:
-        tmp.write_bytes(text.encode("utf-8"))
+        tmp.write_bytes(data)
     return path
+
+
+def write_text_atomic(text: str, path: Path) -> Path:
+    """Write UTF-8 text through a .tmp sibling; a failed write leaves the old target intact."""
+    return write_bytes_atomic(text.encode("utf-8"), path)
 
 
 def write_atomic(frame: pd.DataFrame, path: Path, metadata: dict[str, str] | None = None) -> Path:
@@ -70,14 +86,36 @@ def write_atomic(frame: pd.DataFrame, path: Path, metadata: dict[str, str] | Non
 
     CSV by suffix, else Parquet (GeoParquet for a GeoDataFrame) with the source, product, and
     confidence metadata. The optional metadata adds keys or overrides these defaults.
-    A metadata key or value that holds the forbidden word raises ValueError before any write.
+    A metadata key or value or frame column that holds the forbidden word or an owner field
+    raises ValueError before any write.
     A failed write removes the .tmp file and leaves the old target intact.
     """
     path = Path(path)
     merged = {**METADATA, **(metadata or {})}
     for text in [*merged, *merged.values()]:
-        if FORBIDDEN_WORD in text.lower():
+        lowered = text.lower()
+        if FORBIDDEN_WORD in lowered:
             raise ValueError(f"forbidden word in metadata: {text!r}")
+        for field in OWNER_FIELDS:
+            if field.lower() in lowered:
+                raise ValueError(f"owner field {field!r} in {text!r}")
+    for col in (str(c) for c in frame.columns):
+        lowered = col.lower()
+        if FORBIDDEN_WORD in lowered:
+            raise ValueError(f"forbidden word in column: {col!r}")
+        for field in OWNER_FIELDS:
+            if field.lower() in lowered:
+                raise ValueError(f"owner field {field!r} in {col!r}")
+    for col_name in frame.select_dtypes(include=["object", "string"]).columns:
+        for cell in frame[col_name].dropna():
+            if not isinstance(cell, str):
+                continue
+            lowered = cell.lower()
+            if FORBIDDEN_WORD in lowered:
+                raise ValueError(f"forbidden word in cell of {col_name!r}: {cell!r}")
+            for field in OWNER_FIELDS:
+                if field.lower() in lowered:
+                    raise ValueError(f"owner field {field!r} in cell of {col_name!r}")
     with _atomic(path) as tmp:
         if path.suffix == ".csv":
             frame.to_csv(tmp, index=False)

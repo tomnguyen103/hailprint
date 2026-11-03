@@ -78,18 +78,22 @@ function filePath(file: string, value: unknown, path: string, pattern: RegExp): 
 /** The receipt every published file carries; the receipt list renders each key. */
 export function guardReceipt(file: string, value: unknown, path = "receipt"): void {
   const receipt = rec(file, value, path);
-  str(file, receipt["storm_date"], `${path}.storm_date`);
+  date(file, receipt["storm_date"], `${path}.storm_date`);
   list(file, receipt["sources"], `${path}.sources`).forEach((item, i) => {
     const source = rec(file, item, `${path}.sources[${i}]`);
     for (const key of ["source", "product", "file"]) str(file, source[key], `${path}.sources[${i}].${key}`);
   });
-  for (const key of ["confidence", "run_time", "package_version"]) str(file, receipt[key], `${path}.${key}`);
+  str(file, receipt["confidence"], `${path}.confidence`);
+  runTime(file, receipt["run_time"], `${path}.run_time`);
+  str(file, receipt["package_version"], `${path}.package_version`);
 }
 
 export function guardIndex(value: unknown): StormsIndex {
   const file = "storms.json";
   const root = rec(file, value, "index");
-  for (const key of ["confidence", "run_time", "package_version"]) str(file, root[key], key);
+  str(file, root["confidence"], "confidence");
+  runTime(file, root["run_time"], "run_time");
+  str(file, root["package_version"], "package_version");
   num(file, root["radius_km_default"], "radius_km_default");
   list(file, root["storms"], "storms").forEach((item, i) => {
     const at = `storms[${i}]`;
@@ -112,7 +116,17 @@ export function guardIndex(value: unknown): StormsIndex {
         throw new DataError(file, `${at}.report_source is not wcm or spc-daily`);
       }
     }
-    list(file, storm["table"], `${at}.table`);
+    if ("parcel_total" in storm) {
+      outValue(file, storm["parcel_total"], `${at}.parcel_total`);
+    }
+    list(file, storm["table"], `${at}.table`).forEach((rowItem, r) => {
+      const rowAt = `${at}.table[${r}]`;
+      const row = rec(file, rowItem, rowAt);
+      num(file, row["threshold_mm"], `${rowAt}.threshold_mm`);
+      for (const key of ["hits", "misses", "false_alarms", "correct_negatives"]) {
+        count(file, row[key], `${rowAt}.${key}`);
+      }
+    });
     const files = rec(file, storm["files"], `${at}.files`);
     for (const key of ["swath", "reports"]) filePath(file, files[key], `${at}.files.${key}`, GEOJSON_PATH);
     filePath(file, files["pairs"], `${at}.files.pairs`, JSON_PATH);
@@ -234,14 +248,18 @@ export function guardReports(value: unknown): ReportsFile {
   const file = "reports.geojson";
   guardReceipt(file, rec(file, value, "collection")["receipt"]);
   guardCollection(file, value).forEach((props, i) => {
-    for (const key of ["time", "location", "county"]) str(file, props[key], `features[${i}].properties.${key}`);
-    for (const key of ["id", "size_in"]) num(file, props[key], `features[${i}].properties.${key}`);
+    const at = `features[${i}]`;
+    for (const key of ["time", "location", "county"]) str(file, props[key], `${at}.properties.${key}`);
+    if (props["state"] !== undefined) str(file, props["state"], `${at}.properties.state`);
+    for (const key of ["id", "size_in"]) num(file, props[key], `${at}.properties.${key}`);
     const features = list(file, rec(file, value, "collection")["features"], "features");
-    const coords = rec(file, rec(file, features[i], `features[${i}]`)["geometry"], `features[${i}].geometry`)[
-      "coordinates"
-    ];
+    const geom = rec(file, rec(file, features[i], at)["geometry"], `${at}.geometry`);
+    if (geom["type"] !== "Point") {
+      throw new DataError(file, `${at}.geometry.type is not Point`);
+    }
+    const coords = geom["coordinates"];
     if (!isPosition(coords)) {
-      throw new DataError(file, `features[${i}].geometry.coordinates is not a finite [lon, lat] position`);
+      throw new DataError(file, `${at}.geometry.coordinates is not a finite [lon, lat] position`);
     }
   });
   return value as ReportsFile;

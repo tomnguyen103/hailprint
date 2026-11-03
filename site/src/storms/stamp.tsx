@@ -32,28 +32,29 @@ export function Stamp({ storm, reports, step, indexReceipt, datesOpen = false, o
   const hours = HOUR_LABELS.filter((_, i) => filled[i]);
   const marked = step === null ? null : sliderCell(step);
   const label = `Storm window 12Z to 12Z, reports in ${hours.length} of ${CELLS} hours${marked === null ? "" : `, map time in the ${HOUR_LABELS[marked]} hour`}`;
+  const baseReceipt = reports.status === "ready" ? reports.data.receipt : indexReceipt;
+  const spcCsv = `${storm.storm_date.slice(2, 4)}${storm.storm_date.slice(5, 7)}${storm.storm_date.slice(8, 10)}.csv`;
+  const mrmsSourceEntry = {
+    source: "NOAA MRMS",
+    product: "MESH_Max_1440min",
+    file: `swaths-${storm.storm_date}.parquet`,
+  };
+  const reportSourceEntry = {
+    source: "SPC",
+    product: storm.report_source === "wcm" ? "WCM hail (wcm)" : "daily hail (spc-daily)",
+    file: spcCsv,
+  };
+  const hasMrms = baseReceipt.sources.some((s) => s.source.includes("MRMS"));
+  const hasSpc = baseReceipt.sources.some((s) => s.source === "SPC");
+  const activeReceipt: Receipt = {
+    ...baseReceipt,
+    sources: [
+      ...(hasMrms ? [] : [mrmsSourceEntry]),
+      ...baseReceipt.sources,
+      ...(hasSpc ? [] : [reportSourceEntry]),
+    ],
+  };
   const copyFieldNote = () => {
-    const baseReceipt = reports.status === "ready" ? reports.data.receipt : indexReceipt;
-    const mrmsSourceEntry = {
-      source: "NOAA MRMS",
-      product: "MESH_Max_1440min",
-      file: storm.files.swath,
-    };
-    const reportSourceEntry = {
-      source: "SPC",
-      product: storm.report_source === "wcm" ? "WCM hail (wcm)" : "daily hail (spc-daily)",
-      file: storm.report_source ?? "spc-daily",
-    };
-    const hasMrms = baseReceipt.sources.some((s) => s.source.includes("MRMS"));
-    const hasSpc = baseReceipt.sources.some((s) => s.source === "SPC");
-    const activeReceipt: Receipt = {
-      ...baseReceipt,
-      sources: [
-        ...(hasMrms ? [] : [mrmsSourceEntry]),
-        ...baseReceipt.sources,
-        ...(hasSpc ? [] : [reportSourceEntry]),
-      ],
-    };
     const text = formatStormFieldNote(storm, activeReceipt);
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
       void navigator.clipboard.writeText(text).catch(() => {});
@@ -103,4 +104,3 @@ export function Stamp({ storm, reports, step, indexReceipt, datesOpen = false, o
     </div>
   );
 }
-

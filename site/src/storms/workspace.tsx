@@ -51,9 +51,21 @@ export function Workspace({ index, storm, tab }: Props) {
     harrisPeak(power.status === "ready" ? power.data : null),
     firstReportStep,
   );
+  const spcCsv = `${storm.storm_date.slice(2, 4)}${storm.storm_date.slice(5, 7)}${storm.storm_date.slice(8, 10)}.csv`;
   const indexReceipt: Receipt = {
     storm_date: storm.storm_date,
-    sources: [],
+    sources: [
+      {
+        source: "NOAA MRMS",
+        product: "MESH_Max_1440min",
+        file: `swaths-${storm.storm_date}.parquet`,
+      },
+      {
+        source: "SPC",
+        product: storm.report_source === "wcm" ? "WCM hail (wcm)" : "daily hail (spc-daily)",
+        file: spcCsv,
+      },
+    ],
     confidence: index.confidence,
     run_time: index.run_time,
     package_version: index.package_version,

@@ -1,14 +1,40 @@
 // On-demand live status check for NWS Active Alerts, ORNL ODIN power outages, and Georgia Tech IODA reachability.
-// Uses the shared injectable Fetch seam (`getFetch`) with a 15-second AbortController timeout.
+// Uses the shared injectable Fetch seam (`fetchUrlJson`) with a 15-second AbortController timeout.
 import { METRO_FIPS } from "../data/constants";
 import { fetchUrlJson } from "../data/fetch";
 import { DataError } from "../data/types";
 import { ODIN_LABEL } from "../impact/power";
+import { FORBIDDEN_WORD } from "../method/prose";
 
 const SIGNAL_STEP_S = 600;
 const MAX_IODA_COUNT = 2 ** 24;
 const ODIN_LIMIT = 100;
+const LIVE_TEXT_MAX = 200;
 export const LIVE_IODA_WINDOW_S = 7200;
+
+const OWNER_FIELDS = [
+  "CurrOwner",
+  "mail_addr_1",
+  "mail_addr_2",
+  "mail_city",
+  "mail_state",
+  "mail_zip",
+  "LocAddr",
+  "LocNum",
+  "LocName",
+] as const;
+
+const REDACTED_RE = new RegExp(
+  [FORBIDDEN_WORD, ...OWNER_FIELDS]
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|"),
+  "gi",
+);
+
+export function cleanLiveText(text: string): string {
+  const s = text.replace(REDACTED_RE, "[redacted]");
+  return s.length > LIVE_TEXT_MAX ? `${s.slice(0, LIVE_TEXT_MAX - 3)}...` : s;
+}
 
 /** IODA v2 county codes matching `src/hailprint/internet.py:25-34`. */
 export const IODA_COUNTY_CODES: Readonly<Record<string, string>> = {
@@ -87,9 +113,10 @@ export function parseNwsAlerts(value: unknown): LiveAlert[] {
           : `alert-${i}`;
     return {
       id,
-      event,
-      headline: typeof props["headline"] === "string" ? props["headline"] : null,
-      severity: typeof props["severity"] === "string" ? props["severity"] : "Unknown",
+      event: cleanLiveText(event),
+      headline: typeof props["headline"] === "string" ? cleanLiveText(props["headline"]) : null,
+      severity:
+        typeof props["severity"] === "string" ? cleanLiveText(props["severity"]) : "Unknown",
       onset:
         typeof props["onset"] === "string"
           ? props["onset"]
@@ -172,7 +199,7 @@ export interface LiveIodaSnapshot {
 export function parseIodaSignal(value: unknown): LiveIodaSnapshot {
   const root = rec("ioda", value, "signal");
   if (root["error"] !== null && root["error"] !== undefined) {
-    throw new DataError("ioda", `response holds error ${String(root["error"])}`);
+    throw new DataError("ioda", `response holds error ${cleanLiveText(String(root["error"]))}`);
   }
   const outer = list("ioda", root["data"], "data");
   if (outer.length === 0) {
@@ -244,7 +271,7 @@ export async function fetchLiveStatus(
     .then((alerts): LiveFeedBlock<{ alerts: LiveAlert[] }> => ({ status: "ready", alerts }))
     .catch((err: unknown): LiveFeedBlock<{ alerts: LiveAlert[] }> => ({
       status: "error",
-      message: err instanceof Error ? err.message : String(err),
+      message: cleanLiveText(err instanceof Error ? err.message : String(err)),
     }));
 
   const powerPromise: Promise<LiveFeedBlock<LivePowerSnapshot>> =
@@ -254,11 +281,11 @@ export async function fetchLiveStatus(
           .then((snap): LiveFeedBlock<LivePowerSnapshot> => ({ status: "ready", ...snap }))
           .catch((err: unknown): LiveFeedBlock<LivePowerSnapshot> => ({
             status: "error",
-            message: err instanceof Error ? err.message : String(err),
+            message: cleanLiveText(err instanceof Error ? err.message : String(err)),
           }));
 
   const internetPromise: Promise<LiveFeedBlock<LiveIodaSnapshot & { fips: string }>> =
-    fips === null || !IODA_COUNTY_CODES[fips]
+    fips === null || !Object.hasOwn(IODA_COUNTY_CODES, fips)
       ? Promise.resolve({ status: "error", message: "ioda: no metro county resolved for point" })
       : fetchLiveJson("ioda", iodaSignalUrl(fips, fromSec, untilSec), parseIodaSignal)
           .then((snap): LiveFeedBlock<LiveIodaSnapshot & { fips: string }> => ({
@@ -268,7 +295,7 @@ export async function fetchLiveStatus(
           }))
           .catch((err: unknown): LiveFeedBlock<LiveIodaSnapshot & { fips: string }> => ({
             status: "error",
-            message: err instanceof Error ? err.message : String(err),
+            message: cleanLiveText(err instanceof Error ? err.message : String(err)),
           }));
 
   const [alerts, power, internet] = await Promise.all([alertsPromise, powerPromise, internetPromise]);

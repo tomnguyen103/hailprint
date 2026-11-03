@@ -890,3 +890,24 @@ def test_cli_cloud_live_routes_to_run_cloud(monkeypatch):
 
     assert cli.main(["cloud", "live"]) == 0
     assert recorded == ["live"]
+
+
+def test_config_repr_hides_credentials_and_sync_down_rejects_out_of_prefix_keys(tmp_path: Path):
+    cfg = cloud.Config.from_env(VALID_ENV)
+    assert VALID_ENV["SUPABASE_S3_ACCESS_KEY_ID"] not in repr(cfg)
+    assert VALID_ENV["SUPABASE_S3_SECRET_ACCESS_KEY"] not in repr(cfg)
+
+    class RogueS3(FakeS3):
+        def list_objects_v2(
+            self,
+            *,
+            Bucket: str,
+            Prefix: str = "",
+            ContinuationToken: str | None = None,
+        ) -> dict:
+            return {"Contents": [{"Key": "other/secret.bin", "Size": 2}], "IsTruncated": False}
+
+    s3 = RogueS3({("hailprint-state", "other/secret.bin"): b"no"})
+    with pytest.raises(ValueError, match="unsafe S3 key"):
+        cloud.sync_down(s3, "hailprint-state", ("raw/spc/",), tmp_path / "data")
+

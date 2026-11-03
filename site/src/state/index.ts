@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { STALE, fetchJson, latest } from "../data/fetch";
 import { guardIndex } from "../data/guard";
 import type { StormsIndex } from "../data/types";
@@ -20,22 +20,23 @@ export function usePolledLoad<T>(
   merge?: (prev: T, next: T) => T,
 ): Load<T> & { showLoading: boolean; retry: () => void; now: Date } {
   const initial = useLoad<T>(key, start);
-  const [fresh, setFresh] = useState<T | null>(null);
+  const [fresh, setFresh] = useState<{ key: string; data: T } | null>(null);
   const [now, setNow] = useState<Date>(() => new Date());
   const runRefresh = useRef(latest<T>());
-  const initialRef = useRef<T | undefined>(undefined);
-  initialRef.current = initial.data;
+  const initialRef = useRef<{ key: string; data: T | undefined }>({ key, data: initial.data });
+  initialRef.current = { key, data: initial.data };
+  const currentRef = useRef({ key, start, runTimeOf, merge });
+  currentRef.current = { key, start, runTimeOf, merge };
 
   useEffect(() => {
     const data = initial.data;
     if (!data) return;
     setNow(new Date());
     setFresh((prev) => {
-      if (prev === null) return null;
-      return runTimeOf(data) >= runTimeOf(prev) ? null : prev;
+      if (prev === null || prev.key !== key) return null;
+      return currentRef.current.runTimeOf(data) >= currentRef.current.runTimeOf(prev.data) ? null : prev;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial.data]);
+  }, [initial.data, key]);
 
   useEffect(() => {
     if (
@@ -50,16 +51,23 @@ export function usePolledLoad<T>(
     const isVisible = () => (document.visibilityState ?? "visible") === "visible";
     const refresh = () => {
       if (!live || !isVisible()) return;
+      const { key: curKey, start: curStart, runTimeOf: curRunTimeOf, merge: curMerge } = currentRef.current;
       runRefresh
-        .current(start)
+        .current(curStart)
         .then((next) => {
           if (!live) return;
           setNow(new Date());
           if (next !== STALE) {
             setFresh((prev) => {
-              const base = prev ?? initialRef.current ?? null;
-              if (base !== null && runTimeOf(next) < runTimeOf(base)) return prev;
-              return base !== null && merge ? merge(base, next) : next;
+              const prevData = prev !== null && prev.key === curKey ? prev.data : null;
+              const initData =
+                initialRef.current.key === curKey ? (initialRef.current.data ?? null) : null;
+              const base = prevData ?? initData;
+              if (base !== null && curRunTimeOf(next) < curRunTimeOf(base)) return prev;
+              return {
+                key: curKey,
+                data: base !== null && curMerge ? curMerge(base, next) : next,
+              };
             });
           }
         })
@@ -82,18 +90,25 @@ export function usePolledLoad<T>(
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshMs]);
+  }, [key, refreshMs]);
 
+  const retry = useCallback(() => {
+    setFresh(null);
+    initial.retry();
+  }, [initial]);
+
+  const freshData = fresh !== null && fresh.key === key ? fresh.data : null;
   if (initial.status === "ready") {
     const chosen =
-      fresh !== null && runTimeOf(fresh) >= runTimeOf(initial.data) ? fresh : initial.data;
-    return { ...initial, data: chosen, now };
+      freshData !== null && runTimeOf(freshData) >= runTimeOf(initial.data)
+        ? freshData
+        : initial.data;
+    return { ...initial, data: chosen, retry, now };
   }
-  if (fresh !== null) {
-    return { status: "ready", data: fresh, showLoading: false, retry: initial.retry, now };
+  if (freshData !== null) {
+    return { status: "ready", data: freshData, showLoading: false, retry, now };
   }
-  return { ...initial, now };
+  return { ...initial, retry, now };
 }
 
 /**
