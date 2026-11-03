@@ -21,7 +21,7 @@ export function Archive({ archive }: { archive: ArchiveSummary | null }) {
   if (archive === null) {
     return (
       <>
-        <EmptyState sentence="The archive index is not built yet." />
+        <EmptyState sentence="No archive index." />
         <pre class="code-block">uv run hailprint index</pre>
       </>
     );

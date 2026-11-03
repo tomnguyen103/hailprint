@@ -399,12 +399,9 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                     onClick={runLiveCheck}
                   >
                     {currentLive.status === "loading"
-                      ? "Checking live feeds\u2026"
+                      ? "Fetch live feeds\u2026"
                       : "Check live NWS & outage feeds"}
                   </button>
-                  <span class="point-live-caption">
-                    On-demand check of NWS Active Alerts, ORNL ODIN utility outages, and IODA internet reachability.
-                  </span>
                 </div>
                 {currentLive.status === "ready" ? (
                   <LiveStatusList
@@ -580,7 +577,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
           aria-busy={geoStatus === "locating"}
           onClick={() => void locateUser()}
         >
-          {geoStatus === "locating" ? "Locating\u2026" : "Pin my location"}
+          {geoStatus === "locating" ? "Locate\u2026" : "Pin my location"}
         </button>
         {hasPin ? (
           <button type="button" class="button" onClick={onClearPin}>

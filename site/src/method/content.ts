@@ -85,7 +85,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
       {
         kind: "list",
         items: [
-          "Sentinel cells -3 and -1 are masked before any arithmetic.",
+          "The pipeline masks sentinel cells -3 and -1 before any arithmetic.",
           "Every value is a radar-estimated hail size, not a ground measurement.",
         ],
       },
@@ -100,7 +100,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
         kind: "prose",
         text:
           "The sample unit is the scored report. A size class is a forecast for a report when its swath lies within the scoring radius. " +
-          "The default radius is 5 km and the maximum is 20 km. A report within the radius plus 1 km of the crop edge is not scored.",
+          "The default radius is 5 km and the maximum is 20 km. The score excludes any report within the radius plus 1 km of the crop edge.",
       },
       {
         kind: "list",
@@ -130,7 +130,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
         text:
           "Hailprint covers Harris County only and HCAD footprints only. SPC reports are preliminary and sparse. " +
           "No ground truth of hail size exists at a parcel. " +
-          "The unverifiable area is swath farther than the scoring radius from every report; no report can confirm or deny hail there.",
+          "The unverifiable area is swath farther than the scoring radius from every report. No report confirms or denies hail there.",
       },
       {
         kind: "list",
@@ -185,8 +185,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
         kind: "prose",
         text:
           "IODA has a county signal from 2022-03 to 2024-05 only. A date outside that range has no internet file. " +
-          "A date that the publish step ran without the flag has none either. The strip says so in both cases. " +
-          "A county with no ratio at any step in the window reads No county signal.",
+          "A county with no ratio at any step reads No county signal.",
       },
       {
         kind: "prose",

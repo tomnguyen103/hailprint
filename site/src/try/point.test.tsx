@@ -591,7 +591,7 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
         preventDefault() {},
       });
     });
-    expect(domText(host)).toContain("Checking live feeds");
+    expect(domText(host)).toContain("Fetch live feeds");
 
     // Switch pin while fetchLiveStatus is in flight
     await act(() => {

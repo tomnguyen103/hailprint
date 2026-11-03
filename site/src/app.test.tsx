@@ -504,6 +504,36 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     );
     expect(unknownPowerRunCmds).not.toContain("uv run hailprint power 2026-04-04");
     expect(runPublishedFiles(storm)).toHaveLength(7);
+
+    const { Footer } = await import("./shell/footer");
+    const { TopBar } = await import("./shell/top-bar");
+    const { ThemeToggle } = await import("./shell/theme-toggle");
+    const { CAVEAT } = await import("./shell/caveat");
+
+    const footerTree = Footer() as VNode<{ class?: string; children?: unknown }>;
+    expect(footerTree.type).toBe("footer");
+    expect(footerTree.props.class).toBe("site-footer");
+
+    const walk = (node: unknown, out: VNode[] = []): VNode[] => {
+      if (!node || typeof node !== "object") return out;
+      if (Array.isArray(node)) {
+        for (const item of node) walk(item, out);
+        return out;
+      }
+      const v = node as VNode<{ children?: unknown }>;
+      out.push(v);
+      if (v.props?.children) walk(v.props.children, out);
+      return out;
+    };
+
+    const footerNodes = walk(footerTree);
+    expect(footerNodes.some((n) => n.type === "p" && (n.props as { class?: string }).class === "caveat" && n.props.children === CAVEAT)).toBe(true);
+    expect(footerNodes.some((n) => typeof n.type === "function")).toBe(false);
+    expect(footerNodes.some((n) => n.type === "fieldset" || n.type === "input")).toBe(false);
+
+    const topBarTree = TopBar({ active: "live" });
+    const topBarNodes = walk(topBarTree);
+    expect(topBarNodes.filter((n) => n.type === ThemeToggle)).toHaveLength(1);
   });
 });
 

@@ -19,7 +19,7 @@ export type Fill = "none" | "power" | "internet";
 
 /** The label an ODIN file carries: ODIN lists CenterPoint outages only. */
 export const ODIN_LABEL = "CenterPoint customers only";
-export const ODIN_BOUND = "Lower bound: other utilities are not counted.";
+export const ODIN_BOUND = "Lower bound: excludes other utilities.";
 
 /** Customers out over the MCC customers, at most 1: a utility count can pass the modelled MCC. A null step stays null, never zero. */
 export function shareOut(out: number | null, customers: number): number | null {

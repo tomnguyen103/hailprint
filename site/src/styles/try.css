@@ -162,10 +162,6 @@
   align-items: center;
 }
 
-.point-live-caption {
-  color: var(--ink-muted);
-  font-size: 0.875rem;
-}
 
 .point-live-grid {
   margin: 0;

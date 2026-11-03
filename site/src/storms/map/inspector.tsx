@@ -462,7 +462,7 @@ export function InspectorView({
             disabled={liveStatus === "loading"}
             onClick={onLiveCheck}
           >
-            {liveStatus === "loading" ? "Checking live feeds\u2026" : "Check live NWS & outage feeds"}
+            {liveStatus === "loading" ? "Fetch live feeds\u2026" : "Check live NWS & outage feeds"}
           </button>
           {liveStatus === "ready" && liveData !== null
             ? LiveStatusList({ data: liveData, onRetry: onLiveCheck })

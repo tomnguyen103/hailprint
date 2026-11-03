@@ -151,13 +151,6 @@ function ParcelsTable({
                   Download ZIP CSV
                 </button>
               </div>
-              {index !== undefined &&
-              zipStormCount > 0 &&
-              rawRows.some((row) => /^\d{5}$/.test(row.zip)) ? (
-                <p class="pane-note">
-                  Click any 5-digit ZIP code to inspect its exposure across all {zipStormCount} storms.
-                </p>
-              ) : null}
               <div class="table-scroll">
                 <table class="table">
                   <thead>
@@ -220,8 +213,7 @@ function ParcelsTable({
         <section class="zip-ledger-section" aria-label={`Cross-storm exposure ledger for ZIP ${pickedZip}`}>
           <div class="zip-ledger-header">
             <h2>
-              Cross-storm exposure ledger: ZIP <span class="mono">{pickedZip}</span> at &ge;{" "}
-              {formatInches(mark.threshold_in)}
+              ZIP <span class="mono">{pickedZip}</span> across storms (&ge; {formatInches(mark.threshold_in)})
             </h2>
             <button type="button" class="button button-small" onClick={() => setPickedZip(null)}>
               Close ledger
@@ -241,8 +233,8 @@ function ParcelsTable({
           ) : (
             <>
               <p class="pane-note">
-                Exposed in <span class="mono">{ledgerEntries.length}</span> of{" "}
-                <span class="mono">{zipStormCount}</span> catalog storms at &ge; {formatInches(mark.threshold_in)}.
+                <span class="mono">{ledgerEntries.length}</span> of <span class="mono">{zipStormCount}</span> storms
+                reach &ge; {formatInches(mark.threshold_in)} in ZIP <span class="mono">{pickedZip}</span>.
               </p>
               <div class="table-scroll">
                 <table class="table">
