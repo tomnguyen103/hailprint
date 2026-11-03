@@ -1,7 +1,7 @@
 """Command line entry for the hailprint commands.
 
 The commands are ``ingest``, ``index``, ``candidates``, ``parcels``, ``score``, ``warnings``,
-``eaglei``, ``power``, ``odin``, ``internet``, ``publish``, and ``cloud``.
+``eaglei``, ``power``, ``odin``, ``internet``, ``publish``, ``cloud``, and ``live``.
 Run ``hailprint <command> --help`` for the arguments of one command.
 """
 
@@ -22,6 +22,7 @@ from hailprint import (
     county,
     files,
     internet,
+    live,
     mesh,
     odin,
     parcels,
@@ -178,8 +179,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cloud_cmd.add_argument(
         "task",
-        choices=("nightly", "odin", "backfill"),
+        choices=("nightly", "odin", "backfill", "live"),
         help="cloud task to run",
+    )
+    commands.add_parser(
+        "live", help="write the live files: the rolling 24 h radar-estimated hail size and sources"
     )
     return parser
 
@@ -214,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
             publish_days(args.storm_dates, args.with_internet)
         elif args.command == "cloud":
             return cloud.run_cloud(args.task)
+        elif args.command == "live":
+            live_now()
     except (RuntimeError, OSError, ValueError, *runs.UNREADABLE) as exc:
         print(exc, file=sys.stderr)
         return 1
@@ -226,7 +232,7 @@ def ingest(storm_dates: list[date], *, plot: bool = False) -> list[Path]:
     written: list[Path] = []
     for storm_date in storm_dates:
         da = mesh.daily_max(storm_date, RAW_DIR)
-        max_mesh_mm = None if bool(da.isnull().all()) else round(float(da.max()), 2)
+        max_mesh_mm = swath.max_mesh_mm(da)
         swaths = swath.build_swaths(da, storm_date)
         swath_path = swath.write_swaths(
             swaths, DERIVED_DIR / swath.file_name(storm_date), 1, max_mesh_mm
@@ -545,6 +551,26 @@ def publish_days(storm_dates: list[date], with_internet: bool = False) -> list[P
         selected = _swath_files(storm_dates)
         dirs = publish_run.Dirs(PARCELS_DIR, WARNINGS_DIR, POWER_DIR, INTERNET_DIR, SITE_DATA_DIR)
         return publish_run.run(selected, dirs, with_internet=with_internet, now=_utc_now())
+
+
+def live_now() -> list[Path]:
+    """Write the live files under site/data/live/, now.json last.
+
+    A missing or broken MESH file writes nothing and exits 1, so the old live files stay.
+    """
+    result = live.build(_utc_now(), mesh.s3_client(), live.Fetchers())
+    written = live.write(result, SITE_DATA_DIR / live.DIR)
+    now = result.docs[live.NOW_FILE]
+    max_mm = now["mesh"]["max_mesh_mm"]
+    print(
+        f"live window {now['window']['start']} to {now['window']['end']}: "
+        f"max {'none' if max_mm is None else f'{max_mm} mm'}, "
+        f"{now['mesh']['class_count']} size classes"
+    )
+    for source in now["sources"]:
+        state = "ok" if source["ok"] else f"failed: {source['message']}"
+        print(f"  {source['source']} {source['product']}: {state}")
+    return written
 
 
 if __name__ == "__main__":

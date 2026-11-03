@@ -14,6 +14,7 @@ import numpy as np
 import xarray as xr
 from botocore import UNSIGNED
 from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 
 from hailprint.county import bbox
 
@@ -53,6 +54,31 @@ def local_path(key: str, raw_dir: Path) -> Path:
 def s3_client():
     config = Config(signature_version=UNSIGNED, retries={"mode": "standard", "max_attempts": 5})
     return boto3.client("s3", region_name="us-east-1", config=config)
+
+
+def list_keys(client, product: str, day: date) -> list[str]:
+    """Every key under CONUS/<product>/<YYYYMMDD>/ in the MRMS bucket."""
+    prefix = f"CONUS/{product}/{day:%Y%m%d}/"
+    keys: list[str] = []
+    token: str | None = None
+    while True:
+        kwargs = {"Bucket": BUCKET, "Prefix": prefix}
+        if token is not None:
+            kwargs["ContinuationToken"] = token
+        try:
+            resp = client.list_objects_v2(**kwargs)
+        except (BotoCoreError, ClientError, OSError) as exc:
+            raise RuntimeError(f"MESH list failed for {prefix}: {exc}") from exc
+        for obj in resp.get("Contents", []) or []:
+            key = obj.get("Key", "")
+            if key and not key.endswith("/"):
+                keys.append(key)
+        if not resp.get("IsTruncated"):
+            break
+        token = resp.get("NextContinuationToken")
+        if not token:
+            break
+    return keys
 
 
 def download_many(keys: list[str], raw_dir: Path, client=None, workers: int = 8) -> list[Path]:

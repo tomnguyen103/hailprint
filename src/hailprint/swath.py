@@ -30,6 +30,11 @@ def label(threshold_mm: float) -> str:
     return f"radar-estimated hail size >= {threshold_mm / 25.4:.2f} in"
 
 
+def max_mesh_mm(da: xr.DataArray) -> float | None:
+    """The largest cell in mm rounded to two decimals, or None when no cell is valid."""
+    return None if bool(da.isnull().all()) else round(float(da.max()), 2)
+
+
 def require_nested(swaths: gpd.GeoDataFrame, tolerance: float) -> None:
     """Raise ValueError when a class reaches outside the next lower class (rows sorted by size).
 

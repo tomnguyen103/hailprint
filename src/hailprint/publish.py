@@ -139,10 +139,14 @@ def _inches(threshold_mm: float) -> float:
     return round(threshold_mm / 25.4, 2)
 
 
-def _utc_text(run_time: datetime) -> str:
+def utc_text(run_time: datetime) -> str:
+    """Format `run_time` as UTC `YYYY-MM-DDTHH:MM:SSZ`; ValueError when naive."""
     if run_time.tzinfo is None:
         raise ValueError("run_time needs a time zone")
     return run_time.astimezone(UTC).strftime(RUN_TIME_FORMAT)
+
+
+_utc_text = utc_text
 
 
 def receipt(storm_date: date, sources: list[dict[str, str]], run_time: datetime) -> Doc:

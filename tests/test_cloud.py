@@ -757,3 +757,135 @@ def test_nightly_and_backfill_continue_when_score_or_eaglei_fails(tmp_path: Path
     assert cloud.backfill(fail_eaglei_cli, tmp_path, env={}) == 0
     assert ["publish"] in backfill_calls
     assert "eaglei failed; publish goes on" in capsys.readouterr().err
+
+
+LIVE_NAMES = ("now.json", "swath.geojson", "reports.geojson", "warnings.geojson")
+
+
+def test_public_key_re_live_names(tmp_path: Path):
+    for name in LIVE_NAMES:
+        cloud._validate_key(f"live/{name}", tmp_path, public=True)
+    for bad in ("live/notes.json", "live/x/now.json", "live/now.json.tmp", "live/", "now.json"):
+        with pytest.raises(ValueError, match="unsafe S3 key"):
+            cloud._validate_key(bad, tmp_path, public=True)
+
+
+def _write_live(site_dir: Path, tag: bytes) -> None:
+    live_dir = site_dir / "live"
+    live_dir.mkdir(parents=True, exist_ok=True)
+    for name in LIVE_NAMES:
+        (live_dir / name).write_bytes(tag + name.encode())
+
+
+def test_live_syncs_only_live_prefix(tmp_path: Path):
+    s3 = FakeS3(
+        {
+            ("hailprint-state", "raw/spc/1955-2025_hail.csv.zip"): b"wcm",
+            ("hailprint-public", "storms.json"): b'{"storms":[]}',
+            ("hailprint-public", "live/swath.geojson"): b"same:swath.geojson",
+        }
+    )
+    site_dir = tmp_path / "site" / "data"
+    calls: list[list[str]] = []
+
+    def fake_cli(argv: list[str]) -> int:
+        calls.append(list(argv))
+        assert (site_dir / "live" / "swath.geojson").read_bytes() == b"same:swath.geojson"
+        _write_live(site_dir, b"new:")
+        (site_dir / "live" / "swath.geojson").write_bytes(b"same:swath.geojson")
+        (site_dir / "live" / "extra.json").write_bytes(b"junk")
+        return 0
+
+    rc = cloud.run_cloud("live", client=s3, root=tmp_path, env=VALID_ENV, run_cli=fake_cli)
+
+    assert rc == 0
+    assert calls == [["live"]]
+    assert not (site_dir / "storms.json").exists()
+    assert not (tmp_path / "data").exists()
+    # the unchanged swath file stays; now.json uploads last
+    assert [key for _, key, _ in s3.puts] == [
+        "live/reports.geojson",
+        "live/warnings.geojson",
+        "live/now.json",
+    ]
+    assert all(b == "hailprint-public" for b, _, _ in s3.puts)
+    assert all(extra["CacheControl"] == "max-age=60" for _, _, extra in s3.puts)
+    assert s3.deletes == []
+
+
+def test_live_first_run_uploads_all_four(tmp_path: Path):
+    s3 = FakeS3()
+
+    def fake_cli(argv: list[str]) -> int:
+        _write_live(tmp_path / "site" / "data", b"new:")
+        return 0
+
+    assert cloud.run_cloud("live", client=s3, root=tmp_path, env=VALID_ENV, run_cli=fake_cli) == 0
+    keys = [key for _, key, _ in s3.puts]
+    assert sorted(keys) == sorted(f"live/{name}" for name in LIVE_NAMES)
+    assert keys[-1] == "live/now.json"
+
+
+def test_live_failure_uploads_nothing(tmp_path: Path):
+    s3 = FakeS3({("hailprint-public", "live/now.json"): b"old"})
+
+    def fail_cli(argv: list[str]) -> int:
+        _write_live(tmp_path / "site" / "data", b"partial:")
+        return 1
+
+    rc = cloud.run_cloud("live", client=s3, root=tmp_path, env=VALID_ENV, run_cli=fail_cli)
+
+    assert rc == 1
+    assert s3.puts == []
+    assert s3.objects[("hailprint-public", "live/now.json")] == b"old"
+
+
+@pytest.mark.parametrize("task", ["nightly", "backfill"])
+def test_nightly_excludes_live_prefix(tmp_path: Path, task: str):
+    s3 = FakeS3(
+        {
+            ("hailprint-public", "storms.json"): b'{"storms":[]}',
+            ("hailprint-public", "live/now.json"): b"live-owned",
+            ("hailprint-public", "live/swath.geojson"): b"live-owned",
+        }
+    )
+    site_dir = tmp_path / "site" / "data"
+
+    def fake_cli(argv: list[str]) -> int:
+        if argv[:2] == ["candidates", "--missing"]:
+            cand_dir = tmp_path / "data" / "derived" / "index"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            (cand_dir / "candidate-days.csv").write_text(
+                "storm_date,report_count,max_size_in,has_12z,report_source\n", encoding="utf-8"
+            )
+        if argv[0] == "publish":
+            (site_dir / "storms.json").write_bytes(b'{"storms":["2024-05-28"]}')
+            # a local live file (a manual run) never uploads from nightly or backfill
+            _write_live(site_dir, b"local:")
+        return 0
+
+    rc = cloud.run_cloud(task, client=s3, root=tmp_path, env=VALID_ENV, run_cli=fake_cli)
+
+    assert rc == 0
+    assert [key for b, key, _ in s3.puts if b == "hailprint-public"] == ["storms.json"]
+    assert s3.deletes == []
+    assert s3.objects[("hailprint-public", "live/now.json")] == b"live-owned"
+    assert s3.objects[("hailprint-public", "live/swath.geojson")] == b"live-owned"
+
+
+def test_trigger_live_task_runs_every_10_minutes_on_its_own_queue():
+    live_ts = (paths.ROOT / "trigger" / "live.ts").read_text(encoding="utf-8")
+    assert 'id: "live"' in live_ts
+    assert 'cron: "*/10 * * * *"' in live_ts
+    assert 'machine: "small-1x"' in live_ts
+    assert 'name: "live"' in live_ts
+    assert "concurrencyLimit: 1" in live_ts
+    assert '"cloud", "live"' in live_ts
+
+
+def test_cli_cloud_live_routes_to_run_cloud(monkeypatch):
+    recorded: list[str] = []
+    monkeypatch.setattr(cloud, "run_cloud", lambda task: recorded.append(task) or 0)
+
+    assert cli.main(["cloud", "live"]) == 0
+    assert recorded == ["live"]

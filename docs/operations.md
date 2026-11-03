@@ -21,6 +21,11 @@ This guide covers the Trigger.dev tasks, the Supabase Storage buckets, and the e
   1. Downloads state and public buckets.
   2. Runs `warnings --missing`, `eaglei` for any of `2020`, `2021`, `2022`, `2023`, `2024`, `2025` not yet in `derived/eaglei/`, `power --missing`, `internet --missing`, and `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`). A failed `warnings`, `eaglei`, `power`, or `internet` step logs `<step> failed; publish goes on`.
   3. Uploads changed state and public files.
+- `hailprint cloud live` (`trigger/live.ts`, cron `*/10 * * * *` UTC on `small-1x`, queue `live` with concurrency 1):
+  1. Downloads only the `live/` keys from `HAILPRINT_PUBLIC_BUCKET`. It reads no state file.
+  2. Runs `live`. The command writes `site/data/live/swath.geojson`, `reports.geojson`, `warnings.geojson`, and then `now.json`.
+  3. Uploads the changed `live/` keys with `Cache-Control: max-age=60`, and `live/now.json` last. A failed `live` run uploads nothing and returns 1, so the old public files stay and the site marks them stale.
+- `nightly` and `backfill` exclude `live/` from the public download, the upload, and the mirror delete. The `live` task never touches `storms/`, `storms.json`, or `pipeline.json`. The tasks never delete or overwrite a key of the other.
 
 ## Environment variables
 

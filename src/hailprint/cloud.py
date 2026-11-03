@@ -31,13 +31,17 @@ ENV_VARS: tuple[str, ...] = (
 STATE_PREFIXES: tuple[str, ...] = ("raw/spc/", "derived/")
 PUBLIC_PREFIXES: tuple[str, ...] = ("",)
 ODIN_PREFIX = "derived/odin/"
+# The live task owns this public prefix; nightly and backfill never read, write, or delete it.
+LIVE_PREFIX = "live/"
+LIVE_INDEX = f"{LIVE_PREFIX}now.json"
 BACKFILL_EAGLEI_YEARS: tuple[int, ...] = (2020, 2021, 2022, 2023, 2024, 2025)
 MAX_BYTES = 64 * 1024 * 1024
 _PROJECT_REF_RE = re.compile(r"^[a-z0-9-]+$")
 _PUBLIC_KEY_RE = re.compile(
     r"^(storms\.json|pipeline\.json|storms/\d{4}-\d{2}-\d{2}/"
     r"(swath\.geojson|reports\.geojson|pairs\.json|zip-counts\.json|"
-    r"warnings\.geojson|power\.json|internet\.json))$"
+    r"warnings\.geojson|power\.json|internet\.json)|"
+    r"live/(now\.json|swath\.geojson|reports\.geojson|warnings\.geojson))$"
 )
 
 
@@ -172,12 +176,14 @@ def sync_down(
     *,
     max_bytes: int = MAX_BYTES,
     public: bool = False,
+    exclude_prefixes: Iterable[str] = (),
 ) -> SyncState:
     state = SyncState()
     seen: set[str] = set()
+    exclude_tuple = tuple(exclude_prefixes)
     for prefix in prefixes:
         for key in _list_keys(client, bucket, prefix, max_bytes=max_bytes):
-            if key in seen:
+            if key in seen or any(key.startswith(ex) for ex in exclude_tuple):
                 continue
             seen.add(key)
             _validate_key(key, local_base, public=public)
@@ -225,8 +231,15 @@ def _collect_local_keys(
 def _order_keys(keys: list[str], *, public: bool) -> list[str]:
     if not public:
         return sorted(keys)
-    # Per-date files under storms/ upload before top-level index files (storms.json, pipeline.json)
-    return sorted(keys, key=lambda k: (0 if k.startswith("storms/") else 1, k))
+
+    # Per-date files under storms/ and the live layers upload before the index files
+    # (storms.json, pipeline.json, live/now.json) that name them
+    def rank(key: str) -> int:
+        if key.startswith("storms/"):
+            return 0
+        return 1 if key.startswith(LIVE_PREFIX) and key != LIVE_INDEX else 2
+
+    return sorted(keys, key=lambda k: (rank(k), k))
 
 
 def _public_headers(key: str) -> dict[str, str]:
@@ -510,11 +523,27 @@ def run_cloud(
         sync_up(s3, config.state_bucket, odin_keys, data_dir, state)
         return 0
 
+    if task == "live":
+        # only live/ moves: the storm data and the state bucket stay untouched
+        live_state = sync_down(s3, config.public_bucket, (LIVE_PREFIX,), site_dir, public=True)
+        rc = runner(["live"])
+        if rc != 0:
+            return rc
+        sync_up(s3, config.public_bucket, (LIVE_PREFIX,), site_dir, live_state, public=True)
+        return 0
+
     if task not in ("nightly", "backfill"):
         raise ValueError(f"unknown cloud task: {task}")
 
     state = sync_down(s3, config.state_bucket, STATE_PREFIXES, data_dir)
-    pub_state = sync_down(s3, config.public_bucket, PUBLIC_PREFIXES, site_dir, public=True)
+    pub_state = sync_down(
+        s3,
+        config.public_bucket,
+        PUBLIC_PREFIXES,
+        site_dir,
+        public=True,
+        exclude_prefixes=(LIVE_PREFIX,),
+    )
 
     rc = (
         nightly(runner, resolved_root, env)
@@ -540,5 +569,6 @@ def run_cloud(
         pub_state,
         public=True,
         mirror=True,
+        exclude_prefixes=(LIVE_PREFIX,),
     )
     return rc
