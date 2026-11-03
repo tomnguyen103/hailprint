@@ -33,6 +33,8 @@ uv run hailprint publish --with-internet    # also writes internet.json where `i
 uv run hailprint cloud nightly              # syncs Supabase S3 state/public down, runs nightly pipeline, syncs changed files up
 uv run hailprint cloud odin                 # syncs today's ODIN day file down, runs `odin`, syncs that file up
 uv run hailprint cloud backfill             # syncs state/public down, runs warnings/eaglei/power/internet/publish, syncs up
+uv run hailprint live                       # live files under site/data/live/ (rolling 24 h MESH, SPC, HGX warnings, ODIN), now.json last
+uv run hailprint cloud live                 # syncs public live/ down, runs `live`, syncs changed live/ keys up with now.json last
 make site                                   # cd site && npm ci && npm run check
 cd site && npm run dev                      # Vite dev server at http://localhost:5173
 cd site && npm run check                    # tsc --noEmit && vitest run && vite build
@@ -84,7 +86,11 @@ publish.py    swaths + nearby_reports + ZIP counts -> validated JSON with a rece
               also pipeline.json (runs newest first, cap 50, merged by run_time; archive summary per year or null; one sources row per source and product)
 publish_run.py run(selected, dirs, with_internet=, now=) is the publish run: the files per storm date, then storms.json, then pipeline.json; Dirs holds the parcels, warnings, power, internet, and site directories;
                archive_summary, pipeline_doc, impact_layer, stale_files, and remove_stale sit beside it; the caller holds the publish lock
-cloud.py      Supabase S3 synchronization (sync_down, sync_up with SHA-256 digest tracking, index-last public upload ordering, and mirror deletion) and cloud runners (nightly, odin_run, backfill, run_cloud)
+cloud.py      Supabase S3 synchronization (sync_down, sync_up with SHA-256 digest tracking, index-last public upload ordering, and mirror deletion) and cloud runners (nightly, odin_run, backfill, run_cloud);
+              the `live` task syncs only LIVE_PREFIX (`live/`), and nightly and backfill exclude it from sync_down, sync_up, and the mirror delete
+live.py       the live view: newest_key (today or the previous UTC day folder) -> the newest MESH_Max_1440min_00.50 key (the live window [T-24 h, T]) and MESH_Max_60min_00.50 key ->
+              build_swath (mesh.decode + swath.build_swaths); window_reports, window_warnings, power_now fill the optional layers (ok: false on a failure);
+              write validates every file, then writes swath.geojson, reports.geojson, warnings.geojson, and now.json last (schema live.schema.json); a MESH failure writes nothing
 county.py     committed GeoJSON (package data): outline() and bbox() for Harris County; metro() and metro_bbox() for the 8 metro counties (the impact layers only)
 files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata;
               lock(path): one publish run at a time, pid in site/data/publish.lock, a second run stops with exit 1

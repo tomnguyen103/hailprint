@@ -179,7 +179,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cloud_cmd.add_argument(
         "task",
-        choices=("nightly", "odin", "backfill"),
+        choices=("nightly", "odin", "backfill", "live"),
         help="cloud task to run",
     )
     commands.add_parser(
