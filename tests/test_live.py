@@ -172,17 +172,24 @@ def test_newest_key_previous_day():
 
 
 def test_rerun_identical_layers(tmp_path):
+    same_a = live.build(NOW, mrms(), QUIET)
+    same_b = live.build(NOW, mrms(), QUIET)
+    assert same_a.docs == same_b.docs
+
     first, second = tmp_path / "a", tmp_path / "b"
-    live.write(live.build(NOW, mrms(), QUIET), first)
-    live.write(live.build(datetime(2026, 11, 3, 14, 5, tzinfo=UTC), mrms(), QUIET), second)
+    live.write(same_a, first)
+    later = datetime(2026, 11, 3, 14, 5, tzinfo=UTC)
+    live.write(live.build(later, mrms(), QUIET), second)
 
     for name in ("swath.geojson", "reports.geojson", "warnings.geojson"):
         assert (first / name).read_bytes() == (second / name).read_bytes()
     a, b = read(first, "now.json"), read(second, "now.json")
-    assert a.pop("run_time") != b.pop("run_time")
-    for doc in (a, b):
-        for source in doc["sources"]:
-            source.pop("fetched_at")
+    assert a.pop("run_time") == "2026-11-03T14:00:00Z"
+    assert b.pop("run_time") == "2026-11-03T14:05:00Z"
+    for source in a["sources"]:
+        assert source.pop("fetched_at") == "2026-11-03T14:00:00Z"
+    for source in b["sources"]:
+        assert source.pop("fetched_at") == "2026-11-03T14:05:00Z"
     assert a == b
 
 
@@ -402,6 +409,30 @@ BAD_POINT = warning(9, "SV", "2026-11-03T13:40:00Z", "2026-11-03T14:30:00Z", {"t
             "iem",
             "not a polygon",
         ),
+        (
+            {
+                "warnings": lambda s, e: json.dumps(
+                    {
+                        "type": "FeatureCollection",
+                        "features": [
+                            warning(-1, "SV", "2026-11-03T13:40:00Z", "2026-11-03T14:30:00Z")
+                        ],
+                    }
+                )
+            },
+            "iem",
+            "eventid",
+        ),
+        (
+            {
+                "spc_today": lambda: (
+                    SPC_HEADER
+                    + f"1330,100,Houston {swath.FORBIDDEN_WORD},Harris,TX,29.76,-95.37,x\n"
+                )
+            },
+            "spc-daily",
+            "[redacted]",
+        ),
         ({"odin": _bad_odin}, "odin", "customers_out"),
         ({"odin": _long}, "odin", "xxx"),
     ],
@@ -415,6 +446,7 @@ def test_optional_source_failure_keeps_others(tmp_path, overrides, failed, text)
     rows = {s["source"]: s for s in now["sources"]}
     assert rows[failed]["ok"] is False
     assert text in rows[failed]["message"]
+    assert swath.FORBIDDEN_WORD not in rows[failed]["message"].lower()
     assert len(rows[failed]["message"]) <= 200
     assert all(s["ok"] for s in now["sources"] if s["source"] != failed)
     if failed == "spc-daily":
@@ -428,3 +460,63 @@ def test_optional_source_failure_keeps_others(tmp_path, overrides, failed, text)
     else:
         assert now["power"] is None
         assert now["reports"]["count"] == 3
+
+
+def test_corrupt_last_hour_and_forbidden_word_redacted(tmp_path):
+    client = mrms()
+    client.objects[_key(HOUR, "20261103-135800")] = b"not a gzip stream"
+    fetchers = busy(
+        odin=lambda: (_ for _ in ()).throw(
+            RuntimeError(f"bad /tmp/secret/odin.json with {swath.FORBIDDEN_WORD.upper()} CurrOwner")
+        )
+    )
+    live.write(live.build(NOW, client, fetchers), tmp_path)
+
+    now = read(tmp_path, "now.json")
+    assert now["last_hour"] is None
+    hour_row = next(s for s in now["sources"] if s["product"] == live.HOUR_PRODUCT)
+    assert hour_row["ok"] is False
+    assert "hailprint-live-" not in hour_row["message"]
+    assert "/tmp/" not in hour_row["message"]
+    odin_row = next(s for s in now["sources"] if s["source"] == "odin")
+    assert odin_row["ok"] is False
+    assert "/tmp/" not in odin_row["message"]
+    assert swath.FORBIDDEN_WORD not in odin_row["message"].lower()
+    assert "currowner" not in odin_row["message"].lower()
+    assert "[redacted]" in odin_row["message"]
+
+
+def test_convective_boundary_at_exact_12z(tmp_path):
+    run_time = datetime(2026, 11, 3, 12, 0, tzinfo=UTC)
+    start = datetime(2026, 11, 2, 12, 0, tzinfo=UTC)
+    client = FakeMrms(
+        {
+            _key(DAY, "20261103-120000"): grib(field(30.0)),
+            _key(HOUR, "20261103-120000"): grib(field(20.0)),
+        }
+    )
+    yesterday_csv = SPC_HEADER + "1200,125,Houston,Harris,TX,29.76,-95.37,at 12Z yesterday\n"
+    today_csv = SPC_HEADER + "1200,150,Pasadena,Harris,TX,29.69,-95.21,at 12Z today\n"
+    sbw_12z = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "features": [
+                warning(1, "SV", "2026-11-02T12:00:00Z", "2026-11-02T12:45:00Z"),
+                warning(2, "TO", "2026-11-03T11:45:00Z", "2026-11-03T12:15:00Z"),
+            ],
+        }
+    )
+    fetchers = busy(
+        spc_today=lambda: today_csv,
+        spc_yesterday=lambda: yesterday_csv,
+        warnings=lambda s, e: sbw_12z,
+    )
+
+    assert live.convective_date_of(start).isoformat() == "2026-11-02"
+    assert live.convective_date_of(run_time).isoformat() == "2026-11-03"
+    assert live.storm_date_of(run_time).isoformat() == "2026-11-02"
+
+    live.write(live.build(run_time, client, fetchers), tmp_path)
+    now = read(tmp_path, "now.json")
+    assert now["reports"] == {"count": 2, "max_size_in": 1.5}
+    assert now["warnings"] == {"count": 2, "active": 1}

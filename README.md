@@ -40,7 +40,7 @@ Site: https://hailprint.tomnguyen.me
 | ODIN | `hailprint odin` | One 15-minute snapshot of the open ODIN incidents, added to the file of the UTC day |
 | Internet | `hailprint internet` | Internet reachability per metro county and 15-minute step, from the IODA signal, for each storm date |
 | Publish | `hailprint publish` | Validated JSON under `site/data/`, each file with a receipt; `--with-internet` adds `internet.json` |
-| Cloud sync | `hailprint cloud` | Syncs state and public files with Supabase Storage and runs `nightly`, `odin`, or `backfill` |
+| Cloud sync | `hailprint cloud` | Syncs state and public files with Supabase Storage and runs `nightly`, `odin`, `live`, or `backfill` |
 | Live | `hailprint live` | The live files under `site/data/live/`: the rolling 24 h radar-estimated hail size over the Harris bbox, the SPC reports, the HGX warnings, the ODIN power, then `now.json` |
 
 Trigger.dev schedules run `hailprint cloud nightly` at 13:30 UTC, `hailprint cloud odin` every hour, and `hailprint cloud live` every 10 minutes, while `hailprint cloud backfill` runs on demand. Published files upload to the public Supabase Storage bucket, and Vercel builds and hosts the static site from git.

@@ -96,13 +96,13 @@ files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling t
               lock(path): one publish run at a time, pid in site/data/publish.lock, a second run stops with exit 1
 paths.py      resolve_root() reads HAILPRINT_ROOT when set, else the repo root; ROOT, RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR hang from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; no retry on a 4xx
-__main__.py   argparse wiring, one function per command (the `ingest`, `score`, `eaglei`, and `odin` bodies stay here), printing, and the fixed paths under data/, out/, and site/data/; the `--missing` rules, the run loop, and the publish run sit in `runs` and `publish_run`;
+__main__.py   argparse wiring, one function per command (the `ingest`, `score`, `eaglei`, `odin`, and `live` bodies stay here), printing, and the fixed paths under data/, out/, and site/data/; the `--missing` rules, the run loop, and the publish run sit in `runs` and `publish_run`;
               `power --missing` also replaces an ODIN-sourced power file when EAGLE-I now covers its window (docs/DECISIONS.md row 12)
 ```
 
 `site/` is the static site (Preact 10, Vite 8, TypeScript strict, MapLibre GL 6). Routes:
-`/storms/<date>/map|parcels|score|data` and `/storms/<date>/map/<step>`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`, `/method/<data|storm-date|size-classes|scoring|limits|impacts>`, `/pipeline/<runs|archive|sources>`; `/` redirects
-to the newest storm date with an impact layer (or the newest storm date when none has one). It reads `storms.json` first from `VITE_DATA_BASE` (defaulting to `/data/` in local dev) and re-fetches `storms.json` on tab focus and hourly while visible, then reads the four per-date files, then `warnings.geojson`, `power.json`, and `internet.json` when the date has them,
+`/live`, `/storms/<date>/map|parcels|score|data` and `/storms/<date>/map/<step>`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`, `/method/<data|storm-date|size-classes|scoring|limits|impacts>`, `/pipeline/<runs|archive|sources>`; `/` redirects
+to `/live`. It reads `live/now.json` on `/live` and `storms.json` first from `VITE_DATA_BASE` (defaulting to `/data/` in local dev) and re-fetches `storms.json` on tab focus and hourly while visible, then reads the four per-date files, then `warnings.geojson`, `power.json`, and `internet.json` when the date has them,
 each through a guard in `site/src/data/guard.ts`, and re-scores `pairs.json` in `site/src/rescore.ts` with the
 same radius rule as `publish.rescore`. Every MapLibre import lives under `site/src/storms/map/`.
 `site/README.md` holds the commands, the data path, the basemap step, and the Vercel fields.
