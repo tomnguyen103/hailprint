@@ -113,9 +113,10 @@ export function parseNwsAlerts(value: unknown): LiveAlert[] {
           : `alert-${i}`;
     return {
       id,
-      event,
+      event: cleanLiveText(event),
       headline: typeof props["headline"] === "string" ? cleanLiveText(props["headline"]) : null,
-      severity: typeof props["severity"] === "string" ? props["severity"] : "Unknown",
+      severity:
+        typeof props["severity"] === "string" ? cleanLiveText(props["severity"]) : "Unknown",
       onset:
         typeof props["onset"] === "string"
           ? props["onset"]

@@ -105,7 +105,7 @@ export function usePolledLoad<T>(
         : initial.data;
     return { ...initial, data: chosen, retry, now };
   }
-  if (freshData !== null && initial.status !== "error") {
+  if (freshData !== null) {
     return { status: "ready", data: freshData, showLoading: false, retry, now };
   }
   return { ...initial, retry, now };

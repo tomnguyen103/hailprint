@@ -125,6 +125,8 @@ def test_write_atomic_rejects_owner_columns_and_forbidden_word_in_metadata(tmp_p
         files.write_atomic(pd.DataFrame({"CurrOwner": ["A"]}), path)
     with pytest.raises(ValueError, match="damage"):
         files.write_atomic(pd.DataFrame({"n": [1]}), path, metadata={"note": "hail damage"})
+    with pytest.raises(ValueError, match="damage"):
+        files.write_atomic(pd.DataFrame({"note": ["hail damage"]}), path)
     assert not path.exists()
 
 

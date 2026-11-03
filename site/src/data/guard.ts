@@ -254,7 +254,7 @@ export function guardReports(value: unknown): ReportsFile {
     for (const key of ["id", "size_in"]) num(file, props[key], `${at}.properties.${key}`);
     const features = list(file, rec(file, value, "collection")["features"], "features");
     const geom = rec(file, rec(file, features[i], at)["geometry"], `${at}.geometry`);
-    if (geom["type"] !== undefined && geom["type"] !== "Point") {
+    if (geom["type"] !== "Point") {
       throw new DataError(file, `${at}.geometry.type is not Point`);
     }
     const coords = geom["coordinates"];

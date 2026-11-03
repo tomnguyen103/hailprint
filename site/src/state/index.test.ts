@@ -252,4 +252,68 @@ describe("useIndex", () => {
     await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
     expect(pairCalls).toBe(2);
   });
+
+  it("returns fresh data when background refresh succeeds after or before an initial error", async () => {
+    let calls = 0;
+    setFetch(async () => {
+      calls += 1;
+      if (calls === 1) return jsonResponse({ error: "fail" }, 500);
+      return jsonResponse(makeIndex(["2025-05-01"], "2026-10-30T12:00:00Z"));
+    });
+
+    const states: { status: string; dates?: string[] }[] = [];
+    function Probe() {
+      const idx = useIndex();
+      states.push({
+        status: idx.status,
+        dates: idx.status === "ready" ? idx.data.storms.map((s) => s.storm_date) : undefined,
+      });
+      return null;
+    }
+
+    await act(() => render(h(Probe, null), host));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+    expect(states.at(-1)?.status).toBe("error");
+
+    await act(async () => emitVisibility());
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+    expect(states.at(-1)).toEqual({ status: "ready", dates: ["2025-05-01"] });
+
+    // Order 2: refresh succeeds first while initial request is still pending, then initial fails
+    let rejectInitial!: (res: Response) => void;
+    let secondCalls = 0;
+    setFetch(async () => {
+      secondCalls += 1;
+      if (secondCalls === 1) {
+        return new Promise<Response>((resolve) => {
+          rejectInitial = resolve;
+        });
+      }
+      return jsonResponse(makeIndex(["2026-08-28"], "2026-10-31T12:00:00Z"));
+    });
+    const host2 = {
+      firstChild: null,
+      childNodes: [],
+      namespaceURI: "http://www.w3.org/1999/xhtml",
+    } as unknown as HTMLElement;
+    const states2: { status: string; dates?: string[] }[] = [];
+    function Probe2() {
+      const idx = useIndex();
+      states2.push({
+        status: idx.status,
+        dates: idx.status === "ready" ? idx.data.storms.map((s) => s.storm_date) : undefined,
+      });
+      return null;
+    }
+    await act(() => render(h(Probe2, null), host2));
+    await act(async () => emitVisibility());
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+    expect(states2.at(-1)).toEqual({ status: "ready", dates: ["2026-08-28"] });
+
+    await act(async () => {
+      rejectInitial(jsonResponse({ error: "fail" }, 500));
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(states2.at(-1)).toEqual({ status: "ready", dates: ["2026-08-28"] });
+  });
 });

@@ -106,6 +106,16 @@ def write_atomic(frame: pd.DataFrame, path: Path, metadata: dict[str, str] | Non
         for field in OWNER_FIELDS:
             if field.lower() in lowered:
                 raise ValueError(f"owner field {field!r} in {col!r}")
+    for col_name in frame.select_dtypes(include=["object", "string"]).columns:
+        for cell in frame[col_name].dropna():
+            if not isinstance(cell, str):
+                continue
+            lowered = cell.lower()
+            if FORBIDDEN_WORD in lowered:
+                raise ValueError(f"forbidden word in cell of {col_name!r}: {cell!r}")
+            for field in OWNER_FIELDS:
+                if field.lower() in lowered:
+                    raise ValueError(f"owner field {field!r} in cell of {col_name!r}")
     with _atomic(path) as tmp:
         if path.suffix == ".csv":
             frame.to_csv(tmp, index=False)
