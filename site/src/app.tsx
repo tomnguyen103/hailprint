@@ -1,4 +1,5 @@
 import { useEffect } from "preact/hooks";
+import { LiveView } from "./live/live-view";
 import { Method } from "./method/method";
 import { Pipeline } from "./pipeline/pipeline";
 import { href, replace, type Area } from "./router";
@@ -7,20 +8,12 @@ import { AreaBoundary } from "./shell/area-boundary";
 import { Layout } from "./shell/layout";
 import { EmptyState, ErrorState, LoadingState } from "./shell/states";
 import { useIndex } from "./state/index";
-import { useLive } from "./state/live";
 import { useRoute } from "./state/route";
 import { landingStorm } from "./storms/select";
 import { Workspace } from "./storms/workspace";
 import { TryIt } from "./try/try";
 
 const NO_INDEX = "No storm date is published yet.";
-
-function LiveMount({ newest }: { newest: string | null }) {
-  const live = useLive();
-  void newest;
-  if (live.status === "error") return <ErrorState error={live.error} onRetry={live.retry} />;
-  return live.showLoading ? <LoadingState file="live/now.json" /> : null;
-}
 
 export function App() {
   const { path, route } = useRoute();
@@ -47,7 +40,7 @@ export function App() {
   } else if (route.kind === "redirect-live") {
     body = null;
   } else if (route.kind === "live") {
-    body = <LiveMount newest={newest?.storm_date ?? null} />;
+    body = <LiveView newest={newest?.storm_date ?? null} />;
   } else if (route.kind === "method") {
     body = <Method page={route.page} />;
   } else if (route.kind === "pipeline") {

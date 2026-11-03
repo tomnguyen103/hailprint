@@ -1,0 +1,207 @@
+/* Live view: monitoring archetype. Header + freshness chip, status sentence, 5-stat strip, map, and source clocks. */
+
+.live-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  padding: 24px var(--gutter) 40px;
+}
+
+.live-header {
+  display: grid;
+  gap: 8px;
+}
+
+.live-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.live-title-row h1 {
+  margin: 0;
+  font: 600 32px/1.15 var(--serif);
+  color: var(--ink);
+}
+
+.live-freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--sheet);
+  color: var(--ink);
+  font: 500 13px/1.2 var(--sans);
+}
+
+.live-freshness[data-freshness="aging"] {
+  border-color: var(--note-ink);
+  background: var(--note-bg);
+  color: var(--note-ink);
+}
+
+.live-freshness[data-freshness="stale"] {
+  border-color: var(--report);
+  color: var(--report);
+}
+
+.live-freshness-state {
+  text-transform: capitalize;
+}
+
+.live-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
+
+.live-status {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--ink);
+  font: 400 16px/1.55 var(--sans);
+}
+
+.live-newest {
+  margin: 0;
+  color: var(--ink-muted);
+  font: 400 14px/1.4 var(--sans);
+}
+
+.live-newest a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+.live-window {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+
+.live-notes {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 14px;
+  list-style: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+  background: var(--note-bg);
+  color: var(--note-ink);
+  font-size: 0.85rem;
+}
+
+/* Five-stat strip: one sheet frame with hairline dividers, never nested cards */
+
+.live-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pane);
+  background: var(--sheet);
+}
+
+.live-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-right: 1px solid var(--rule);
+}
+
+.live-stat:last-child {
+  border-right: 0;
+}
+
+.live-stat-value {
+  font: 500 28px/1.15 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.live-stat-note {
+  color: var(--ink-muted);
+  font: 400 13px/1.35 var(--sans);
+}
+
+.live-map-section {
+  min-width: 0;
+}
+
+.live-sources {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.live-sources h2 {
+  margin: 0;
+  font: 600 18px/1.3 var(--sans);
+  color: var(--ink);
+}
+
+.live-source-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.live-source-status[data-ok="false"] {
+  color: var(--report);
+}
+
+@media (max-width: 1023px) {
+  .live-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .live-stat {
+    border-bottom: 1px solid var(--rule);
+  }
+}
+
+@media (max-width: 767px) {
+  .bottom-bar {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .live-page {
+    padding: 16px var(--gutter) 28px;
+    gap: 20px;
+  }
+
+  .live-title-row h1 {
+    font-size: 24px;
+  }
+
+  .live-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .live-stat:nth-child(2n) {
+    border-right: 0;
+  }
+
+  .live-stat:last-child {
+    grid-column: 1 / -1;
+    border-bottom: 0;
+  }
+}
+
+@media (max-width: 359px) {
+  .live-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .live-stat {
+    border-right: 0;
+  }
+}
