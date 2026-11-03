@@ -232,7 +232,7 @@ def ingest(storm_dates: list[date], *, plot: bool = False) -> list[Path]:
     written: list[Path] = []
     for storm_date in storm_dates:
         da = mesh.daily_max(storm_date, RAW_DIR)
-        max_mesh_mm = None if bool(da.isnull().all()) else round(float(da.max()), 2)
+        max_mesh_mm = swath.max_mesh_mm(da)
         swaths = swath.build_swaths(da, storm_date)
         swath_path = swath.write_swaths(
             swaths, DERIVED_DIR / swath.file_name(storm_date), 1, max_mesh_mm
