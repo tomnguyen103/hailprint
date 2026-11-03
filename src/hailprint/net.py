@@ -20,6 +20,20 @@ def _check_url(url: str) -> None:
         raise ValueError(f"unsupported URL scheme: {url}")
 
 
+class _NoDowngradeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Reject HTTPS-to-HTTP redirects before urllib sends the next request."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: PLR0913
+        if req.full_url.startswith("https://") and newurl.startswith("http://"):
+            if fp is not None:
+                fp.close()
+            raise RuntimeError(f"{req.full_url}: redirect downgraded from https to http")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+urllib.request.install_opener(urllib.request.build_opener(_NoDowngradeRedirectHandler()))
+
+
 def _check_redirect(url: str, response: Any) -> None:
     final_url = getattr(response, "url", None) or (
         response.geturl() if hasattr(response, "geturl") else None

@@ -2,6 +2,7 @@
 
 import gzip
 import re
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
@@ -94,7 +95,7 @@ def decode(path: Path, max_bytes: int = MAX_DECODE_BYTES) -> xr.DataArray:
     try:
         with opener(path, "rb") as fh:
             raw = fh.read(max_bytes + 1)
-    except (OSError, EOFError) as err:
+    except (OSError, EOFError, zlib.error) as err:
         raise RuntimeError(f"not a gzip stream: {path}") from err
     if len(raw) > max_bytes:
         raise RuntimeError(f"MESH file {path.name} exceeds {max_bytes} bytes")

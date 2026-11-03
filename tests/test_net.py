@@ -238,3 +238,10 @@ def test_get_and_open_stream_reject_https_to_http_downgrade(monkeypatch):
     _script(monkeypatch, DowngradedResponse(b"ok"))
     with pytest.raises(RuntimeError, match="redirect downgraded from https to http"):
         net.open_stream(URL)
+
+
+def test_redirect_handler_rejects_https_to_http_before_following():
+    req = net.urllib.request.Request(URL)
+    handler = net._NoDowngradeRedirectHandler()
+    with pytest.raises(RuntimeError, match="redirect downgraded from https to http"):
+        handler.redirect_request(req, None, 302, "Found", {}, "http://example.test/insecure.csv")

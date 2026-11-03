@@ -327,7 +327,7 @@ export function InspectorView({
   onLiveCheck?: () => void;
 }) {
   const [lon, lat] = pick.lngLat;
-  const inMetro = isMetroCoordinate(pick.lngLat) && pick.countyFips !== null;
+  const inMetro = isMetroCoordinate(pick.lngLat);
   const activePin = pinnedLngLat !== undefined ? pinnedLngLat : (getPinState().pin?.lngLat ?? null);
   const isPinned =
     activePin !== null && Math.abs(activePin[0] - lon) < 1e-5 && Math.abs(activePin[1] - lat) < 1e-5;
