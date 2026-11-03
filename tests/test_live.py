@@ -17,6 +17,7 @@ DAY = "CONUS/MESH_Max_1440min_00.50"
 HOUR = "CONUS/MESH_Max_60min_00.50"
 NOW = datetime(2026, 11, 3, 14, 0, tzinfo=UTC)
 NI, NJ = 140, 100
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 def _key(prefix: str, stamp: str) -> str:
@@ -89,8 +90,20 @@ def read(out: Path, name: str) -> dict:
     return json.loads((out / name).read_text(encoding="utf-8"))
 
 
+SPC_HEADER = "Time,Size,Location,County,State,Lat,Lon,Comments\n"
+EMPTY_SBW = '{"type": "FeatureCollection", "features": []}'
+ODIN_GROUPED = (FIXTURES / "odin_grouped.json").read_text(encoding="utf-8")
+# SPC answers with a header and no row, IEM with no feature, ODIN with the grouped fixture
+QUIET = live.Fetchers(
+    spc_today=lambda: SPC_HEADER,
+    spc_yesterday=lambda: SPC_HEADER,
+    warnings=lambda start, end: EMPTY_SBW,
+    odin=lambda: ODIN_GROUPED,
+)
+
+
 def test_build_writes_four_valid_files(tmp_path):
-    written = live.write(live.build(NOW, mrms()), tmp_path)
+    written = live.write(live.build(NOW, mrms(), QUIET), tmp_path)
 
     assert [p.name for p in written] == [
         "swath.geojson",
@@ -127,7 +140,7 @@ def test_build_writes_four_valid_files(tmp_path):
 
 
 def test_empty_swath(tmp_path):
-    live.write(live.build(NOW, mrms(day_peak=19.0)), tmp_path)
+    live.write(live.build(NOW, mrms(day_peak=19.0), QUIET), tmp_path)
 
     assert read(tmp_path, "swath.geojson")["features"] == []
     now = read(tmp_path, "now.json")
@@ -136,7 +149,7 @@ def test_empty_swath(tmp_path):
 
 
 def test_every_class_nests(tmp_path):
-    live.write(live.build(NOW, mrms(day_peak=70.0)), tmp_path)
+    live.write(live.build(NOW, mrms(day_peak=70.0), QUIET), tmp_path)
 
     features = read(tmp_path, "swath.geojson")["features"]
     assert [f["properties"]["threshold_mm"] for f in features] == list(swath.SIZE_CLASSES_MM)
@@ -160,8 +173,8 @@ def test_newest_key_previous_day():
 
 def test_rerun_identical_layers(tmp_path):
     first, second = tmp_path / "a", tmp_path / "b"
-    live.write(live.build(NOW, mrms()), first)
-    live.write(live.build(datetime(2026, 11, 3, 14, 5, tzinfo=UTC), mrms()), second)
+    live.write(live.build(NOW, mrms(), QUIET), first)
+    live.write(live.build(datetime(2026, 11, 3, 14, 5, tzinfo=UTC), mrms(), QUIET), second)
 
     for name in ("swath.geojson", "reports.geojson", "warnings.geojson"):
         assert (first / name).read_bytes() == (second / name).read_bytes()
@@ -183,7 +196,7 @@ def test_mesh_failure_writes_nothing(tmp_path):
 
     for client in (empty, corrupt):
         with pytest.raises(RuntimeError):
-            live.write(live.build(NOW, client), out)
+            live.write(live.build(NOW, client, QUIET), out)
 
     assert [p.name for p in out.iterdir()] == ["now.json"]
     assert (out / "now.json").read_text(encoding="utf-8") == "old"
@@ -194,6 +207,7 @@ def test_cli_live_exit_1_on_mesh_failure_keeps_old_files(tmp_path, monkeypatch, 
     (tmp_path / "live" / "now.json").write_text("old", encoding="utf-8")
     monkeypatch.setattr(cli, "SITE_DATA_DIR", tmp_path)
     monkeypatch.setattr(cli, "_utc_now", lambda: NOW)
+    monkeypatch.setattr(live, "Fetchers", lambda: QUIET)
     monkeypatch.setattr(mesh, "s3_client", lambda: FakeMrms({}))
 
     assert cli.main(["live"]) == 1
@@ -205,6 +219,7 @@ def test_cli_live_exit_1_on_mesh_failure_keeps_old_files(tmp_path, monkeypatch, 
 def test_cli_live_writes_and_prints_the_window(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(cli, "SITE_DATA_DIR", tmp_path)
     monkeypatch.setattr(cli, "_utc_now", lambda: NOW)
+    monkeypatch.setattr(live, "Fetchers", lambda: QUIET)
     monkeypatch.setattr(mesh, "s3_client", lambda: mrms())
 
     assert cli.main(["live"]) == 0
@@ -240,3 +255,176 @@ def test_live_swath_matches_archive():
         assert a.equals(b)
     # the archived 2024-05-28 swath file records 52.8 mm as its largest cell
     assert max_mm == 52.8 == round(float(daily.max()), 2)
+
+
+# --- ticket 02: windowed SPC reports, HGX warnings, ODIN power, per-source status ---
+
+START = datetime(2026, 11, 2, 13, 30, tzinfo=UTC)
+YESTERDAY_CSV = SPC_HEADER + (
+    "1329,100,Houston,Harris,TX,29.76,-95.37,one minute before the window\n"
+    "1330,100,Houston,Harris,TX,29.76,-95.37,at the window start\n"
+    "2200,175,Katy,Harris,TX,29.79,-95.82,inside\n"
+    "0100,100,Dallas,Dallas,TX,32.78,-96.80,outside the 50 km buffer\n"
+)
+TODAY_CSV = SPC_HEADER + (
+    "1330,100,Pasadena,Harris,TX,29.69,-95.21,at the window end\n"
+    "1331,100,Houston,Harris,TX,29.76,-95.37,one minute after the window\n"
+)
+HOUSTON = [[[-95.41, 29.81], [-95.37, 29.81], [-95.37, 29.85], [-95.41, 29.85], [-95.41, 29.81]]]
+
+
+def warning(eventid: int, kind: str, begin: str, end: str, geometry: dict | None = None) -> dict:
+    return {
+        "type": "Feature",
+        "properties": {
+            "phenomena": kind,
+            "significance": "W",
+            "event_label": f"{kind} Warning",
+            "eventid": eventid,
+            "utc_polygon_begin": begin,
+            "utc_polygon_end": end,
+            "product_id": f"202611{eventid:03d}-KHGX",
+        },
+        "geometry": geometry or {"type": "Polygon", "coordinates": HOUSTON},
+    }
+
+
+SBW = json.dumps(
+    {
+        "type": "FeatureCollection",
+        "features": [
+            warning(1, "SV", "2026-11-03T13:40:00Z", "2026-11-03T14:30:00Z"),
+            warning(2, "TO", "2026-11-02T20:00:00Z", "2026-11-02T20:45:00Z"),
+            warning(3, "SV", "2026-11-02T10:00:00Z", "2026-11-02T11:00:00Z"),
+            warning(4, "FF", "2026-11-03T14:10:00Z", "2026-11-03T15:00:00Z"),
+        ],
+    }
+)
+
+
+def busy(**overrides) -> live.Fetchers:
+    fields = {
+        "spc_today": lambda: TODAY_CSV,
+        "spc_yesterday": lambda: YESTERDAY_CSV,
+        "warnings": lambda start, end: SBW,
+        "odin": lambda: ODIN_GROUPED,
+    }
+    return live.Fetchers(**{**fields, **overrides})
+
+
+def test_sources_fill_the_layers(tmp_path):
+    asked = []
+
+    def warnings(start, end):
+        asked.append((start, end))
+        return SBW
+
+    live.write(live.build(NOW, mrms(), busy(warnings=warnings)), tmp_path)
+
+    for name, kind in live.KINDS.items():
+        publish.validate(read(tmp_path, name), kind)
+    # IEM gets the window start and the run time
+    assert asked == [(START, NOW)]
+    now = read(tmp_path, "now.json")
+    assert now["reports"] == {"count": 3, "max_size_in": 1.75}
+    # eventid 1 ends after the run time; 3 ends before the start, 4 begins after the run time
+    assert now["warnings"] == {"count": 2, "active": 1}
+    events = [f["properties"]["eventid"] for f in read(tmp_path, "warnings.geojson")["features"]]
+    assert events == [2, 1]
+    # tests/fixtures/odin_grouped.json: 13 + 1 + 1 + 3 + 714 + 1 + 2 customers out
+    assert now["power"]["customers_out"] == 735
+    harris = next(c for c in now["power"]["counties"] if c["fips"] == "48201")
+    # 714 of the 1 827 686 MCC customers of Harris
+    assert harris == {"fips": "48201", "name": "Harris", "customers_out": 714, "share_out": 0.0004}
+    liberty = next(c for c in now["power"]["counties"] if c["fips"] == "48291")
+    assert liberty["customers_out"] == 0 and liberty["share_out"] == 0
+    assert len(now["power"]["counties"]) == 8
+    assert [(s["source"], s["ok"]) for s in now["sources"]] == [
+        ("noaa-mrms-pds", True),
+        ("noaa-mrms-pds", True),
+        ("spc-daily", True),
+        ("iem", True),
+        ("odin", True),
+    ]
+    odin_row = now["sources"][4]
+    assert odin_row["valid_time"] == "2026-11-03T14:00:00Z"
+
+
+def test_window_closed_interval(tmp_path):
+    live.write(live.build(NOW, mrms(), busy()), tmp_path)
+
+    features = read(tmp_path, "reports.geojson")["features"]
+    assert [(f["properties"]["time"], f["properties"]["location"]) for f in features] == [
+        ("1330", "Houston"),
+        ("2200", "Katy"),
+        ("1330", "Pasadena"),
+    ]
+    assert [f["properties"]["id"] for f in features] == [0, 1, 2]
+
+
+def _bad_odin() -> str:
+    return json.dumps(
+        {
+            "total_count": 1,
+            "results": [
+                {"communitydescriptor": "48201", "name": "CENTERPOINT", "customers_out": -5}
+            ],
+        }
+    )
+
+
+def _drop(*args):
+    raise OSError("connection reset by peer")
+
+
+def _long(*args):
+    raise RuntimeError("x" * 500)
+
+
+BAD_POINT = warning(9, "SV", "2026-11-03T13:40:00Z", "2026-11-03T14:30:00Z", {"type": "Point"})
+
+
+@pytest.mark.parametrize(
+    ("overrides", "failed", "text"),
+    [
+        (
+            {"spc_today": lambda: TODAY_CSV + "1340,abc,Houston,Harris,TX,29.7,-95.3,x\n"},
+            "spc-daily",
+            "malformed row",
+        ),
+        ({"spc_yesterday": _drop}, "spc-daily", "connection reset"),
+        (
+            {
+                "warnings": lambda s, e: json.dumps(
+                    {"type": "FeatureCollection", "features": [BAD_POINT]}
+                )
+            },
+            "iem",
+            "not a polygon",
+        ),
+        ({"odin": _bad_odin}, "odin", "customers_out"),
+        ({"odin": _long}, "odin", "xxx"),
+    ],
+)
+def test_optional_source_failure_keeps_others(tmp_path, overrides, failed, text):
+    live.write(live.build(NOW, mrms(), busy(**overrides)), tmp_path)
+
+    for name, kind in live.KINDS.items():
+        publish.validate(read(tmp_path, name), kind)
+    now = read(tmp_path, "now.json")
+    rows = {s["source"]: s for s in now["sources"]}
+    assert rows[failed]["ok"] is False
+    assert text in rows[failed]["message"]
+    assert len(rows[failed]["message"]) <= 200
+    assert all(s["ok"] for s in now["sources"] if s["source"] != failed)
+    if failed == "spc-daily":
+        assert read(tmp_path, "reports.geojson")["features"] == []
+        assert now["reports"] == {"count": 0, "max_size_in": None}
+        assert now["warnings"]["count"] == 2
+    elif failed == "iem":
+        assert read(tmp_path, "warnings.geojson")["features"] == []
+        assert now["warnings"] == {"count": 0, "active": 0}
+        assert now["reports"]["count"] == 3
+    else:
+        assert now["power"] is None
+        assert now["reports"]["count"] == 3

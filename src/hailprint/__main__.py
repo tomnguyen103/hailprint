@@ -558,7 +558,7 @@ def live_now() -> list[Path]:
 
     A missing or broken MESH file writes nothing and exits 1, so the old live files stay.
     """
-    result = live.build(_utc_now(), mesh.s3_client())
+    result = live.build(_utc_now(), mesh.s3_client(), live.Fetchers())
     written = live.write(result, SITE_DATA_DIR / live.DIR)
     now = result.docs[live.NOW_FILE]
     max_mm = now["mesh"]["max_mesh_mm"]
