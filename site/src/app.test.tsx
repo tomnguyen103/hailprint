@@ -13,6 +13,7 @@ const stub = vi.hoisted(() => ({
   replaced: [] as string[],
   shown: [] as { error: { message: string }; inLayout: boolean }[],
   storms: [{ storm_date: "2024-05-28" }] as Record<string, unknown>[],
+  index: null as Record<string, unknown> | null,
   // The Layout stub provides it, the ErrorState stub reads it: true when the error state renders under the layout.
   layoutContext: undefined as unknown as Context<boolean>,
   armed: true,
@@ -51,7 +52,13 @@ vi.mock("./shell/states", async () => {
 });
 vi.mock("./state/route", () => ({ useRoute: () => stub.current }));
 vi.mock("./state/index", () => ({
-  useIndex: () => ({ status: "ready", data: { storms: stub.storms }, showLoading: false, retry() {} }),
+  useIndex: () => stub.index ?? { status: "ready", data: { storms: stub.storms }, showLoading: false, retry() {} },
+}));
+vi.mock("./state/live", () => ({
+  useLive: () => {
+    stub.log.push("live");
+    return { status: "loading", showLoading: false, retry() {} };
+  },
 }));
 vi.mock("./storms/workspace", () => ({ Workspace: () => null }));
 vi.mock("./method/method", () => ({
@@ -85,6 +92,7 @@ describe("App", () => {
     stub.replaced.length = 0;
     stub.shown.length = 0;
     stub.storms = [{ storm_date: "2024-05-28" }];
+    stub.index = null;
     stub.armed = true;
     stub.current = { path: "/method/data", route: { kind: "method", page: "data" } };
   });
@@ -119,7 +127,7 @@ describe("App", () => {
     expect(stub.log.at(-1)).toBe("pipeline");
   });
 
-  it("redirects / to the newest storm date that has an impact layer", async () => {
+  it("redirects bare /storms to the newest storm date that has an impact layer", async () => {
     stub.storms = [
       {
         storm_date: "2026-08-28",
@@ -138,11 +146,30 @@ describe("App", () => {
         },
       },
     ];
-    stub.current = { path: "/", route: { kind: "redirect-latest" } };
+    stub.current = { path: "/storms", route: { kind: "redirect-latest" } };
 
     await mount();
 
     expect(stub.replaced).toEqual(["/storms/2025-05-01/map"]);
+  });
+
+  it("replaces / with /live", async () => {
+    stub.current = { path: "/", route: { kind: "redirect-live" } };
+
+    await mount();
+
+    expect(stub.replaced).toEqual(["/live"]);
+  });
+
+  it("renders the live view when storms.json fails, and marks Live as the active area", async () => {
+    stub.index = { status: "error", error: { message: "storms.json: HTTP 500" }, showLoading: false, retry() {} };
+    stub.current = { path: "/live", route: { kind: "live" } };
+
+    await mount();
+
+    expect(stub.log.at(-1)).toBe("live");
+    expect(stub.shown).toEqual([]);
+    expect((stub.layouts.at(-1) as unknown as { active: string }).active).toBe("live");
   });
 });
 

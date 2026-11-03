@@ -5,6 +5,7 @@ import type { FeatureCollection, MultiPolygon } from "geojson";
 import { DATE, METRO_FIPS, STEP_MINUTES, STEPS } from "./constants";
 import type {
   InternetFile,
+  LiveFile,
   Pairs,
   PipelineFile,
   PowerFile,
@@ -409,4 +410,68 @@ export function guardOutline(value: unknown): FeatureCollection<MultiPolygon> {
   guardCollection("counties.geojson", value);
   guardMultiPolygons("counties.geojson", value);
   return value as FeatureCollection<MultiPolygon>;
+}
+
+/** The three layer names `now.json` may name; the site builds a fetch path from them, so each is exact. */
+const LIVE_FILES = { swath: "swath.geojson", reports: "reports.geojson", warnings: "warnings.geojson" } as const;
+
+function bool(file: string, value: unknown, path: string): void {
+  if (typeof value !== "boolean") throw new DataError(file, `${path} is not a boolean`);
+}
+
+function strOrNull(file: string, value: unknown, path: string): void {
+  if (value !== null) str(file, value, path);
+}
+
+/** `live/now.json`: every key the Live page reads, with the counts whole and never negative. */
+export function guardLive(value: unknown): LiveFile {
+  const file = "now.json";
+  const root = rec(file, value, "now");
+  if (root["kind"] !== "live") throw new DataError(file, "kind is not live");
+  runTime(file, root["run_time"], "run_time");
+  const window = rec(file, root["window"], "window");
+  for (const key of ["start", "end"]) runTime(file, window[key], `window.${key}`);
+  const mesh = rec(file, root["mesh"], "mesh");
+  str(file, mesh["key"], "mesh.key");
+  runTime(file, mesh["valid_time"], "mesh.valid_time");
+  numOrNull(file, mesh["max_mesh_mm"], "mesh.max_mesh_mm");
+  count(file, mesh["class_count"], "mesh.class_count");
+  if ((mesh["class_count"] as number) > 7) throw new DataError(file, "mesh.class_count is not a class count");
+  if (root["last_hour"] !== null) {
+    const hour = rec(file, root["last_hour"], "last_hour");
+    str(file, hour["key"], "last_hour.key");
+    runTime(file, hour["valid_time"], "last_hour.valid_time");
+    numOrNull(file, hour["max_mesh_mm"], "last_hour.max_mesh_mm");
+  }
+  const reports = rec(file, root["reports"], "reports");
+  count(file, reports["count"], "reports.count");
+  numOrNull(file, reports["max_size_in"], "reports.max_size_in");
+  const warnings = rec(file, root["warnings"], "warnings");
+  for (const key of ["count", "active"]) count(file, warnings[key], `warnings.${key}`);
+  if (root["power"] !== null) {
+    const power = rec(file, root["power"], "power");
+    count(file, power["customers_out"], "power.customers_out");
+    list(file, power["counties"], "power.counties").forEach((item, i) => {
+      const at = `power.counties[${i}]`;
+      const row = rec(file, item, at);
+      for (const key of ["fips", "name"]) str(file, row[key], `${at}.${key}`);
+      count(file, row["customers_out"], `${at}.customers_out`);
+      num(file, row["share_out"], `${at}.share_out`);
+    });
+  }
+  list(file, root["sources"], "sources").forEach((item, i) => {
+    const at = `sources[${i}]`;
+    const source = rec(file, item, at);
+    for (const key of ["source", "product"]) str(file, source[key], `${at}.${key}`);
+    bool(file, source["ok"], `${at}.ok`);
+    runTime(file, source["fetched_at"], `${at}.fetched_at`);
+    if (source["valid_time"] !== null) runTime(file, source["valid_time"], `${at}.valid_time`);
+    strOrNull(file, source["message"], `${at}.message`);
+  });
+  const files = rec(file, root["files"], "files");
+  for (const [key, name] of Object.entries(LIVE_FILES)) {
+    if (files[key] !== name) throw new DataError(file, `files.${key} is not ${name}`);
+  }
+  str(file, root["confidence"], "confidence");
+  return value as LiveFile;
 }

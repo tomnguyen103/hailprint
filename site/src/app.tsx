@@ -7,12 +7,20 @@ import { AreaBoundary } from "./shell/area-boundary";
 import { Layout } from "./shell/layout";
 import { EmptyState, ErrorState, LoadingState } from "./shell/states";
 import { useIndex } from "./state/index";
+import { useLive } from "./state/live";
 import { useRoute } from "./state/route";
 import { landingStorm } from "./storms/select";
 import { Workspace } from "./storms/workspace";
 import { TryIt } from "./try/try";
 
 const NO_INDEX = "No storm date is published yet.";
+
+function LiveMount({ newest }: { newest: string | null }) {
+  const live = useLive();
+  void newest;
+  if (live.status === "error") return <ErrorState error={live.error} onRetry={live.retry} />;
+  return live.showLoading ? <LoadingState file="live/now.json" /> : null;
+}
 
 export function App() {
   const { path, route } = useRoute();
@@ -21,17 +29,25 @@ export function App() {
   const newest = storms[0];
   const landing = landingStorm(storms);
   useEffect(() => {
-    if (route.kind === "redirect-latest" && landing) {
+    if (route.kind === "redirect-live") {
+      replace(href({ area: "live" }));
+    } else if (route.kind === "redirect-latest" && landing) {
       replace(href({ area: "storms", date: landing.storm_date, tab: "map" }));
     }
   }, [route.kind, landing]);
   const active: Area | null =
-    route.kind === "scorecard" || route.kind === "try" || route.kind === "method" || route.kind === "pipeline"
-      ? route.kind
-      : route.kind === "not-found" ? null : "storms";
+    route.kind === "redirect-live" || route.kind === "live"
+      ? "live"
+      : route.kind === "scorecard" || route.kind === "try" || route.kind === "method" || route.kind === "pipeline"
+        ? route.kind
+        : route.kind === "not-found" ? null : "storms";
   let body;
   if (route.kind === "not-found") {
     body = <EmptyState sentence="No page at this address." link={{ href: "/storms", label: "Storms" }} />;
+  } else if (route.kind === "redirect-live") {
+    body = null;
+  } else if (route.kind === "live") {
+    body = <LiveMount newest={newest?.storm_date ?? null} />;
   } else if (route.kind === "method") {
     body = <Method page={route.page} />;
   } else if (route.kind === "pipeline") {

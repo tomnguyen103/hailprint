@@ -4,7 +4,7 @@
 import { DATE } from "./data/constants";
 import { isStep, parseStep } from "./time/step";
 
-export const AREAS = ["storms", "scorecard", "try", "method", "pipeline"] as const;
+export const AREAS = ["live", "storms", "scorecard", "try", "method", "pipeline"] as const;
 export type Area = (typeof AREAS)[number];
 
 export const TABS = ["map", "parcels", "score", "data"] as const;
@@ -22,7 +22,7 @@ export type MethodPage = (typeof METHOD_PAGES)[number];
 export const PIPELINE_VIEWS = ["runs", "archive", "sources"] as const;
 export type PipelineView = (typeof PIPELINE_VIEWS)[number];
 
-export const AREA_LABELS: Record<Area, string> = { storms: "Storms", scorecard: "Scorecard", try: "Try it", method: "Method", pipeline: "Pipeline" };
+export const AREA_LABELS: Record<Area, string> = { live: "Live", storms: "Storms", scorecard: "Scorecard", try: "Try it", method: "Method", pipeline: "Pipeline" };
 export const TAB_LABELS: Record<Tab, string> = { map: "Map", parcels: "Parcels", score: "Score", data: "Data" };
 export const METHOD_LABELS: Record<MethodPage, string> = {
   data: "Data", "storm-date": "Storm date", "size-classes": "Size classes", scoring: "Scoring", limits: "Limits", impacts: "Impacts",
@@ -30,7 +30,10 @@ export const METHOD_LABELS: Record<MethodPage, string> = {
 export const PIPELINE_LABELS: Record<PipelineView, string> = { runs: "Runs", archive: "Archive", sources: "Sources" };
 
 export type Route =
+  // `/` lands on the live view; bare `/storms` still lands on the newest storm date.
+  | { kind: "redirect-live" }
   | { kind: "redirect-latest" }
+  | { kind: "live" }
   // step is the map step of /map/<step>; null means the default step (see time/step.ts).
   | { kind: "storms"; date: string; tab: Tab; step: number | null }
   | { kind: "scorecard"; view: ScorecardView }
@@ -40,6 +43,7 @@ export type Route =
   | { kind: "not-found" };
 
 export type Target =
+  | { area: "live" }
   | { area: "storms"; date: string; tab?: Tab; step?: number }
   | { area: "scorecard"; view?: ScorecardView }
   | { area: "try"; tool?: TryTool }
@@ -60,8 +64,9 @@ function subOf<T extends string>(options: readonly T[], parts: string[]): T | nu
 export function match(path: string): Route {
   const parts = path.split("/").filter((p) => p !== "");
   const [head, date, tab, ...rest] = parts;
-  if (head === undefined) return { kind: "redirect-latest" };
+  if (head === undefined) return { kind: "redirect-live" };
   if (!isArea(head)) return { kind: "not-found" };
+  if (head === "live") return parts.length === 1 ? { kind: "live" } : { kind: "not-found" };
   if (head === "scorecard") {
     const view = subOf(SCORECARD_VIEWS, parts);
     return view === null ? { kind: "not-found" } : { kind: "scorecard", view };
@@ -92,6 +97,7 @@ export function match(path: string): Route {
 }
 
 export function href(target: Target): string {
+  if (target.area === "live") return "/live";
   if (target.area === "storms") {
     const tab = target.tab ?? "map";
     const step = tab === "map" && target.step !== undefined && isStep(target.step) ? `/${target.step}` : "";
