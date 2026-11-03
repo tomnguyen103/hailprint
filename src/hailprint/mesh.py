@@ -14,6 +14,7 @@ import numpy as np
 import xarray as xr
 from botocore import UNSIGNED
 from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 
 from hailprint.county import bbox
 
@@ -64,7 +65,10 @@ def list_keys(client, product: str, day: date) -> list[str]:
         kwargs = {"Bucket": BUCKET, "Prefix": prefix}
         if token is not None:
             kwargs["ContinuationToken"] = token
-        resp = client.list_objects_v2(**kwargs)
+        try:
+            resp = client.list_objects_v2(**kwargs)
+        except (BotoCoreError, ClientError, OSError) as exc:
+            raise RuntimeError(f"MESH list failed for {prefix}: {exc}") from exc
         for obj in resp.get("Contents", []) or []:
             key = obj.get("Key", "")
             if key and not key.endswith("/"):

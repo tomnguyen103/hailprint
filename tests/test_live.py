@@ -8,6 +8,7 @@ from pathlib import Path
 import eccodes
 import numpy as np
 import pytest
+from botocore.exceptions import ClientError
 
 from hailprint import __main__ as cli
 from hailprint import county, live, mesh, publish, swath
@@ -520,3 +521,40 @@ def test_convective_boundary_at_exact_12z(tmp_path):
     now = read(tmp_path, "now.json")
     assert now["reports"] == {"count": 2, "max_size_in": 1.5}
     assert now["warnings"] == {"count": 2, "active": 1}
+
+
+def test_last_hour_s3_client_error_marks_source_failed(tmp_path):
+    class FlakyHourMrms(FakeMrms):
+        def list_objects_v2(self, *, Bucket, Prefix="", ContinuationToken=None):
+            if live.HOUR_PRODUCT in Prefix:
+                raise ClientError(
+                    {"Error": {"Code": "SlowDown", "Message": "Reduce your request rate"}},
+                    "ListObjectsV2",
+                )
+            return super().list_objects_v2(
+                Bucket=Bucket, Prefix=Prefix, ContinuationToken=ContinuationToken
+            )
+
+    client = FlakyHourMrms({_key(DAY, "20261103-133000"): grib(field(30.0))})
+    live.write(live.build(NOW, client, QUIET), tmp_path)
+
+    now = read(tmp_path, "now.json")
+    assert now["last_hour"] is None
+    hour_row = next(s for s in now["sources"] if s["product"] == live.HOUR_PRODUCT)
+    assert hour_row["ok"] is False
+    assert "SlowDown" in hour_row["message"]
+
+
+def test_window_warnings_spans_three_convective_days_when_mesh_lags():
+    start = datetime(2026, 11, 1, 11, 0, tzinfo=UTC)
+    run_time = datetime(2026, 11, 3, 12, 30, tzinfo=UTC)
+    sbw_late = json.dumps(
+        {
+            "type": "FeatureCollection",
+            "features": [
+                warning(1, "SV", "2026-11-03T12:05:00Z", "2026-11-03T12:45:00Z"),
+            ],
+        }
+    )
+    rows = live.window_warnings(sbw_late, start, run_time)
+    assert rows["eventid"].tolist() == [1]

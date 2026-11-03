@@ -16,7 +16,6 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
-import xarray as xr
 
 from hailprint import county, files, mesh, net, odin, parcels, power, publish, reports, sbw, swath
 from hailprint.score import REPORT_SOURCE
@@ -115,15 +114,10 @@ def newest_key(client, product: str, now: datetime) -> str:
     raise RuntimeError(f"no {product} key in the last {DAYS_BACK} UTC day folders")
 
 
-def _max_mm(da: xr.DataArray) -> float | None:
-    """The largest cell in mm, rounded as `ingest` rounds it, or None when no cell is valid."""
-    return None if bool(da.isnull().all()) else round(float(da.max()), 2)
-
-
 def build_swath(path: Path, storm_date: date) -> tuple[gpd.GeoDataFrame, float | None]:
     """The swath classes and the largest cell of one MESH file, as `ingest` builds them."""
     da = mesh.decode(path)
-    return swath.build_swaths(da, storm_date), _max_mm(da)
+    return swath.build_swaths(da, storm_date), swath.max_mesh_mm(da)
 
 
 def _fetch(client, key: str, raw_dir: Path) -> Path:
@@ -174,7 +168,7 @@ def _last_hour(client, now: datetime, raw_dir: Path) -> tuple[Doc | None, Doc]:
     try:
         key = newest_key(client, HOUR_PRODUCT, now)
         valid = valid_time(key)
-        max_mm = _max_mm(mesh.decode(_fetch(client, key, raw_dir)))
+        max_mm = swath.max_mesh_mm(mesh.decode(_fetch(client, key, raw_dir)))
     except SOURCE_ERRORS as exc:
         return None, _failed(mesh.BUCKET, HOUR_PRODUCT, exc, fetched_at=now)
     block = {"key": key, "valid_time": publish.utc_text(valid), "max_mesh_mm": max_mm}
@@ -220,13 +214,16 @@ def window_reports(
 def window_warnings(text: str, start: datetime, run_time: datetime) -> gpd.GeoDataFrame:
     """The HGX SV, TO, and FF warnings (significance W) that overlap [start, run_time].
 
-    `sbw.parse` keeps the polygons of one impact window (48 h from 12Z). The two impact
-    windows from the storm date of the start cover [start, run_time], and the overlap rule
-    of `sbw.parse` (begin before the end, end after the start) then applies to the live window.
+    `sbw.parse` keeps the polygons of one impact window (48 h from 12Z). The impact
+    windows from the convective day of `start` through `run_time` cover [start, run_time],
+    and the overlap rule of `sbw.parse` then applies to the live window.
     """
     first = convective_date_of(start)
+    last = convective_date_of(run_time)
+    days = max(2, (last - first).days + 1)
     frame = pd.concat(
-        [sbw.parse(text, first), sbw.parse(text, first + timedelta(days=1))], ignore_index=True
+        [sbw.parse(text, first + timedelta(days=offset)) for offset in range(days)],
+        ignore_index=True,
     )
     frame = frame.drop_duplicates(subset=list(sbw.ALLOWED))
     keep = (frame["polygon_begin"] < run_time) & (frame["polygon_end"] > start)
