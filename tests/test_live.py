@@ -403,6 +403,15 @@ BAD_POINT = warning(9, "SV", "2026-11-03T13:40:00Z", "2026-11-03T14:30:00Z", {"t
         ({"spc_yesterday": _drop}, "spc-daily", "connection reset"),
         (
             {
+                "spc_today": lambda: (
+                    "Size,Location,County,State,Lat,Lon,Comments,Time\n100,Houston,Harris,TX,29.76,-95.37,x\n"
+                )
+            },
+            "spc-daily",
+            "malformed time",
+        ),
+        (
+            {
                 "warnings": lambda s, e: json.dumps(
                     {"type": "FeatureCollection", "features": [BAD_POINT]}
                 )

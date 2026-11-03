@@ -183,8 +183,8 @@ def _report_times(frame: gpd.GeoDataFrame, day: date) -> pd.Series:
     """
     times = []
     for text in frame["time"]:
-        if not re.fullmatch(r"\d{4}", text) or int(text[:2]) > 23 or int(text[2:]) > 59:
-            raise ValueError(f"SPC hail CSV has a malformed time: {text[:8]!r}")
+        if not re.fullmatch(r"\d{4}", str(text)) or int(text[:2]) > 23 or int(text[2:]) > 59:
+            raise ValueError(f"SPC hail CSV has a malformed time: {str(text)[:8]!r}")
         moment = datetime(day.year, day.month, day.day, int(text[:2]), int(text[2:]), tzinfo=UTC)
         times.append(moment if text >= "1200" else moment + timedelta(days=1))
     return pd.Series(times, index=frame.index, dtype="datetime64[ns, UTC]")
