@@ -4,7 +4,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 24px;
-  padding: 24px var(--gutter) 40px;
+  padding: 0;
 }
 
 .live-header {
@@ -197,7 +197,7 @@
 
 @media (max-width: 767px) {
   .live-page {
-    padding: 16px var(--gutter) 28px;
+    padding: 0;
     gap: 20px;
   }
 
