@@ -46,9 +46,11 @@ it("names a sentence that starts with an ing form", () => {
 it("names a sentence with passive voice", () => {
   const s1 = "Sentinel cells are masked before arithmetic.";
   const s2 = "A report is not scored.";
-  expect(proseFindings({ scoring: pageOf(`${s1} ${s2}`) })).toEqual([
+  const s3 = "A report is excluded.";
+  expect(proseFindings({ scoring: pageOf(`${s1} ${s2} ${s3}`) })).toEqual([
     { page: "scoring", rule: "passive", text: s1 },
     { page: "scoring", rule: "passive", text: s2 },
+    { page: "scoring", rule: "passive", text: s3 },
   ]);
 });
 
