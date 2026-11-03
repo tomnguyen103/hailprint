@@ -18,7 +18,7 @@ import geopandas as gpd
 import pandas as pd
 import xarray as xr
 
-from hailprint import cloud, county, files, mesh, net, odin, power, publish, reports, sbw, swath
+from hailprint import county, files, mesh, net, odin, parcels, power, publish, reports, sbw, swath
 from hailprint.score import REPORT_SOURCE
 
 DIR = "live"
@@ -40,6 +40,16 @@ KINDS = {
     NOW_FILE: "live",
 }
 _STAMP_RE = re.compile(r"_(\d{8}-\d{6})\.grib2\.gz$")
+_TEMP_PATH_RE = re.compile(
+    r"(?:/private)?/tmp/[^\s'\"]+"
+    r"|/var/folders/[^\s'\"]+"
+    r"|[A-Za-z]:[\\/][^\s'\"]*?(?:Temp|tmp|hailprint-live-)[^\s'\"]*",
+    re.IGNORECASE,
+)
+_REDACTED_RE = re.compile(
+    "|".join(re.escape(w) for w in (swath.FORBIDDEN_WORD, *parcels.OWNER_FIELDS)),
+    re.IGNORECASE,
+)
 
 Doc = publish.Doc
 
@@ -77,6 +87,11 @@ def valid_time(key: str) -> datetime:
     return datetime.strptime(match.group(1), "%Y%m%d-%H%M%S").replace(tzinfo=UTC)
 
 
+def convective_date_of(moment: datetime) -> date:
+    """The SPC convective day that holds the instant `moment` (12Z starts the new day)."""
+    return (moment.astimezone(UTC) - timedelta(hours=12)).date()
+
+
 def storm_date_of(end: datetime) -> date:
     """The SPC convective day that holds the window end.
 
@@ -94,8 +109,7 @@ def newest_key(client, product: str, now: datetime) -> str:
     today = now.astimezone(UTC).date()
     for back in range(DAYS_BACK):
         day = today - timedelta(days=back)
-        prefix = f"CONUS/{product}/{day:%Y%m%d}/"
-        keys = [k for k in cloud._list_keys(client, mesh.BUCKET, prefix) if _STAMP_RE.search(k)]
+        keys = [k for k in mesh.list_keys(client, product, day) if _STAMP_RE.search(k)]
         if keys:
             return max(keys, key=valid_time)
     raise RuntimeError(f"no {product} key in the last {DAYS_BACK} UTC day folders")
@@ -116,24 +130,43 @@ def _fetch(client, key: str, raw_dir: Path) -> Path:
     return mesh.download_many([key], raw_dir, client=client)[0]
 
 
-def _source(
-    source: str, product: str, ok: bool, valid: datetime | None, message: str | None
-) -> Doc:
-    """One row of now.json sources; a message longer than MESSAGE_CHARS is cut."""
-    if message is not None and len(message) > publish.MESSAGE_CHARS:
+def _clean_message(message: str) -> str:
+    """Sanitize a source failure message: redact temp paths, forbidden words, and owner fields."""
+    temp_root = re.escape(tempfile.gettempdir())
+    message = re.sub(rf"{temp_root}[\\/][^\s'\"]+", "[redacted]", message, flags=re.IGNORECASE)
+    message = _TEMP_PATH_RE.sub("[redacted]", message)
+    message = _REDACTED_RE.sub("[redacted]", message)
+    if len(message) > publish.MESSAGE_CHARS:
         message = message[: publish.MESSAGE_CHARS - 3] + "..."
+    return message
+
+
+def _source(
+    source: str,
+    product: str,
+    ok: bool,
+    valid: datetime | None,
+    message: str | None,
+    *,
+    fetched_at: datetime,
+) -> Doc:
+    """One row of now.json sources; a message is sanitized and cut to MESSAGE_CHARS."""
+    if message is not None:
+        message = _clean_message(message)
     return {
         "source": source,
         "product": product,
         "ok": ok,
-        "fetched_at": publish._utc_text(datetime.now(UTC)),
-        "valid_time": None if valid is None else publish._utc_text(valid),
+        "fetched_at": publish.utc_text(fetched_at),
+        "valid_time": None if valid is None else publish.utc_text(valid),
         "message": message,
     }
 
 
-def _failed(source: str, product: str, exc: Exception) -> Doc:
-    return _source(source, product, False, None, f"{type(exc).__name__}: {exc}")
+def _failed(source: str, product: str, exc: Exception, *, fetched_at: datetime) -> Doc:
+    return _source(
+        source, product, False, None, f"{type(exc).__name__}: {exc}", fetched_at=fetched_at
+    )
 
 
 def _last_hour(client, now: datetime, raw_dir: Path) -> tuple[Doc | None, Doc]:
@@ -143,9 +176,9 @@ def _last_hour(client, now: datetime, raw_dir: Path) -> tuple[Doc | None, Doc]:
         valid = valid_time(key)
         max_mm = _max_mm(mesh.decode(_fetch(client, key, raw_dir)))
     except SOURCE_ERRORS as exc:
-        return None, _failed(mesh.BUCKET, HOUR_PRODUCT, exc)
-    block = {"key": key, "valid_time": publish._utc_text(valid), "max_mesh_mm": max_mm}
-    return block, _source(mesh.BUCKET, HOUR_PRODUCT, True, valid, None)
+        return None, _failed(mesh.BUCKET, HOUR_PRODUCT, exc, fetched_at=now)
+    block = {"key": key, "valid_time": publish.utc_text(valid), "max_mesh_mm": max_mm}
+    return block, _source(mesh.BUCKET, HOUR_PRODUCT, True, valid, None, fetched_at=now)
 
 
 def _report_times(frame: gpd.GeoDataFrame, day: date) -> pd.Series:
@@ -173,7 +206,7 @@ def window_reports(
     """
     # shortcut: only today and yesterday are read, so just after 12Z the first minutes of the
     # window (before 12Z two days ago) hold no row; upgrade to the dated CSV when that matters
-    today = storm_date_of(run_time)
+    today = convective_date_of(run_time)
     frames = []
     for text, day in ((yesterday_text, today - timedelta(days=1)), (today_text, today)):
         frame = reports.nearby_reports(day, text)
@@ -191,7 +224,7 @@ def window_warnings(text: str, start: datetime, run_time: datetime) -> gpd.GeoDa
     windows from the storm date of the start cover [start, run_time], and the overlap rule
     of `sbw.parse` (begin before the end, end after the start) then applies to the live window.
     """
-    first = storm_date_of(start)
+    first = convective_date_of(start)
     frame = pd.concat(
         [sbw.parse(text, first), sbw.parse(text, first + timedelta(days=1))], ignore_index=True
     )
@@ -240,10 +273,13 @@ def build(now: datetime, client, fetchers: Fetchers) -> LiveResult:
             raise RuntimeError(f"{key}: {exc}") from exc
         last_hour, hour_source = _last_hour(client, now, raw_dir)
     name = key.rsplit("/", 1)[1]
-    sources = [_source(mesh.BUCKET, mesh.PRODUCT, True, end, None), hour_source]
+    sources = [_source(mesh.BUCKET, mesh.PRODUCT, True, end, None, fetched_at=now), hour_source]
 
     def rcpt(origins: list[dict[str, str]]) -> Doc:
         return publish.receipt(storm_date, origins, end)
+
+    def empty(origins: list[dict[str, str]]) -> Doc:
+        return {"type": "FeatureCollection", "receipt": rcpt(origins), "features": []}
 
     spc_origins = [
         {"source": REPORT_SOURCE, "product": publish.SPC_PRODUCT, "file": f} for f in SPC_FILES
@@ -252,36 +288,52 @@ def build(now: datetime, client, fetchers: Fetchers) -> LiveResult:
         report_rows = window_reports(
             fetchers.spc_today(), fetchers.spc_yesterday(), start, end, now
         )
-        sources.append(_source(REPORT_SOURCE, publish.SPC_PRODUCT, True, None, None))
+        reports_doc = publish.reports_doc(report_rows, rcpt(spc_origins))
+        publish.validate(reports_doc, "reports")
+        publish.dumps(reports_doc, "reports")
+        sizes = report_rows["size_in"].tolist()
+        sources.append(
+            _source(REPORT_SOURCE, publish.SPC_PRODUCT, True, None, None, fetched_at=now)
+        )
     except SOURCE_ERRORS as exc:
-        report_rows = None
-        sources.append(_failed(REPORT_SOURCE, publish.SPC_PRODUCT, exc))
+        reports_doc = empty(spc_origins)
+        sizes = []
+        sources.append(_failed(REPORT_SOURCE, publish.SPC_PRODUCT, exc, fetched_at=now))
     sbw_origin = {**sbw.METADATA, "file": SBW_FILE}
     try:
         warning_rows = window_warnings(fetchers.warnings(start, now), start, now)
-        sources.append(_source(sbw_origin["source"], sbw_origin["product"], True, None, None))
+        warnings_doc = publish.warnings_doc(warning_rows, rcpt([sbw_origin]))
+        publish.validate(warnings_doc, "warnings")
+        publish.dumps(warnings_doc, "warnings")
+        ends = warning_rows["polygon_end"].tolist()
+        sources.append(
+            _source(sbw_origin["source"], sbw_origin["product"], True, None, None, fetched_at=now)
+        )
     except SOURCE_ERRORS as exc:
-        warning_rows = None
-        sources.append(_failed(sbw_origin["source"], sbw_origin["product"], exc))
+        warnings_doc = empty([sbw_origin])
+        ends = []
+        sources.append(_failed(sbw_origin["source"], sbw_origin["product"], exc, fetched_at=now))
     try:
         power_block, slot = power_now(fetchers.odin(), now)
-        sources.append(_source(odin.METADATA["source"], odin.METADATA["product"], True, slot, None))
+        publish.dumps(power_block, "live")
+        sources.append(
+            _source(
+                odin.METADATA["source"], odin.METADATA["product"], True, slot, None, fetched_at=now
+            )
+        )
     except SOURCE_ERRORS as exc:
         power_block = None
-        sources.append(_failed(odin.METADATA["source"], odin.METADATA["product"], exc))
+        sources.append(
+            _failed(odin.METADATA["source"], odin.METADATA["product"], exc, fetched_at=now)
+        )
 
-    def empty(origins: list[dict[str, str]]) -> Doc:
-        return {"type": "FeatureCollection", "receipt": rcpt(origins), "features": []}
-
-    sizes = [] if report_rows is None else report_rows["size_in"].tolist()
-    ends = [] if warning_rows is None else warning_rows["polygon_end"].tolist()
     now_doc = {
         "kind": "live",
-        "run_time": publish._utc_text(now),
-        "window": {"start": publish._utc_text(start), "end": publish._utc_text(end)},
+        "run_time": publish.utc_text(now),
+        "window": {"start": publish.utc_text(start), "end": publish.utc_text(end)},
         "mesh": {
             "key": key,
-            "valid_time": publish._utc_text(end),
+            "valid_time": publish.utc_text(end),
             "max_mesh_mm": max_mm,
             "class_count": len(swaths),
         },
@@ -301,12 +353,8 @@ def build(now: datetime, client, fetchers: Fetchers) -> LiveResult:
     return LiveResult(
         {
             publish.SWATH_FILE: publish.swath_doc(swaths, rcpt([swath_origin])),
-            publish.REPORTS_FILE: empty(spc_origins)
-            if report_rows is None
-            else publish.reports_doc(report_rows, rcpt(spc_origins)),
-            publish.WARNINGS_FILE: empty([sbw_origin])
-            if warning_rows is None
-            else publish.warnings_doc(warning_rows, rcpt([sbw_origin])),
+            publish.REPORTS_FILE: reports_doc,
+            publish.WARNINGS_FILE: warnings_doc,
             NOW_FILE: now_doc,
         }
     )
