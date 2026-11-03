@@ -1,4 +1,4 @@
-// The one module that imports MapLibre. map-pane.tsx loads it with import().
+// The one module that imports MapLibre. Map views load it with import().
 import {
   type GeoJSONSource,
   type LngLatBoundsLike,

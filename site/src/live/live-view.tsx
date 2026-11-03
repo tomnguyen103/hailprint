@@ -3,6 +3,7 @@ import "../styles/pipeline.css";
 import "../styles/live.css";
 import type { LiveFile } from "../data/types";
 import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../format";
+import { ODIN_LABEL } from "../impact/power";
 import { href } from "../router";
 import { RULER } from "../ruler";
 import { Link } from "../shell/link";
@@ -62,7 +63,7 @@ export function LiveViewContent({
 
   const reportsNote = live.reports.max_size_in !== null ? `max ${formatInches(live.reports.max_size_in)}` : "50 km buffer";
   const powerValue = live.power === null ? "\u2014" : formatCount(live.power.customers_out);
-  const powerNote = live.power === null ? "unavailable" : "CenterPoint customers only";
+  const powerNote = live.power === null ? "unavailable" : ODIN_LABEL;
 
   return (
     <div class="live-page">

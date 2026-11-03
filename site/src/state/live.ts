@@ -37,11 +37,21 @@ export async function loadLive(): Promise<LiveData> {
   return { now, swath: swath.data, reports: reports.data, warnings: warnings.data, notes };
 }
 
+function mergeLive(prev: LiveData, next: LiveData): LiveData {
+  return {
+    now: next.now,
+    swath: next.swath ?? prev.swath,
+    reports: next.reports ?? prev.reports,
+    warnings: next.warnings ?? prev.warnings,
+    notes: next.notes,
+  };
+}
+
 /**
  * The live view data (`live/now.json` and the three layer files it names), loaded on mount
  * and refreshed every 2 minutes while the tab is visible or when the tab returns to visible.
  * A failed background refresh keeps the last good data untouched and advances `now`.
  */
 export function useLive(): Load<LiveData> & { showLoading: boolean; retry: () => void; now: Date } {
-  return usePolledLoad<LiveData>(LIVE_FILE, loadLive, LIVE_REFRESH_MS, (d) => d.now.run_time);
+  return usePolledLoad<LiveData>(LIVE_FILE, loadLive, LIVE_REFRESH_MS, (d) => d.now.run_time, mergeLive);
 }

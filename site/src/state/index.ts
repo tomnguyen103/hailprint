@@ -17,11 +17,14 @@ export function usePolledLoad<T>(
   start: () => Promise<T>,
   refreshMs: number,
   runTimeOf: (data: T) => string,
+  merge?: (prev: T, next: T) => T,
 ): Load<T> & { showLoading: boolean; retry: () => void; now: Date } {
   const initial = useLoad<T>(key, start);
   const [fresh, setFresh] = useState<T | null>(null);
   const [now, setNow] = useState<Date>(() => new Date());
   const runRefresh = useRef(latest<T>());
+  const initialRef = useRef<T | undefined>(undefined);
+  initialRef.current = initial.data;
 
   useEffect(() => {
     const data = initial.data;
@@ -53,7 +56,11 @@ export function usePolledLoad<T>(
           if (!live) return;
           setNow(new Date());
           if (next !== STALE) {
-            setFresh((prev) => (prev === null || runTimeOf(next) >= runTimeOf(prev) ? next : prev));
+            setFresh((prev) => {
+              const base = prev ?? initialRef.current ?? null;
+              if (base !== null && runTimeOf(next) < runTimeOf(base)) return prev;
+              return base !== null && merge ? merge(base, next) : next;
+            });
           }
         })
         .catch(() => {

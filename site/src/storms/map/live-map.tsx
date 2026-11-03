@@ -82,10 +82,13 @@ export function LiveMap({ swath, reports, warnings }: Props) {
     if (ready) handle.current?.setWarnings(warnings);
   }, [ready, warnings]);
 
+  const swathRunTime = swath?.receipt.run_time ?? null;
   useEffect(() => {
     if (!ready || !handle.current) return;
     handle.current.fit(swath ? boundsOf(swath) : null);
-  }, [ready, swath]);
+    // Re-fit only when the map becomes ready or the swath valid time changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, swathRunTime]);
 
   useEffect(() => {
     if (ready) handle.current?.setTheme(theme);
