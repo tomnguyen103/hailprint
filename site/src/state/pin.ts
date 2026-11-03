@@ -172,7 +172,7 @@ export function locateUser(): Promise<PinState> {
   const geo = typeof navigator !== "undefined" ? navigator.geolocation : undefined;
   if (!geo || typeof geo.getCurrentPosition !== "function") {
     return Promise.resolve(
-      setGeoFailure("unsupported", "Browser geolocation is not available in this environment."),
+      setGeoFailure("unsupported", "Browser geolocation is unavailable."),
     );
   }
 
@@ -200,7 +200,7 @@ export function locateUser(): Promise<PinState> {
             resolve(
               setGeoFailure(
                 "outside-metro",
-                "Your GPS location is outside the 8-county Houston Metro area. Pick a Metro preset or enter coordinates.",
+                "GPS location lies outside the 8-county Houston Metro. Pick a preset or enter coordinates.",
               ),
             );
             return;
@@ -216,15 +216,15 @@ export function locateUser(): Promise<PinState> {
           activeLocatePromise = null;
           if (err.code === 1) {
             resolve(
-              setGeoFailure("denied", "Location permission was denied. Enter coordinates or pick a Metro preset."),
+              setGeoFailure("denied", "Browser denied location access. Enter coordinates or pick a preset."),
             );
           } else if (err.code === 3) {
-            resolve(setGeoFailure("timeout", "Location request timed out. Try again or pick a Metro preset."));
+            resolve(setGeoFailure("timeout", "Location request timed out. Retry or pick a preset."));
           } else {
             resolve(
               setGeoFailure(
                 "unavailable",
-                "Current location is unavailable. Enter coordinates or pick a Metro preset.",
+                "Location is unavailable. Enter coordinates or pick a preset.",
               ),
             );
           }
@@ -234,7 +234,7 @@ export function locateUser(): Promise<PinState> {
     } catch {
       activeLocatePromise = null;
       resolve(
-        setGeoFailure("unavailable", "Current location is unavailable. Enter coordinates or pick a Metro preset."),
+        setGeoFailure("unavailable", "Location is unavailable. Enter coordinates or pick a preset."),
       );
     }
   });

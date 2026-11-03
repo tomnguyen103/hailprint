@@ -5,7 +5,7 @@ import { EmptyState } from "../shell/states";
 
 /** One section per source row: the product as the heading, the source under it, the storm dates as links. */
 export function Sources({ sources }: { sources: SourceRow[] }) {
-  if (sources.length === 0) return <EmptyState sentence="No source is published yet." />;
+  if (sources.length === 0) return <EmptyState sentence="No published sources." />;
   return (
     <>
       {sources.map((row) => (

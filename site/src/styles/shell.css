@@ -302,29 +302,6 @@
   color: var(--note-ink);
 }
 
-.appearance {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  margin: 0;
-  padding: 0;
-  border: 0;
-}
-
-.appearance legend {
-  float: left;
-  padding: 0;
-  margin-right: 4px;
-}
-
-.appearance-option {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-  min-height: 40px;
-  color: var(--ink);
-  cursor: pointer;
-}
 
 .receipt-list {
   display: grid;

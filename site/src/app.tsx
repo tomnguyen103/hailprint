@@ -13,7 +13,7 @@ import { landingStorm } from "./storms/select";
 import { Workspace } from "./storms/workspace";
 import { TryIt } from "./try/try";
 
-const NO_INDEX = "No storm date is published yet.";
+const NO_INDEX = "No storm dates in catalog.";
 
 export function App() {
   const { path, route } = useRoute();
@@ -60,7 +60,7 @@ export function App() {
   } else {
     const storm = storms.find((s) => s.storm_date === route.date);
     body = storm ? <Workspace index={index.data} storm={storm} tab={route.tab} />
-      : <EmptyState sentence={`No storm date ${route.date} is published.`} link={{ href: href({ area: "storms", date: newest.storm_date }), label: newest.storm_date }} />;
+      : <EmptyState sentence={`No storm date ${route.date} in catalog.`} link={{ href: href({ area: "storms", date: newest.storm_date }), label: newest.storm_date }} />;
   }
   return (
     <Layout active={active}>

@@ -15,7 +15,7 @@ import type { Block, FigureId } from "./content";
 import { GuessReveal } from "./guess-reveal";
 import "../styles/map.css";
 
-const NO_INDEX = "No storm date is published yet.";
+const NO_INDEX = "No storm dates in catalog.";
 const INDEX_FILE = "storms.json";
 /** The storm date the stamp figure draws; the newest storm date stands in when it is absent. */
 const EXAMPLE_DATE = "2024-05-28";
@@ -82,7 +82,7 @@ function Receipt({ index }: { index: StormsIndex }) {
   if (pairs.status === "loading") return pairs.showLoading ? <LoadingState file="pairs.json" /> : null;
   return (
     <p>
-      Receipt of the newest storm date, <span class="mono">{storm.storm_date}</span>:{" "}
+      Newest storm receipt (<span class="mono">{storm.storm_date}</span>):{" "}
       <ReceiptChip receipt={pairs.data[0]!.receipt} file="pairs.json" />
     </p>
   );
@@ -147,5 +147,5 @@ function GridFigure({ index }: { index: StormsIndex }) {
   const pooled = pooledRows(pairs.data, index.radius_km_default);
   if ("error" in pooled) return <ErrorState error={pooled.error} onRetry={pairs.retry} />;
   const row = pooled.rows[0];
-  return row ? <ContingencyGrid row={row} /> : <EmptyState sentence="No size class is scored yet." />;
+  return row ? <ContingencyGrid row={row} /> : <EmptyState sentence="No scored size classes." />;
 }

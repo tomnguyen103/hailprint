@@ -59,8 +59,8 @@ export function ScorePane({
           <h2>Per-class table</h2>
           <RadiusSlider value={activeRadiusKm} max={maxRadiusKm} onChange={setRadiusKm} />
           <p class="pane-note">
-            Scoring radius <span class="mono">{activeRadiusKm} km</span>, <span class="mono">{scored}</span> scored reports,{" "}
-            <span class="mono">{pairs.data.reports.length - scored}</span> excluded near the crop edge.
+            Radius <span class="mono">{activeRadiusKm} km</span> &middot; <span class="mono">{scored}</span> scored reports &middot;{" "}
+            <span class="mono">{pairs.data.reports.length - scored}</span> near crop edge.
           </p>
           <div class="table-scroll">
             <table class="table">

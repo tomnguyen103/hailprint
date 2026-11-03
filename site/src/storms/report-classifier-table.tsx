@@ -78,11 +78,10 @@ export function ReportClassifierTable({
     <section class="report-classifier-section" aria-label="Per-report contingency classifier">
       <h2>Per-report contingency classifier</h2>
       <p class="pane-note">
-        Classifies each SPC report at <span class="mono">R = {radiusKm} km</span> and{" "}
+        <span class="mono">R = {radiusKm} km</span> &middot;{" "}
         <span class="mono">
           &ge; {formatInches(thresholdIn)} ({thresholdMm} mm)
         </span>
-        .
       </p>
       <div class="classifier-filter-bar" role="group" aria-label="Filter reports by contingency outcome">
         {filterPills.map((p) => (

@@ -36,7 +36,7 @@ export function ErrorState({ error, onRetry }: { error: DataError; onRetry: () =
 export function LoadingState({ file }: { file: string }) {
   return (
     <p class="state state-loading" aria-live="polite">
-      Loading {file}.
+      Load {file}{"\u2026"}
     </p>
   );
 }
