@@ -527,7 +527,7 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     };
 
     const footerNodes = walk(footerTree);
-    expect(footerNodes.some((n) => n.type === "p" && String((n.props as { class?: string }).class).includes("footer-caveat") && n.props.children === CAVEAT)).toBe(true);
+    expect(footerNodes.some((n) => n.type === "p" && (n.props as { class?: string }).class === "caveat" && n.props.children === CAVEAT)).toBe(true);
     expect(footerNodes.some((n) => typeof n.type === "function")).toBe(false);
     expect(footerNodes.some((n) => n.type === "fieldset" || n.type === "input")).toBe(false);
 

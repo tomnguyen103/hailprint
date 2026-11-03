@@ -212,7 +212,7 @@ function ParcelsTable({
       {pickedZip !== null && index !== undefined ? (
         <section class="zip-ledger-section" aria-label={`Cross-storm exposure ledger for ZIP ${pickedZip}`}>
           <div class="zip-ledger-header">
-            <h2 class="zip-ledger-title">
+            <h2>
               ZIP <span class="mono">{pickedZip}</span> across storms (&ge; {formatInches(mark.threshold_in)})
             </h2>
             <button type="button" class="button button-small" onClick={() => setPickedZip(null)}>
@@ -232,7 +232,7 @@ function ParcelsTable({
             </p>
           ) : (
             <>
-              <p class="pane-note zip-ledger-sub">
+              <p class="pane-note">
                 <span class="mono">{ledgerEntries.length}</span> of <span class="mono">{zipStormCount}</span> storms
                 reach &ge; {formatInches(mark.threshold_in)} in ZIP <span class="mono">{pickedZip}</span>.
               </p>
