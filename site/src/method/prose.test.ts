@@ -47,10 +47,14 @@ it("names a sentence with passive voice", () => {
   const s1 = "Sentinel cells are masked before arithmetic.";
   const s2 = "A report is not scored.";
   const s3 = "A report is excluded.";
-  expect(proseFindings({ scoring: pageOf(`${s1} ${s2} ${s3}`) })).toEqual([
+  const s4 = "A file is used.";
+  const s5 = "A file is added.";
+  expect(proseFindings({ scoring: pageOf(`${s1} ${s2} ${s3} ${s4} ${s5}`) })).toEqual([
     { page: "scoring", rule: "passive", text: s1 },
     { page: "scoring", rule: "passive", text: s2 },
     { page: "scoring", rule: "passive", text: s3 },
+    { page: "scoring", rule: "passive", text: s4 },
+    { page: "scoring", rule: "passive", text: s5 },
   ]);
 });
 

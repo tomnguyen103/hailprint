@@ -7,7 +7,7 @@ export const SENTENCE_WORDS = 25;
 /** `swath.FORBIDDEN_WORD` in Python; joined here so the word itself stays out of the site source. */
 export const FORBIDDEN_WORD = ["dam", "age"].join("");
 const PASSIVE_VOICE =
-  /\b(is|are|was|were|be|been|being)\s+(?:not\s+|never\s+)?([a-z]{4,}ed|built|drawn|written|taken|given|made|done|known|shown|seen|found|kept|held|sent|hidden|proven|spoken|broken|chosen)\b/i;
+  /\b(is|are|was|were|be|been|being)\s+(?:not\s+|never\s+)?([a-z]{2,}ed|built|drawn|written|taken|given|made|done|known|shown|seen|found|kept|held|sent|hidden|proven|spoken|broken|chosen)\b/i;
 
 export interface Finding {
   page: string;
