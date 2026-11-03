@@ -380,7 +380,7 @@ export function InspectorView({
         <dd class="mono">
           {lat.toFixed(4)}, {lon.toFixed(4)}
         </dd>
-        <dt>Radar-estimated size</dt>
+        <dt>Radar-estimated hail size</dt>
         <dd>{covering}</dd>
         {pick.coveringMm === null ? (
           <>
@@ -479,6 +479,7 @@ type InspectorLiveState =
   | { key: string; status: "ready"; data: LiveStatusResult };
 
 /** The point inspector. Escape and Close call `onClose`; the caller returns focus. */
+/** Render the map point inspector drawer with radar, report, warning, impact, and live status sections. */
 export function Inspector(props: InspectorProps) {
   const panel = useRef<HTMLDivElement>(null);
   const { pin } = usePin();
@@ -493,11 +494,17 @@ export function Inspector(props: InspectorProps) {
     const reqKey = liveKey;
     const myEpoch = ++liveEpochRef.current;
     setLiveState({ key: reqKey, status: "loading" });
-    void fetchLiveStatus(props.pick.lngLat, liveFips).then((data) => {
-      if (liveEpochRef.current === myEpoch) {
-        setLiveState({ key: reqKey, status: "ready", data });
-      }
-    });
+    void fetchLiveStatus(props.pick.lngLat, liveFips)
+      .then((data) => {
+        if (liveEpochRef.current === myEpoch) {
+          setLiveState({ key: reqKey, status: "ready", data });
+        }
+      })
+      .catch(() => {
+        if (liveEpochRef.current === myEpoch) {
+          setLiveState({ key: reqKey, status: "idle" });
+        }
+      });
   };
 
   useEffect(() => {

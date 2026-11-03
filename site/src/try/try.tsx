@@ -4,6 +4,7 @@ import { guardPairs } from "../data/guard";
 import type { Pairs, Storm, StormsIndex } from "../data/types";
 import { pooledReceipt, pooledRows } from "../pool";
 import { TRY_TOOLS, href, type TryTool } from "../router";
+import { RADIUS_MAX_FALLBACK } from "../shell/radius-slider";
 import { PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { useAllFiles } from "../state/pairs-all";
@@ -65,7 +66,10 @@ export function useScopeRows(index: StormsIndex, scope: string, radius: number) 
     index.run_time,
   );
   const data = load.status === "ready" ? load.data : null;
-  const table = useMemo(() => (data === null ? null : pooledRows(data, radius)), [data, radius]);
+  const maxRadiusKm =
+    data !== null && data.length > 0 ? Math.min(...data.map((f) => f.radius_km_max)) : RADIUS_MAX_FALLBACK;
+  const activeRadius = Math.max(0, Math.min(maxRadiusKm, Math.round(radius)));
+  const table = useMemo(() => (data === null ? null : pooledRows(data, activeRadius)), [data, activeRadius]);
   const first = data?.[0];
   const receipt = useMemo(
     () => (data === null ? null : scope === ALL_SCOPE ? pooledReceipt(data, index) : (first?.receipt ?? null)),
@@ -75,7 +79,8 @@ export function useScopeRows(index: StormsIndex, scope: string, radius: number) 
     load,
     table,
     receipt,
-    radiusMax: first?.radius_km_max ?? null,
+    maxRadiusKm,
+    activeRadius,
     file: scope === ALL_SCOPE ? `pairs.json, pooled over ${storms.length} storm dates` : "pairs.json",
   };
 }

@@ -14,6 +14,7 @@ import { crossStormZipLedger, zipRows } from "./select";
 
 const FILE = "zip-counts.json";
 
+/** Render the storm parcel exposure summary, threshold selector, and filterable ZIP table. */
 export function ParcelsPane({ storm, index }: { storm: Storm; index?: StormsIndex }) {
   const path = storm.files.zip_counts;
   if (path === null) {
@@ -73,7 +74,7 @@ function ParcelsTable({
   };
 
   const ledgerItemError = allZipsLoad.itemErrors.find((e) => e !== null) ?? null;
-  const zipStormCount = index ? index.storms.filter((s) => s.files.zip_counts !== null).length : 25;
+  const zipStormCount = index ? index.storms.filter((s) => s.files.zip_counts !== null).length : 0;
   const ledgerEntries =
     pickedZip !== null && index !== undefined && allZipsLoad.status === "ready" && ledgerItemError === null
       ? crossStormZipLedger(index.storms, allZipsLoad.data, pickedZip, selected)
@@ -150,9 +151,13 @@ function ParcelsTable({
                   Download ZIP CSV
                 </button>
               </div>
-              <p class="pane-note">
-                Click any 5-digit ZIP code to inspect its exposure across all {zipStormCount} storms.
-              </p>
+              {index !== undefined &&
+              zipStormCount > 0 &&
+              rawRows.some((row) => /^\d{5}$/.test(row.zip)) ? (
+                <p class="pane-note">
+                  Click any 5-digit ZIP code to inspect its exposure across all {zipStormCount} storms.
+                </p>
+              ) : null}
               <div class="table-scroll">
                 <table class="table">
                   <thead>
@@ -178,7 +183,14 @@ function ParcelsTable({
                         <tr key={row.zip}>
                           <td>
                             {row.zip === "unknown" || !index ? (
-                              <span class="mono" title="Parcel row without a 77xxx Houston ZIP in HCAD">
+                              <span
+                                class="mono"
+                                title={
+                                  row.zip === "unknown"
+                                    ? "Parcel row without a 77xxx Houston ZIP in HCAD"
+                                    : undefined
+                                }
+                              >
                                 {row.zip}
                               </span>
                             ) : (

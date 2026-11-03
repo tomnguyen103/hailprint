@@ -155,17 +155,7 @@ export function internetSeries(file: InternetFile | null, fips: string): Interne
 
 /** The first step of the largest Harris value; null without a file, with no outage, or with only gaps. */
 export function harrisPeak(file: PowerFile | null): number | null {
-  const harris = file?.counties.find((c) => c.fips === HARRIS_FIPS);
-  if (harris === undefined) return null;
-  let peak: number | null = null;
-  let best = 0;
-  harris.out.forEach((value, step) => {
-    if (value !== null && value > best) {
-      best = value;
-      peak = step;
-    }
-  });
-  return peak;
+  return powerSeries(file, HARRIS_FIPS)?.peakStep ?? null;
 }
 
 export interface PowerPeakSummary {

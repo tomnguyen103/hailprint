@@ -7,7 +7,7 @@ import { RULER, diameterPx } from "../ruler";
 import { MetricText } from "../scorecard/metric-text";
 import { ThresholdCurve } from "../scorecard/threshold-curve";
 import { ContingencyGrid } from "../shell/contingency-grid";
-import { RADIUS_MAX_FALLBACK, RadiusSlider } from "../shell/radius-slider";
+import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
@@ -16,12 +16,13 @@ import { ALL_SCOPE, ScopeSelect, useScopeRows } from "./try";
 
 const DEFAULT_CLASS = 1; // quarter, 1.00 in
 
+/** Render the interactive radius and hail-size threshold tuning tool. */
 export function Tune({ index }: { index: StormsIndex }) {
   const [scope, setScope] = useState(ALL_SCOPE);
   const [radius, setRadius] = useState(index.radius_km_default);
   const [classIdx, setClassIdx] = useState(DEFAULT_CLASS);
   const [metric, setMetric] = useState<MetricKey>("hss");
-  const { load, table, receipt, radiusMax, file } = useScopeRows(index, scope, radius);
+  const { load, table, receipt, maxRadiusKm, activeRadius, file } = useScopeRows(index, scope, radius);
   const selectedStorm = scope === ALL_SCOPE ? undefined : index.storms.find((s) => s.storm_date === scope);
   const reportsLoad = useLoad<ReportsFile | null>(
     selectedStorm ? `tune:${selectedStorm.files.reports}` : "tune:reports:none",
@@ -67,7 +68,7 @@ export function Tune({ index }: { index: StormsIndex }) {
               stormDate={scope}
               pairs={singlePairs}
               reportsGeo={reportsGeo}
-              radiusKm={radius}
+              radiusKm={activeRadius}
               thresholdMm={mark.threshold_mm}
               thresholdIn={mark.threshold_in}
             />
@@ -80,7 +81,7 @@ export function Tune({ index }: { index: StormsIndex }) {
     <>
       <div class="try-controls">
         <ScopeSelect storms={index.storms} value={scope} onChange={setScope} label="Scope" withAll />
-        <RadiusSlider value={radius} max={radiusMax ?? RADIUS_MAX_FALLBACK} onChange={setRadius} />
+        <RadiusSlider value={activeRadius} max={maxRadiusKm} onChange={setRadius} />
         <div>
           <div class="radius-slider threshold-slider">
             <label for={sliderId}>Threshold</label>

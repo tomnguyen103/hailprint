@@ -16,6 +16,7 @@ import { ReportClassifierTable } from "./report-classifier-table";
 const FILE = "pairs.json";
 
 /** Render the per-class contingency table, contingency grid, and per-report classifier table for one storm date. */
+/** Render the single-storm verification scorecard and radius slider. */
 export function ScorePane({
   storm,
   radiusKm: defaultRadiusKm,
@@ -30,15 +31,18 @@ export function ScorePane({
   const [radiusKm, setRadiusKm] = useState(defaultRadiusKm);
 
   const data = pairs.status === "ready" ? pairs.data : null;
+  const maxRadiusKm = pairs.status === "ready" ? pairs.data.radius_km_max : 20;
+  const activeRadiusKm =
+    pairs.status === "ready" ? Math.max(0, Math.min(pairs.data.radius_km_max, Math.round(radiusKm))) : radiusKm;
   const table = useMemo<{ rows: TableRow[] } | { error: DataError } | null>(() => {
     if (data === null) return null;
     try {
-      return { rows: rescore(data, radiusKm) };
+      return { rows: rescore(data, activeRadiusKm) };
     } catch (error) {
       if (error instanceof DataError) return { error };
       return { error: new DataError(FILE, error instanceof Error ? error.message : String(error)) };
     }
-  }, [data, radiusKm]);
+  }, [data, activeRadiusKm]);
 
   if (pairs.status === "error") return <ErrorState error={pairs.error} onRetry={pairs.retry} />;
   if (pairs.status === "loading" || table === null) return pairs.showLoading ? <LoadingState file={FILE} /> : null;
@@ -46,16 +50,16 @@ export function ScorePane({
 
   const receipt = pairs.data.receipt;
   const row = table.rows.find((r) => r.threshold_mm === selected) ?? table.rows[0];
-  const scored = scoredCount(pairs.data, radiusKm);
+  const scored = scoredCount(pairs.data, activeRadiusKm);
   const reportsGeo = reports.status === "ready" ? reports.data : null;
   return (
     <>
       <div class="pane-grid">
         <section>
           <h2>Per-class table</h2>
-          <RadiusSlider value={radiusKm} max={pairs.data.radius_km_max} onChange={setRadiusKm} />
+          <RadiusSlider value={activeRadiusKm} max={maxRadiusKm} onChange={setRadiusKm} />
           <p class="pane-note">
-            Scoring radius <span class="mono">{radiusKm} km</span>, <span class="mono">{scored}</span> scored reports,{" "}
+            Scoring radius <span class="mono">{activeRadiusKm} km</span>, <span class="mono">{scored}</span> scored reports,{" "}
             <span class="mono">{pairs.data.reports.length - scored}</span> excluded near the crop edge.
           </p>
           <div class="table-scroll">
@@ -123,7 +127,7 @@ export function ScorePane({
           stormDate={storm.storm_date}
           pairs={pairs.data}
           reportsGeo={reportsGeo}
-          radiusKm={radiusKm}
+          radiusKm={activeRadiusKm}
           thresholdMm={row.threshold_mm}
           thresholdIn={row.threshold_in}
         />

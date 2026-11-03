@@ -5,7 +5,6 @@ import {
   coveringAt,
   coveringClass,
   distanceKm,
-  haversineKm,
   nearestReport,
   reportsWithinRadius,
   swathExposureAt,
@@ -20,14 +19,12 @@ function report(id: number, lon: number, lat: number, size_in = 1.5): Feature<Po
   };
 }
 
-describe("haversineKm and distanceKm", () => {
+describe("distanceKm", () => {
   it("is 0 for the same point", () => {
-    expect(haversineKm([-95.5, 29.8], [-95.5, 29.8])).toBe(0);
     expect(distanceKm([-95.5, 29.8], [-95.5, 29.8])).toBe(0);
   });
 
-  it("is about 96.5 km for one degree of longitude at 29.5 N", () => {
-    expect(Math.abs(haversineKm([-95.0, 29.5], [-96.0, 29.5]) - 96.5)).toBeLessThan(0.5);
+  it("is about 96.8 km for one degree of longitude at 29.5 N", () => {
     expect(Math.abs(distanceKm([-95.0, 29.5], [-96.0, 29.5]) - 96.8)).toBeLessThan(0.5);
   });
 });
@@ -183,5 +180,32 @@ describe("warningsAtPoint", () => {
     expect(nearby.nearbyWarnings).toHaveLength(2);
     expect(nearby.nearbyWarnings[0]?.phenomena).toBe("SV");
     expect(nearby.nearbyWarnings[0]?.distanceKm).toBeCloseTo(0.966, 2);
+  });
+
+  it("returns firstStep: null when a sub-step warning polygon falls strictly between two 15-minute step marks", () => {
+    const subStepWarnings: WarningsFile = {
+      type: "FeatureCollection",
+      receipt,
+      features: [
+        {
+          type: "Feature",
+          properties: {
+            phenomena: "SV",
+            significance: "W",
+            event_label: "Severe Thunderstorm Warning",
+            eventid: 99,
+            polygon_begin: "2024-05-28T12:02:00Z",
+            polygon_end: "2024-05-28T12:10:00Z",
+            product_id: "P99",
+          },
+          geometry: { type: "MultiPolygon", coordinates: [[square(-95.5, 29.7, -95.3, 29.8)]] },
+        },
+      ],
+    };
+
+    const res = warningsAtPoint([-95.4, 29.75], subStepWarnings, "2024-05-28");
+    expect(res.directWarnings).toHaveLength(1);
+    expect(res.directWarnings[0]?.firstStep).toBeNull();
+    expect(res.firstWarningStep).toBeNull();
   });
 });

@@ -15,22 +15,23 @@ import { ReceiptChip } from "../shell/receipt-chip";
 import { ReceiptList } from "../shell/receipt-list";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type Load, useLoad } from "../state/load";
+import { LAST_STEP, stepTime } from "../time/step";
 
 const FILE = "pairs.json";
 
 /** Distinct calendar years touched by the 48-hour impact window (192 steps of 15 min from 12:00 UTC on `stormDate`). */
 export function eagleiYearsFor(stormDate: string): string[] {
-  const start = new Date(`${stormDate}T12:00:00Z`);
+  const start = stepTime(stormDate, 0);
   if (Number.isNaN(start.getTime())) return [stormDate.slice(0, 4)];
-  const last = new Date(start.getTime() + 191 * 15 * 60 * 1000);
+  const last = stepTime(stormDate, LAST_STEP);
   return [...new Set([String(start.getUTCFullYear()), String(last.getUTCFullYear())])].sort();
 }
 
 /** Distinct UTC calendar days touched by the 48-hour impact window (`D`, `D+1`, `D+2`). */
 export function odinWindowDays(stormDate: string): string[] {
-  const start = new Date(`${stormDate}T12:00:00Z`);
+  const start = stepTime(stormDate, 0);
   if (Number.isNaN(start.getTime())) return [stormDate];
-  const last = new Date(start.getTime() + 191 * 15 * 60 * 1000);
+  const last = stepTime(stormDate, LAST_STEP);
   const startDayMs = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
   const lastDayMs = Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), last.getUTCDate());
   const days: string[] = [];
@@ -126,6 +127,7 @@ interface Props {
   fips: string;
 }
 
+/** Render the per-file provenance and data receipt pane for a storm date. */
 export function DataPane({ storm, reports: reportsProp, power, internet, fips }: Props) {
   const swath = useLoad<SwathFile>(`data:${storm.files.swath}`, () => fetchJson(storm.files.swath, guardSwath));
   const pairs = useLoad(`data:${storm.files.pairs}`, () => fetchJson(storm.files.pairs, guardPairs));
@@ -137,12 +139,9 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
   const zipCounts = useLoad<ZipCounts | null>(`data:${zipFile ?? "zips:none"}`, () =>
     zipFile === null ? Promise.resolve(null) : fetchJson(zipFile, guardZipCounts),
   );
-  const internalReports = useLoad<ReportsFile>(
+  const internalReports = useLoad<ReportsFile | null>(
     reportsProp ? "data:reports:external" : `data:${storm.files.reports}`,
-    () =>
-      reportsProp
-        ? Promise.resolve(null as unknown as ReportsFile)
-        : fetchJson(storm.files.reports, guardReports),
+    () => (reportsProp ? Promise.resolve(null) : fetchJson(storm.files.reports, guardReports)),
   );
   const reports = reportsProp ?? internalReports;
   const swathReceipt = swath.status === "ready" && swath.data !== null ? swath.data.receipt : null;

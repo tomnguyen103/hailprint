@@ -95,6 +95,8 @@ export function useStep(
   const { route } = useRoute();
   const pathStep = route.kind === "storms" ? route.step : null;
   const routeStep = resolveStep(pathStep, peak, reportFallback);
+  const pathStepRef = useRef<number | null>(pathStep);
+  pathStepRef.current = pathStep;
   const fallbackRef = useRef({ peak, reportFallback });
   fallbackRef.current = { peak, reportFallback };
   const [held, setHeld] = useState<Held | null>(null);
@@ -113,10 +115,11 @@ export function useStep(
       createWriter({
         delayMs: WRITE_MS,
         write: (next) => {
-          written.current = next;
-          if (!writeStep(date, next, PORTS)) {
-            written.current = null;
+          written.current = null;
+          if (!writeStep(date, next, PORTS) || next === pathStepRef.current) {
             hold(null);
+          } else {
+            written.current = next;
           }
         },
       }),
