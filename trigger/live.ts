@@ -4,7 +4,7 @@ import { schedules } from "@trigger.dev/sdk/v3";
 export const liveTask = schedules.task({
   id: "live",
   cron: "*/10 * * * *",
-  machine: "small-1x",
+  machine: "small-2x",
   queue: {
     name: "live",
     concurrencyLimit: 1,
