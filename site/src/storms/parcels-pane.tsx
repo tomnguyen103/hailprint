@@ -14,6 +14,7 @@ import { crossStormZipLedger, zipRows } from "./select";
 
 const FILE = "zip-counts.json";
 
+/** Render the storm parcel exposure summary, threshold selector, and filterable ZIP table. */
 export function ParcelsPane({ storm, index }: { storm: Storm; index?: StormsIndex }) {
   const path = storm.files.zip_counts;
   if (path === null) {
@@ -150,7 +151,9 @@ function ParcelsTable({
                   Download ZIP CSV
                 </button>
               </div>
-              {index !== undefined && zipStormCount > 0 ? (
+              {index !== undefined &&
+              zipStormCount > 0 &&
+              rawRows.some((row) => /^\d{5}$/.test(row.zip)) ? (
                 <p class="pane-note">
                   Click any 5-digit ZIP code to inspect its exposure across all {zipStormCount} storms.
                 </p>

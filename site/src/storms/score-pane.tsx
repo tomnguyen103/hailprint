@@ -16,6 +16,7 @@ import { ReportClassifierTable } from "./report-classifier-table";
 const FILE = "pairs.json";
 
 /** Render the per-class contingency table, contingency grid, and per-report classifier table for one storm date. */
+/** Render the single-storm verification scorecard and radius slider. */
 export function ScorePane({
   storm,
   radiusKm: defaultRadiusKm,

@@ -127,6 +127,7 @@ interface Props {
   fips: string;
 }
 
+/** Render the per-file provenance and data receipt pane for a storm date. */
 export function DataPane({ storm, reports: reportsProp, power, internet, fips }: Props) {
   const swath = useLoad<SwathFile>(`data:${storm.files.swath}`, () => fetchJson(storm.files.swath, guardSwath));
   const pairs = useLoad(`data:${storm.files.pairs}`, () => fetchJson(storm.files.pairs, guardPairs));

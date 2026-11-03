@@ -105,6 +105,7 @@ function renderCellError(label: string, err: DataError, onRetry: () => void) {
   );
 }
 
+/** Render the interactive coordinate and address hail exposure lookup tool. */
 export function PointCheck({ index }: { index: StormsIndex }) {
   const {
     pin,

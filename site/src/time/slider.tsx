@@ -28,19 +28,11 @@ export function eventJumpChips(input: {
 }): EventJumpChip[] {
   const chips: EventJumpChip[] = [];
   const bars = warningBars(input.warnings ?? null, input.date);
-  if (bars.length > 0) {
-    const earliest = Math.max(
-      0,
-      Math.min(
-        LAST_STEP,
-        Math.min(
-          ...bars.map((b) => {
-            const first = Math.ceil(b.from);
-            return first < b.to ? first : Math.floor(b.from);
-          }),
-        ),
-      ),
-    );
+  const coveredWarningSteps = bars
+    .map((b) => Math.ceil(b.from))
+    .filter((first, i) => first < bars[i]!.to);
+  if (coveredWarningSteps.length > 0) {
+    const earliest = Math.max(0, Math.min(LAST_STEP, Math.min(...coveredWarningSteps)));
     chips.push({
       id: "warning",
       label: "First warning",

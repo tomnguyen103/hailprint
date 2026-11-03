@@ -193,6 +193,7 @@ function warningFirstStep(date: string, beginIso: string, endIso: string): numbe
   return null;
 }
 
+/** Merge a warning polygon hit into the keyed map, keeping earliest begin, latest end, and minimum distance. */
 function mergeDirectWarning(prev: DirectWarning | undefined, p: WarningProps, step: number | null): DirectWarning {
   if (prev === undefined) {
     return {

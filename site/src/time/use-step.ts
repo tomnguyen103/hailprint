@@ -50,12 +50,8 @@ const PORTS: WritePorts = { pathname: () => window.location.pathname, replace: r
 export function writeStep(date: string, step: number, ports: WritePorts): boolean {
   const route = match(ports.pathname());
   if (route.kind !== "storms" || route.date !== date || route.tab !== "map") return false;
-  try {
-    ports.replace(date, step);
-    return true;
-  } catch {
-    return false;
-  }
+  ports.replace(date, step);
+  return true;
 }
 
 export interface Held {
@@ -119,11 +115,8 @@ export function useStep(
       createWriter({
         delayMs: WRITE_MS,
         write: (next) => {
-          if (!writeStep(date, next, PORTS)) {
-            written.current = null;
-            hold(null);
-          } else if (next === pathStepRef.current) {
-            written.current = null;
+          written.current = null;
+          if (!writeStep(date, next, PORTS) || next === pathStepRef.current) {
             hold(null);
           } else {
             written.current = next;

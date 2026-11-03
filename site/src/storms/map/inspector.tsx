@@ -479,6 +479,7 @@ type InspectorLiveState =
   | { key: string; status: "ready"; data: LiveStatusResult };
 
 /** The point inspector. Escape and Close call `onClose`; the caller returns focus. */
+/** Render the map point inspector drawer with radar, report, warning, impact, and live status sections. */
 export function Inspector(props: InspectorProps) {
   const panel = useRef<HTMLDivElement>(null);
   const { pin } = usePin();

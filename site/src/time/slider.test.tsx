@@ -335,6 +335,33 @@ describe("eventJumpChips", () => {
     });
     expect(chips).toEqual([{ id: "warning", label: "First warning", step: 1 }]);
   });
+
+  it("omits First warning when a sub-step warning covers no 15-minute step mark", async () => {
+    const { eventJumpChips } = await import("./slider");
+    const chips = eventJumpChips({
+      date: "2024-05-28",
+      warnings: {
+        type: "FeatureCollection",
+        receipt: {} as never,
+        features: [
+          {
+            type: "Feature",
+            properties: {
+              phenomena: "SV",
+              significance: "W",
+              event_label: "Severe Thunderstorm Warning",
+              eventid: 1,
+              polygon_begin: "2024-05-28T12:02:00Z",
+              polygon_end: "2024-05-28T12:10:00Z",
+              product_id: "HGX-SV-1",
+            },
+            geometry: { type: "MultiPolygon", coordinates: [] },
+          },
+        ],
+      },
+    });
+    expect(chips).toEqual([]);
+  });
 });
 
 describe("replaceStep", () => {
