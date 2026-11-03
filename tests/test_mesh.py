@@ -1,4 +1,5 @@
 import gzip
+import tracemalloc
 from datetime import date
 
 import numpy as np
@@ -274,3 +275,45 @@ def test_daily_max_recovers_from_truncated_cached_grib2_gz(tmp_path, monkeypatch
     da = mesh.daily_max(STORM_DATE, tmp_path)
     assert da.attrs["file_count"] == 1
     assert float(da.max()) == 30.0
+
+
+def test_decode_crops_conus_grid_within_memory_budget(tmp_path, monkeypatch):
+    keys = {
+        "Ni": 7000,
+        "Nj": 3500,
+        "longitudeOfFirstGridPointInDegrees": 230.005,
+        "latitudeOfFirstGridPointInDegrees": 54.995,
+        "iDirectionIncrementInDegrees": 0.01,
+        "jDirectionIncrementInDegrees": 0.01,
+        "jScansPositively": 0,
+        "bitmapPresent": 0,
+    }
+
+    def fake_values(handle):
+        arr = np.full(3500 * 7000, 31.75, dtype=np.float64)
+        arr[2524 * 7000 + 3464] = -3.0
+        return arr
+
+    monkeypatch.setattr(mesh.eccodes, "codes_new_from_message", lambda raw: object())
+    monkeypatch.setattr(mesh.eccodes, "codes_get", lambda handle, key: keys[key])
+    monkeypatch.setattr(mesh.eccodes, "codes_get_values", fake_values)
+    monkeypatch.setattr(mesh.eccodes, "codes_release", lambda handle: None)
+    grib = tmp_path / "MRMS_conus.grib2"
+    grib.write_bytes(b"x")
+
+    tracemalloc.start()
+    try:
+        da = mesh.decode(grib)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert peak < 250 * 1024 * 1024
+    assert da.dtype == np.float32
+    assert 0 < da.size < 15_000
+    assert np.all(np.diff(da.longitude.values) > 0)
+    assert np.all(np.diff(da.latitude.values) < 0)
+    assert np.isnan(float(da.sel(latitude=29.755, longitude=-95.355, method="nearest")))
+    assert float(da.max()) == 31.75
+    assert float(da.min()) == 31.75
+    assert da.attrs["units"] == "mm"

@@ -878,7 +878,7 @@ def test_trigger_live_task_runs_every_10_minutes_on_its_own_queue():
     live_ts = (paths.ROOT / "trigger" / "live.ts").read_text(encoding="utf-8")
     assert 'id: "live"' in live_ts
     assert 'cron: "*/10 * * * *"' in live_ts
-    assert 'machine: "small-1x"' in live_ts
+    assert 'machine: "small-2x"' in live_ts
     assert 'name: "live"' in live_ts
     assert "concurrencyLimit: 1" in live_ts
     assert '"cloud", "live"' in live_ts

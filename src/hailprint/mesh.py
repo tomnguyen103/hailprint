@@ -130,6 +130,7 @@ def decode(path: Path, max_bytes: int = MAX_DECODE_BYTES) -> xr.DataArray:
         handle = eccodes.codes_new_from_message(raw)
     except codes_err as exc:
         raise RuntimeError(f"bad GRIB2 message in {path}: {exc}") from exc
+    del raw
     try:
         # eccodes has no precise return types; these keys hold numbers in a MESH GRIB2 file
         ni = cast(int, eccodes.codes_get(handle, "Ni"))
@@ -152,15 +153,20 @@ def decode(path: Path, max_bytes: int = MAX_DECODE_BYTES) -> xr.DataArray:
         eccodes.codes_release(handle)
     lon = ((lon0 + dlon * np.arange(ni) + 180) % 360) - 180
     lat = lat0 - dlat * np.arange(nj)
-    da = xr.DataArray(
-        values, dims=("latitude", "longitude"), coords={"latitude": lat, "longitude": lon}
-    )
     min_lon, min_lat, max_lon, max_lat = bbox()
-    # latitude is stored descending, so the slice runs from max to min
-    da = da.sortby("longitude").sel(
-        longitude=slice(min_lon, max_lon), latitude=slice(max_lat, min_lat)
+    # slice the numpy array to the Harris bbox before the DataArray build
+    lat_keep = (lat >= min_lat) & (lat <= max_lat)
+    lon_keep = (lon >= min_lon) & (lon <= max_lon)
+    lon_cropped = lon[lon_keep]
+    lon_order = np.argsort(lon_cropped, kind="stable")
+    cropped = values[lat_keep][:, lon_keep][:, lon_order].astype(np.float32)
+    del values
+    da = xr.DataArray(
+        cropped,
+        dims=("latitude", "longitude"),
+        coords={"latitude": lat[lat_keep], "longitude": lon_cropped[lon_order]},
     )
-    da = mask_sentinels(da).astype(np.float32)
+    da = mask_sentinels(da)
     da.attrs.update(units="mm", units_source=UNITS_SOURCE, product=PRODUCT)
     return da
 
