@@ -9,6 +9,7 @@ import {
   MAX_RUNS,
   guardIndex,
   guardInternet,
+  guardLive,
   guardOutline,
   guardPairs,
   guardPipeline,
@@ -747,5 +748,52 @@ describe("guardInternet", () => {
     const promise = fetchJson("storms/2024-05-28/internet.json", guardInternet);
     await expect(promise).rejects.toBeInstanceOf(DataError);
     await expect(promise).rejects.toThrow(/^internet\.json: HTTP 404/);
+  });
+});
+
+describe("guardLive", () => {
+  const fixture = (state: "quiet" | "hail", name: string): Record<string, unknown> =>
+    JSON.parse(readFileSync(fileURLToPath(new URL(`../live/fixtures/${state}/${name}`, import.meta.url)), "utf8"));
+
+  it("passes the now.json of a real hailprint live run and of the 2024-05-28 fixture", () => {
+    const quiet = fixture("quiet", "now.json");
+    expect(guardLive(quiet)).toBe(quiet);
+    const hail = guardLive(fixture("hail", "now.json"));
+    expect(hail.mesh.class_count).toBe(6);
+    expect(hail.files).toEqual({ swath: "swath.geojson", reports: "reports.geojson", warnings: "warnings.geojson" });
+  });
+
+  it("passes the layer files of the fixture through the existing guards", () => {
+    expect(guardSwath(fixture("hail", "swath.geojson")).features).toHaveLength(6);
+    expect(guardReports(fixture("hail", "reports.geojson")).features).toHaveLength(10);
+    expect(guardWarnings(fixture("hail", "warnings.geojson")).features).toHaveLength(5);
+  });
+
+  it("accepts a null last_hour and a null power", () => {
+    const doc = { ...fixture("hail", "now.json"), last_hour: null, power: null };
+    expect(guardLive(doc).power).toBeNull();
+  });
+
+  const broken: [string, (doc: Record<string, unknown>) => void, string][] = [
+    ["kind", (d) => (d["kind"] = "storms"), "kind is not live"],
+    ["run_time", (d) => (d["run_time"] = "2026-11-03 14:00"), "run_time is not a run time"],
+    ["window", (d) => delete d["window"], "window is not an object"],
+    ["class_count", (d) => ((d["mesh"] as Record<string, unknown>)["class_count"] = 8), "mesh.class_count is not a class count"],
+    ["reports.count", (d) => ((d["reports"] as Record<string, unknown>)["count"] = -1), "reports.count is not a count"],
+    ["warnings.active", (d) => ((d["warnings"] as Record<string, unknown>)["active"] = 1.5), "warnings.active is not a count"],
+    ["sources.ok", (d) => (((d["sources"] as Record<string, unknown>[])[0]!)["ok"] = "yes"), "sources[0].ok is not a boolean"],
+    ["sources.empty", (d) => (d["sources"] = []), "sources is empty"],
+    ["sources.message", (d) => (((d["sources"] as Record<string, unknown>[])[0]!)["message"] = "x".repeat(201)), "sources[0].message exceeds 200 characters"],
+    ["mesh.max_mesh_mm", (d) => ((d["mesh"] as Record<string, unknown>)["max_mesh_mm"] = -1), "mesh.max_mesh_mm is below 0"],
+    ["warnings.active>count", (d) => ((d["warnings"] as Record<string, unknown>)["active"] = 99), "warnings.active exceeds warnings.count"],
+    ["power.share_out", (d) => ((((d["power"] as Record<string, unknown>)["counties"] as Record<string, unknown>[])[0]!)["share_out"] = 1.5), "power.counties[0].share_out is not in [0, 1]"],
+    ["power.fips", (d) => ((((d["power"] as Record<string, unknown>)["counties"] as Record<string, unknown>[])[0]!)["fips"] = "201"), "power.counties[0].fips is not a 5-digit FIPS"],
+    ["files", (d) => ((d["files"] as Record<string, unknown>)["swath"] = "../storms.json"), "files.swath is not swath.geojson"],
+    ["power", (d) => ((d["power"] as Record<string, unknown>)["counties"] = {}), "power.counties is not an array"],
+  ];
+  it.each(broken)("names the bad key: %s", (_, mutate, reason) => {
+    const doc = structuredClone(fixture("hail", "now.json"));
+    mutate(doc);
+    expect(() => guardLive(doc)).toThrow(new DataError("now.json", reason));
   });
 });

@@ -16,9 +16,9 @@ npm run check    # tsc --noEmit && vitest run && vite build
 
 ## Routes
 
-`/storms/<date>/map|parcels|score|data`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`,
+`/live`, `/storms/<date>/map|parcels|score|data`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`,
 `/method/<data|storm-date|size-classes|scoring|limits|impacts>`, `/pipeline/<runs|archive|sources>`. `/` redirects to
-the newest storm date with an impact layer (or the newest storm date when none has one), `/scorecard` opens the Table view, `/try` opens the Tune tool, `/method` opens the Data
+`/live`, `/storms` opens the newest storm date with an impact layer (or the newest storm date when none has one), `/scorecard` opens the Table view, `/try` opens the Tune tool, `/method` opens the Data
 page, and `/pipeline` opens Runs.
 
 ## Data

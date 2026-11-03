@@ -220,3 +220,36 @@ export interface PipelineFile {
   archive: ArchiveSummary | null;
   sources: SourceRow[];
 }
+
+/** One row of `now.json` sources: the fetch of one source in the live run. */
+export interface LiveSource {
+  source: string;
+  product: string;
+  ok: boolean;
+  fetched_at: string;
+  valid_time: string | null;
+  message: string | null;
+}
+
+/** One metro county in `now.json` power: the ODIN customers out now and the capped share out. */
+export interface LiveCounty {
+  fips: string;
+  name: string;
+  customers_out: number;
+  share_out: number;
+}
+
+/** `live/now.json`: the live window, the MESH summary, the layer counts, the power now, and the sources (live.schema.json). */
+export interface LiveFile {
+  kind: "live";
+  run_time: string;
+  window: { start: string; end: string };
+  mesh: { key: string; valid_time: string; max_mesh_mm: number | null; class_count: number };
+  last_hour: { key: string; valid_time: string; max_mesh_mm: number | null } | null;
+  reports: { count: number; max_size_in: number | null };
+  warnings: { count: number; active: number };
+  power: { customers_out: number; counties: LiveCounty[] } | null;
+  sources: LiveSource[];
+  files: { swath: "swath.geojson"; reports: "reports.geojson"; warnings: "warnings.geojson" };
+  confidence: string;
+}

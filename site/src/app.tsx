@@ -1,4 +1,5 @@
 import { useEffect } from "preact/hooks";
+import { LiveView } from "./live/live-view";
 import { Method } from "./method/method";
 import { Pipeline } from "./pipeline/pipeline";
 import { href, replace, type Area } from "./router";
@@ -21,17 +22,25 @@ export function App() {
   const newest = storms[0];
   const landing = landingStorm(storms);
   useEffect(() => {
-    if (route.kind === "redirect-latest" && landing) {
+    if (route.kind === "redirect-live") {
+      replace(href({ area: "live" }));
+    } else if (route.kind === "redirect-latest" && landing) {
       replace(href({ area: "storms", date: landing.storm_date, tab: "map" }));
     }
   }, [route.kind, landing]);
   const active: Area | null =
-    route.kind === "scorecard" || route.kind === "try" || route.kind === "method" || route.kind === "pipeline"
-      ? route.kind
-      : route.kind === "not-found" ? null : "storms";
+    route.kind === "redirect-live" || route.kind === "live"
+      ? "live"
+      : route.kind === "scorecard" || route.kind === "try" || route.kind === "method" || route.kind === "pipeline"
+        ? route.kind
+        : route.kind === "not-found" ? null : "storms";
   let body;
   if (route.kind === "not-found") {
     body = <EmptyState sentence="No page at this address." link={{ href: "/storms", label: "Storms" }} />;
+  } else if (route.kind === "redirect-live") {
+    body = null;
+  } else if (route.kind === "live") {
+    body = <LiveView newest={newest?.storm_date ?? null} />;
   } else if (route.kind === "method") {
     body = <Method page={route.page} />;
   } else if (route.kind === "pipeline") {

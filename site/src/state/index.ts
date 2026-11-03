@@ -8,21 +8,33 @@ const INDEX_FILE = "storms.json";
 export const REFRESH_MS = 3_600_000;
 
 /**
- * The storm index, loaded on mount and refreshed in the background when the tab
- * becomes visible or every hour while visible. A failed background refresh keeps
- * the existing ready index untouched.
+ * Load one resource with `useLoad` and refresh it in the background on `refreshMs`
+ * while the tab is visible and whenever the tab returns to visible.
+ * A failed background refresh keeps the last good data untouched and advances `now`.
  */
-export function useIndex(): Load<StormsIndex> & { showLoading: boolean; retry: () => void } {
-  const initial = useLoad<StormsIndex>(INDEX_FILE, () => fetchJson(INDEX_FILE, guardIndex));
-  const [fresh, setFresh] = useState<StormsIndex | null>(null);
-  const runRefresh = useRef(latest<StormsIndex>());
+export function usePolledLoad<T>(
+  key: string,
+  start: () => Promise<T>,
+  refreshMs: number,
+  runTimeOf: (data: T) => string,
+  merge?: (prev: T, next: T) => T,
+): Load<T> & { showLoading: boolean; retry: () => void; now: Date } {
+  const initial = useLoad<T>(key, start);
+  const [fresh, setFresh] = useState<T | null>(null);
+  const [now, setNow] = useState<Date>(() => new Date());
+  const runRefresh = useRef(latest<T>());
+  const initialRef = useRef<T | undefined>(undefined);
+  initialRef.current = initial.data;
 
   useEffect(() => {
-    if (!initial.data) return;
+    const data = initial.data;
+    if (!data) return;
+    setNow(new Date());
     setFresh((prev) => {
       if (prev === null) return null;
-      return initial.data.run_time >= prev.run_time ? null : prev;
+      return runTimeOf(data) >= runTimeOf(prev) ? null : prev;
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initial.data]);
 
   useEffect(() => {
@@ -39,22 +51,29 @@ export function useIndex(): Load<StormsIndex> & { showLoading: boolean; retry: (
     const refresh = () => {
       if (!live || !isVisible()) return;
       runRefresh
-        .current(() => fetchJson(INDEX_FILE, guardIndex))
+        .current(start)
         .then((next) => {
-          if (live && next !== STALE) {
-            setFresh((prev) => (prev === null || next.run_time >= prev.run_time ? next : prev));
+          if (!live) return;
+          setNow(new Date());
+          if (next !== STALE) {
+            setFresh((prev) => {
+              const base = prev ?? initialRef.current ?? null;
+              if (base !== null && runTimeOf(next) < runTimeOf(base)) return prev;
+              return base !== null && merge ? merge(base, next) : next;
+            });
           }
         })
         .catch(() => {
-          // Keep existing ready data when a background refresh fails.
+          // Keep existing ready data when a background refresh fails, and advance the clock.
+          if (live) setNow(new Date());
         });
     };
-    let timer = window.setInterval(refresh, REFRESH_MS);
+    let timer = window.setInterval(refresh, refreshMs);
     const onVisibility = () => {
       window.clearInterval(timer);
       if (isVisible()) {
         refresh();
-        timer = window.setInterval(refresh, REFRESH_MS);
+        timer = window.setInterval(refresh, refreshMs);
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
@@ -63,15 +82,30 @@ export function useIndex(): Load<StormsIndex> & { showLoading: boolean; retry: (
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshMs]);
 
   if (initial.status === "ready") {
     const chosen =
-      fresh !== null && fresh.run_time >= initial.data.run_time ? fresh : initial.data;
-    return { ...initial, data: chosen };
+      fresh !== null && runTimeOf(fresh) >= runTimeOf(initial.data) ? fresh : initial.data;
+    return { ...initial, data: chosen, now };
   }
   if (fresh !== null) {
-    return { status: "ready", data: fresh, showLoading: false, retry: initial.retry };
+    return { status: "ready", data: fresh, showLoading: false, retry: initial.retry, now };
   }
-  return initial;
+  return { ...initial, now };
+}
+
+/**
+ * The storm index, loaded on mount and refreshed in the background when the tab
+ * becomes visible or every hour while visible. A failed background refresh keeps
+ * the existing ready index untouched.
+ */
+export function useIndex(): Load<StormsIndex> & { showLoading: boolean; retry: () => void; now: Date } {
+  return usePolledLoad<StormsIndex>(
+    INDEX_FILE,
+    () => fetchJson(INDEX_FILE, guardIndex),
+    REFRESH_MS,
+    (d) => d.run_time,
+  );
 }

@@ -1,7 +1,7 @@
 ---
 name: Hailprint web
 status: locked
-archetype: { storms: analytics, scorecard: analytics, try: editor, method: editor, pipeline: monitoring }
+archetype: { live: monitoring, storms: analytics, scorecard: analytics, try: editor, method: editor, pipeline: monitoring }
 stitch-project: 6567773575427554988
 scope-sidebar: light
 ---
@@ -110,12 +110,14 @@ for internet. The county fill shows one ramp at a time.
 
 ## Shell
 
-- Top bar, one row: wordmark, five route tabs (Storms, Scorecard, Try it, Method,
-  Pipeline), theme toggle, source-code link. No route sidebar (5 areas).
+- Top bar, one row: wordmark, six route tabs (Live, Storms, Scorecard, Try it,
+  Method, Pipeline), theme toggle, source-code link. No route sidebar (6 areas).
+- Live area: monitoring page (`/live`, and the target of `/`) with the status line,
+  freshness chip, five-stat strip, rolling 24 h map, and source clocks table.
 - Storms area: light scope sidebar like a page tree (storm dates grouped by year,
   report-count badge), main pane with sub-tab routes (Map, Parcels, Score, Data),
   inspector drawer on map click.
-- Mobile < 768 px: tabs collapse into a bottom bar of five icons with labels; the
+- Mobile < 768 px: tabs collapse into a bottom bar of six icons with labels; the
   scope sidebar becomes a sheet; the inspector becomes a full-screen sheet.
 
 ## Motion

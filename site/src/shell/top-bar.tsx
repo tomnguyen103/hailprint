@@ -32,7 +32,7 @@ export function TopBar({ active }: { active: Area | null }) {
   );
 }
 
-/** Below 768 px the five areas move here: icon over label, sticky at the bottom. */
+/** Below 768 px the six areas move here: icon over label, sticky at the bottom. */
 export function BottomBar({ active }: { active: Area | null }) {
   return (
     <nav class="bottom-bar" aria-label="Areas">

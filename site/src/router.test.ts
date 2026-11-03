@@ -1,10 +1,23 @@
 import { expect, it } from "vitest";
-import { href, match } from "./router";
+import { AREA_LABELS, AREAS, href, match } from "./router";
 
-it("redirects the root and bare /storms to the newest storm date", () => {
-  expect(match("/")).toEqual({ kind: "redirect-latest" });
+it("sends the root to the live view and bare /storms to the newest storm date", () => {
+  expect(match("/")).toEqual({ kind: "redirect-live" });
   expect(match("/storms")).toEqual({ kind: "redirect-latest" });
   expect(match("/storms/")).toEqual({ kind: "redirect-latest" });
+});
+
+it("matches /live and /live/, and gives not-found below it", () => {
+  expect(match("/live")).toEqual({ kind: "live" });
+  expect(match("/live/")).toEqual({ kind: "live" });
+  expect(match("/live/x")).toEqual({ kind: "not-found" });
+  expect(href({ area: "live" })).toBe("/live");
+});
+
+it("puts Live first in the areas", () => {
+  expect(AREAS[0]).toBe("live");
+  expect(AREA_LABELS.live).toBe("Live");
+  expect(AREAS).toHaveLength(6);
 });
 
 it("resolves a storm date to the Map sub-tab by default", () => {
