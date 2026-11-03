@@ -58,9 +58,9 @@ export interface StormFiles {
 
 export interface Storm {
   storm_date: string;
-  report_count: number;
+  report_count: number | null;
   max_size_in: number | null;
-  report_source: string;
+  report_source: string | null;
   max_mesh_mm: number | null;
   scored_reports: number;
   excluded_reports: number;

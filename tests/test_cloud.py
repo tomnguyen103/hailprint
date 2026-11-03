@@ -706,3 +706,54 @@ def test_nightly_returns_nonzero_when_candidate_csv_missing_after_candidates(
     rc = cloud.nightly(lambda _argv: 0, tmp_path, env={"MAX_INGEST": "1"})
     assert rc == 1
     assert "no candidate-days.csv" in capsys.readouterr().err
+
+
+def test_config_from_env_rejects_non_https_endpoint():
+    env = dict(VALID_ENV)
+    env["SUPABASE_S3_ENDPOINT"] = "http://example.supabase.co/storage/v1/s3"
+    with pytest.raises(ValueError, match="SUPABASE_S3_ENDPOINT must start with https://"):
+        cloud.Config.from_env(env)
+
+
+def test_s3_client_rejects_single_colon_access_key_id():
+    cfg = cloud.Config(
+        endpoint="https://ref.storage.supabase.co/storage/v1/s3",
+        region="us-east-1",
+        access_key_id="ref:only_one_colon",
+        secret_access_key="anon-jwt",
+        state_bucket="hailprint-state",
+        public_bucket="hailprint-public",
+    )
+    with pytest.raises(
+        ValueError,
+        match="SUPABASE_S3_ACCESS_KEY_ID with ':' must have format project_ref:email:password",
+    ):
+        cloud.s3_client(cfg)
+
+
+def test_nightly_and_backfill_continue_when_score_or_eaglei_fails(tmp_path: Path, capsys):
+    cand_dir = tmp_path / "data" / "derived" / "index"
+    cand_dir.mkdir(parents=True)
+    (cand_dir / "candidate-days.csv").write_text(
+        "storm_date,report_count,max_size_in,has_12z,report_source\n",
+        encoding="utf-8",
+    )
+    nightly_calls: list[list[str]] = []
+
+    def fail_score_cli(argv: list[str]) -> int:
+        nightly_calls.append(list(argv))
+        return 1 if argv == ["score"] else 0
+
+    assert cloud.nightly(fail_score_cli, tmp_path, env={}) == 0
+    assert ["publish"] in nightly_calls
+    assert "score failed; publish goes on" in capsys.readouterr().err
+
+    backfill_calls: list[list[str]] = []
+
+    def fail_eaglei_cli(argv: list[str]) -> int:
+        backfill_calls.append(list(argv))
+        return 1 if argv[0] == "eaglei" else 0
+
+    assert cloud.backfill(fail_eaglei_cli, tmp_path, env={}) == 0
+    assert ["publish"] in backfill_calls
+    assert "eaglei failed; publish goes on" in capsys.readouterr().err

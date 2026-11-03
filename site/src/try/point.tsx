@@ -15,7 +15,7 @@ import { ErrorState, LoadingState } from "../shell/states";
 import { countyAt } from "../state/county";
 import { useInternetAll, usePowerAll, useReportsAll, useWarningsAll } from "../state/impact-all";
 import { useLoad } from "../state/load";
-import { METRO_PRESETS, usePin } from "../state/pin";
+import { METRO_PRESETS, setPinCounties, usePin } from "../state/pin";
 import { useSwathsAll } from "../state/swaths-all";
 import { useTheme } from "../state/theme";
 import type { MapHandle } from "../storms/map/create-map";
@@ -207,6 +207,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   }, [ready, previewSwath, previewReports, countyData]);
 
   useEffect(() => {
+    setPinCounties(outlines);
     if (ready) handle.current?.setCounties(outlines);
   }, [ready, outlines]);
 
@@ -240,8 +241,9 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const check = (event: Event) => {
     event.preventDefault();
     const next = parsePoint(latText, lonText);
-    setInvalid(next === null);
-    if (next !== null) setPin(next, "manual");
+    const valid = next !== null && setPin(next, "manual");
+    setInvalid(!valid);
+
   };
 
   const onClearPin = () => {

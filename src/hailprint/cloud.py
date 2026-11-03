@@ -18,7 +18,7 @@ from typing import Any
 import boto3
 import pandas as pd
 
-from hailprint import candidates, odin, paths
+from hailprint import candidates, net, odin, paths
 
 ENV_VARS: tuple[str, ...] = (
     "SUPABASE_S3_ENDPOINT",
@@ -55,8 +55,11 @@ class Config:
         missing = [name for name in ENV_VARS if not env.get(name, "").strip()]
         if missing:
             raise ValueError(f"missing environment variables: {', '.join(missing)}")
+        endpoint = env["SUPABASE_S3_ENDPOINT"].strip()
+        if not endpoint.startswith("https://"):
+            raise ValueError("SUPABASE_S3_ENDPOINT must start with https://")
         return cls(
-            endpoint=env["SUPABASE_S3_ENDPOINT"].strip(),
+            endpoint=endpoint,
             region=env["SUPABASE_S3_REGION"].strip(),
             access_key_id=env["SUPABASE_S3_ACCESS_KEY_ID"].strip(),
             secret_access_key=env["SUPABASE_S3_SECRET_ACCESS_KEY"].strip(),
@@ -76,15 +79,22 @@ def _fetch_session_token(project_ref: str, anon_key: str, email: str, password: 
         raise ValueError(f"invalid Supabase project_ref: {project_ref!r}")
     url = f"https://{project_ref}.supabase.co/auth/v1/token?grant_type=password"
     payload = json.dumps({"email": email, "password": password}).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=payload,
-        headers={"apikey": anon_key, "Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
-        data = json.loads(resp.read().decode("utf-8"))
-    token = data.get("access_token")
+
+    def attempt() -> bytes:
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"apikey": anon_key, "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
+            raw = resp.read(65537)
+            if len(raw) > 65536:
+                raise RuntimeError("Supabase Auth token response exceeds 64 KiB")
+            return raw
+
+    data = json.loads(net._retry(attempt).decode("utf-8"))
+    token = data.get("access_token") if isinstance(data, dict) else None
     if not isinstance(token, str) or not token:
         raise ValueError("missing access_token from Supabase auth")
     return token
@@ -92,6 +102,10 @@ def _fetch_session_token(project_ref: str, anon_key: str, email: str, password: 
 
 def s3_client(config: Config) -> Any:
     if ":" in config.access_key_id:
+        if config.access_key_id.count(":") != 2:
+            raise ValueError(
+                "SUPABASE_S3_ACCESS_KEY_ID with ':' must have format project_ref:email:password"
+            )
         project_ref, email, password = config.access_key_id.split(":", 2)
         if not _PROJECT_REF_RE.fullmatch(project_ref):
             raise ValueError(f"invalid Supabase project_ref: {project_ref!r}")
@@ -287,6 +301,32 @@ def _log(msg: str) -> None:
     print(msg, file=sys.stderr)
 
 
+def _root_paths(root: Path) -> dict[str, Path]:
+    raw = root / "data" / "raw"
+    derived = root / "data" / "derived"
+    return {
+        "root": root,
+        "raw": raw,
+        "derived": derived,
+        "out": root / "out",
+        "site_data": root / "site" / "data",
+        "mesh_raw": raw / "mesh",
+        "swaths": derived / "swaths",
+        "parcels_gdb": raw / "hcad" / "extracted" / "Parcels.gdb",
+        "parcels": derived / "parcels",
+        "scores": derived / "scores",
+        "warnings": derived / "warnings",
+        "eaglei": derived / "eaglei",
+        "power": derived / "power",
+        "odin": derived / "odin",
+        "internet": derived / "internet",
+        "archive_index": derived / "index" / "mesh-archive.parquet",
+        "wcm": raw / "spc" / "1955-2025_hail.csv.zip",
+        "candidates": derived / "index" / "candidate-days.csv",
+        "daily": raw / "spc" / "daily",
+    }
+
+
 def nightly(
     run_cli: Callable[[list[str]], int],
     root: Path,
@@ -301,8 +341,9 @@ def nightly(
     if rc != 0:
         return rc
 
-    cand_path = root / "data" / "derived" / "index" / "candidate-days.csv"
-    swaths_dir = root / "data" / "derived" / "swaths"
+    rp = _root_paths(root)
+    cand_path = rp["candidates"]
+    swaths_dir = rp["swaths"]
     if not cand_path.is_file():
         _log("candidates failed: no candidate-days.csv")
         return 1
@@ -315,7 +356,7 @@ def nightly(
             d.isoformat() for d in candidates.missing_days(ranked, swaths_dir)[:max_ingest]
         ]
     if missing_dates:
-        gdb_dir = root / "data" / "raw" / "hcad" / "extracted" / "Parcels.gdb"
+        gdb_dir = rp["parcels_gdb"]
         has_gdb = gdb_dir.is_dir()
         if not has_gdb:
             _log("parcels skipped: no HCAD gdb")
@@ -329,9 +370,8 @@ def nightly(
                     f"rerun by hand: uv run hailprint parcels {storm_date}"
                 )
 
-    rc = run_cli(["score"])
-    if rc != 0:
-        return rc
+    if run_cli(["score"]) != 0:
+        _log("score failed; publish goes on")
 
     for step in ("warnings", "power", "internet"):
         if run_cli([step, "--missing"]) != 0:
@@ -355,14 +395,12 @@ def backfill(
     if run_cli(["warnings", "--missing"]) != 0:
         _log("warnings failed; publish goes on")
 
-    eaglei_dir = root / "data" / "derived" / "eaglei"
+    eaglei_dir = _root_paths(root)["eaglei"]
     missing_years = [
         str(y) for y in BACKFILL_EAGLEI_YEARS if not (eaglei_dir / f"eaglei-{y}.parquet").exists()
     ]
-    if missing_years:
-        rc = run_cli(["eaglei", *missing_years])
-        if rc != 0:
-            return rc
+    if missing_years and run_cli(["eaglei", *missing_years]) != 0:
+        _log("eaglei failed; publish goes on")
 
     for step in ("power", "internet"):
         if run_cli([step, "--missing"]) != 0:
@@ -379,30 +417,29 @@ def _cli_context(root: Path, now: datetime | None):
     from hailprint import __main__ as cli_mod
     from hailprint import archive
 
-    derived = root / "data" / "derived"
-    raw = root / "data" / "raw"
+    rp = _root_paths(root)
     patches: list[tuple[Any, str, Any]] = [
-        (paths, "ROOT", root),
-        (paths, "RAW_DIR", raw),
-        (paths, "DERIVED_DIR", derived),
-        (paths, "OUT_DIR", root / "out"),
-        (paths, "SITE_DATA_DIR", root / "site" / "data"),
-        (cli_mod, "RAW_DIR", raw / "mesh"),
-        (cli_mod, "DERIVED_DIR", derived / "swaths"),
-        (cli_mod, "OUT_DIR", root / "out"),
-        (cli_mod, "PARCELS_GDB", raw / "hcad" / "extracted" / "Parcels.gdb"),
-        (cli_mod, "PARCELS_DIR", derived / "parcels"),
-        (cli_mod, "SCORES_DIR", derived / "scores"),
-        (cli_mod, "WARNINGS_DIR", derived / "warnings"),
-        (cli_mod, "EAGLEI_DIR", derived / "eaglei"),
-        (cli_mod, "POWER_DIR", derived / "power"),
-        (cli_mod, "ODIN_DIR", derived / "odin"),
-        (cli_mod, "INTERNET_DIR", derived / "internet"),
-        (cli_mod, "SITE_DATA_DIR", root / "site" / "data"),
-        (archive, "INDEX_PATH", derived / "index" / "mesh-archive.parquet"),
-        (candidates, "WCM_PATH", raw / "spc" / "1955-2025_hail.csv.zip"),
-        (candidates, "CANDIDATES_PATH", derived / "index" / "candidate-days.csv"),
-        (candidates, "DAILY_DIR", raw / "spc" / "daily"),
+        (paths, "ROOT", rp["root"]),
+        (paths, "RAW_DIR", rp["raw"]),
+        (paths, "DERIVED_DIR", rp["derived"]),
+        (paths, "OUT_DIR", rp["out"]),
+        (paths, "SITE_DATA_DIR", rp["site_data"]),
+        (cli_mod, "RAW_DIR", rp["mesh_raw"]),
+        (cli_mod, "DERIVED_DIR", rp["swaths"]),
+        (cli_mod, "OUT_DIR", rp["out"]),
+        (cli_mod, "PARCELS_GDB", rp["parcels_gdb"]),
+        (cli_mod, "PARCELS_DIR", rp["parcels"]),
+        (cli_mod, "SCORES_DIR", rp["scores"]),
+        (cli_mod, "WARNINGS_DIR", rp["warnings"]),
+        (cli_mod, "EAGLEI_DIR", rp["eaglei"]),
+        (cli_mod, "POWER_DIR", rp["power"]),
+        (cli_mod, "ODIN_DIR", rp["odin"]),
+        (cli_mod, "INTERNET_DIR", rp["internet"]),
+        (cli_mod, "SITE_DATA_DIR", rp["site_data"]),
+        (archive, "INDEX_PATH", rp["archive_index"]),
+        (candidates, "WCM_PATH", rp["wcm"]),
+        (candidates, "CANDIDATES_PATH", rp["candidates"]),
+        (candidates, "DAILY_DIR", rp["daily"]),
     ]
     if now is not None:
         patches.append((cli_mod, "_utc_now", lambda: now))

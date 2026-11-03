@@ -36,14 +36,14 @@ export function Workspace({ index, storm, tab }: Props) {
   // The county of the power strip lives here, apart from the step and the play state: a pick moves neither.
   const [fips, setFips] = useState<string>(HARRIS_FIPS);
   const powerFile = storm.files.power;
-  const power = useLoad<PowerFile | null>(powerFile ?? "power:none", () =>
+  const power = useLoad<PowerFile | null>(powerFile === null ? "power:none" : `${index.run_time}:${powerFile}`, () =>
     powerFile === null ? Promise.resolve(null) : fetchJson(powerFile, guardPower),
   );
   const internetFile = storm.files.internet;
-  const internet = useLoad<InternetFile | null>(internetFile ?? "internet:none", () =>
+  const internet = useLoad<InternetFile | null>(internetFile === null ? "internet:none" : `${index.run_time}:${internetFile}`, () =>
     internetFile === null ? Promise.resolve(null) : fetchJson(internetFile, guardInternet),
   );
-  const reports = useLoad(storm.files.reports, () => fetchJson(storm.files.reports, guardReports));
+  const reports = useLoad(`${index.run_time}:${storm.files.reports}`, () => fetchJson(storm.files.reports, guardReports));
   const firstReportStep = reports.status === "ready" ? (reportTicks(reports.data)[0]?.step ?? null) : null;
   // The map opens at the Harris power peak when the file is valid, else the earliest SPC report step, else step 48.
   const { step, setStep } = useStep(

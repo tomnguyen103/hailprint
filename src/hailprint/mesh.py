@@ -20,6 +20,8 @@ BUCKET = "noaa-mrms-pds"
 PRODUCT = "MESH_Max_1440min_00.50"
 UNITS_SOURCE = "NSSL MRMS GRIB2 table; the GRIB2 file carries no unit string"
 MAX_DECODE_BYTES = 64 * 1024 * 1024
+MAX_GRID_DIM = 20_000
+MAX_GRID_CELLS = 50_000_000
 
 
 def key_for(storm_date: date) -> str:
@@ -73,6 +75,11 @@ def download_many(keys: list[str], raw_dir: Path, client=None, workers: int = 8)
     return paths
 
 
+def fetch_12z(storm_date: date, raw_dir: Path, client=None) -> Path:
+    """Download the 12Z file for one storm date if absent and return its local path."""
+    return download_many([key_for(storm_date)], raw_dir, client=client)[0]
+
+
 def mask_sentinels(da: xr.DataArray) -> xr.DataArray:
     """Replace every sentinel (-3 no coverage, -1 no data) with NaN."""
     return da.where(da >= 0)
@@ -84,8 +91,11 @@ def decode(path: Path, max_bytes: int = MAX_DECODE_BYTES) -> xr.DataArray:
     opener = gzip.open if path.suffix == ".gz" else open
     # eccodes keys, not cfgrib.open_dataset: cfgrib spends 7 s per file on the
     # 24.5 M-point coordinate build and eccodes reads the grid in 0.2 s
-    with opener(path, "rb") as fh:
-        raw = fh.read(max_bytes + 1)
+    try:
+        with opener(path, "rb") as fh:
+            raw = fh.read(max_bytes + 1)
+    except (OSError, EOFError) as err:
+        raise RuntimeError(f"not a gzip stream: {path}") from err
     if len(raw) > max_bytes:
         raise RuntimeError(f"MESH file {path.name} exceeds {max_bytes} bytes")
     codes_err = getattr(eccodes, "CodesInternalError", Exception)
@@ -97,6 +107,8 @@ def decode(path: Path, max_bytes: int = MAX_DECODE_BYTES) -> xr.DataArray:
         # eccodes has no precise return types; these keys hold numbers in a MESH GRIB2 file
         ni = cast(int, eccodes.codes_get(handle, "Ni"))
         nj = cast(int, eccodes.codes_get(handle, "Nj"))
+        if ni <= 0 or nj <= 0 or ni > MAX_GRID_DIM or nj > MAX_GRID_DIM or ni * nj > MAX_GRID_CELLS:
+            raise RuntimeError(f"grid dimensions out of bounds: {ni}x{nj} in {path}")
         lon0 = cast(float, eccodes.codes_get(handle, "longitudeOfFirstGridPointInDegrees"))
         lat0 = cast(float, eccodes.codes_get(handle, "latitudeOfFirstGridPointInDegrees"))
         dlon = cast(float, eccodes.codes_get(handle, "iDirectionIncrementInDegrees"))
@@ -131,6 +143,11 @@ def daily_max(storm_date: date, raw_dir: Path) -> xr.DataArray:
     path = local_path(key_for(storm_date), raw_dir)
     if not path.exists():
         raise FileNotFoundError(f"no MESH file at {path}")
-    da = decode(path)
+    try:
+        da = decode(path)
+    except RuntimeError:
+        path.unlink(missing_ok=True)
+        fetch_12z(storm_date, raw_dir)
+        da = decode(path)
     da.attrs["file_count"] = 1
     return da

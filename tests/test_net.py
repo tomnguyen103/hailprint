@@ -206,3 +206,35 @@ def test_open_stream_enforces_max_bytes_boundary(server, sleeps):
     ):
         stream.read()
     assert sleeps == []
+
+
+def test_open_stream_rejects_malformed_content_length_and_closes_response(monkeypatch):
+    class BadLenResponse(_Response):
+        closed_flag = False
+
+        def getheader(self, name):
+            return "not-an-int" if name == "Content-Length" else None
+
+        def close(self):
+            self.closed_flag = True
+            super().close()
+
+    resp = BadLenResponse(b"ok")
+    _script(monkeypatch, resp)
+
+    with pytest.raises(RuntimeError, match="invalid Content-Length"):
+        net.open_stream(URL)
+    assert resp.closed_flag is True
+
+
+def test_get_and_open_stream_reject_https_to_http_downgrade(monkeypatch):
+    class DowngradedResponse(_Response):
+        url = "http://example.test/insecure.csv"
+
+    _script(monkeypatch, DowngradedResponse(b"ok"))
+    with pytest.raises(RuntimeError, match="redirect downgraded from https to http"):
+        net.get(URL)
+
+    _script(monkeypatch, DowngradedResponse(b"ok"))
+    with pytest.raises(RuntimeError, match="redirect downgraded from https to http"):
+        net.open_stream(URL)

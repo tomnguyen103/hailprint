@@ -42,7 +42,7 @@ def archive_summary() -> dict | None:
         return None
     try:
         return publish.archive_summary(pd.read_parquet(archive.INDEX_PATH))
-    except (OSError, ValueError, KeyError) as exc:
+    except (OSError, ValueError, KeyError, *runs.UNREADABLE) as exc:
         raise ValueError(
             f"{archive.INDEX_PATH}: not a readable archive index, run hailprint index again"
         ) from exc
@@ -152,6 +152,7 @@ def run(
     )
     summary = archive_summary()
     run_time = now
+    built: list[tuple[date, dict[str, str], dict]] = []
     entries, written, failed = [], [], []
     file_count = 0
     for storm_date, swath_path in selected:
@@ -199,16 +200,28 @@ def run(
             print(f"{storm_date}: {detail}", file=sys.stderr)
             failed.append(storm_date.isoformat())
             continue
+        built.append((storm_date, texts, entry))
+    if not built:
+        raise RuntimeError(
+            "no storm date was published" + (f"; failed: {', '.join(failed)}" if failed else "")
+        )
+    built_dates = {storm_date.isoformat() for storm_date, _, _ in built}
+    untouched = [e for e in old if e["storm_date"] not in built_dates]
+    untouched_absent = (
+        frozenset((dirs.site / publish.STORMS_DIR).glob(f"*/{publish.INTERNET_FILE}"))
+        if not with_internet
+        else frozenset()
+    )
+    publish.index_receipts(
+        publish.merge_entries(untouched, [], dirs.site, absent=untouched_absent), dirs.site
+    )
+    for storm_date, texts, entry in built:
         folder = dirs.site / publish.STORMS_DIR / storm_date.isoformat()
         for name, body in texts.items():
             written.append(files.write_text_atomic(body, folder / name))
         entries.append(entry)
         file_count += len(texts)
         print(f"{storm_date}: published {len(texts)} files")
-    if not entries:
-        raise RuntimeError(
-            "no storm date was published" + (f"; failed: {', '.join(failed)}" if failed else "")
-        )
     stale = stale_files(written, with_internet, dirs.site)
     merged = publish.merge_entries(old, entries, dirs.site, absent=frozenset(stale))
     receipts = publish.index_receipts(merged, dirs.site)

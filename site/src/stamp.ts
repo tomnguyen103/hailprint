@@ -34,6 +34,8 @@ export function formatStormFieldNote(storm: Storm, receipt: Receipt): string {
     receipt.sources.length > 0
       ? receipt.sources.map((s) => `${s.source} ${s.product}`).join(", ")
       : "NOAA MRMS MESH_Max_1440min, SPC hail";
-  return `Hailprint field note — ${storm.storm_date}: ${storm.report_count} SPC hail reports (${maxPart}), report source ${storm.report_source}${maxMeshPart}${parcelPart}. Source: ${sources} (run ${receipt.run_time}, v${receipt.package_version}). ${receipt.confidence}`;
+  const reportCount = storm.report_count ?? 0;
+  const reportSource = storm.report_source ?? "spc-daily";
+  return `Hailprint field note — ${storm.storm_date}: ${reportCount} SPC hail reports (${maxPart}), report source ${reportSource}${maxMeshPart}${parcelPart}. Source: ${sources} (run ${receipt.run_time}, v${receipt.package_version}). ${receipt.confidence}`;
 }
 

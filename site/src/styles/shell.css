@@ -189,6 +189,8 @@
 }
 
 .button-small {
+  min-width: 40px;
+  justify-content: center;
   min-height: 40px;
   padding: 0 10px;
   font-size: 12px;

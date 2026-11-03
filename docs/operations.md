@@ -10,7 +10,7 @@ This guide covers the Trigger.dev tasks, the Supabase Storage buckets, and the e
   1. Downloads `raw/spc/` and `derived/` from `HAILPRINT_STATE_BUCKET` and all published files from `HAILPRINT_PUBLIC_BUCKET`.
   2. Runs `index` and `candidates --missing --top $MAX_INGEST` (default `5`).
   3. Runs `ingest` for each missing candidate day (and `parcels` when `data/raw/hcad/extracted/Parcels.gdb` exists). A failed ingest logs one line and skips to the next date.
-  4. Runs `score`, `warnings --missing`, `power --missing`, and `internet --missing`. A failed layer step logs `<step> failed; publish goes on`.
+  4. Runs `score`, `warnings --missing`, `power --missing`, and `internet --missing`. A failed score or layer step logs `<step> failed; publish goes on`.
   5. Runs `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`, per `docs/DECISIONS.md` row 14).
   6. Uploads changed state files (excluding `derived/odin/`) to `HAILPRINT_STATE_BUCKET`, uploads changed per-date files to `HAILPRINT_PUBLIC_BUCKET` before `storms.json` and `pipeline.json` with `Cache-Control: max-age=60`, and deletes stale remote public objects last.
 - `hailprint cloud odin` (`trigger/odin.ts`, cron `0 * * * *` UTC on `small-1x`, queue concurrency 1):
@@ -19,7 +19,7 @@ This guide covers the Trigger.dev tasks, the Supabase Storage buckets, and the e
   3. Uploads only `derived/odin/odin-<YYYY-MM-DD>.parquet`. Because `nightly` never uploads `derived/odin/`, the two schedules never race.
 - `hailprint cloud backfill` (`trigger/backfill.ts`, on-demand task on `medium-1x`, queue concurrency 1):
   1. Downloads state and public buckets.
-  2. Runs `warnings --missing`, `eaglei` for any of `2021`, `2023`, `2025` not yet in `derived/eaglei/`, `power --missing`, `internet --missing`, and `publish`.
+  2. Runs `warnings --missing`, `eaglei` for any of `2021`, `2023`, `2025` not yet in `derived/eaglei/`, `power --missing`, `internet --missing`, and `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`). A failed `warnings`, `eaglei`, `power`, or `internet` step logs `<step> failed; publish goes on`.
   3. Uploads changed state and public files.
 
 ## Environment variables

@@ -192,7 +192,7 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
             extra={
               <>
                 <dt>Report source</dt>
-                <dd class="mono">{storm.report_source}</dd>
+                <dd class="mono">{storm.report_source ?? "spc-daily"}</dd>
               </>
             }
           />

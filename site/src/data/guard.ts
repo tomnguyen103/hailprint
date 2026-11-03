@@ -52,7 +52,7 @@ function str(file: string, value: unknown, path: string): string {
 }
 
 function num(file: string, value: unknown, path: string): number {
-  if (typeof value !== "number") throw new DataError(file, `${path} is not a number`);
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new DataError(file, `${path} is not a number`);
   return value;
 }
 
@@ -96,9 +96,21 @@ export function guardIndex(value: unknown): StormsIndex {
     if (!DATE.test(str(file, storm["storm_date"], `${at}.storm_date`))) {
       throw new DataError(file, `${at}.storm_date is not a date`);
     }
-    for (const key of ["report_count", "scored_reports", "excluded_reports"]) num(file, storm[key], `${at}.${key}`);
+    for (const key of ["scored_reports", "excluded_reports"]) num(file, storm[key], `${at}.${key}`);
+    numOrNull(file, storm["report_count"], `${at}.report_count`);
+    if (
+      typeof storm["report_count"] === "number" &&
+      (!Number.isInteger(storm["report_count"]) || storm["report_count"] < 0)
+    ) {
+      throw new DataError(file, `${at}.report_count is not a count`);
+    }
     for (const key of ["max_size_in", "max_mesh_mm"]) numOrNull(file, storm[key], `${at}.${key}`);
-    str(file, storm["report_source"], `${at}.report_source`);
+    if (storm["report_source"] !== null) {
+      const source = str(file, storm["report_source"], `${at}.report_source`);
+      if (source !== "wcm" && source !== "spc-daily") {
+        throw new DataError(file, `${at}.report_source is not wcm or spc-daily`);
+      }
+    }
     list(file, storm["table"], `${at}.table`);
     const files = rec(file, storm["files"], `${at}.files`);
     for (const key of ["swath", "reports"]) filePath(file, files[key], `${at}.files.${key}`, GEOJSON_PATH);
@@ -221,8 +233,15 @@ export function guardReports(value: unknown): ReportsFile {
   const file = "reports.geojson";
   guardReceipt(file, rec(file, value, "collection")["receipt"]);
   guardCollection(file, value).forEach((props, i) => {
-    for (const key of ["time", "location"]) str(file, props[key], `features[${i}].properties.${key}`);
+    for (const key of ["time", "location", "county"]) str(file, props[key], `features[${i}].properties.${key}`);
     for (const key of ["id", "size_in"]) num(file, props[key], `features[${i}].properties.${key}`);
+    const features = list(file, rec(file, value, "collection")["features"], "features");
+    const coords = rec(file, rec(file, features[i], `features[${i}]`)["geometry"], `features[${i}].geometry`)[
+      "coordinates"
+    ];
+    if (!isPosition(coords)) {
+      throw new DataError(file, `features[${i}].geometry.coordinates is not a finite [lon, lat] position`);
+    }
   });
   return value as ReportsFile;
 }
@@ -388,5 +407,6 @@ export function guardInternet(value: unknown): InternetFile {
 /** The committed county outline: a FeatureCollection with no receipt. */
 export function guardOutline(value: unknown): FeatureCollection<MultiPolygon> {
   guardCollection("counties.geojson", value);
+  guardMultiPolygons("counties.geojson", value);
   return value as FeatureCollection<MultiPolygon>;
 }

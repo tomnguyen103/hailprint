@@ -10,7 +10,7 @@ import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
 import { countyAt } from "../state/county";
 import { type Load, useLoad } from "../state/load";
-import { usePin } from "../state/pin";
+import { setPinCounties, usePin } from "../state/pin";
 import { useTheme } from "../state/theme";
 import "../styles/map.css";
 import { TimeSlider, eventJumpChips } from "../time/slider";
@@ -155,6 +155,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     handle.current.setData(swathData, reportsData, countyData);
   }, [ready, swathData, reportsData, countyData]);
   useEffect(() => {
+    setPinCounties(outlines);
     if (ready) handle.current?.setCounties(outlines);
   }, [ready, outlines]);
   useEffect(() => {

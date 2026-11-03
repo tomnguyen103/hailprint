@@ -112,3 +112,15 @@ it("reports a body-read abort from FETCH_TIMEOUT_MS as a network error instead o
 });
 
 
+
+
+it("rejects a response whose Content-Length header exceeds MAX_JSON_BYTES", async () => {
+  setFetch(
+    async () =>
+      new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json", "content-length": String(16 * 1024 * 1024 + 1) },
+      }),
+  );
+  await expect(fetchJson("storms.json", (v) => v)).rejects.toThrow(/storms\.json: response exceeds 16 MiB/);
+});

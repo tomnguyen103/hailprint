@@ -6,12 +6,31 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from typing import Any
 
 TRIES = 3
 BACKOFF_S = (0.5, 1.0)
 CHUNK_BYTES = 1 << 20  # read-ahead buffer of a stream
 MAX_BYTES = 64 * 1024 * 1024  # 64 MB cap on whole-body responses
 MAX_STREAM_BYTES = 2 * 1024 * 1024 * 1024  # 2 GiB cap on chunked stream responses
+
+
+def _check_url(url: str) -> None:
+    if not url.startswith(("https://", "http://")):
+        raise ValueError(f"unsupported URL scheme: {url}")
+
+
+def _check_redirect(url: str, response: Any) -> None:
+    final_url = getattr(response, "url", None) or (
+        response.geturl() if hasattr(response, "geturl") else None
+    )
+    if (
+        url.startswith("https://")
+        and isinstance(final_url, str)
+        and final_url.startswith("http://")
+    ):
+        response.close()
+        raise RuntimeError(f"{url}: redirect downgraded from https to http")
 
 
 def _retry[T](attempt_once: Callable[[], T]) -> T:
@@ -36,9 +55,11 @@ def get(url: str, timeout: float = 30, max_bytes: int = MAX_BYTES) -> bytes:
 
     After the last try the last error propagates.
     """
+    _check_url(url)
 
     def fetch() -> bytes:
-        with urllib.request.urlopen(url, timeout=timeout) as response:
+        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310
+            _check_redirect(url, response)
             data = response.read(max_bytes + 1)
             if len(data) > max_bytes:
                 raise RuntimeError(f"response exceeds {max_bytes} bytes: {url}")
@@ -59,12 +80,24 @@ class _Body(io.RawIOBase):
         url: str = "",
         max_bytes: int = MAX_STREAM_BYTES,
     ) -> None:
+        _check_redirect(url, response)
         self._response = response
         self._url = url
         self._max_bytes = max_bytes
         self._read_bytes = 0
-        length = response.getheader("Content-Length")
-        self._left = int(length) if length is not None else None
+        length = response.getheader("Content-Length") if hasattr(response, "getheader") else None
+        if length is None:
+            self._left = None
+        else:
+            try:
+                parsed = int(length)
+            except ValueError as err:
+                response.close()
+                raise RuntimeError(f"{url}: invalid Content-Length {length!r}") from err
+            if parsed < 0:
+                response.close()
+                raise RuntimeError(f"{url}: invalid Content-Length {length!r}")
+            self._left = parsed
 
     def readable(self) -> bool:
         return True
@@ -97,5 +130,6 @@ def open_stream(
     """
     # shortcut: open_stream retries the connect only and has no Range resume, upgrade when a
     # stream breaks more than once per year
-    response = _retry(lambda: urllib.request.urlopen(url, timeout=timeout))
+    _check_url(url)
+    response = _retry(lambda: urllib.request.urlopen(url, timeout=timeout))  # noqa: S310
     return io.BufferedReader(_Body(response, url=url, max_bytes=max_bytes), CHUNK_BYTES)

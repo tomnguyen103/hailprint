@@ -1,7 +1,9 @@
 // Ephemeral in-memory location pin store shared across `/try/point` and `/storms/<date>/map`.
 // Never writes coordinates to localStorage, cookies, or URL query parameters.
+import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useEffect, useState } from "preact/hooks";
 import { METRO_BBOX, contains } from "../county";
+import { countyAt } from "./county";
 
 export type PinSource = "gps" | "manual" | "map" | "preset";
 
@@ -53,6 +55,7 @@ const INITIAL_STATE: PinState = {
 };
 
 let state: PinState = INITIAL_STATE;
+let pinCounties: FeatureCollection<MultiPolygon> | null = null;
 
 let activeLocatePromise: Promise<PinState> | null = null;
 let locateEpoch = 0;
@@ -60,6 +63,28 @@ const listeners = new Set<() => void>();
 
 function notify(): void {
   listeners.forEach((fn) => fn());
+}
+
+export function setPinCounties(outlines: FeatureCollection<MultiPolygon> | null): void {
+  pinCounties = outlines;
+  if (
+    state.pin !== null &&
+    outlines !== null &&
+    outlines.features.length > 0 &&
+    countyAt(state.pin.lngLat, outlines) === null
+  ) {
+    state = { ...state, pin: null };
+    notify();
+  }
+}
+
+export function isMetroCoordinate(lngLat: [number, number]): boolean {
+  return (
+    Number.isFinite(lngLat[0]) &&
+    Number.isFinite(lngLat[1]) &&
+    contains(METRO_BBOX, lngLat) &&
+    (pinCounties === null || pinCounties.features.length === 0 || countyAt(lngLat, pinCounties) !== null)
+  );
 }
 
 function setGeoFailure(reason: GeoFailureReason, message: string): PinState {
@@ -92,9 +117,9 @@ export function setPin(
     locateEpoch += 1;
     activeLocatePromise = null;
   }
-  if (!Number.isFinite(lngLat[0]) || !Number.isFinite(lngLat[1]) || !contains(METRO_BBOX, lngLat)) {
-    if (source !== "gps" && state.geoStatus !== "idle") {
-      state = { ...state, geoStatus: "idle" };
+  if (!isMetroCoordinate(lngLat)) {
+    if (source !== "gps" && (state.geoStatus !== "idle" || state.reason !== null || state.message !== null)) {
+      state = { ...state, geoStatus: "idle", reason: null, message: null };
       notify();
     }
     return false;
@@ -161,47 +186,57 @@ export function locateUser(): Promise<PinState> {
   notify();
 
   const promise = new Promise<PinState>((resolve) => {
-    geo.getCurrentPosition(
-      (pos) => {
-        if (epoch !== locateEpoch) {
+    try {
+      geo.getCurrentPosition(
+        (pos) => {
+          if (epoch !== locateEpoch) {
+            resolve(state);
+            return;
+          }
+          activeLocatePromise = null;
+          const lngLat: [number, number] = [pos.coords.longitude, pos.coords.latitude];
+          const accuracyM = Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null;
+          if (!isMetroCoordinate(lngLat)) {
+            resolve(
+              setGeoFailure(
+                "outside-metro",
+                "Your GPS location is outside the 8-county Houston Metro area. Pick a Metro preset or enter coordinates.",
+              ),
+            );
+            return;
+          }
+          setPin(lngLat, { source: "gps", label: "Current GPS location", accuracyM });
           resolve(state);
-          return;
-        }
-        activeLocatePromise = null;
-        const lngLat: [number, number] = [pos.coords.longitude, pos.coords.latitude];
-        const accuracyM = Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null;
-        if (!contains(METRO_BBOX, lngLat)) {
-          resolve(
-            setGeoFailure(
-              "outside-metro",
-              "Your GPS location is outside the 8-county Houston Metro area. Pick a Metro preset or enter coordinates.",
-            ),
-          );
-          return;
-        }
-        setPin(lngLat, { source: "gps", label: "Current GPS location", accuracyM });
-        resolve(state);
-      },
-      (err) => {
-        if (epoch !== locateEpoch) {
-          resolve(state);
-          return;
-        }
-        activeLocatePromise = null;
-        if (err.code === 1) {
-          resolve(
-            setGeoFailure("denied", "Location permission was denied. Enter coordinates or pick a Metro preset."),
-          );
-        } else if (err.code === 3) {
-          resolve(setGeoFailure("timeout", "Location request timed out. Try again or pick a Metro preset."));
-        } else {
-          resolve(
-            setGeoFailure("unavailable", "Current location is unavailable. Enter coordinates or pick a Metro preset."),
-          );
-        }
-      },
-      { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
-    );
+        },
+        (err) => {
+          if (epoch !== locateEpoch) {
+            resolve(state);
+            return;
+          }
+          activeLocatePromise = null;
+          if (err.code === 1) {
+            resolve(
+              setGeoFailure("denied", "Location permission was denied. Enter coordinates or pick a Metro preset."),
+            );
+          } else if (err.code === 3) {
+            resolve(setGeoFailure("timeout", "Location request timed out. Try again or pick a Metro preset."));
+          } else {
+            resolve(
+              setGeoFailure(
+                "unavailable",
+                "Current location is unavailable. Enter coordinates or pick a Metro preset.",
+              ),
+            );
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10_000, maximumAge: 60_000 },
+      );
+    } catch {
+      activeLocatePromise = null;
+      resolve(
+        setGeoFailure("unavailable", "Current location is unavailable. Enter coordinates or pick a Metro preset."),
+      );
+    }
   });
 
   activeLocatePromise = promise;
@@ -211,6 +246,7 @@ export function locateUser(): Promise<PinState> {
 export function resetPinStore(): void {
   locateEpoch += 1;
   activeLocatePromise = null;
+  pinCounties = null;
   state = INITIAL_STATE;
   notify();
 }

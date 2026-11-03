@@ -43,7 +43,7 @@ export function ScopeSidebar({ storms, current, open, onClose }: Props) {
                           </span>
                         ))}
                         <span class="badge">
-                          {storm.report_count}
+                          {storm.report_count ?? 0}
                           <span class="visually-hidden"> reports</span>
                         </span>
                       </span>

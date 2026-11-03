@@ -1938,3 +1938,11 @@ def test_a_warnings_parquet_without_metadata_skips_its_layer_and_publishes_the_d
     assert (two_days.storm_dir(EARLIER) / "warnings.geojson").exists()
     assert (two_days.storm_dir(LATER) / "swath.geojson").exists()
     assert not (two_days.storm_dir(LATER) / "warnings.geojson").exists()
+
+
+def test_corrupt_untouched_earlier_run_pairs_json_aborts_before_overwriting_new_date(two_days):
+    assert cli.main(["publish", str(EARLIER)]) == 0
+    (two_days.storm_dir(EARLIER) / "pairs.json").write_text("{corrupt", encoding="utf-8")
+
+    assert cli.main(["publish", str(LATER)]) == 1
+    assert not (two_days.storm_dir(LATER) / "swath.geojson").exists()

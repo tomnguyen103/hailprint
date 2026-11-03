@@ -178,7 +178,7 @@ def test_a_full_page_with_no_total_count_fails_the_snapshot():
         odin.snapshot(body, SLOT)
 
 
-@pytest.mark.parametrize("total", ['"150"', "150.0", "true", "[]"])
+@pytest.mark.parametrize("total", ['"150"', "150.0", "true", "[]", "-1"])
 def test_a_total_count_that_is_not_a_whole_number_fails_the_snapshot(total):
     body = f'{{"total_count": {total}, "results": []}}'
 
