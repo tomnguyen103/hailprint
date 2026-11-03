@@ -260,11 +260,17 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     const reqKey = liveKey;
     const myEpoch = ++liveEpochRef.current;
     setLiveState({ key: reqKey, status: "loading" });
-    void fetchLiveStatus(activePoint, pinnedFips).then((data) => {
-      if (liveEpochRef.current === myEpoch) {
-        setLiveState({ key: reqKey, status: "ready", data });
-      }
-    });
+    void fetchLiveStatus(activePoint, pinnedFips)
+      .then((data) => {
+        if (liveEpochRef.current === myEpoch) {
+          setLiveState({ key: reqKey, status: "ready", data });
+        }
+      })
+      .catch(() => {
+        if (liveEpochRef.current === myEpoch) {
+          setLiveState({ key: reqKey, status: "idle" });
+        }
+      });
   };
 
   const rows = useMemo((): StormPinRow[] => {

@@ -184,4 +184,31 @@ describe("warningsAtPoint", () => {
     expect(nearby.nearbyWarnings[0]?.phenomena).toBe("SV");
     expect(nearby.nearbyWarnings[0]?.distanceKm).toBeCloseTo(0.966, 2);
   });
+
+  it("returns firstStep: null when a sub-step warning polygon falls strictly between two 15-minute step marks", () => {
+    const subStepWarnings: WarningsFile = {
+      type: "FeatureCollection",
+      receipt,
+      features: [
+        {
+          type: "Feature",
+          properties: {
+            phenomena: "SV",
+            significance: "W",
+            event_label: "Severe Thunderstorm Warning",
+            eventid: 99,
+            polygon_begin: "2024-05-28T12:02:00Z",
+            polygon_end: "2024-05-28T12:10:00Z",
+            product_id: "P99",
+          },
+          geometry: { type: "MultiPolygon", coordinates: [[square(-95.5, 29.7, -95.3, 29.8)]] },
+        },
+      ],
+    };
+
+    const res = warningsAtPoint([-95.4, 29.75], subStepWarnings, "2024-05-28");
+    expect(res.directWarnings).toHaveLength(1);
+    expect(res.directWarnings[0]?.firstStep).toBeNull();
+    expect(res.firstWarningStep).toBeNull();
+  });
 });

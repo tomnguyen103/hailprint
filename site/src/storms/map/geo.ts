@@ -9,6 +9,7 @@ import {
   type ReportsFile,
   type SwathFile,
   type SwathProps,
+  type WarningProps,
   type WarningsFile,
 } from "../../data/types";
 import { containsPoint, distanceM, pointInMultiPolygon, pointToMultiPolygonDistanceM } from "../../geometry";
@@ -38,7 +39,7 @@ export function nearestReport<P>(
 ): { feature: Feature<Point, P>; km: number } | null {
   let best: { feature: Feature<Point, P>; km: number } | null = null;
   for (const feature of features) {
-    const km = haversineKm(point, feature.geometry.coordinates);
+    const km = distanceKm(point, feature.geometry.coordinates);
     if (best === null || km < best.km) best = { feature, km };
   }
   return best;
@@ -201,7 +202,30 @@ function warningFirstStep(date: string, beginIso: string, endIso: string): numbe
     const at = origin + s * STEP_MS;
     if (beginMs <= at && at < endMs) return s;
   }
-  return Math.max(0, Math.min(LAST_STEP, Math.floor((beginMs - origin) / STEP_MS)));
+  return null;
+}
+
+function mergeDirectWarning(prev: DirectWarning | undefined, p: WarningProps, step: number | null): DirectWarning {
+  if (prev === undefined) {
+    return {
+      phenomena: p.phenomena,
+      eventid: p.eventid,
+      event_label: p.event_label,
+      polygon_begin: p.polygon_begin,
+      polygon_end: p.polygon_end,
+      product_id: p.product_id,
+      firstStep: step,
+    };
+  }
+  const earlierBegin = Date.parse(p.polygon_begin) < Date.parse(prev.polygon_begin);
+  const laterEnd = Date.parse(p.polygon_end) > Date.parse(prev.polygon_end);
+  return {
+    ...prev,
+    polygon_begin: earlierBegin ? p.polygon_begin : prev.polygon_begin,
+    polygon_end: laterEnd ? p.polygon_end : prev.polygon_end,
+    product_id: earlierBegin ? p.product_id : prev.product_id,
+    firstStep: prev.firstStep === null ? step : step === null ? prev.firstStep : Math.min(prev.firstStep, step),
+  };
 }
 
 /** NWS storm-based warning polygons covering `point` (plus nearby warnings within `radiusKm`), deduplicated by `(phenomena, eventid)`. */
@@ -229,29 +253,7 @@ export function warningsAtPoint(
       if (step !== null && (firstWarningStep === null || step < firstWarningStep)) {
         firstWarningStep = step;
       }
-      const prev = byKey.get(key);
-      if (prev === undefined) {
-        byKey.set(key, {
-          phenomena: p.phenomena,
-          eventid: p.eventid,
-          event_label: p.event_label,
-          polygon_begin: p.polygon_begin,
-          polygon_end: p.polygon_end,
-          product_id: p.product_id,
-          firstStep: step,
-        });
-      } else {
-        const earlierBegin = Date.parse(p.polygon_begin) < Date.parse(prev.polygon_begin);
-        const laterEnd = Date.parse(p.polygon_end) > Date.parse(prev.polygon_end);
-        byKey.set(key, {
-          ...prev,
-          polygon_begin: earlierBegin ? p.polygon_begin : prev.polygon_begin,
-          polygon_end: laterEnd ? p.polygon_end : prev.polygon_end,
-          product_id: earlierBegin ? p.product_id : prev.product_id,
-          firstStep:
-            step !== null && (prev.firstStep === null || step < prev.firstStep) ? step : prev.firstStep,
-        });
-      }
+      byKey.set(key, mergeDirectWarning(byKey.get(key), p, step));
       continue;
     }
 
@@ -260,30 +262,10 @@ export function warningsAtPoint(
       if (dM !== null && dM > 0 && dM <= radiusM) {
         const distanceKm = dM / 1000;
         const prev = byNearbyKey.get(key);
-        if (prev === undefined) {
-          byNearbyKey.set(key, {
-            phenomena: p.phenomena,
-            eventid: p.eventid,
-            event_label: p.event_label,
-            polygon_begin: p.polygon_begin,
-            polygon_end: p.polygon_end,
-            product_id: p.product_id,
-            firstStep: step,
-            distanceKm,
-          });
-        } else {
-          const earlierBegin = Date.parse(p.polygon_begin) < Date.parse(prev.polygon_begin);
-          const laterEnd = Date.parse(p.polygon_end) > Date.parse(prev.polygon_end);
-          byNearbyKey.set(key, {
-            ...prev,
-            polygon_begin: earlierBegin ? p.polygon_begin : prev.polygon_begin,
-            polygon_end: laterEnd ? p.polygon_end : prev.polygon_end,
-            product_id: earlierBegin ? p.product_id : prev.product_id,
-            firstStep:
-              step !== null && (prev.firstStep === null || step < prev.firstStep) ? step : prev.firstStep,
-            distanceKm: Math.min(prev.distanceKm, distanceKm),
-          });
-        }
+        byNearbyKey.set(key, {
+          ...mergeDirectWarning(prev, p, step),
+          distanceKm: prev === undefined ? distanceKm : Math.min(prev.distanceKm, distanceKm),
+        });
       }
     }
   }

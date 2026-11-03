@@ -65,7 +65,11 @@ export function useScopeRows(index: StormsIndex, scope: string, radius: number) 
     index.run_time,
   );
   const data = load.status === "ready" ? load.data : null;
-  const table = useMemo(() => (data === null ? null : pooledRows(data, radius)), [data, radius]);
+  const radiusMax =
+    data !== null && data.length > 0 ? Math.min(...data.map((f) => f.radius_km_max)) : null;
+  const activeRadius =
+    radiusMax !== null ? Math.max(0, Math.min(radiusMax, Math.round(radius))) : radius;
+  const table = useMemo(() => (data === null ? null : pooledRows(data, activeRadius)), [data, activeRadius]);
   const first = data?.[0];
   const receipt = useMemo(
     () => (data === null ? null : scope === ALL_SCOPE ? pooledReceipt(data, index) : (first?.receipt ?? null)),
@@ -75,7 +79,7 @@ export function useScopeRows(index: StormsIndex, scope: string, radius: number) 
     load,
     table,
     receipt,
-    radiusMax: first?.radius_km_max ?? null,
+    radiusMax,
     file: scope === ALL_SCOPE ? `pairs.json, pooled over ${storms.length} storm dates` : "pairs.json",
   };
 }

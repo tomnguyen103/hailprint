@@ -22,6 +22,8 @@ export function Tune({ index }: { index: StormsIndex }) {
   const [classIdx, setClassIdx] = useState(DEFAULT_CLASS);
   const [metric, setMetric] = useState<MetricKey>("hss");
   const { load, table, receipt, radiusMax, file } = useScopeRows(index, scope, radius);
+  const maxRadiusKm = radiusMax ?? RADIUS_MAX_FALLBACK;
+  const activeRadius = Math.max(0, Math.min(maxRadiusKm, Math.round(radius)));
   const selectedStorm = scope === ALL_SCOPE ? undefined : index.storms.find((s) => s.storm_date === scope);
   const reportsLoad = useLoad<ReportsFile | null>(
     selectedStorm ? `tune:${selectedStorm.files.reports}` : "tune:reports:none",
@@ -67,7 +69,7 @@ export function Tune({ index }: { index: StormsIndex }) {
               stormDate={scope}
               pairs={singlePairs}
               reportsGeo={reportsGeo}
-              radiusKm={radius}
+              radiusKm={activeRadius}
               thresholdMm={mark.threshold_mm}
               thresholdIn={mark.threshold_in}
             />
@@ -80,7 +82,7 @@ export function Tune({ index }: { index: StormsIndex }) {
     <>
       <div class="try-controls">
         <ScopeSelect storms={index.storms} value={scope} onChange={setScope} label="Scope" withAll />
-        <RadiusSlider value={radius} max={radiusMax ?? RADIUS_MAX_FALLBACK} onChange={setRadius} />
+        <RadiusSlider value={activeRadius} max={maxRadiusKm} onChange={setRadius} />
         <div>
           <div class="radius-slider threshold-slider">
             <label for={sliderId}>Threshold</label>

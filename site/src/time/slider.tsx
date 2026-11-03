@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { HARRIS_FIPS } from "../data/constants";
 import type { InternetFile, PowerFile, ReportsFile, WarningsFile } from "../data/types";
-import { harrisPeak, internetSeries, powerSeries, reportTicks, warningBars } from "../impact/series";
+import { internetSeries, powerSeries, reportTicks, warningBars } from "../impact/series";
 import { href, replace } from "../router";
 import "../styles/time.css";
 import { LAST_STEP, STEPS_PER_HOUR, readout } from "./step";
@@ -29,11 +29,22 @@ export function eventJumpChips(input: {
   const chips: EventJumpChip[] = [];
   const bars = warningBars(input.warnings ?? null, input.date);
   if (bars.length > 0) {
-    const earliest = Math.min(...bars.map((b) => Math.floor(b.from)));
+    const earliest = Math.max(
+      0,
+      Math.min(
+        LAST_STEP,
+        Math.min(
+          ...bars.map((b) => {
+            const first = Math.ceil(b.from);
+            return first < b.to ? first : Math.floor(b.from);
+          }),
+        ),
+      ),
+    );
     chips.push({
       id: "warning",
       label: "First warning",
-      step: Math.min(LAST_STEP, Math.max(0, earliest)),
+      step: earliest,
     });
   }
   const ticks = reportTicks(input.reports ?? null);
@@ -41,9 +52,7 @@ export function eventJumpChips(input: {
     chips.push({ id: "report", label: "First report", step: ticks[0]!.step });
   }
   const fips = input.fips ?? HARRIS_FIPS;
-  const pStep = input.fips
-    ? (powerSeries(input.power ?? null, fips)?.peakStep ?? null)
-    : harrisPeak(input.power ?? null);
+  const pStep = powerSeries(input.power ?? null, fips)?.peakStep ?? null;
   if (pStep !== null) {
     chips.push({ id: "power", label: "Peak power out", step: pStep });
   }
