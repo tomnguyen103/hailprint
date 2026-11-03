@@ -1,6 +1,6 @@
 import type { Feature, Point } from "geojson";
 import { useEffect, useRef, useState } from "preact/hooks";
-import { METRO_BBOX } from "../../county";
+
 import type {
   InternetFile,
   PowerFile,
@@ -11,7 +11,7 @@ import type {
   WarningsFile,
 } from "../../data/types";
 import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../../format";
-import { contains, pointInMultiPolygon } from "../../geometry";
+import { pointInMultiPolygon } from "../../geometry";
 import { dropOf } from "../../impact/internet";
 import { ODIN_LABEL, percentText, shareOut } from "../../impact/power";
 import { internetSeriesTrough, powerSeriesPeak } from "../../impact/series";
@@ -21,7 +21,7 @@ import { href } from "../../router";
 import { objectName } from "../../ruler";
 import { Link } from "../../shell/link";
 import { ReceiptChip } from "../../shell/receipt-chip";
-import { clearPin, getPinState, setPin, usePin } from "../../state/pin";
+import { clearPin, getPinState, isMetroCoordinate, setPin, usePin } from "../../state/pin";
 import {
   type DirectWarning,
   type NearbyWarning,
@@ -327,7 +327,7 @@ export function InspectorView({
   onLiveCheck?: () => void;
 }) {
   const [lon, lat] = pick.lngLat;
-  const inMetro = contains(METRO_BBOX, pick.lngLat);
+  const inMetro = isMetroCoordinate(pick.lngLat);
   const activePin = pinnedLngLat !== undefined ? pinnedLngLat : (getPinState().pin?.lngLat ?? null);
   const isPinned =
     activePin !== null && Math.abs(activePin[0] - lon) < 1e-5 && Math.abs(activePin[1] - lat) < 1e-5;

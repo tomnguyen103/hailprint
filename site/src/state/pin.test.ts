@@ -1,3 +1,4 @@
+import type { FeatureCollection, MultiPolygon } from "geojson";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   METRO_PRESETS,
@@ -6,6 +7,7 @@ import {
   locateUser,
   resetPinStore,
   setPin,
+  setPinCounties,
   setPinRadiusKm,
   setPresetPin,
 } from "./pin";
@@ -40,6 +42,55 @@ describe("pin store presets and manual coordinates (US-01.4)", () => {
     clearPin();
     expect(getPinState().pin).toBeNull();
     expect(getPinState().radiusKm).toBe(12);
+  });
+
+  it("enforces polygon boundary when setPinCounties is populated", () => {
+    const outlines: FeatureCollection<MultiPolygon> = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          properties: { fips: "48201", name: "Harris" },
+          geometry: {
+            type: "MultiPolygon",
+            coordinates: [
+              [
+                [
+                  [-95.6, 29.6],
+                  [-95.2, 29.6],
+                  [-95.2, 29.9],
+                  [-95.6, 29.9],
+                  [-95.6, 29.6],
+                ],
+              ],
+            ],
+          },
+        },
+      ],
+    };
+    setPinCounties(null);
+    expect(setPin([-96.1, 29.0], "manual")).toBe(true);
+    expect(getPinState().pin?.lngLat).toEqual([-96.1, 29.0]);
+    setPinCounties(outlines);
+    expect(getPinState().pin).toBeNull();
+    // Inside METRO_BBOX, but outside the Harris polygon above:
+    expect(setPin([-96.1, 29.0], "manual")).toBe(false);
+    expect(getPinState().pin).toBeNull();
+    // Inside the Harris polygon:
+    expect(setPin([-95.4, 29.75], "manual")).toBe(true);
+    expect(getPinState().pin?.lngLat).toEqual([-95.4, 29.75]);
+  });
+
+  it("clears stale geo error reason and message when an invalid manual pin resets geoStatus to idle", async () => {
+    vi.stubGlobal("navigator", {});
+    await locateUser();
+    expect(getPinState().geoStatus).toBe("error");
+    expect(getPinState().reason).toBe("unsupported");
+
+    expect(setPin([0, 0], "manual")).toBe(false);
+    expect(getPinState().geoStatus).toBe("idle");
+    expect(getPinState().reason).toBeNull();
+    expect(getPinState().message).toBeNull();
   });
 });
 
@@ -128,6 +179,19 @@ describe("locateUser geolocation lifecycle and error handling (US-01.4, US-01.5)
       expect(state.reason).toBe(expectedReason);
       expect(state.pin?.lngLat).toEqual([-95.5297, 29.7752]);
     }
+  });
+
+  it("handles a synchronous throw from getCurrentPosition as unavailable", async () => {
+    vi.stubGlobal("navigator", {
+      geolocation: {
+        getCurrentPosition: () => {
+          throw new Error("SecurityError");
+        },
+      },
+    });
+    await locateUser();
+    expect(getPinState().geoStatus).toBe("error");
+    expect(getPinState().reason).toBe("unavailable");
   });
 
   it("cancels in-flight locateUser when setPin or clearPin is called, resetting geoStatus to idle and ignoring late GPS callbacks", async () => {

@@ -243,3 +243,34 @@ def test_s3_client_retries_with_the_standard_mode_and_five_attempts():
 
     # botocore stores max_attempts=5 (retries) as total_max_attempts=6 (tries)
     assert retries == {"mode": "standard", "total_max_attempts": 6}
+
+
+@pytest.mark.parametrize(("ni", "nj"), [(0, 4), (4, 0), (20_001, 4), (10_000, 6_000)])
+def test_decode_rejects_out_of_bounds_grid_dimensions(tmp_path, monkeypatch, ni, nj):
+    _fake_eccodes(monkeypatch, bitmap=0)
+    monkeypatch.setattr(
+        mesh.eccodes,
+        "codes_get",
+        lambda handle, key: ni if key == "Ni" else (nj if key == "Nj" else 0),
+    )
+    grib = tmp_path / "MRMS_bounds.grib2"
+    grib.write_bytes(b"x")
+    with pytest.raises(RuntimeError, match="grid dimensions out of bounds"):
+        mesh.decode(grib)
+
+
+def test_daily_max_recovers_from_truncated_cached_grib2_gz(tmp_path, monkeypatch):
+    _fake_eccodes(monkeypatch, bitmap=0)
+    local = mesh.local_path(KEY_12Z, tmp_path)
+    local.parent.mkdir(parents=True)
+    local.write_bytes(b"\x1f\x8b\x08\x00truncated")
+
+    def fake_fetch(storm_date, raw_dir, client=None):
+        local.write_bytes(gzip.compress(b"x"))
+        return local
+
+    monkeypatch.setattr(mesh, "fetch_12z", fake_fetch)
+
+    da = mesh.daily_max(STORM_DATE, tmp_path)
+    assert da.attrs["file_count"] == 1
+    assert float(da.max()) == 30.0

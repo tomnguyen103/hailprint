@@ -42,7 +42,7 @@ export function Stamp({ storm, reports, step, indexReceipt, datesOpen = false, o
     const reportSourceEntry = {
       source: "SPC",
       product: storm.report_source === "wcm" ? "WCM hail (wcm)" : "daily hail (spc-daily)",
-      file: storm.report_source,
+      file: storm.report_source ?? "spc-daily",
     };
     const hasMrms = baseReceipt.sources.some((s) => s.source.includes("MRMS"));
     const hasSpc = baseReceipt.sources.some((s) => s.source === "SPC");
@@ -84,7 +84,7 @@ export function Stamp({ storm, reports, step, indexReceipt, datesOpen = false, o
         ))}
       </ul>
       <span class="stamp-fact">
-        <span class="mono">{storm.report_count}</span> reports
+        <span class="mono">{storm.report_count ?? 0}</span> reports
       </span>
       <span class="stamp-fact">
         {storm.max_size_in === null ? (

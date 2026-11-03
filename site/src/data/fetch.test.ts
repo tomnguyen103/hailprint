@@ -112,3 +112,39 @@ it("reports a body-read abort from FETCH_TIMEOUT_MS as a network error instead o
 });
 
 
+
+
+it("rejects a response whose Content-Length header exceeds MAX_JSON_BYTES", async () => {
+  setFetch(
+    async () =>
+      new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json", "content-length": String(16 * 1024 * 1024 + 1) },
+      }),
+  );
+  await expect(fetchJson("storms.json", (v) => v)).rejects.toThrow(/storms\.json: response exceeds 16 MiB/);
+});
+
+it("cancels and rejects a chunked stream without Content-Length once read bytes exceed MAX_JSON_BYTES", async () => {
+  let cancelled = false;
+  const chunk = new Uint8Array(9 * 1024 * 1024);
+  let reads = 0;
+  setFetch(async () => ({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "content-type": "application/json" }),
+    body: {
+      getReader: () => ({
+        read: async () => {
+          reads += 1;
+          return reads <= 2 ? { done: false, value: chunk } : { done: true, value: undefined };
+        },
+        cancel: async () => {
+          cancelled = true;
+        },
+      }),
+    },
+  } as unknown as Response));
+  await expect(fetchJson("storms.json", (v) => v)).rejects.toThrow(/storms\.json: response exceeds 16 MiB/);
+  expect(cancelled).toBe(true);
+});

@@ -403,8 +403,8 @@
 
 .map-frame .maplibregl-ctrl-group button,
 .map-canvas .maplibregl-ctrl-group button {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
 }
 
 /* MapLibre ships black SVG icons; the dark tokens invert them */

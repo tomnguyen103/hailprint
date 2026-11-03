@@ -28,10 +28,29 @@ USECOLS = ["date", "time", "tz", "st", "mag", "f1", "f2", "f3", "f4"]
 CST_TZ = 3  # WCM tz code for CST
 # WCM times are CST (UTC-6); the SPC day starts at 12 UTC; the net shift from local clock is -6 h
 CST_TO_CONVECTIVE = timedelta(hours=6)
+MAX_WCM_UNCOMPRESSED_BYTES = 512 * 1024 * 1024
 
 
 def _utc_today() -> date:
     return datetime.now(UTC).date()
+
+
+def _check_wcm_zip(path: Path) -> None:
+    if not zipfile.is_zipfile(path):
+        return
+    with zipfile.ZipFile(path) as zf:
+        infos = zf.infolist()
+        if not infos:
+            raise RuntimeError(f"{path}: empty zip archive")
+        if sum(info.file_size for info in infos) > MAX_WCM_UNCOMPRESSED_BYTES:
+            raise RuntimeError(
+                f"{path}: zip uncompressed size exceeds {MAX_WCM_UNCOMPRESSED_BYTES} bytes"
+            )
+
+
+def _read_wcm(path: Path, usecols: list[str] = USECOLS) -> pd.DataFrame:
+    _check_wcm_zip(path)
+    return pd.read_csv(path, usecols=usecols)
 
 
 def fetch_database(path: Path | None = None) -> Path:
@@ -49,6 +68,11 @@ def fetch_database(path: Path | None = None) -> Path:
     if not zipfile.is_zipfile(tmp):
         tmp.unlink()
         raise RuntimeError(f"WCM download is not a zip archive: {WCM_URL}")
+    try:
+        _check_wcm_zip(tmp)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
     tmp.replace(path)
     return path
 
@@ -58,9 +82,7 @@ def convective_day(day: date, clock: time) -> date:
     return (datetime.combine(day, clock) - CST_TO_CONVECTIVE).date()
 
 
-def harris_days(path: Path) -> pd.DataFrame:
-    """Harris County, TX rows grouped by convective day: report_count and max_size_in."""
-    df = pd.read_csv(path, usecols=USECOLS)
+def _harris_days_from_df(df: pd.DataFrame) -> pd.DataFrame:
     harris = (df[["f1", "f2", "f3", "f4"]] == HARRIS_FIPS).any(axis=1)
     df = df.loc[(df["st"] == "TX") & harris].copy()
     other = sorted(set(df["tz"]) - {CST_TZ})
@@ -72,14 +94,22 @@ def harris_days(path: Path) -> pd.DataFrame:
     return grouped.reset_index().assign(report_source="wcm")
 
 
-def wcm_last_day(path: Path) -> date:
-    """Last convective day of any row in the WCM database."""
-    df = pd.read_csv(path, usecols=["date", "time"])
+def harris_days(path: Path) -> pd.DataFrame:
+    """Harris County, TX rows grouped by convective day: report_count and max_size_in."""
+    return _harris_days_from_df(_read_wcm(path, USECOLS))
+
+
+def _wcm_last_day_from_df(df: pd.DataFrame) -> date:
     return (
         (pd.to_datetime(df["date"] + " " + df["time"]) - pd.Timedelta(CST_TO_CONVECTIVE))
         .max()
         .date()
     )
+
+
+def wcm_last_day(path: Path) -> date:
+    """Last convective day of any row in the WCM database."""
+    return _wcm_last_day_from_df(_read_wcm(path, ["date", "time"]))
 
 
 def daily_csv(storm_date: date, cache_dir: Path, today: date) -> str | None:
@@ -140,12 +170,13 @@ def all_days(
     Columns: storm_date, report_count, max_size_in, report_source ("wcm" or "spc-daily").
     """
     # shortcut: the daily fill counts preliminary reports, upgrade when SPC publishes the 2026
-    # WCM file; the WCM end is the day of the last row of any county, and only later days are
-    # filled, so a partial end day keeps its WCM count
-    wcm = harris_days(wcm_path)
+    # WCM file; the WCM end is the day of the last row of any county, and d >= wcm_end is
+    # merged with the daily CSV so a partial end day takes the larger report count
+    raw_wcm = _read_wcm(wcm_path, USECOLS)
+    wcm = _harris_days_from_df(raw_wcm)
     resolved_cache_dir = DAILY_DIR if cache_dir is None else cache_dir
     today = _utc_today() if today is None else today
-    wcm_end = wcm_last_day(wcm_path)
+    wcm_end = _wcm_last_day_from_df(raw_wcm)
     later = sorted({d for d in index["storm_date"] if d >= wcm_end})
     with ThreadPoolExecutor(FETCH_THREADS) as pool:
         texts = list(pool.map(lambda d: daily_csv(d, resolved_cache_dir, today), later))

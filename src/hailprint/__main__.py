@@ -214,7 +214,7 @@ def main(argv: list[str] | None = None) -> int:
             publish_days(args.storm_dates, args.with_internet)
         elif args.command == "cloud":
             return cloud.run_cloud(args.task)
-    except (RuntimeError, OSError, ValueError) as exc:
+    except (RuntimeError, OSError, ValueError, *runs.UNREADABLE) as exc:
         print(exc, file=sys.stderr)
         return 1
     return 0
@@ -494,7 +494,7 @@ def odin_snapshot() -> Path:
     with files.lock(ODIN_DIR / ODIN_LOCK_FILE):
         try:
             existing = pd.read_parquet(path) if path.exists() else None
-        except (OSError, ValueError) as exc:
+        except (OSError, ValueError, *runs.UNREADABLE) as exc:
             raise ValueError(f"{path}: not a readable ODIN day file: {exc}") from exc
         written = files.write_atomic(odin.merge(existing, fresh), path, odin.METADATA)
     print(f"{slot:%Y-%m-%d %H:%M} UTC: {len(fresh)} rows")

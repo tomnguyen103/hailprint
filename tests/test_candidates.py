@@ -557,3 +557,10 @@ def test_all_days_keeps_max_size_from_winning_source_row_not_hybrid_max(tmp_path
     assert days.loc[WCM_END, "report_count"] == 3
     assert days.loc[WCM_END, "report_source"] == "wcm"
     assert days.loc[WCM_END, "max_size_in"] == 1.75
+
+
+def test_wcm_zip_rejects_oversized_uncompressed_entry(tmp_path, monkeypatch):
+    path = _wcm_csv(tmp_path)
+    monkeypatch.setattr(candidates, "MAX_WCM_UNCOMPRESSED_BYTES", 10)
+    with pytest.raises(RuntimeError, match="zip uncompressed size exceeds 10 bytes"):
+        candidates.harris_days(path)

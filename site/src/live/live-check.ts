@@ -1,5 +1,6 @@
 // On-demand live status check for NWS Active Alerts, ORNL ODIN power outages, and Georgia Tech IODA reachability.
 // Uses the shared injectable Fetch seam (`getFetch`) with a 15-second AbortController timeout.
+import { METRO_FIPS } from "../data/constants";
 import { fetchUrlJson } from "../data/fetch";
 import { DataError } from "../data/types";
 import { ODIN_LABEL } from "../impact/power";
@@ -21,7 +22,7 @@ export const IODA_COUNTY_CODES: Readonly<Record<string, string>> = {
   "48071": "3085",
 };
 
-const SORTED_METRO_FIPS = ["48039", "48071", "48157", "48167", "48201", "48291", "48339", "48473"] as const;
+const SORTED_METRO_FIPS = [...METRO_FIPS].sort();
 
 /** ORNL ODIN grouped query URL for the 8 Houston Metro counties (`src/hailprint/odin.py:26-40`). */
 export const ODIN_METRO_URL =

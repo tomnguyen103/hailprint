@@ -3,6 +3,7 @@
 import { DataError } from "./types";
 
 export const FETCH_TIMEOUT_MS = 15_000;
+export const MAX_JSON_BYTES = 16 * 1024 * 1024;
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -47,9 +48,35 @@ export async function fetchUrlJson<T>(
       throw new DataError(label, `network error, ${String(error)}`);
     }
     if (!response.ok) throw new DataError(label, `HTTP ${response.status}`);
+    const len = response.headers?.get?.("content-length");
+    if (len && Number(len) > MAX_JSON_BYTES) throw new DataError(label, "response exceeds 16 MiB");
     try {
-      body = await response.json();
+      if (typeof response.body?.getReader === "function") {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        const parts: string[] = [];
+        let totalBytes = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          totalBytes += value.byteLength;
+          if (totalBytes > MAX_JSON_BYTES) {
+            await reader.cancel().catch(() => {});
+            throw new DataError(label, "response exceeds 16 MiB");
+          }
+          parts.push(decoder.decode(value, { stream: true }));
+        }
+        parts.push(decoder.decode());
+        body = JSON.parse(parts.join(""));
+      } else if (typeof response.text === "function") {
+        const text = await response.text();
+        if (text.length > MAX_JSON_BYTES) throw new DataError(label, "response exceeds 16 MiB");
+        body = JSON.parse(text);
+      } else {
+        body = await response.json();
+      }
     } catch (error) {
+      if (error instanceof DataError) throw error;
       if (controller.signal.aborted) {
         throw new DataError(label, `network error, ${String(error)}`);
       }

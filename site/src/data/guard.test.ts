@@ -353,6 +353,19 @@ describe("guardIndex", () => {
     const files = { ...storm.files, pairs: "storms/2024-05-28/pairs.geojson" };
     expect(() => guardIndex({ ...index, storms: [{ ...storm, files }] })).toThrow(/files\.pairs/);
   });
+  it("accepts null report_count and report_source and rejects invalid counts or sources", () => {
+    const nullStorm = { ...storm, report_count: null, report_source: null };
+    expect(guardIndex({ ...index, storms: [nullStorm] }).storms[0]!.report_count).toBeNull();
+    expect(guardIndex({ ...index, storms: [nullStorm] }).storms[0]!.report_source).toBeNull();
+    expect(guardIndex({ ...index, storms: [{ ...storm, report_source: "wcm" }] }).storms[0]!.report_source).toBe("wcm");
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, report_count: -1 }] })).toThrow(/report_count is not a count/);
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, report_count: 1.5 }] })).toThrow(/report_count is not a count/);
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, report_source: "other" }] })).toThrow(/report_source is not wcm or spc-daily/);
+  });
+  it("rejects NaN and Infinity in numeric fields", () => {
+    expect(() => guardIndex({ ...index, radius_km_default: Number.NaN })).toThrow(/radius_km_default is not a number/);
+    expect(() => guardIndex({ ...index, radius_km_default: Number.POSITIVE_INFINITY })).toThrow(/radius_km_default is not a number/);
+  });
 });
 
 describe("guardPairs", () => {
@@ -464,6 +477,23 @@ describe("guardOutline", () => {
     const outline = { type: "FeatureCollection", features: [] };
     expect(guardOutline(outline)).toBe(outline);
     expect(() => guardOutline({ type: "Feature" })).toThrow(/counties\.geojson: type is not FeatureCollection/);
+  });
+  it("validates MultiPolygon rings in counties.geojson and Point coordinates and county in reports.geojson", () => {
+    const badOutline = {
+      type: "FeatureCollection",
+      features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [-95.5, 29.7] } }],
+    };
+    expect(() => guardOutline(badOutline)).toThrow(/counties\.geojson: features\[0\]\.geometry\.type is not MultiPolygon/);
+    const badReportCoords = {
+      ...reports,
+      features: [{ ...reports.features[0], geometry: { type: "Point", coordinates: [-95.53] } }],
+    };
+    expect(() => guardReports(badReportCoords)).toThrow(/features\[0\]\.geometry\.coordinates is not a finite \[lon, lat\] position/);
+    const badReportCounty = {
+      ...reports,
+      features: [{ ...reports.features[0], properties: { ...reports.features[0]!.properties, county: undefined } }],
+    };
+    expect(() => guardReports(badReportCounty)).toThrow(/features\[0\]\.properties\.county is not a string/);
   });
 });
 

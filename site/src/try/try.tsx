@@ -83,9 +83,9 @@ export function useScopeRows(index: StormsIndex, scope: string, radius: number) 
 export function TryIt({ index, tool }: { index: StormsIndex; tool: TryTool }) {
   return (
     <>
-      <PageHeader title="Try it">
-        <p>Try it rescores the swath at a radius and a threshold you choose.</p>
-      </PageHeader>
+      <PageHeader title="Try it" />
+
+
       <SubTabs
         label="Try it tools"
         tabs={TRY_TOOLS.map((t) => ({ id: t, label: TOOL_LABELS[t], href: href({ area: "try", tool: t }) }))}

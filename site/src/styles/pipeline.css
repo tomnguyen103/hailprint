@@ -74,7 +74,7 @@
 .date-list a {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
+  min-height: 40px;
 }
 
 /* Archive coverage: the bar is at most 96 px wide, so 0 % and 100 % stay inside the cell. */
