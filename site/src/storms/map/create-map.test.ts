@@ -331,4 +331,54 @@ describe("createMap", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(new Error("network down")));
     expect(await actual.probeBasemap()).toBe(false);
   });
+
+  it("observes container with ResizeObserver, disconnects on destroy, skips setTheme no-op, and supports navigation: false", async () => {
+    const observed: Element[] = [];
+    let disconnected = 0;
+    let resizeCallback: (() => void) | null = null;
+    class FakeResizeObserver {
+      constructor(cb: () => void) {
+        resizeCallback = cb;
+      }
+      observe(el: Element) {
+        observed.push(el);
+      }
+      disconnect() {
+        disconnected += 1;
+      }
+    }
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+
+    const container = {} as HTMLElement;
+    const state = track(createMap(container, "light", { navigation: false }));
+    await advance(0);
+    const [map] = stub.FakeMap.instances;
+    const resize = vi.fn();
+    const setPaintProperty = vi.fn();
+    Object.assign(map!, { resize, setPaintProperty });
+
+    map!.emit("load");
+    await advance(0);
+    expect(state.status).toBe("resolved");
+    const handle = state.value!;
+
+    expect(map!.addControl).not.toHaveBeenCalled();
+
+    expect(observed).toEqual([container]);
+    expect(resizeCallback).not.toBeNull();
+    resizeCallback!();
+    expect(resize).toHaveBeenCalledTimes(1);
+
+    handle.setTheme("light");
+    expect(setPaintProperty).not.toHaveBeenCalled();
+
+    handle.setTheme("dark");
+    const countAfterDark = setPaintProperty.mock.calls.length;
+    expect(countAfterDark).toBeGreaterThan(0);
+    handle.setTheme("dark");
+    expect(setPaintProperty.mock.calls.length).toBe(countAfterDark);
+
+    handle.destroy();
+    expect(disconnected).toBe(1);
+  });
 });

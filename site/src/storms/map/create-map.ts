@@ -132,8 +132,16 @@ function reduceMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+export interface CreateMapOptions {
+  navigation?: boolean;
+}
+
 /** Create the map in `container`, probe the basemap, and resolve once the style has loaded. */
-export async function createMap(container: HTMLElement, theme: Theme): Promise<MapHandle> {
+export async function createMap(
+  container: HTMLElement,
+  theme: Theme,
+  options?: CreateMapOptions,
+): Promise<MapHandle> {
   setUpOnce();
   const basemap = await probeBasemap();
   const map = new MapLibreMap({
@@ -145,17 +153,32 @@ export async function createMap(container: HTMLElement, theme: Theme): Promise<M
     // On touch, one finger scrolls the page and two fingers move the map; a mouse keeps wheel zoom.
     cooperativeGestures: window.matchMedia("(pointer: coarse)").matches,
   });
-  map.addControl(new NavigationControl({ showCompass: false }), "top-left");
+  if (options?.navigation !== false) {
+    map.addControl(new NavigationControl({ showCompass: false }), "top-left");
+  }
   await whenLoaded(map);
+  const observer =
+    typeof ResizeObserver === "function"
+      ? new ResizeObserver(() => {
+          map.resize?.();
+        })
+      : null;
+  observer?.observe(container);
 
-  return makeHandle(map, basemap);
+  return makeHandle(map, basemap, theme, () => observer?.disconnect());
 }
 
 /** The handle over a map whose style is loaded or still loading. Layer state lives here, so every call is safe in any order. */
-export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
+export function makeHandle(
+  map: MapLibreMap,
+  basemap: boolean,
+  initialTheme?: Theme,
+  onDestroy?: () => void,
+): MapHandle {
   const geojson = (id: string) => map.getSource(id) as GeoJSONSource | undefined;
   const show = (id: string, on: boolean) => map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
   const hiddenClasses = new Set<number>();
+  let currentTheme: Theme | undefined = initialTheme;
   let swathOn = true;
   let warningsOn = true;
   let reportsFile: ReportsFile | null = null;
@@ -248,6 +271,8 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
       geojson(COUNTY_SOURCE)?.setData(county ?? EMPTY);
     },
     setTheme(nextTheme) {
+      if (nextTheme === currentTheme) return;
+      currentTheme = nextTheme;
       map.setPaintProperty("paper", "background-color", token("--paper"));
       for (const [id, paint] of Object.entries(themedPaint())) {
         for (const [prop, value] of Object.entries(paint) as [PaintName, string][]) map.setPaintProperty(id, prop, value);
@@ -327,6 +352,7 @@ export function makeHandle(map: MapLibreMap, basemap: boolean): MapHandle {
       map.flyTo({ center: lngLat, zoom, duration: reduceMotion() ? 0 : FLY_MS });
     },
     destroy() {
+      onDestroy?.();
       for (const tag of tags) tag.remove();
       clearCountyTags();
       map.remove();
