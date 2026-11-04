@@ -34,15 +34,6 @@ export function nearestReport<P>(
   return best;
 }
 
-/** The highest size class among the swath features under a point, or null for none. */
-export function coveringClass(features: readonly { properties: { threshold_mm: number } }[]): number | null {
-  let max: number | null = null;
-  for (const f of features) {
-    if (max === null || f.properties.threshold_mm > max) max = f.properties.threshold_mm;
-  }
-  return max;
-}
-
 /** The properties of the largest size class whose feature holds the point, or null outside the swath. */
 export function coveringAt(swath: SwathFile, point: [number, number]): SwathProps | null {
   let best: SwathProps | null = null;
@@ -131,9 +122,9 @@ export function buildPick(
   reports: ReportsFile | null,
   outlines: FeatureCollection<MultiPolygon> | null,
 ): PickedPoint {
-  const coveringMm = swath !== null ? (coveringAt(swath, lngLat)?.threshold_mm ?? null) : null;
-  const nearestSwath =
-    coveringMm === null && swath !== null ? swathExposureAt(swath, lngLat, 20).nearest : null;
+  const exp = swath !== null ? swathExposureAt(swath, lngLat, 20) : null;
+  const coveringMm = exp !== null ? (exp.covering?.threshold_mm ?? null) : null;
+  const nearestSwath = exp !== null ? (exp.covering ? null : exp.nearest) : null;
   return {
     date,
     lngLat,
@@ -153,13 +144,9 @@ export function refreshPick(
   outlines: FeatureCollection<MultiPolygon> | null,
 ): PickedPoint | null {
   if (prev === null || prev.date !== stormDate) return prev;
-  const coveringMm = swath !== null ? (coveringAt(swath, prev.lngLat)?.threshold_mm ?? null) : prev.coveringMm;
-  const nearestSwath =
-    coveringMm === null && swath !== null
-      ? swathExposureAt(swath, prev.lngLat, 20).nearest
-      : coveringMm !== null
-        ? null
-        : prev.nearestSwath;
+  const exp = swath !== null ? swathExposureAt(swath, prev.lngLat, 20) : null;
+  const coveringMm = exp !== null ? (exp.covering?.threshold_mm ?? null) : prev.coveringMm;
+  const nearestSwath = exp !== null ? (exp.covering ? null : exp.nearest) : prev.nearestSwath;
   const countyFips = outlines !== null ? countyAt(prev.lngLat, outlines) : prev.countyFips;
   return {
     ...prev,

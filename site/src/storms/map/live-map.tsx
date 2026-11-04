@@ -50,16 +50,8 @@ export function LiveMap({ swath, reports, warnings }: Props) {
       .catch((error: unknown) => {
         if (live) setMapError(new DataError("map", String(error)));
       });
-    const observer =
-      typeof ResizeObserver === "function"
-        ? new ResizeObserver(() => {
-            handle.current?.map.resize();
-          })
-        : null;
-    observer?.observe(node);
     return () => {
       live = false;
-      observer?.disconnect();
       created?.destroy();
       handle.current = null;
       setReady(null);

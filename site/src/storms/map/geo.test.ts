@@ -5,7 +5,6 @@ import {
   coveringAt,
   buildPick,
   refreshPick,
-  coveringClass,
   distanceKm,
   nearestReport,
   reportsWithinRadius,
@@ -61,21 +60,6 @@ describe("nearestReport and reportsWithinRadius", () => {
       nearest: null,
       within: [],
     });
-  });
-});
-
-describe("coveringClass", () => {
-  it("returns the highest threshold among the hit features", () => {
-    const hits = [
-      { properties: { threshold_mm: 19.05 } },
-      { properties: { threshold_mm: 38.1 } },
-      { properties: { threshold_mm: 25.4 } },
-    ];
-    expect(coveringClass(hits)).toBe(38.1);
-  });
-
-  it("returns null for no hit", () => {
-    expect(coveringClass([])).toBeNull();
   });
 });
 

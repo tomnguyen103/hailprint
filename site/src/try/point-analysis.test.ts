@@ -15,8 +15,10 @@ import type {
 } from "../data/types";
 import { useInternetAll, usePowerAll, useReportsAll, useWarningsAll } from "../state/impact-all";
 import { clearFileCache, useSparseFiles } from "../state/pairs-all";
+import { cropStatusAt } from "../geometry";
+import { reportsWithinRadius, swathExposureAt, warningsAtPoint } from "../storms/map/geo";
 import * as pointAnalysis from "./point-analysis";
-import { analyzeStormAtPin, internetSeriesTrough, summarizeArchiveAtPin } from "./point-analysis";
+import { analyzeStormAtPin, internetSeriesTrough, powerSeriesPeak, summarizeArchiveAtPin } from "./point-analysis";
 
 const receipt: Receipt = {
   storm_date: "2024-05-28",
@@ -376,10 +378,18 @@ describe("point distance pass and radius threshold pass (US-12.2)", () => {
     const applyRadius = (distances: unknown, radiusKm: number) =>
       fnRecord["applyRadiusToStormDistances"]!(distances, radiusKm);
 
+    const point: [number, number] = [-95.3698, 29.7604];
+    const fips = "48201";
+    const stormDate = stormFixture.storm_date;
+    const countyPowerSummary = (file: PowerFile | null, countyFips: string | null) =>
+      powerSeriesPeak(file, countyFips, stormDate);
+    const countyInternetSummary = (file: InternetFile | null, countyFips: string | null) =>
+      internetSeriesTrough(file, countyFips, stormDate);
+
     const distances = computeDistances({
       storm: stormFixture,
-      point: [-95.3698, 29.7604],
-      fips: "48201",
+      point,
+      fips,
       swath: swathFixture,
       reports: reportsFixture,
       warnings: warningsFixture,
@@ -390,18 +400,40 @@ describe("point distance pass and radius threshold pass (US-12.2)", () => {
 
     for (let radiusKm = 1; radiusKm <= 20; radiusKm++) {
       const fromSplit = applyRadius(distances, radiusKm);
-      const fromCombined = analyzeStormAtPin({
+      const cropStatus = cropStatusAt(point, radiusKm);
+      const swathExp = swathExposureAt(swathFixture, point, radiusKm);
+      const reportsProx = reportsWithinRadius(point, reportsFixture, radiusKm);
+      const warningsProx = warningsAtPoint(point, warningsFixture, stormDate, radiusKm);
+      const powerPeak = countyPowerSummary(power, fips);
+      const internetTrough = countyInternetSummary(internet, fips);
+      const covering = cropStatus === "outside-crop" ? null : swathExp.covering;
+      const withinRadius = cropStatus === "outside-crop" ? null : swathExp.withinRadius;
+      const expected = {
         storm: stormFixture,
-        point: [-95.3698, 29.7604],
+        stormDate,
+        point,
         radiusKm,
-        fips: "48201",
-        swath: swathFixture,
-        reports: reportsFixture,
-        warnings: warningsFixture,
-        power,
-        internet,
-      });
-      expect(fromSplit).toEqual(fromCombined);
+        fips,
+        cropStatus,
+        covering,
+        withinRadius,
+        nearest: swathExp.nearest,
+        reportsWithinRadius: reportsProx,
+        directWarnings: warningsProx.directWarnings,
+        nearbyWarnings: warningsProx.nearbyWarnings,
+        warningCounts: warningsProx.warningCounts,
+        firstWarningStep: warningsProx.firstWarningStep,
+        powerPeak,
+        internetTrough,
+        hasActivityNearPin:
+          withinRadius !== null ||
+          reportsProx.count > 0 ||
+          warningsProx.directWarnings.length > 0 ||
+          (powerPeak?.peakShare ?? 0) >= 0.01 ||
+          (internetTrough?.maxDrop ?? 0) >= 0.02,
+        swathReceipt: swathFixture.receipt,
+      };
+      expect(fromSplit).toEqual(expected);
     }
     expect(distanceCalls).toBe(1);
   });
