@@ -24,6 +24,12 @@
   gap: 6px;
 }
 
+.cohort-pill:disabled {
+  color: var(--ink-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .cohort-pill[aria-pressed="true"],
 .sensitivity-cell[aria-pressed="true"] {
   border-color: var(--accent);
@@ -90,6 +96,11 @@
   stroke: var(--ink-muted);
   stroke-width: 1;
   stroke-dasharray: 6 4;
+}
+
+.curve .marker-hit {
+  fill: transparent;
+  cursor: pointer;
 }
 
 .curve .marker {

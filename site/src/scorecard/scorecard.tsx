@@ -14,7 +14,7 @@ import { SCORECARD_VIEWS, href, type ScorecardView } from "../router";
 import { RULER } from "../ruler";
 import { RADIUS_MAX_FALLBACK, RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
-import { ErrorState, LoadingState, PageHeader } from "../shell/states";
+import { EmptyState, ErrorState, LoadingState, PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { usePairsAll } from "../state/pairs-all";
 import { GridView } from "./grid-view";
@@ -59,19 +59,25 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
   const receipt = useMemo(() => (data === null ? null : pooledReceipt(data, index)), [data, index]);
   const file = `${FILE}, pooled over ${activeStormCount} storm ${activeStormCount === 1 ? "date" : "dates"}`;
 
-  const cohortOptions: { id: CohortId; label: string }[] = [
-    { id: "all", label: `All (${index.storms.length})` },
-    { id: "wcm", label: `WCM 2021–2025 (${wcmCount})` },
-    { id: "spc-daily", label: `SPC-Daily 2026 (${dailyCount})` },
-    ...years.map((y) => ({
-      id: `year:${y}` as CohortId,
-      label: y,
-    })),
+  const cohortOptions: { id: CohortId; label: string; count: number }[] = [
+    { id: "all", label: `All (${index.storms.length})`, count: index.storms.length },
+    { id: "wcm", label: `WCM 2021–2025 (${wcmCount})`, count: wcmCount },
+    { id: "spc-daily", label: `SPC-Daily 2026 (${dailyCount})`, count: dailyCount },
+    ...years.map((y) => {
+      const count = index.storms.filter((s) => s.storm_date.startsWith(y)).length;
+      return {
+        id: `year:${y}` as CohortId,
+        label: count === 0 ? `${y} (0)` : y,
+        count,
+      };
+    }),
   ];
 
   let body;
   if (pairs.status === "error") body = <ErrorState error={pairs.error} onRetry={pairs.retry} />;
-  else if (pairs.status === "loading" || table === null) body = pairs.showLoading ? <LoadingState file={FILE} /> : null;
+  else if (pairs.status === "loading") body = pairs.showLoading ? <LoadingState file={FILE} /> : null;
+  else if (data !== null && data.length === 0) body = <EmptyState sentence="No storm dates in this cohort." />;
+  else if (table === null) body = null;
   else if ("error" in table) body = <ErrorState error={table.error} onRetry={pairs.retry} />;
   else if (receipt === null) body = null;
   else if (view === "table") {
@@ -112,6 +118,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
                 key={opt.id}
                 type="button"
                 class="button button-small cohort-pill"
+                disabled={opt.count === 0}
                 aria-pressed={cohort === opt.id}
                 onClick={() => setCohort(opt.id)}
               >

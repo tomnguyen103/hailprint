@@ -5,6 +5,7 @@ import { objectName } from "../ruler";
 import { HEIGHT, LITERATURE_HSS, MARGIN, WIDTH, pathOf, xOf, yMinOf, yOf } from "./curve";
 
 const MARKER_R = 4;
+const HIT_R = 20;
 const HIGHLIGHT_R = 6;
 const TIP_H = 24;
 const TIP_CHAR_W = 7.2;
@@ -23,6 +24,7 @@ export function ThresholdCurve({
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const [focus, setFocus] = useState<number | null>(null);
+  const [roving, setRoving] = useState(0);
   const markers = useRef<(SVGCircleElement | null)[]>([]);
   const yMin = yMinOf(rows.map((row) => row[metric]));
   const yBottom = yOf(yMin, yMin);
@@ -31,23 +33,41 @@ export function ThresholdCurve({
     const value = row[metric];
     return { row, value, x: xOf(row.threshold_in), y: value === null ? null : yOf(value, yMin) };
   });
+  const validIndices = points.flatMap((p, idx) => (p.y !== null && p.value !== null ? [idx] : []));
+  const activeRoving = validIndices.includes(roving) ? roving : (validIndices[0] ?? 0);
   const active = hover ?? focus;
   const tip = active === null ? null : points[active];
 
+  const focusMarker = (idx: number) => {
+    setRoving(idx);
+    markers.current[idx]?.focus();
+  };
   const move = (dir: 1 | -1) => {
-    let i = (focus ?? -1) + dir;
+    const current = focus ?? activeRoving;
+    let i = current + dir;
     while (i >= 0 && i < points.length) {
       if (points[i]?.y !== null) {
-        markers.current[i]?.focus();
+        focusMarker(i);
         return;
       }
       i += dir;
     }
   };
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
-    event.preventDefault();
-    move(event.key === "ArrowRight" ? 1 : -1);
+    if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+      event.preventDefault();
+      move(1);
+    } else if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+      event.preventDefault();
+      move(-1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      if (validIndices[0] !== undefined) focusMarker(validIndices[0]);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      const last = validIndices[validIndices.length - 1];
+      if (last !== undefined) focusMarker(last);
+    }
   };
 
   let tooltip = null;
@@ -126,6 +146,15 @@ export function ThresholdCurve({
                 <circle class="highlight" cx={p.x} cy={p.y} r={HIGHLIGHT_R} />
               ) : null}
               <circle
+                class="marker-hit"
+                cx={p.x}
+                cy={p.y}
+                r={HIT_R}
+                onClick={() => focusMarker(i)}
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover(null)}
+              />
+              <circle
                 ref={(el) => {
                   markers.current[i] = el;
                 }}
@@ -133,9 +162,12 @@ export function ThresholdCurve({
                 cx={p.x}
                 cy={p.y}
                 r={MARKER_R}
-                tabIndex={0}
+                tabIndex={i === activeRoving ? 0 : -1}
                 aria-label={`${objectName(p.row.threshold_mm)}, ${formatInches(p.row.threshold_in)}, ${METRIC_LABELS[metric]} ${p.value.toFixed(2)}`}
-                onFocus={() => setFocus(i)}
+                onFocus={() => {
+                  setRoving(i);
+                  setFocus(i);
+                }}
                 onBlur={() => setFocus(null)}
                 onMouseEnter={() => setHover(i)}
                 onMouseLeave={() => setHover(null)}
