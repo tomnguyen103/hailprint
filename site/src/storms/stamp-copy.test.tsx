@@ -166,6 +166,28 @@ describe("Stamp copy feedback & UI polish contracts (US-16.1, US-16.2, US-16.3)"
     });
     expect(domText(copyBtn)).toBe("Copy field note");
     expect(domText(liveRegion)).toBe("");
+
+    // Switching storm date while "Copied" is active immediately resets copy feedback
+    await act(async () => {
+      (copyBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+      await Promise.resolve();
+    });
+    expect(domText(copyBtn)).toBe("Copied");
+    await act(() =>
+      render(
+        h(Stamp, {
+          storm: { ...storm, storm_date: "2023-06-23" },
+          reports: { status: "loading" },
+          step: null,
+          indexReceipt: receipt,
+          datesOpen: false,
+          onOpenDates: () => {},
+        }),
+        host as unknown as HTMLElement,
+      ),
+    );
+    const nextCopyBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && n["class"] === "button button-small stamp-copy")[0]!;
+    expect(domText(nextCopyBtn)).toBe("Copy field note");
   });
 
   it("enforces navigation indicators, sub-tab height, forced-colors, live stat borders, and token rules across CSS (US-16.1, US-16.2, US-16.3)", () => {

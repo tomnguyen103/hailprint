@@ -516,6 +516,12 @@ export function Inspector(props: InspectorProps) {
     return () => mql.removeEventListener?.("change", onChange);
   }, []);
   useModalFocusTrap(isMobile, panel);
+  useEffect(() => {
+    if (!isMobile || typeof document === "undefined" || typeof document.querySelector !== "function") return;
+    const header = document.querySelector<HTMLElement>(".top-bar");
+    header?.setAttribute("inert", "");
+    return () => header?.removeAttribute("inert");
+  }, [isMobile]);
   const liveEpochRef = useRef(0);
   const liveFips = props.pick.countyFips !== undefined ? props.pick.countyFips : props.fips;
   const liveKey = `${props.pick.lngLat[0]},${props.pick.lngLat[1]},${liveFips ?? ""}`;

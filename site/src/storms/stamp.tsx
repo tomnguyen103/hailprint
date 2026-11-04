@@ -29,19 +29,28 @@ export function sliderCell(step: number): number | null {
 }
 
 function StampCopyButton({ storm, receipt }: { storm: Storm; receipt: Receipt }) {
-  const [copied, setCopied] = useState(false);
+  const [copiedDate, setCopiedDate] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
+  const stormDateRef = useRef(storm.storm_date);
+  stormDateRef.current = storm.storm_date;
+  useEffect(() => {
+    clearTimeout(timer.current);
+    setCopiedDate(null);
+    return () => clearTimeout(timer.current);
+  }, [storm.storm_date]);
 
+  const copied = copiedDate === storm.storm_date;
   const copyFieldNote = () => {
+    const targetDate = storm.storm_date;
     const text = formatStormFieldNote(storm, receipt);
     if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
       void navigator.clipboard
         .writeText(text)
         .then(() => {
+          if (stormDateRef.current !== targetDate) return;
           clearTimeout(timer.current);
-          setCopied(true);
-          timer.current = setTimeout(() => setCopied(false), COPIED_MS);
+          setCopiedDate(targetDate);
+          timer.current = setTimeout(() => setCopiedDate(null), COPIED_MS);
         })
         .catch(() => {});
     }
@@ -124,7 +133,7 @@ export function Stamp({ storm, reports, step, indexReceipt, datesOpen = false, o
         )}
       </span>
       <ReceiptChip receipt={indexReceipt} file="storms.json" />
-      <StampCopyButton storm={storm} receipt={activeReceipt} />
+      <StampCopyButton key={storm.storm_date} storm={storm} receipt={activeReceipt} />
       <span class="visually-hidden">{times.map(cellFor).filter((c) => c !== null).length} reports placed</span>
     </div>
   );
