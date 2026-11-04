@@ -8,6 +8,7 @@ import type { Fill } from "../impact/power";
 import { fillNotes, InternetLegend, PowerFillControl, PowerLegend } from "../impact/power-fill";
 import { Timeline } from "../impact/timeline";
 import { ErrorState, LoadingState } from "../shell/states";
+import { countyAt } from "../state/county";
 import { type Load, useLoad } from "../state/load";
 import { setPinCounties, usePin } from "../state/pin";
 import { useTheme } from "../state/theme";
