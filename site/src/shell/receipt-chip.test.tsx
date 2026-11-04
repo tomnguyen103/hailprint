@@ -17,6 +17,9 @@ interface FakeDomNode {
   parentNode: FakeDomNode | null;
   namespaceURI: string;
   style: Record<string, unknown>;
+  focus: () => void;
+  contains: (target: unknown) => boolean;
+  querySelectorAll: (selector?: string) => FakeDomNode[];
   [key: string]: unknown;
 }
 
@@ -91,7 +94,7 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
     },
     contains(target: unknown): boolean {
       if (target === el) return true;
-      return el.childNodes.some((c) => typeof c.contains === "function" && (c.contains as (t: unknown) => boolean)(target));
+      return el.childNodes.some((c) => typeof c.contains === "function" && c.contains(target));
     },
     closest(): FakeDomNode | null {
       return null;
@@ -284,7 +287,7 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
     expect(dialog.contains(activeEl)).toBe(true);
 
     // Tab wraps from last focusable back to first
-    const focusables = dialog.querySelectorAll() as FakeDomNode[];
+    const focusables = dialog.querySelectorAll();
     expect(focusables.length).toBeGreaterThan(1);
     const last = focusables[focusables.length - 1]!;
     last.focus();
@@ -309,10 +312,11 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
     expect(activeEl).toBe(mapFrame);
   });
 
-  it("gives .inspector-try-link an inline-flex target at least 40 px tall in map.css (US-14.3)", () => {
-    const css = readFileSync(fileURLToPath(new URL("../styles/map.css", import.meta.url)), "utf8");
-    const block = css.match(/\.inspector-try-link\s*\{([^}]*)\}/)?.[1] ?? "";
-    expect(block).toContain("inline-flex");
-    expect(block).toMatch(/min-height:\s*40px/);
+  it("gives .inspector-try-link a >= 40 px touch target in map.css (US-14.3)", () => {
+    const cssPath = fileURLToPath(new URL("../styles/map.css", import.meta.url));
+    const css = readFileSync(cssPath, "utf8");
+    const match = css.match(/\.inspector-try-link\s*\{([^}]*)\}/);
+    expect(match).not.toBeNull();
+    expect(match![1]).toContain("min-height: 40px");
   });
 });

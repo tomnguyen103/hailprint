@@ -101,9 +101,10 @@
 
 .pane h2 {
   margin: 0 0 12px;
-  font-family: var(--serif);
-  font-size: 1.25rem;
-  font-weight: 500;
+  font-family: var(--sans);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .pane section + section,
@@ -194,7 +195,7 @@
 
 .ruler-mark {
   flex: none;
-  border: 1.5px solid var(--accent);
+  border: 1px solid var(--rule);
   border-radius: 50%;
 }
 

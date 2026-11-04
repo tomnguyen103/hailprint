@@ -36,6 +36,9 @@ interface FakeDomNode {
   parentNode: FakeDomNode | null;
   namespaceURI: string;
   style: Record<string, unknown>;
+  focus: () => void;
+  contains: (target: unknown) => boolean;
+  querySelectorAll: (selector?: string) => FakeDomNode[];
   [key: string]: unknown;
 }
 
@@ -51,9 +54,9 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
     nodeType: tag === "#text" ? 3 : 1,
     tagName: tag.toUpperCase(),
     data: text,
-    childNodes: [],
-    firstChild: null,
-    parentNode: null,
+    childNodes: [] as FakeDomNode[],
+    firstChild: null as FakeDomNode | null,
+    parentNode: null as FakeDomNode | null,
     namespaceURI: "http://www.w3.org/1999/xhtml",
     style: {},
     setAttribute(k: string, v: unknown) {
@@ -107,7 +110,7 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
     },
     contains(target: unknown): boolean {
       if (target === el) return true;
-      return el.childNodes.some((c) => typeof c.contains === "function" && (c.contains as (t: unknown) => boolean)(target));
+      return el.childNodes.some((c) => typeof c.contains === "function" && c.contains(target));
     },
     closest(): FakeDomNode | null {
       return null;
@@ -198,11 +201,16 @@ describe("ScopeDrawer focus lifecycle and ARIA (US-13.1, US-13.2, US-13.3)", () 
 
     await act(() =>
       render(
-        h(
-          ScopeDrawer,
-          { id: "storms-scope", label: "Storm dates", title: "Storm dates", open: true, onClose: () => { closed += 1; } },
-          h("a", { href: "/storms/2024-05-28/map" }, "2024-05-28"),
-        ),
+        h(ScopeDrawer, {
+          id: "storms-scope",
+          label: "Storm dates",
+          title: "Storm dates",
+          open: true,
+          onClose: () => {
+            closed += 1;
+          },
+          children: h("a", { href: "/storms/2024-05-28/map" }, "2024-05-28"),
+        }),
         host as unknown as HTMLElement,
       ),
     );
@@ -237,11 +245,16 @@ describe("ScopeDrawer focus lifecycle and ARIA (US-13.1, US-13.2, US-13.3)", () 
     // Closing returns focus to opener
     await act(() =>
       render(
-        h(
-          ScopeDrawer,
-          { id: "storms-scope", label: "Storm dates", title: "Storm dates", open: false, onClose: () => { closed += 1; } },
-          h("a", { href: "/storms/2024-05-28/map" }, "2024-05-28"),
-        ),
+        h(ScopeDrawer, {
+          id: "storms-scope",
+          label: "Storm dates",
+          title: "Storm dates",
+          open: false,
+          onClose: () => {
+            closed += 1;
+          },
+          children: h("a", { href: "/storms/2024-05-28/map" }, "2024-05-28"),
+        }),
         host as unknown as HTMLElement,
       ),
     );
@@ -254,11 +267,16 @@ describe("ScopeDrawer focus lifecycle and ARIA (US-13.1, US-13.2, US-13.3)", () 
 
     await act(() =>
       render(
-        h(
-          ScopeDrawer,
-          { id: "storms-scope", label: "Storm dates", title: "Storm dates", open: true, onClose: () => { closed += 1; } },
-          h("a", { href: "/storms/2024-05-28/map" }, "2024-05-28"),
-        ),
+        h(ScopeDrawer, {
+          id: "storms-scope",
+          label: "Storm dates",
+          title: "Storm dates",
+          open: true,
+          onClose: () => {
+            closed += 1;
+          },
+          children: h("a", { href: "/storms/2024-05-28/map" }, "2024-05-28"),
+        }),
         host as unknown as HTMLElement,
       ),
     );
@@ -275,11 +293,14 @@ describe("ScopeDrawer focus lifecycle and ARIA (US-13.1, US-13.2, US-13.3)", () 
     opener.focus();
     await act(() =>
       render(
-        h(
-          ScopeDrawer,
-          { id: "storms-scope", label: "Storm dates", title: "Storm dates", open: false, onClose: () => {} },
-          h("a", { href: "/storms/2024-05-28/map" }, "2024-05-28"),
-        ),
+        h(ScopeDrawer, {
+          id: "storms-scope",
+          label: "Storm dates",
+          title: "Storm dates",
+          open: false,
+          onClose: () => {},
+          children: h("a", { href: "/storms/2024-05-28/map" }, "2024-05-28"),
+        }),
         host as unknown as HTMLElement,
       ),
     );
@@ -328,7 +349,7 @@ describe("ScopeDrawer focus lifecycle and ARIA (US-13.1, US-13.2, US-13.3)", () 
 
     const stampVnode = Stamp({
       storm,
-      reports: { status: "loading", showLoading: false, retry: () => {} },
+      reports: { status: "loading" },
       step: null,
       indexReceipt: receipt,
       datesOpen: false,
@@ -380,5 +401,10 @@ describe("ScopeDrawer focus lifecycle and ARIA (US-13.1, US-13.2, US-13.3)", () 
     )[0]!;
     expect(wsTrigger).toBeDefined();
     expect(wsTrigger["aria-haspopup"]).toBeUndefined();
+    await act(() => {
+      render(null, host as unknown as HTMLElement);
+      render(null, pipeHost as unknown as HTMLElement);
+      render(null, wsHost as unknown as HTMLElement);
+    });
   });
 });

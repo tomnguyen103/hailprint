@@ -1,12 +1,15 @@
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { Receipt, ReportsFile, Storm } from "../data/types";
+import { formatInches } from "../format";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { CELLS, cellFor, cells, formatStormFieldNote } from "../stamp";
 import type { Load } from "../state/load";
 import { STEPS_PER_HOUR } from "../time/step";
-import { formatInches } from "../format";
 import { objectForSize } from "./select";
 
 export { formatStormFieldNote };
+
+const COPIED_MS = 2000;
 
 interface Props {
   storm: Storm;
@@ -23,6 +26,37 @@ const HOUR_LABELS = Array.from({ length: CELLS }, (_, i) => `${String((i + 12) %
 /** The stamp cell that holds a map step; null once the step is past the 24-cell storm window. */
 export function sliderCell(step: number): number | null {
   return step < CELLS * STEPS_PER_HOUR ? Math.floor(step / STEPS_PER_HOUR) : null;
+}
+
+function StampCopyButton({ storm, receipt }: { storm: Storm; receipt: Receipt }) {
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const copyFieldNote = () => {
+    const text = formatStormFieldNote(storm, receipt);
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      void navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          clearTimeout(timer.current);
+          setCopied(true);
+          timer.current = setTimeout(() => setCopied(false), COPIED_MS);
+        })
+        .catch(() => {});
+    }
+  };
+
+  return (
+    <>
+      <button type="button" class="button button-small stamp-copy" onClick={copyFieldNote}>
+        {copied ? "Copied" : "Copy field note"}
+      </button>
+      <span class="visually-hidden" aria-live="polite">
+        {copied ? "Copied" : ""}
+      </span>
+    </>
+  );
 }
 
 /** Storm date in mono, the 24-cell 12Z-to-12Z bar, the report count, and the max size. */
@@ -54,18 +88,11 @@ export function Stamp({ storm, reports, step, indexReceipt, datesOpen = false, o
       ...(hasSpc ? [] : [reportSourceEntry]),
     ],
   };
-  const copyFieldNote = () => {
-    const text = formatStormFieldNote(storm, activeReceipt);
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      void navigator.clipboard.writeText(text).catch(() => {});
-    }
-  };
   return (
     <div class="stamp">
       <button
         type="button"
         class="stamp-date stamp-date-button mono"
-
         aria-expanded={datesOpen}
         aria-controls="storms-scope"
         onClick={onOpenDates}
@@ -97,9 +124,7 @@ export function Stamp({ storm, reports, step, indexReceipt, datesOpen = false, o
         )}
       </span>
       <ReceiptChip receipt={indexReceipt} file="storms.json" />
-      <button type="button" class="button button-small stamp-copy" onClick={copyFieldNote}>
-        Copy field note
-      </button>
+      <StampCopyButton storm={storm} receipt={activeReceipt} />
       <span class="visually-hidden">{times.map(cellFor).filter((c) => c !== null).length} reports placed</span>
     </div>
   );

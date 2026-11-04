@@ -85,7 +85,7 @@
   height: 8px;
   margin-right: 8px;
   border-radius: 2px;
-  background: var(--hail-3);
+  background: var(--accent);
   vertical-align: middle;
 }
 

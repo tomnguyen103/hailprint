@@ -1,31 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { h, render, type ComponentChild, type VNode } from "preact";
+import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Storm, StormFiles } from "../data/types";
 import { ScopeSidebar } from "./scope-sidebar";
-
-type Node = VNode<Record<string, unknown>>;
-
-function findAll(node: ComponentChild, match: (vnode: Node) => boolean, out: Node[] = []): Node[] {
-  if (Array.isArray(node)) {
-    for (const child of node) findAll(child as ComponentChild, match, out);
-    return out;
-  }
-  if (node === null || typeof node !== "object") return out;
-  const vnode = node as Node;
-  if (match(vnode)) out.push(vnode);
-  return findAll(vnode.props["children"] as ComponentChild, match, out);
-}
-
-function textOf(node: ComponentChild): string {
-  if (Array.isArray(node)) return node.map((child) => textOf(child as ComponentChild)).join(" ");
-  if (node === null || node === undefined || typeof node === "boolean") return "";
-  if (typeof node !== "object") return String(node);
-  const vnode = node as Node;
-  return textOf(vnode.props["children"] as ComponentChild);
-}
 
 function makeStorm(storm_date: string, report_count: number, files: Partial<StormFiles> = {}): Storm {
   return {
@@ -60,6 +39,9 @@ interface FakeDomNode {
   parentNode: FakeDomNode | null;
   namespaceURI: string;
   style: Record<string, unknown>;
+  focus: () => void;
+  contains: (target: unknown) => boolean;
+  querySelectorAll: (selector?: string) => FakeDomNode[];
   [key: string]: unknown;
 }
 
@@ -133,7 +115,7 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
     },
     contains(target: unknown): boolean {
       if (target === el) return true;
-      return el.childNodes.some((c) => typeof c.contains === "function" && (c.contains as (t: unknown) => boolean)(target));
+      return el.childNodes.some((c) => typeof c.contains === "function" && c.contains(target));
     },
     closest(selector: string): FakeDomNode | null {
       if (selector === "details:not([open])") {
@@ -145,7 +127,7 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
       }
       return null;
     },
-    querySelectorAll(selector: string): FakeDomNode[] {
+    querySelectorAll(selector = ""): FakeDomNode[] {
       const out: FakeDomNode[] = [];
       const walk = (n: FakeDomNode) => {
         for (const c of n.childNodes) {
