@@ -20,7 +20,8 @@ import { LiveStatusList } from "../../live/live-status-list";
 import { href } from "../../router";
 import { objectName } from "../../ruler";
 import { Link } from "../../shell/link";
-import { ReceiptChip, getActiveReceiptChipId } from "../../shell/receipt-chip"; import { useModalFocusTrap } from "../../shell/scope-drawer";
+import { ReceiptChip, getActiveReceiptChipId } from "../../shell/receipt-chip";
+import { useModalFocusTrap } from "../../shell/scope-drawer";
 import { clearPin, getPinState, isMetroCoordinate, setPin, usePin } from "../../state/pin";
 import {
   type DirectWarning,
@@ -315,16 +316,22 @@ export function InspectorView({
   onCounty,
   onClose,
   pinnedLngLat,
-  panelRef, isModalSheet = false,
+  panelRef,
+  isModalSheet = false,
   liveStatus = "idle",
   liveData = null,
-  onLiveCheck, copiedNote = false, onCopyNote,
+  onLiveCheck,
+  copiedNote = false,
+  onCopyNote,
 }: InspectorProps & {
   pinnedLngLat?: [number, number] | null;
-  panelRef?: { current: HTMLDivElement | null }; isModalSheet?: boolean;
+  panelRef?: { current: HTMLDivElement | null };
+  isModalSheet?: boolean;
   liveStatus?: "idle" | "loading" | "ready";
   liveData?: LiveStatusResult | null;
-  onLiveCheck?: () => void; copiedNote?: boolean; onCopyNote?: () => void;
+  onLiveCheck?: () => void;
+  copiedNote?: boolean;
+  onCopyNote?: () => void;
 }) {
   const [lon, lat] = pick.lngLat;
   const inMetro = isMetroCoordinate(pick.lngLat);
@@ -370,7 +377,10 @@ export function InspectorView({
           >
             {copiedNote ? "Copied" : "Copy field note"}
           </button>
-          <span class="visually-hidden" aria-live="polite">{copiedNote ? "Copied" : ""}</span><button type="button" class="button button-small" onClick={onClose}>
+          <span class="visually-hidden" aria-live="polite">
+            {copiedNote ? "Copied" : ""}
+          </span>
+          <button type="button" class="button button-small" onClick={onClose}>
             Close
           </button>
         </div>
@@ -483,9 +493,30 @@ type InspectorLiveState =
 export function Inspector(props: InspectorProps) {
   const panel = useRef<HTMLDivElement>(null);
   const { pin } = usePin();
-  const [copiedNote, setCopiedNote] = useState(false); const copyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined); useEffect(() => () => clearTimeout(copyTimerRef.current), []); const markCopied = () => { clearTimeout(copyTimerRef.current); setCopiedNote(true); copyTimerRef.current = setTimeout(() => setCopiedNote(false), 2000); };
+  const [copiedNote, setCopiedNote] = useState(false);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(copyTimerRef.current), []);
+  const markCopied = () => {
+    clearTimeout(copyTimerRef.current);
+    setCopiedNote(true);
+    copyTimerRef.current = setTimeout(() => setCopiedNote(false), 2000);
+  };
   const [liveState, setLiveState] = useState<InspectorLiveState>({ key: "", status: "idle" });
-  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 767px)").matches : false); useEffect(() => { if (typeof window === "undefined" || typeof window.matchMedia !== "function") return; const mql = window.matchMedia("(max-width: 767px)"); setIsMobile(mql.matches); const onChange = (event: { matches: boolean }) => setIsMobile(event.matches); mql.addEventListener?.("change", onChange); return () => mql.removeEventListener?.("change", onChange); }, []); useModalFocusTrap(isMobile, panel); const liveEpochRef = useRef(0);
+  const [isMobile, setIsMobile] = useState<boolean>(() =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(max-width: 767px)").matches
+      : false,
+  );
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia("(max-width: 767px)");
+    setIsMobile(mql.matches);
+    const onChange = (event: { matches: boolean }) => setIsMobile(event.matches);
+    mql.addEventListener?.("change", onChange);
+    return () => mql.removeEventListener?.("change", onChange);
+  }, []);
+  useModalFocusTrap(isMobile, panel);
+  const liveEpochRef = useRef(0);
   const liveFips = props.pick.countyFips !== undefined ? props.pick.countyFips : props.fips;
   const liveKey = `${props.pick.lngLat[0]},${props.pick.lngLat[1]},${liveFips ?? ""}`;
   const currentLive: InspectorLiveState =
@@ -509,9 +540,14 @@ export function Inspector(props: InspectorProps) {
   };
 
   useEffect(() => {
-    const isMobile = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 767px)").matches : false; if (!isMobile) panel.current?.focus();
+    const mobile =
+      typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia("(max-width: 767px)").matches
+        : false;
+    if (!mobile) panel.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || getActiveReceiptChipId() !== null) return; if (event.key === "Escape") props.onClose();
+      if (event.defaultPrevented || getActiveReceiptChipId() !== null) return;
+      if (event.key === "Escape") props.onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -521,10 +557,13 @@ export function Inspector(props: InspectorProps) {
     <InspectorView
       {...props}
       pinnedLngLat={pin?.lngLat ?? null}
-      panelRef={panel} isModalSheet={isMobile}
+      panelRef={panel}
+      isModalSheet={isMobile}
       liveStatus={currentLive.status}
       liveData={currentLive.status === "ready" ? currentLive.data : null}
-      onLiveCheck={runLiveCheck} copiedNote={copiedNote} onCopyNote={markCopied}
+      onLiveCheck={runLiveCheck}
+      copiedNote={copiedNote}
+      onCopyNote={markCopied}
     />
   );
 }
