@@ -10,11 +10,7 @@ export const MAX_IN_FLIGHT = 6;
 let inFlight = 0;
 const waitQueue: Array<() => void> = [];
 
-function acquireSlot(): Promise<void> {
-  if (inFlight < MAX_IN_FLIGHT) {
-    inFlight += 1;
-    return Promise.resolve();
-  }
+function waitForSlot(): Promise<void> {
   return new Promise<void>((resolve) => {
     waitQueue.push(resolve);
   });
@@ -60,8 +56,12 @@ export async function fetchUrlJson<T>(
   guard: (value: unknown) => T,
   headers?: HeadersInit,
 ): Promise<T> {
-  await acquireSlot();
   const run = impl ?? fetch;
+  if (inFlight < MAX_IN_FLIGHT) {
+    inFlight += 1;
+  } else {
+    await waitForSlot();
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let body: unknown;
