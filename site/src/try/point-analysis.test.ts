@@ -15,6 +15,7 @@ import type {
 } from "../data/types";
 import { useInternetAll, usePowerAll, useReportsAll, useWarningsAll } from "../state/impact-all";
 import { clearFileCache, useSparseFiles } from "../state/pairs-all";
+import * as pointAnalysis from "./point-analysis";
 import { analyzeStormAtPin, internetSeriesTrough, summarizeArchiveAtPin } from "./point-analysis";
 
 const receipt: Receipt = {
@@ -356,5 +357,52 @@ describe("analyzeStormAtPin and summarizeArchiveAtPin (US-02.3, US-02.4, US-02.5
       internet,
     });
     expect(quiet.hasActivityNearPin).toBe(false);
+  });
+});
+
+describe("point distance pass and radius threshold pass (US-12.2)", () => {
+  it("matches analyzeStormAtPin at every radius 1..20 km and reuses per-point distances across radius changes", () => {
+    const power = makePowerFixture();
+    const internet = makeInternetFixture();
+    const fnRecord = pointAnalysis as unknown as Record<string, (...args: unknown[]) => unknown>;
+    expect(typeof fnRecord["computeStormPointDistances"]).toBe("function");
+    expect(typeof fnRecord["applyRadiusToStormDistances"]).toBe("function");
+
+    let distanceCalls = 0;
+    const computeDistances = (input: unknown) => {
+      distanceCalls += 1;
+      return fnRecord["computeStormPointDistances"]!(input);
+    };
+    const applyRadius = (distances: unknown, radiusKm: number) =>
+      fnRecord["applyRadiusToStormDistances"]!(distances, radiusKm);
+
+    const distances = computeDistances({
+      storm: stormFixture,
+      point: [-95.3698, 29.7604],
+      fips: "48201",
+      swath: swathFixture,
+      reports: reportsFixture,
+      warnings: warningsFixture,
+      power,
+      internet,
+    });
+    expect(distanceCalls).toBe(1);
+
+    for (let radiusKm = 1; radiusKm <= 20; radiusKm++) {
+      const fromSplit = applyRadius(distances, radiusKm);
+      const fromCombined = analyzeStormAtPin({
+        storm: stormFixture,
+        point: [-95.3698, 29.7604],
+        radiusKm,
+        fips: "48201",
+        swath: swathFixture,
+        reports: reportsFixture,
+        warnings: warningsFixture,
+        power,
+        internet,
+      });
+      expect(fromSplit).toEqual(fromCombined);
+    }
+    expect(distanceCalls).toBe(1);
   });
 });
