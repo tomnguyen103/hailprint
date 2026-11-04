@@ -18,4 +18,4 @@ The WCM database writes "Harris". The preliminary daily CSV has no fixed case. `
 
 ## Fix
 
-Open follow-up, not part of PR C. Compare `reports["county"].str.casefold() == "harris"` in `reports.harris_reports`, and test it with a daily CSV row spelled "HARRIS". No score changes, because `score` reads `nearby_reports` by distance. The count in `ingest` and the `report_count` in `candidate-days.csv` for `spc-daily` rows change.
+Shipped in v0.2.0. `reports.harris_reports` trims and casefolds the county and the state, then compares with `harris` and `tx`. `HARRISON, TX` and `Harris, OK` stay out. The test `tests/test_reports.py::test_harris_reports_matches_county_and_state_without_case_or_space` holds the rule. No score changes, because `score` reads `nearby_reports` by distance. The count in `ingest` and the `report_count` in `candidate-days.csv` for `spc-daily` rows change.

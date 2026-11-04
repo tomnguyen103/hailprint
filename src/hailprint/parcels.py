@@ -104,9 +104,11 @@ def count_parcels(
         swaths_native.loc[:, ["threshold_mm", "geometry"]].explode(index_parts=False),
         predicate="intersects",
     )
-    by_parcel = cast(
-        pd.DataFrame,
-        hits.groupby("hcad_num").agg(top=("threshold_mm", "max"), zip=("zip", "first")),
+    hits = hits.sort_values("threshold_mm", ascending=False, kind="stable")
+    by_parcel = (
+        hits.dropna(subset=["hcad_num"])
+        .drop_duplicates("hcad_num")
+        .rename(columns={"threshold_mm": "top"})
     )
     by_parcel["zip"] = zip5(cast(pd.Series, by_parcel["zip"]))
     out = swaths.drop(columns="geometry").copy()

@@ -6,14 +6,19 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
+from importlib.metadata import version
 from typing import Any
 
 TRIES = 3
 BACKOFF_S = (0.5, 1.0)
+MAX_RETRY_AFTER_S = 30.0
+RETRY_CODES = frozenset({408, 429})
+SERVER_ERROR_MIN = 500
 DEFAULT_TIMEOUT = 30
 CHUNK_BYTES = 1 << 20  # read-ahead buffer of a stream
 MAX_BYTES = 64 * 1024 * 1024  # 64 MB cap on whole-body responses
 MAX_STREAM_BYTES = 2 * 1024 * 1024 * 1024  # 2 GiB cap on chunked stream responses
+USER_AGENT = f"hailprint/{version('hailprint')} (+https://hailprint.tomnguyen.me)"
 
 
 def _check_url(url: str) -> None:
@@ -32,7 +37,9 @@ class _NoDowngradeRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-urllib.request.install_opener(urllib.request.build_opener(_NoDowngradeRedirectHandler()))
+_opener = urllib.request.build_opener(_NoDowngradeRedirectHandler())
+_opener.addheaders = [("User-Agent", USER_AGENT)]
+urllib.request.install_opener(_opener)
 
 
 def _check_redirect(url: str, response: Any) -> None:
@@ -49,24 +56,43 @@ def _check_redirect(url: str, response: Any) -> None:
 
 
 def _retry[T](attempt_once: Callable[[], T]) -> T:
-    """Return the result of `attempt_once`. Retry a network error or an HTTP 5xx; a 4xx raises."""
+    """Return the result of `attempt_once`. Retry a network error, an HTTP 408, 429, or 5xx.
+
+    Any other 4xx raises at once. A numeric `Retry-After` (RFC 9110 10.2.3 delta-seconds) sets
+    the sleep, at most `MAX_RETRY_AFTER_S`; any other value uses `BACKOFF_S`. A retried HTTP
+    error is closed before the sleep; the last error goes to the caller open.
+    """
     # shortcut: no jitter in the backoff, upgrade if many parallel callers appear
     for attempt in range(TRIES):
+        pause = BACKOFF_S[min(attempt, len(BACKOFF_S) - 1)]
         try:
             return attempt_once()
         except urllib.error.HTTPError as exc:
-            if exc.code < 500 or attempt == TRIES - 1:
+            if (
+                exc.code not in RETRY_CODES and exc.code < SERVER_ERROR_MIN
+            ) or attempt == TRIES - 1:
                 raise
+            pause = _retry_after(exc.headers, pause)
+            exc.close()
         except (OSError, http.client.HTTPException):
             # URLError, timeout, reset, or a short read (IncompleteRead) during the body read
             if attempt == TRIES - 1:
                 raise
-        time.sleep(BACKOFF_S[attempt])
+        time.sleep(pause)
     raise AssertionError("unreachable: the last try returns or raises")
 
 
+def _retry_after(headers: Any, default: float) -> float:
+    """The delta-seconds of a `Retry-After` header, capped; `default` for any other value."""
+    raw = headers.get("Retry-After") if headers is not None else None
+    text = str(raw).strip() if raw is not None else ""
+    if not (text.isascii() and text.isdigit()):
+        return default
+    return float(min(int((text.lstrip("0") or "0")[:9]), MAX_RETRY_AFTER_S))
+
+
 def get(url: str, timeout: float = DEFAULT_TIMEOUT, max_bytes: int = MAX_BYTES) -> bytes:
-    """Return the body. Retry a network error, a short read, or an HTTP 5xx; a 4xx raises at once.
+    """Return the body. Retry a network error, a short read, or an HTTP 408, 429, or 5xx.
 
     After the last try the last error propagates.
     """

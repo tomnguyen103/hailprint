@@ -86,7 +86,12 @@ def nearby_reports(storm_date: date, text: str | None = None) -> gpd.GeoDataFram
 
 
 def harris_reports(storm_date: date, text: str | None = None) -> gpd.GeoDataFrame:
-    """The reports whose county is Harris and state is TX, by name as the WCM count does."""
+    """The reports whose county is Harris and state is TX, by name as the WCM count does.
+
+    The match trims and casefolds both fields: the daily CSV writes `HARRIS` since 2025.
+    """
     reports = parse(fetch_hail_csv(storm_date) if text is None else text)
-    keep = (reports["county"] == "Harris") & (reports["state"] == "TX")
+    county_name = reports["county"].str.strip().str.casefold()
+    state = reports["state"].str.strip().str.casefold()
+    keep = (county_name == "harris") & (state == "tx")
     return reports.loc[keep].reset_index(drop=True)

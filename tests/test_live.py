@@ -567,3 +567,25 @@ def test_window_warnings_spans_three_convective_days_when_mesh_lags():
     )
     rows = live.window_warnings(sbw_late, start, run_time)
     assert rows["eventid"].tolist() == [1]
+
+
+@pytest.mark.parametrize(
+    ("end", "expected_endts"),
+    [
+        (datetime(2026, 11, 3, 12, 34, 0, tzinfo=UTC), "2026-11-03T12:34Z"),
+        (datetime(2026, 11, 3, 12, 34, 1, tzinfo=UTC), "2026-11-03T12:35Z"),
+        (datetime(2026, 11, 3, 12, 34, 0, 500, tzinfo=UTC), "2026-11-03T12:35Z"),
+    ],
+)
+def test_sbw_rounds_end_up_to_the_next_whole_minute_when_subminute(
+    monkeypatch, end: datetime, expected_endts: str
+):
+    urls: list[str] = []
+    monkeypatch.setattr(live.net, "get", lambda url, timeout: urls.append(url) or b"{}")
+
+    live._sbw(datetime(2026, 11, 2, 12, 34, 0, tzinfo=UTC), end)
+
+    assert urls == [
+        "https://mesonet.agron.iastate.edu/api/1/vtec/sbw_interval.geojson"
+        f"?begints=2026-11-02T12:34Z&endts={expected_endts}&wfo=HGX"
+    ]

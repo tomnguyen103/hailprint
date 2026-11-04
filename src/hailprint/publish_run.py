@@ -4,6 +4,7 @@ The caller holds the publish lock. A run reads the directories of `Dirs` and wri
 `Dirs.site`.
 """
 
+import json
 import sys
 from datetime import date, datetime
 from pathlib import Path
@@ -25,6 +26,8 @@ from hailprint import (
     swath,
 )
 
+PARTIAL_EXIT = 3  # the exit code of a publish that failed some dates and built at least one
+
 
 class Dirs(NamedTuple):
     """The directories of one publish run."""
@@ -34,6 +37,17 @@ class Dirs(NamedTuple):
     power: Path
     internet: Path
     site: Path
+
+
+class PartialPublish(ValueError):
+    """Some storm dates failed and at least one date published; `failed` names the dates.
+
+    The CLI exits `PARTIAL_EXIT` for it, and the cloud task still uploads.
+    """
+
+    def __init__(self, failed: list[str]) -> None:
+        super().__init__(f"publish failed for: {', '.join(failed)}")
+        self.failed = failed
 
 
 def archive_summary() -> dict | None:
@@ -126,6 +140,26 @@ def remove_stale(paths: set[Path], with_internet: bool) -> None:
                 print(f"{path.parent.name}: removed {path.name}, this run has no --with-internet")
 
 
+def _without_run_time(doc: object) -> object:
+    """The document with the `run_time` of its top-level receipt removed."""
+    if isinstance(doc, dict) and isinstance(doc.get("receipt"), dict):
+        receipt = {k: v for k, v in doc["receipt"].items() if k != "run_time"}
+        return doc | {"receipt": receipt}
+    return doc
+
+
+def _same_but_run_time(path: Path, body: str) -> bool:
+    """True when the file at `path` validates and equals `body` outside `receipt.run_time`.
+
+    A missing, unreadable, or schema-invalid file gives False, so the run writes it.
+    """
+    try:
+        old = publish.read_published(path, path.stem)
+    except (OSError, ValueError):
+        return False
+    return _without_run_time(old) == _without_run_time(json.loads(body))
+
+
 def run(
     selected: list[tuple[date, Path]], dirs: Dirs, *, with_internet: bool, now: datetime
 ) -> list[Path]:
@@ -140,6 +174,8 @@ def run(
     stops the run before the index write. Without `with_internet` no date gets an internet.json
     and a stale one is removed. The run removes every stale file after the index write, so a run
     that fails before the write leaves the old index and the old files together.
+    A per-date file whose content differs from the file on disk only in `receipt.run_time` keeps
+    its old bytes, so `run_time` is the run that last changed the file content.
     """
     if not candidates.CANDIDATES_PATH.exists():
         raise FileNotFoundError(f"run hailprint candidates first: {candidates.CANDIDATES_PATH}")
@@ -218,7 +254,10 @@ def run(
     for storm_date, texts, entry in built:
         folder = dirs.site / publish.STORMS_DIR / storm_date.isoformat()
         for name, body in texts.items():
-            written.append(files.write_text_atomic(body, folder / name))
+            path = folder / name
+            if not _same_but_run_time(path, body):
+                files.write_text_atomic(body, path)
+            written.append(path)
         entries.append(entry)
         file_count += len(texts)
         print(f"{storm_date}: published {len(texts)} files")
@@ -240,5 +279,5 @@ def run(
     remove_stale(stale, with_internet)
     print(f"confidence: {swath.CONFIDENCE}")
     if failed:
-        raise ValueError(f"publish failed for: {', '.join(failed)}")
+        raise PartialPublish(failed)
     return written

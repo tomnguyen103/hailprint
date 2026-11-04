@@ -40,6 +40,20 @@ def test_no_harris_rows_gives_empty_frame():
     assert list(gdf.columns) == COLUMNS
 
 
+def test_harris_reports_matches_county_and_state_without_case_or_space():
+    text = (
+        HEADER
+        + """1800,100,Katy,HARRIS,TX,29.78,-95.82,(HGX)
+1805,125,Spring, Harris ,tx,30.08,-95.42,(HGX)
+1810,150,Marshall,HARRISON,TX,32.54,-94.37,(SHV)
+1815,175,Ardmore,Harris,OK,34.17,-97.13,(OUN)
+"""
+    )
+    gdf = harris_reports(date(2025, 6, 1), text=text)
+    assert gdf["time"].tolist() == ["1800", "1805"]
+    assert gdf["size_in"].tolist() == [1.0, 1.25]
+
+
 def test_nearby_reports_keeps_fort_bend_and_drops_georgia():
     gdf = nearby_reports(date(2024, 5, 28), text=CSV)
 

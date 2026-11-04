@@ -6,6 +6,7 @@ from datetime import date
 
 import geopandas as gpd
 import pandas as pd
+import shapely
 from shapely.errors import ShapelyError
 from shapely.geometry import shape
 
@@ -100,7 +101,17 @@ def parse(text: str, storm_date: date) -> gpd.GeoDataFrame:
                 raise ValueError("polygon time is empty")
             if geometry.get("type") not in GEOMETRY_TYPES:
                 raise ValueError(f"geometry type {_show(geometry.get('type'))} is not a polygon")
-            row["geometry"] = shape(geometry)
+            repaired = shapely.make_valid(shape(geometry))
+            polygons = [
+                poly
+                for part in shapely.get_parts(repaired)
+                if isinstance(part, shapely.Polygon | shapely.MultiPolygon)
+                for poly in shapely.get_parts(part)
+                if isinstance(poly, shapely.Polygon) and not poly.is_empty
+            ]
+            if not polygons:
+                continue
+            row["geometry"] = polygons[0] if len(polygons) == 1 else shapely.MultiPolygon(polygons)
             reaches = row["geometry"].intersects(metro)
         except (ShapelyError, TypeError, ValueError, KeyError, AttributeError) as exc:
             raise ValueError(

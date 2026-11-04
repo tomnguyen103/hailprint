@@ -42,8 +42,8 @@ class _BrokenBody(_Response):
         raise http.client.IncompleteRead(b"x")
 
 
-def _http(code):
-    return urllib.error.HTTPError(URL, code, "status", {}, None)
+def _http(code, headers=None):
+    return urllib.error.HTTPError(URL, code, "status", headers or {}, io.BytesIO(b"err"))
 
 
 def test_get_returns_the_bytes_after_one_url_error(monkeypatch):
@@ -126,6 +126,7 @@ def server():
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             hits[self.path] = count = hits.get(self.path, 0) + 1
+            server_uas.append(self.headers.get("User-Agent"))
             if self.path == "/missing":
                 self.send_error(404)
             elif self.path == "/down" or (self.path == "/flaky" and count <= 2):
@@ -138,12 +139,25 @@ def server():
                 self.end_headers()
                 self.wfile.write(body)
 
+        def do_POST(self):
+            hits[self.path] = hits.get(self.path, 0) + 1
+            server_uas.append(self.headers.get("User-Agent"))
+            self.send_response(200)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(b"ok")
+
         def log_message(self, *args):
             pass
 
+    server_uas: list[str | None] = []
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    yield SimpleNamespace(url=lambda path: f"http://127.0.0.1:{httpd.server_port}{path}", hits=hits)
+    yield SimpleNamespace(
+        url=lambda path: f"http://127.0.0.1:{httpd.server_port}{path}",
+        hits=hits,
+        uas=server_uas,
+    )
     httpd.shutdown()
     httpd.server_close()
 
@@ -245,3 +259,60 @@ def test_redirect_handler_rejects_https_to_http_before_following():
     handler = net._NoDowngradeRedirectHandler()
     with pytest.raises(RuntimeError, match="redirect downgraded from https to http"):
         handler.redirect_request(req, None, 302, "Found", {}, "http://example.test/insecure.csv")
+
+
+@pytest.mark.parametrize("code", [408, 429])
+def test_get_retries_408_and_429_and_closes_the_retried_error(monkeypatch, code):
+    err = _http(code)
+    calls, sleeps = _script(monkeypatch, err, b"ok")
+
+    assert net.get(URL) == b"ok"
+    assert len(calls) == 2
+    assert sleeps == [0.5]
+    assert err.fp.closed is True
+
+
+def test_get_honors_numeric_retry_after_capped_and_falls_back_on_non_numeric(monkeypatch):
+    calls, sleeps = _script(
+        monkeypatch,
+        _http(429, {"Retry-After": "0000000002"}),
+        _http(429, {"Retry-After": "9999"}),
+        b"ok",
+    )
+    assert net.get(URL) == b"ok"
+    assert len(calls) == 3
+    assert sleeps == [2.0, 30.0]
+
+    _, sleeps_date = _script(
+        monkeypatch,
+        _http(503, {"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"}),
+        _http(503, {"Retry-After": "junk"}),
+        b"ok",
+    )
+    assert net.get(URL) == b"ok"
+    assert sleeps_date == [0.5, 1.0]
+
+
+def test_get_closes_retried_503_errors_and_raises_the_last_one(monkeypatch):
+    errors = [_http(503) for _ in range(3)]
+    calls, sleeps = _script(monkeypatch, *errors)
+
+    with pytest.raises(urllib.error.HTTPError) as exc:
+        net.get(URL)
+
+    assert exc.value is errors[-1]
+    assert len(calls) == 3
+    assert sleeps == [0.5, 1.0]
+    assert errors[0].fp.closed is True
+    assert errors[1].fp.closed is True
+
+
+def test_requests_send_hailprint_user_agent_unless_caller_provides_one(server):
+    expected = "hailprint/0.1.0 (+https://hailprint.tomnguyen.me)"
+    assert net.get(server.url("/ok")) == b"abcdef"
+    with net.open_stream(server.url("/ok")) as stream:
+        assert stream.read() == b"abcdef"
+    assert net.post(server.url("/ok"), b"{}", {"Content-Type": "application/json"}) == b"ok"
+    assert net.post(server.url("/ok"), b"{}", {"User-Agent": "custom/1.0"}) == b"ok"
+
+    assert server.uas == [expected, expected, expected, "custom/1.0"]
