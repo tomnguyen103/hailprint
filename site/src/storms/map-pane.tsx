@@ -16,9 +16,9 @@ import "../styles/map.css";
 import { TimeSlider, eventJumpChips } from "../time/slider";
 import { LAYER_ROWS, LayersControl, type LayerState } from "./layers-control";
 import type { MapHandle } from "./map/create-map";
-import { boundsOf, coveringAt, coveringClass, nearestReport, swathExposureAt } from "./map/geo";
+import { boundsOf, buildPick, refreshPick } from "./map/geo";
 import { Inspector, type Pick } from "./map/inspector";
-import { type LayerName, fillLayerId, warningsNote } from "./map/layers";
+import { type LayerName, warningsNote } from "./map/layers";
 import { RulerLegend } from "./map/ruler-legend";
 import { RULER } from "../ruler";
 import { defaultFill } from "./select";
@@ -81,27 +81,18 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
   const onCountyRef = useRef(onCounty);
   onCountyRef.current = onCounty;
 
-  const pickCoordinate = useCallback((lngLat: [number, number], coveringOverride?: number | null) => {
-    const clickedCounty = countyAt(lngLat, outlinesRef.current);
-    if (clickedCounty !== null) onCountyRef.current(clickedCounty);
-    const cov =
-      coveringOverride !== undefined
-        ? coveringOverride
-        : swathRef.current
-          ? (coveringAt(swathRef.current, lngLat)?.threshold_mm ?? null)
-          : null;
-    const nearSwath =
-      cov === null && swathRef.current !== null
-        ? swathExposureAt(swathRef.current, lngLat, 20).nearest
-        : null;
-    setPick({
-      date: stormDateRef.current,
+  const pickCoordinate = useCallback((lngLat: [number, number]) => {
+    const next = buildPick(
+      stormDateRef.current,
       lngLat,
-      coveringMm: cov,
-      nearest: nearestReport(lngLat, reportsRef.current?.features ?? []),
-      nearestSwath: nearSwath,
-      countyFips: outlinesRef.current !== null ? clickedCounty : undefined,
-    });
+      swathRef.current,
+      reportsRef.current,
+      outlinesRef.current,
+    );
+    if (next.countyFips !== undefined && next.countyFips !== null) {
+      onCountyRef.current(next.countyFips);
+    }
+    setPick(next);
   }, []);
 
   // Create the map once; MapLibre arrives in its own chunk. Retry runs the import again.
@@ -121,12 +112,8 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
         created = next;
         handle.current = next;
         next.map.on("click", (event) => {
-          const layers = RULER.map((m) => fillLayerId(m.threshold_mm));
-          const hits = next.map.queryRenderedFeatures(event.point, { layers }) as unknown as {
-            properties: { threshold_mm: number };
-          }[];
           const lngLat: [number, number] = [event.lngLat.lng, event.lngLat.lat];
-          pickCoordinate(lngLat, coveringClass(hits));
+          pickCoordinate(lngLat);
         });
         setReady({ basemap: next.basemap });
       })
@@ -175,18 +162,19 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
 
   useEffect(() => {
     setPick((prev) => {
-      if (prev === null || prev.date !== storm.storm_date) return prev;
-      const resolvedCounty = outlines !== null ? countyAt(prev.lngLat, outlines) : prev.countyFips;
-      if (prev.countyFips === undefined && resolvedCounty !== undefined && resolvedCounty !== null) {
-        onCountyRef.current(resolvedCounty);
+      const next = refreshPick(prev, storm.storm_date, swathData, reportsData, outlines);
+      if (
+        prev !== null &&
+        prev.date === storm.storm_date &&
+        prev.countyFips === undefined &&
+        next?.countyFips !== undefined &&
+        next.countyFips !== null
+      ) {
+        onCountyRef.current(next.countyFips);
       }
-      return {
-        ...prev,
-        nearest: nearestReport(prev.lngLat, reportsData?.features ?? []),
-        countyFips: resolvedCounty,
-      };
+      return next;
     });
-  }, [reportsData, outlines, storm.storm_date]);
+  }, [swathData, reportsData, outlines, storm.storm_date]);
 
   const displayPoint = activePick?.lngLat ?? pin?.lngLat ?? null;
   useEffect(() => {

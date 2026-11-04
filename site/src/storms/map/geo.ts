@@ -1,5 +1,5 @@
 // Pure geometry for the map inspector and point proximity analyzer. No MapLibre import.
-import type { Feature, FeatureCollection, Point, Position } from "geojson";
+import type { Feature, FeatureCollection, MultiPolygon, Point, Position } from "geojson";
 import type { Bbox } from "../../county";
 import { STEPS } from "../../data/constants";
 import {
@@ -13,6 +13,7 @@ import {
   type WarningsFile,
 } from "../../data/types";
 import { containsPoint, distanceM, pointInMultiPolygon, pointToMultiPolygonDistanceM } from "../../geometry";
+import { countyAt } from "../../state/county";
 import { LAST_STEP, STEP_MS, stepTime } from "../../time/step";
 
 /** Ellipsoidal tangent-plane distance in kilometres between two coordinates. */
@@ -111,6 +112,62 @@ export function swathExposureAt(
     }
   }
   return { covering, withinRadius, nearest, classes };
+}
+
+export interface PickedPoint {
+  date: string;
+  lngLat: [number, number];
+  coveringMm: number | null;
+  nearest: { feature: Feature<Point, ReportProps>; km: number } | null;
+  nearestSwath?: SwathDistance | null;
+  countyFips?: string | null;
+}
+
+/** Build a picked-point record from swath geometry, reports, and county outlines, independent of rendered layers. */
+export function buildPick(
+  date: string,
+  lngLat: [number, number],
+  swath: SwathFile | null,
+  reports: ReportsFile | null,
+  outlines: FeatureCollection<MultiPolygon> | null,
+): PickedPoint {
+  const coveringMm = swath !== null ? (coveringAt(swath, lngLat)?.threshold_mm ?? null) : null;
+  const nearestSwath =
+    coveringMm === null && swath !== null ? swathExposureAt(swath, lngLat, 20).nearest : null;
+  return {
+    date,
+    lngLat,
+    coveringMm,
+    nearest: nearestReport(lngLat, reports?.features ?? []),
+    nearestSwath,
+    countyFips: outlines !== null ? countyAt(lngLat, outlines) : undefined,
+  };
+}
+
+/** Refresh an existing pick for `stormDate` when swath, reports, or county outlines finish loading. */
+export function refreshPick(
+  prev: PickedPoint | null,
+  stormDate: string,
+  swath: SwathFile | null,
+  reports: ReportsFile | null,
+  outlines: FeatureCollection<MultiPolygon> | null,
+): PickedPoint | null {
+  if (prev === null || prev.date !== stormDate) return prev;
+  const coveringMm = swath !== null ? (coveringAt(swath, prev.lngLat)?.threshold_mm ?? null) : prev.coveringMm;
+  const nearestSwath =
+    coveringMm === null && swath !== null
+      ? swathExposureAt(swath, prev.lngLat, 20).nearest
+      : coveringMm !== null
+        ? null
+        : prev.nearestSwath;
+  const countyFips = outlines !== null ? countyAt(prev.lngLat, outlines) : prev.countyFips;
+  return {
+    ...prev,
+    coveringMm,
+    nearest: nearestReport(prev.lngLat, reports?.features ?? []),
+    nearestSwath,
+    countyFips,
+  };
 }
 
 export interface ReportHit {
