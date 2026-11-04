@@ -136,6 +136,48 @@ describe("the strips", () => {
     }
     expect(calls).toEqual([96, 96]);
   });
+
+  it("captures pointer on pointerdown, seeks on pointermove while captured, and releases on pointerup/pointercancel (US-12.3)", () => {
+    const { tree, calls } = chart();
+    const strip = findAll(tree, (v) => v.props["data-strip"] === "warnings")[0]!;
+    const captured = new Set<number>();
+    const target = {
+      getBoundingClientRect: () => rect,
+      setPointerCapture: (id: number) => captured.add(id),
+      hasPointerCapture: (id: number) => captured.has(id),
+      releasePointerCapture: (id: number) => captured.delete(id),
+    };
+
+    (strip.props["onPointerDown"] as (e: unknown) => void)({
+      pointerId: 7,
+      clientX: 100,
+      currentTarget: target,
+    });
+    expect(captured.has(7)).toBe(true);
+    expect(calls).toEqual([0]);
+
+    (strip.props["onPointerMove"] as (e: unknown) => void)({
+      pointerId: 7,
+      clientX: 580,
+      currentTarget: target,
+    });
+    expect(calls).toEqual([0, 96]);
+
+    (strip.props["onPointerUp"] as (e: unknown) => void)({
+      pointerId: 7,
+      clientX: 580,
+      currentTarget: target,
+    });
+    expect(captured.has(7)).toBe(false);
+
+    // Move while not captured does not seek
+    (strip.props["onPointerMove"] as (e: unknown) => void)({
+      pointerId: 7,
+      clientX: 900,
+      currentTarget: target,
+    });
+    expect(calls).toEqual([0, 96]);
+  });
 });
 
 describe("the empty and labelled states", () => {

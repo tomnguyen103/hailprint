@@ -71,7 +71,14 @@ function powerTitle({ county, peak, peakStep, gapSteps }: PowerSeries): string {
   return `${county.name} County: ${parts.join("; ")}.`;
 }
 
-type StripClick = (event: { clientX: number; currentTarget: { getBoundingClientRect(): { left: number; width: number } } }) => void;
+interface StripTarget {
+  getBoundingClientRect(): { left: number; width: number };
+  setPointerCapture?(pointerId: number): void;
+  hasPointerCapture?(pointerId: number): boolean;
+  releasePointerCapture?(pointerId: number): void;
+}
+type StripClick = (event: { clientX: number; currentTarget: StripTarget }) => void;
+type StripPointer = (event: { pointerId: number; clientX: number; currentTarget: StripTarget }) => void;
 
 type Rows = ReturnType<typeof layout>;
 
@@ -124,6 +131,26 @@ export function chartSvg(input: ChartInput) {
   const { titleId, step, bars, ticks, series, net, internetNote, withInternet, rows, onStep } = input;
   const { internetY, warningsY, reportsY, height } = rows;
   const pick: StripClick = (event) => onStep(stepAt(event.clientX, event.currentTarget.getBoundingClientRect()));
+  const onPointerDown: StripPointer = (event) => {
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    onStep(stepAt(event.clientX, event.currentTarget.getBoundingClientRect()));
+  };
+  const onPointerMove: StripPointer = (event) => {
+    if (!event.currentTarget.hasPointerCapture?.(event.pointerId)) return;
+    onStep(stepAt(event.clientX, event.currentTarget.getBoundingClientRect()));
+  };
+  const onPointerEnd: StripPointer = (event) => {
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
+  };
+  const stripHandlers = {
+    onClick: pick,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp: onPointerEnd,
+    onPointerCancel: onPointerEnd,
+  };
   const cursorX = step * STEP_PX;
   const powerSpan = POWER_H - 2 * POWER_PAD;
   return (
@@ -137,17 +164,17 @@ export function chartSvg(input: ChartInput) {
     >
       <title id={titleId}>{chartTitle(input)}</title>
       {series === null ? null : (
-        <rect class="timeline-strip" data-strip="power" x={0} y={0} width={WIDTH} height={POWER_H} onClick={pick}>
+        <rect class="timeline-strip" data-strip="power" x={0} y={0} width={WIDTH} height={POWER_H} {...stripHandlers}>
           <title>{powerTitle(series)}</title>
         </rect>
       )}
       {!withInternet ? null : (
-        <rect class="timeline-strip" data-strip="internet" x={0} y={internetY} width={WIDTH} height={NET_H} onClick={pick}>
+        <rect class="timeline-strip" data-strip="internet" x={0} y={internetY} width={WIDTH} height={NET_H} {...stripHandlers}>
           <title>{net === null ? internetNote : internetTitle(net)}</title>
         </rect>
       )}
-      <rect class="timeline-strip" data-strip="warnings" x={0} y={warningsY} width={WIDTH} height={WARNINGS_H} onClick={pick} />
-      <rect class="timeline-strip" data-strip="reports" x={0} y={reportsY} width={WIDTH} height={REPORTS_H} onClick={pick} />
+      <rect class="timeline-strip" data-strip="warnings" x={0} y={warningsY} width={WIDTH} height={WARNINGS_H} {...stripHandlers} />
+      <rect class="timeline-strip" data-strip="reports" x={0} y={reportsY} width={WIDTH} height={REPORTS_H} {...stripHandlers} />
       {AXIS_STEPS.slice(1, -1).map((at) => (
         <line key={at} class="timeline-grid" x1={at * STEP_PX} x2={at * STEP_PX} y1={0} y2={height} />
       ))}
