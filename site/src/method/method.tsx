@@ -48,7 +48,7 @@ export function Method({ page }: { page: MethodPage }) {
         <button
           type="button"
           class="button button-small"
-          aria-haspopup="dialog"
+
           aria-expanded={pagesOpen}
           aria-controls="method-scope"
           onClick={() => setPagesOpen(true)}

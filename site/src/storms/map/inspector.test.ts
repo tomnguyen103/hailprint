@@ -199,6 +199,21 @@ describe("InspectorView out-of-metro guard", () => {
     (copyButtons[0]!.props["onClick"] as () => void)();
     expect(copiedTexts).toHaveLength(1);
     expect(copiedTexts[0]).toContain("Hailprint point note — 2024-05-28");
+    const copiedTree = InspectorView({
+      pick: { lngLat: [-95.3698, 29.7604], coveringMm: null, nearest: null },
+      receipt,
+      power: null,
+      internet: null,
+      step: 46,
+      fips: "48201",
+      onCounty: () => {},
+      onClose: () => {},
+      copiedNote: true,
+    } as never);
+    expect(findAll(copiedTree, (v) => v.type === "button" && textOf(v).trim() === "Copied")).toHaveLength(1);
+    const liveSpans = findAll(copiedTree, (v) => v.props["aria-live"] === "polite");
+    expect(liveSpans).toHaveLength(1);
+    expect(textOf(liveSpans[0])).toBe("Copied");
   });
 
   it("formats a plain-text point field note with coordinate, radar-estimated hail size, and receipt", async () => {

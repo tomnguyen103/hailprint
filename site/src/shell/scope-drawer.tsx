@@ -1,43 +1,10 @@
 import type { ComponentChildren, RefObject } from "preact";
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import "../styles/scope.css";
 
-/** Close on Escape while `open` is true. */
-function useEscape(open: boolean, onClose: () => void): void {
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-}
-
-/** Remember the element that had focus when `open` became true, and focus it again when `open` becomes false. */
-function useFocusReturn(open: boolean): void {
-  const opener = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    return () => opener.current?.focus();
-  }, [open]);
-}
-
-interface Props {
-  id?: string;
-  /** The nav label; the backdrop reads "Close <label>". */
-  label: string;
-  /** The head text. */
-  title: string;
-  open: boolean;
-  onClose: () => void;
-  children: ComponentChildren;
-  navRef?: RefObject<HTMLElement>;
-  onKeyDown?: (event: KeyboardEvent) => void;
-}
-
-const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), summary, input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+const DESKTOP_MEDIA = "(min-width: 1280px)";
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), summary, input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 function isElementVisible(el: HTMLElement): boolean {
   if (el.hidden || el.getAttribute?.("aria-hidden") === "true") return false;
@@ -53,12 +20,17 @@ function isElementVisible(el: HTMLElement): boolean {
   return true;
 }
 
-/** Wrap Tab and Shift+Tab inside the drawer while it is open below 1280px. */
+export function focusableItems(root: HTMLElement | null): HTMLElement[] {
+  if (!root) return [];
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+    (el) => (el.closest?.("details:not([open])") === null || el.tagName === "SUMMARY") && isElementVisible(el),
+  );
+}
+
+/** Wrap Tab and Shift+Tab inside the container while `open` is true. */
 export function trapDrawerTab(event: KeyboardEvent, root: HTMLElement | null, open: boolean): void {
   if (!open || event.key !== "Tab" || !root) return;
-  const items = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => (el.closest("details:not([open])") === null || el.tagName === "SUMMARY") && isElementVisible(el),
-  );
+  const items = focusableItems(root);
   if (items.length === 0) return;
   const first = items[0]!;
   const last = items[items.length - 1]!;
@@ -72,20 +44,104 @@ export function trapDrawerTab(event: KeyboardEvent, root: HTMLElement | null, op
   }
 }
 
-/** The scope sidebar of the Method and Pipeline areas: a drawer below 1280 px with a backdrop, a head, and a Close button. */
-export function ScopeDrawer({ id, label, title, open, onClose, children, navRef, onKeyDown }: Props) {
-  const localNavRef = useRef<HTMLElement>(null);
-  const resolvedRef = navRef ?? localNavRef;
-  useEscape(open, onClose);
-  useFocusReturn(open);
-  const handleKeyDown = (event: KeyboardEvent) => {
-    trapDrawerTab(event, resolvedRef.current, open);
-    onKeyDown?.(event);
-  };
+/** Close on Escape while `open` is true and the event was not already handled by an inner overlay. */
+function useEscape(open: boolean, onClose: () => void): void {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [open, onClose]);
+}
+
+/** Track whether the viewport is below the 1280 px docked sidebar breakpoint, and close an open drawer when crossing to >= 1280 px. */
+function useDrawerViewport(open: boolean, onClose: () => void): boolean {
+  const readBelow = () =>
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? !window.matchMedia(DESKTOP_MEDIA).matches
+      : true;
+  const [belowDesktop, setBelowDesktop] = useState<boolean>(readBelow);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+    const mql = window.matchMedia(DESKTOP_MEDIA);
+    setBelowDesktop(!mql.matches);
+    if (mql.matches && open) onClose();
+    const onChange = (event: { matches: boolean }) => {
+      setBelowDesktop(!event.matches);
+      if (event.matches && open) onClose();
+    };
+    mql.addEventListener?.("change", onChange);
+    return () => mql.removeEventListener?.("change", onChange);
+  }, [open, onClose]);
+  return belowDesktop;
+}
+
+/** Move focus into `root` when `activeModal` becomes true, trap Tab at document level, and restore focus to the opener on close. */
+export function useModalFocusTrap(activeModal: boolean, rootRef: RefObject<HTMLElement>): void {
+  const opener = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!activeModal) return;
+    const prev = document.activeElement;
+    opener.current = prev && typeof (prev as HTMLElement).focus === "function" ? (prev as HTMLElement) : null;
+    const root = rootRef.current;
+    const first = focusableItems(root)[0];
+    if (first) first.focus();
+    else root?.focus?.();
+    const onKey = (event: KeyboardEvent) => {
+      trapDrawerTab(event, rootRef.current, true);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      opener.current?.focus?.();
+    };
+  }, [activeModal, rootRef]);
+}
+
+interface Props {
+  id?: string;
+  /** The landmark label; the backdrop reads "Close <label>". */
+  label: string;
+  /** The head text. */
+  title: string;
+  open: boolean;
+  onClose: () => void;
+  children: ComponentChildren;
+  navRef?: RefObject<HTMLElement>;
+  onKeyDown?: (event: KeyboardEvent) => void;
+  /** Semantic landmark element; defaults to "nav" for link trees, or "aside" when the sidebar holds no links. */
+  as?: "nav" | "aside";
+}
+
+/** The scope sidebar of the Storms, Method, and Pipeline areas: a modal drawer below 1280 px with a backdrop, a head, and a Close button. */
+export function ScopeDrawer({ id, label, title, open, onClose, children, navRef, onKeyDown, as = "nav" }: Props) {
+  const localRef = useRef<HTMLElement>(null);
+  const resolvedRef = navRef ?? localRef;
+  const belowDesktop = useDrawerViewport(open, onClose);
+  const isModal = open && belowDesktop;
+  useEscape(isModal, onClose);
+  useModalFocusTrap(isModal, resolvedRef);
+
+  const Tag = as;
   return (
     <>
-      {open ? <button type="button" class="scope-backdrop" aria-label={`Close ${label}`} onClick={onClose} /> : null}
-      <nav id={id} ref={resolvedRef} class="scope" aria-label={label} data-open={open} onKeyDown={handleKeyDown}>
+      {isModal ? <button type="button" class="scope-backdrop" aria-label={`Close ${label}`} onClick={onClose} /> : null}
+      <Tag
+        id={id}
+        ref={resolvedRef as never}
+        class="scope"
+        role={isModal ? "dialog" : undefined}
+        aria-modal={isModal ? "true" : undefined}
+        aria-label={label}
+        data-open={open}
+        onKeyDown={onKeyDown}
+      >
         <div class="scope-head">
           <span class="section-label">{title}</span>
           <button type="button" class="button button-small scope-close" onClick={onClose}>
@@ -93,7 +149,7 @@ export function ScopeDrawer({ id, label, title, open, onClose, children, navRef,
           </button>
         </div>
         {children}
-      </nav>
+      </Tag>
     </>
   );
 }

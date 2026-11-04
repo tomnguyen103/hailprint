@@ -554,5 +554,5 @@
 }
 
 .inspector-try-link {
-  color: var(--accent);
+  display: inline-flex; align-items: center; min-height: 40px; color: var(--accent);
 }

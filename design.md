@@ -116,7 +116,7 @@ for internet. The county fill shows one ramp at a time.
   freshness chip, five-stat strip, rolling 24 h map, and source clocks table.
 - Storms area: light scope sidebar like a page tree (storm dates grouped by year,
   report-count badge), main pane with sub-tab routes (Map, Parcels, Score, Data),
-  inspector drawer on map click.
+  inspector drawer on map click. A 240 px sidebar at 1280 px and up; from 768 to 1279 px a horizontal scope bar sits above the main column and opens the drawer.
 - Mobile < 768 px: tabs collapse into a bottom bar of six icons with labels; the
   scope sidebar becomes a sheet; the inspector becomes a full-screen sheet.
 

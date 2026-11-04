@@ -78,7 +78,7 @@ export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string 
     updatePos();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        openReceiptChip(null);
+        event.preventDefault(); event.stopPropagation(); openReceiptChip(null);
         chip.current?.focus();
       }
     };
@@ -86,12 +86,12 @@ export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string 
       const target = event.target as Node;
       if (!pop.current?.contains(target) && !chip.current?.contains(target)) openReceiptChip(null);
     };
-    document.addEventListener("keydown", onKey);
+    document.addEventListener("keydown", onKey, true);
     document.addEventListener("mousedown", onClick);
     window.addEventListener("resize", updatePos);
     window.addEventListener("scroll", updatePos, true);
     return () => {
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("mousedown", onClick);
       window.removeEventListener("resize", updatePos);
       window.removeEventListener("scroll", updatePos, true);

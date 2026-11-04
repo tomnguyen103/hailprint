@@ -107,7 +107,7 @@ export function LiveMap({ swath, reports, warnings }: Props) {
         class="map-frame"
         role="region"
         aria-label="Live radar-estimated hail swath over Harris County"
-        tabIndex={0}
+        tabIndex={-1}
       />
       {mapError ? (
         <div class="map-overlay">
