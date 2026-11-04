@@ -683,6 +683,65 @@ def test_run_cloud_nightly_uploads_nothing_when_index_fails_before_publish(tmp_p
     assert s3.puts == []
 
 
+@pytest.mark.parametrize("task", ["nightly", "backfill"])
+def test_run_cloud_builds_a_fresh_client_for_the_upload_phase(
+    tmp_path: Path, monkeypatch, task: str
+):
+    built: list[FakeS3] = []
+
+    def fake_s3_client(config: cloud.Config) -> FakeS3:
+        built.append(FakeS3({("hailprint-public", "storms.json"): b'{"storms":[]}'}))
+        return built[-1]
+
+    monkeypatch.setattr(cloud, "s3_client", fake_s3_client)
+    calls: list[list[str]] = []
+
+    rc = cloud.run_cloud(
+        task, root=tmp_path, env=VALID_ENV, run_cli=_publish_cli(tmp_path, 0, calls)
+    )
+
+    assert rc == 0
+    assert len(built) == 2
+    assert built[0].puts == []
+    assert ("hailprint-public", "storms/2024-05-28/swath.geojson") in built[1].objects
+
+
+def test_run_cloud_with_an_injected_client_serves_both_phases_with_it(tmp_path: Path, monkeypatch):
+    def no_client(config: cloud.Config) -> FakeS3:
+        raise AssertionError("an injected client builds no other client")
+
+    monkeypatch.setattr(cloud, "s3_client", no_client)
+    s3 = FakeS3({("hailprint-public", "storms.json"): b'{"storms":[]}'})
+    calls: list[list[str]] = []
+
+    rc = cloud.run_cloud(
+        "nightly", client=s3, root=tmp_path, env=VALID_ENV, run_cli=_publish_cli(tmp_path, 0, calls)
+    )
+
+    assert rc == 0
+    assert ("hailprint-public", "storms/2024-05-28/swath.geojson") in s3.objects
+
+
+def test_run_cloud_odin_uploads_its_own_day_keys_and_never_a_stale_local_odin_file(
+    tmp_path: Path,
+):
+    now = datetime(2026, 10, 29, 14, 7, tzinfo=UTC)
+    odin_key = "derived/odin/odin-2026-10-29.parquet"
+    stale = tmp_path / "data" / "derived" / "odin" / "odin-2020-01-01.parquet"
+    stale.parent.mkdir(parents=True)
+    stale.write_bytes(b"stale")
+    s3 = FakeS3()
+
+    def ok_cli(argv: list[str]) -> int:
+        (tmp_path / "data" / odin_key).write_bytes(b"slot")
+        return 0
+
+    rc = cloud.run_cloud("odin", client=s3, root=tmp_path, env=VALID_ENV, run_cli=ok_cli, now=now)
+
+    assert rc == 0
+    assert [key for _, key, _ in s3.puts] == [odin_key]
+
+
 def test_sync_up_enforces_max_bytes_boundary(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(cloud, "MAX_BYTES", 10)
     s3 = FakeS3()

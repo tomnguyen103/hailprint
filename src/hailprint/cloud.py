@@ -484,19 +484,8 @@ def run_cloud(
             return rc
         post_slot = odin.slot_of(datetime.now(UTC) if now is None else pre_now)
         post_key = f"{ODIN_PREFIX}{odin.file_name(post_slot.date())}"
-        odin_keys = tuple(
-            dict.fromkeys(
-                [
-                    odin_key,
-                    post_key,
-                    next_day_key,
-                    *(
-                        f"{ODIN_PREFIX}{p.name}"
-                        for p in sorted((data_dir / ODIN_PREFIX).glob("odin-*.parquet"))
-                    ),
-                ]
-            )
-        )
+        # only the keys of this run: a stale local ODIN file never overwrites the bucket
+        odin_keys = tuple(dict.fromkeys([odin_key, post_key, next_day_key]))
         sync_up(s3, config.state_bucket, odin_keys, data_dir, state)
         return 0
 
@@ -531,6 +520,9 @@ def run_cloud(
     if rc not in (0, publish_run.PARTIAL_EXIT):
         return rc
 
+    # a long run outlives the session token, so a client of our own is built again for upload
+    if client is None:
+        s3 = s3_client(config)
     sync_up(
         s3,
         config.state_bucket,
