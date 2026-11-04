@@ -301,3 +301,12 @@ def test_count_parcels_assigns_split_account_to_zip_of_highest_class_polygon(tmp
 
     assert result.classes["parcel_count"].tolist() == [1, 1]
     assert _zip_rows(result) == {("77002", 19.05): 1, ("77002", 25.4): 1}
+
+    # If the highest-class polygon has a missing ZIP, zip5 normalizes before groupby so it
+    # counts under "unknown" instead of falling back to the lower-class polygon's ZIP.
+    two["zip"] = ["77001", None]
+    two.rename(columns={v: k for k, v in ALLOWED.items()}).to_file(
+        path, layer="Parcels", driver="GPKG"
+    )
+    missing_zip_result = count_parcels(_swath_frame([outer, inner]), path)
+    assert _zip_rows(missing_zip_result) == {("unknown", 19.05): 1, ("unknown", 25.4): 1}

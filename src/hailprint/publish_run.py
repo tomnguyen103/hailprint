@@ -149,13 +149,13 @@ def _without_run_time(doc: object) -> object:
 
 
 def _same_but_run_time(path: Path, body: str) -> bool:
-    """True when the file at `path` parses and equals `body` outside `receipt.run_time`.
+    """True when the file at `path` validates and equals `body` outside `receipt.run_time`.
 
-    A missing or unreadable file, or a file that is not JSON, gives False, so the run writes it.
+    A missing, unreadable, or schema-invalid file gives False, so the run writes it.
     """
     try:
-        old = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        old = publish.read_published(path, path.stem)
+    except (OSError, ValueError):
         return False
     return _without_run_time(old) == _without_run_time(json.loads(body))
 

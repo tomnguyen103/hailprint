@@ -88,7 +88,7 @@ def _retry_after(headers: Any, default: float) -> float:
     text = str(raw).strip() if raw is not None else ""
     if not (text.isascii() and text.isdigit()):
         return default
-    return float(min(int(text[:9]), MAX_RETRY_AFTER_S))
+    return float(min(int((text.lstrip("0") or "0")[:9]), MAX_RETRY_AFTER_S))
 
 
 def get(url: str, timeout: float = DEFAULT_TIMEOUT, max_bytes: int = MAX_BYTES) -> bytes:

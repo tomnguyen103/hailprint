@@ -275,7 +275,7 @@ def test_get_retries_408_and_429_and_closes_the_retried_error(monkeypatch, code)
 def test_get_honors_numeric_retry_after_capped_and_falls_back_on_non_numeric(monkeypatch):
     calls, sleeps = _script(
         monkeypatch,
-        _http(429, {"Retry-After": "2"}),
+        _http(429, {"Retry-After": "0000000002"}),
         _http(429, {"Retry-After": "9999"}),
         b"ok",
     )

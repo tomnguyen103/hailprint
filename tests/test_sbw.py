@@ -270,4 +270,6 @@ def test_parse_repairs_a_self_intersecting_bowtie_polygon_and_drops_non_polygon_
     assert frame["eventid"].tolist() == [201]
     geom = frame.geometry.iloc[0]
     assert geom.is_valid
-    assert geom.geom_type in ("Polygon", "MultiPolygon")
+    assert geom.geom_type == "MultiPolygon"
+    assert len(geom.geoms) == 2
+    assert geom.area == pytest.approx(0.02)

@@ -2039,3 +2039,13 @@ def test_an_existing_file_that_is_not_json_is_rewritten(two_days):
     doc = json.loads(path.read_text(encoding="utf-8"))
     publish.validate(doc, "swath")
     assert doc["receipt"]["run_time"] == "2024-06-02T13:30:00Z"
+
+    pairs_path = two_days.storm_dir(LATER) / "pairs.json"
+    bad_pairs = json.loads(pairs_path.read_text(encoding="utf-8"))
+    del bad_pairs["receipt"]["run_time"]
+    pairs_path.write_text(json.dumps(bad_pairs), encoding="utf-8")
+
+    _publish_later(two_days, NEXT_RUN)
+    fixed_pairs = json.loads(pairs_path.read_text(encoding="utf-8"))
+    publish.validate(fixed_pairs, "pairs")
+    assert fixed_pairs["receipt"]["run_time"] == "2024-06-02T13:30:00Z"
