@@ -1,6 +1,7 @@
 """Documents, schemas, receipt, and safe serialisation of the published files."""
 
 import csv
+import hashlib
 import io
 import json
 from datetime import UTC, date, datetime, timedelta, timezone
@@ -15,7 +16,18 @@ import shapely
 from jsonschema import Draft202012Validator
 
 from hailprint import __main__ as cli
-from hailprint import county, impact, internet, parcels, power, publish, reports, sbw, swath
+from hailprint import (
+    county,
+    impact,
+    internet,
+    parcels,
+    power,
+    publish,
+    publish_run,
+    reports,
+    sbw,
+    swath,
+)
 from hailprint import files as files_module
 from hailprint.parcels import OWNER_FIELDS
 from tests.test_cli import EARLIER, LATER
@@ -1946,3 +1958,84 @@ def test_corrupt_untouched_earlier_run_pairs_json_aborts_before_overwriting_new_
 
     assert cli.main(["publish", str(LATER)]) == 1
     assert not (two_days.storm_dir(LATER) / "swath.geojson").exists()
+
+
+# byte-stable published files
+
+
+FIRST_RUN = datetime(2024, 6, 1, 12, 0, 0, tzinfo=UTC)
+NEXT_RUN = datetime(2024, 6, 2, 13, 30, 0, tzinfo=UTC)
+
+
+def _publish_later(env, now):
+    dirs = publish_run.Dirs(env.parcels, env.warnings, env.power, env.internet, env.site)
+    selected = [(LATER, env.swaths / f"swaths-{LATER}.parquet")]
+    return publish_run.run(selected, dirs, with_internet=False, now=now)
+
+
+def _digests(folder):
+    return {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(folder.iterdir())}
+
+
+def _file_receipts(env):
+    return [
+        json.loads((env.site / e["files"][key]).read_text(encoding="utf-8"))["receipt"]
+        for e in env.index()["storms"]
+        for key, _ in publish.RECEIPT_FILES
+        if e["files"][key]
+    ]
+
+
+def test_a_rerun_with_the_same_inputs_keeps_every_per_date_file_byte_for_byte(two_days):
+    _publish_later(two_days, FIRST_RUN)
+    before = _digests(two_days.storm_dir(LATER))
+
+    written = _publish_later(two_days, NEXT_RUN)
+
+    assert _digests(two_days.storm_dir(LATER)) == before
+    assert {p.name for p in written if p.parent == two_days.storm_dir(LATER)} == set(before)
+    swath_doc = json.loads((two_days.storm_dir(LATER) / "swath.geojson").read_text("utf-8"))
+    assert swath_doc["receipt"]["run_time"] == "2024-06-01T12:00:00Z"
+    assert two_days.index()["run_time"] == "2024-06-02T13:30:00Z"
+    receipts = _file_receipts(two_days)
+    assert publish.index_receipts(two_days.index()["storms"], two_days.site) == receipts
+    assert {r["run_time"] for r in receipts} == {"2024-06-01T12:00:00Z"}
+
+
+def test_one_more_report_rewrites_only_the_files_that_hold_it(two_days):
+    _publish_later(two_days, FIRST_RUN)
+    before = _digests(two_days.storm_dir(LATER))
+    extra = "2359,100,Downtown,Harris,TX,29.76,-95.37,(HGX)\n"
+    two_days.served[LATER] = str(two_days.served[LATER]).rstrip("\r\n") + "\n" + extra
+
+    _publish_later(two_days, NEXT_RUN)
+
+    after = _digests(two_days.storm_dir(LATER))
+    changed = {name for name in before if before[name] != after[name]}
+    assert changed == {"reports.geojson", "pairs.json"}
+    folder = two_days.storm_dir(LATER)
+    times = {
+        name: json.loads((folder / name).read_text("utf-8"))["receipt"]["run_time"]
+        for name in before
+    }
+    assert times == {
+        "swath.geojson": "2024-06-01T12:00:00Z",
+        "warnings.geojson": "2024-06-01T12:00:00Z",
+        "reports.geojson": "2024-06-02T13:30:00Z",
+        "pairs.json": "2024-06-02T13:30:00Z",
+    }
+    assert publish.index_receipts(two_days.index()["storms"], two_days.site) == _file_receipts(
+        two_days
+    )
+
+
+def test_an_existing_file_that_is_not_json_is_rewritten(two_days):
+    _publish_later(two_days, FIRST_RUN)
+    path = two_days.storm_dir(LATER) / "swath.geojson"
+    path.write_text("{corrupt", encoding="utf-8")
+
+    _publish_later(two_days, NEXT_RUN)
+
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    publish.validate(doc, "swath")
+    assert doc["receipt"]["run_time"] == "2024-06-02T13:30:00Z"

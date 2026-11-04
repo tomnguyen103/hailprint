@@ -444,7 +444,8 @@ def test_a_malformed_date_is_rejected_by_the_parser(env):
 def test_a_failed_rename_leaves_the_old_file_intact_and_no_tmp_file(env, monkeypatch, capsys):
     env.add_day(LATER)
     cli.main(["publish", "2024-05-28"])
-    target = env.storm_dir(LATER) / "swath.geojson"
+    # storms.json always writes; an unchanged per-date file keeps its bytes and skips the write
+    target = env.site / "storms.json"
     old = target.read_bytes()
     real = Path.replace
 
