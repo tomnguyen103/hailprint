@@ -440,6 +440,12 @@
     bottom: auto;
   }
 
+  .map-note {
+    top: calc(min(70dvh, 640px) - 12px);
+    bottom: auto;
+    transform: translateY(-100%);
+  }
+
   /* Under the frame, the controls and legends no longer cover the swath */
   .map-controls,
   .map-legends {
@@ -498,6 +504,10 @@
   .map-frame,
   .map-overlay {
     height: min(50dvh, 420px);
+  }
+
+  .map-note {
+    top: calc(min(50dvh, 420px) - 12px);
   }
 
   .legend-item {

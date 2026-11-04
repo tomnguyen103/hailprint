@@ -41,6 +41,7 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
     parentNode: null,
     namespaceURI: "http://www.w3.org/1999/xhtml",
     style: {},
+    onclick: null,
     setAttribute(k: string, v: unknown) {
       el[k] = v;
     },
@@ -223,7 +224,7 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(Boolean(wcmPill!["disabled"])).toBe(false);
   });
 
-  it("renders EmptyState sentence when the active cohort has 0 storms", async () => {
+  it("renders EmptyState sentence when the active cohort has 0 storms, and ErrorState when storms exist but pairs are missing", async () => {
     const index = makeIndex([]);
     mockPairsState.status = "ready";
     mockPairsState.data = [];
@@ -234,6 +235,19 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const empty = findDomNodes(host, (n) => classOf(n).includes("state-empty"));
     expect(empty).toHaveLength(1);
     expect(domText(empty[0]!)).toContain("No storm dates in this cohort.");
+
+    const mismatchedIndex = makeIndex(["wcm"]);
+    mockPairsState.data = [makePairs("2024-05-11")];
+    const host2 = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index: mismatchedIndex, view: "table" }), host2 as unknown as HTMLElement));
+    const pills = findDomNodes(host2, (n) => n.tagName === "BUTTON" && classOf(n).includes("cohort-pill"));
+    const wcmPill = pills.find((p) => domText(p).includes("WCM 2021"))!;
+    await act(() => {
+      (wcmPill["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    const err = findDomNodes(host2, (n) => classOf(n).includes("state-error"));
+    expect(err).toHaveLength(1);
+    expect(domText(err[0]!)).toContain("no matching pairs for cohort");
   });
 
   it("exposes one Tab stop across all 7 markers and a >= 20 unit transparent hit circle per marker", async () => {

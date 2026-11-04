@@ -1,6 +1,6 @@
 import { useMemo, useState } from "preact/hooks";
 import "../styles/scorecard.css";
-import type { StormsIndex } from "../data/types";
+import { DataError, type StormsIndex } from "../data/types";
 import { formatInches, type MetricKey } from "../format";
 import {
   SENSITIVITY_RADII_KM,
@@ -76,8 +76,11 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
   let body;
   if (pairs.status === "error") body = <ErrorState error={pairs.error} onRetry={pairs.retry} />;
   else if (pairs.status === "loading") body = pairs.showLoading ? <LoadingState file={FILE} /> : null;
-  else if (data !== null && data.length === 0) body = <EmptyState sentence="No storm dates in this cohort." />;
-  else if (table === null) body = null;
+  else if (filtered !== null && filtered.storms.length === 0) {
+    body = <EmptyState sentence="No storm dates in this cohort." />;
+  } else if (filtered !== null && filtered.pairs.length === 0) {
+    body = <ErrorState error={new DataError(FILE, "no matching pairs for cohort")} onRetry={pairs.retry} />;
+  } else if (table === null) body = null;
   else if ("error" in table) body = <ErrorState error={table.error} onRetry={pairs.retry} />;
   else if (receipt === null) body = null;
   else if (view === "table") {

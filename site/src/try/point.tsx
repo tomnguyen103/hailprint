@@ -24,10 +24,9 @@ import { pointCsvOf } from "./csv";
 import {
   type StormPinRow,
   type StormPointDistances,
-  applyRadiusToStormDistances,
-  computeStormPointDistances,
   summarizeArchiveAtPin,
 } from "./point-analysis";
+import * as pointAnalysis from "./point-analysis";
 import { POINT_HINT, parsePoint } from "./point-form";
 
 const SWATH_FILE = "swath.geojson";
@@ -283,7 +282,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const distances = useMemo((): StormPointDistances[] => {
     if (activePoint === null || swathData === null) return [];
     return index.storms.map((storm, i) =>
-      computeStormPointDistances({
+      pointAnalysis.computeStormPointDistances({
         storm,
         point: activePoint,
         fips: pinnedFips,
@@ -297,7 +296,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   }, [activePoint, swathData, index.storms, pinnedFips, reportsData, warningsData, powerData, internetData]);
 
   const rows = useMemo(
-    (): StormPinRow[] => distances.map((d) => applyRadiusToStormDistances(d, radiusKm)),
+    (): StormPinRow[] => distances.map((d) => pointAnalysis.applyRadiusToStormDistances(d, radiusKm)),
     [distances, radiusKm],
   );
 

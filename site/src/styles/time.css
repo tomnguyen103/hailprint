@@ -132,6 +132,7 @@
   stroke-width: 1px;
   vector-effect: non-scaling-stroke;
   cursor: pointer;
+  touch-action: pan-y;
 }
 
 .timeline-grid,

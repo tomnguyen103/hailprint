@@ -36,7 +36,7 @@ export function resetBasemapProbeForTests(): void {
 
 export function probeBasemap(): Promise<boolean> {
   if (basemapProbePromise !== null) return basemapProbePromise;
-  basemapProbePromise = (async () => {
+  const probe = (async () => {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
     try {
@@ -49,7 +49,11 @@ export function probeBasemap(): Promise<boolean> {
       window.clearTimeout(timer);
     }
   })();
-  return basemapProbePromise;
+  basemapProbePromise = probe;
+  void probe.then((present) => {
+    if (!present && basemapProbePromise === probe) basemapProbePromise = null;
+  });
+  return probe;
 }
 
 /** Build the Protomaps color flavor mapped to the Hailprint theme tokens. */
