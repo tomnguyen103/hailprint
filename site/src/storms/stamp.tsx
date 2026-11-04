@@ -65,7 +65,7 @@ export function Stamp({ storm, reports, step, indexReceipt, datesOpen = false, o
       <button
         type="button"
         class="stamp-date stamp-date-button mono"
-        aria-haspopup="dialog"
+
         aria-expanded={datesOpen}
         aria-controls="storms-scope"
         onClick={onOpenDates}

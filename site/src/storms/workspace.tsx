@@ -88,7 +88,7 @@ export function Workspace({ index, storm, tab }: Props) {
         <button
           type="button"
           class="button button-small"
-          aria-haspopup="dialog"
+
           aria-expanded={datesOpen}
           aria-controls="storms-scope"
           onClick={() => setDatesOpen(true)}

@@ -46,7 +46,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
         <button
           type="button"
           class="button button-small"
-          aria-haspopup="dialog"
+
           aria-expanded={servicesOpen}
           aria-controls="pipeline-scope"
           onClick={() => setServicesOpen(true)}
@@ -54,7 +54,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
           Services
         </button>
       </div>
-      <ScopeDrawer id="pipeline-scope" label="Services" title="Services" open={servicesOpen} onClose={close}>
+      <ScopeDrawer id="pipeline-scope" label="Services" title="Services" open={servicesOpen} onClose={close} as="aside">
         <ul class="service-list">
           {services(data).map((s) => (
             <li key={s.name} class="service">
