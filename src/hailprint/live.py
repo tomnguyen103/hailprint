@@ -65,6 +65,8 @@ def _spc(day: str) -> Callable[[], str]:
 
 
 def _sbw(start: datetime, end: datetime) -> str:
+    if end.second or end.microsecond:
+        end = end.replace(second=0, microsecond=0) + timedelta(minutes=1)
     return net.get(sbw.URL.format(begin=start, end=end), timeout=30).decode()
 
 

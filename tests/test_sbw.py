@@ -228,3 +228,46 @@ def test_the_live_feed_count_after_the_filter_equals_the_parquet_row_count():
     ]
 
     assert len(sbw.parse(text, STORM_DATE)) == len(expected)
+
+
+def test_parse_repairs_a_self_intersecting_bowtie_polygon_and_drops_non_polygon_or_collapsed():
+    document = feed()
+    base = next(f for f in document["features"] if f["properties"]["eventid"] == 101)
+    # Bow-tie with a dangling spike in Harris -> GeometryCollection(MultiPolygon, LineString)
+    bowtie = json.loads(json.dumps(base))
+    bowtie["properties"]["eventid"] = 201
+    bowtie["geometry"] = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [-95.50, 29.70],
+                [-95.30, 29.90],
+                [-95.50, 29.90],
+                [-95.30, 29.70],
+                [-95.20, 29.70],
+                [-95.50, 29.70],
+            ]
+        ],
+    }
+    # Collapsed collinear polygon -> LineString only -> drops after polygon extraction
+    collapsed = json.loads(json.dumps(base))
+    collapsed["properties"]["eventid"] = 202
+    collapsed["geometry"] = {
+        "type": "Polygon",
+        "coordinates": [
+            [
+                [-95.50, 29.75],
+                [-95.40, 29.75],
+                [-95.30, 29.75],
+                [-95.50, 29.75],
+            ]
+        ],
+    }
+    document["features"] = [bowtie, collapsed]
+
+    frame = sbw.parse(json.dumps(document), STORM_DATE)
+
+    assert frame["eventid"].tolist() == [201]
+    geom = frame.geometry.iloc[0]
+    assert geom.is_valid
+    assert geom.geom_type in ("Polygon", "MultiPolygon")
