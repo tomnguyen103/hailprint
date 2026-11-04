@@ -910,4 +910,3 @@ def test_config_repr_hides_credentials_and_sync_down_rejects_out_of_prefix_keys(
     s3 = RogueS3({("hailprint-state", "other/secret.bin"): b"no"})
     with pytest.raises(ValueError, match="unsafe S3 key"):
         cloud.sync_down(s3, "hailprint-state", ("raw/spc/",), tmp_path / "data")
-

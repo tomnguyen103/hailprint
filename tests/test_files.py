@@ -135,4 +135,3 @@ def test_write_bytes_atomic_writes_bytes_and_leaves_no_tmp_sibling(tmp_path):
     files.write_bytes_atomic(b"payload", path)
     assert path.read_bytes() == b"payload"
     assert list(path.parent.glob("*.tmp")) == []
-
