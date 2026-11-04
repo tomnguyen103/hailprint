@@ -280,3 +280,24 @@ def test_count_parcels_accepts_lon_lat_order_crs84_and_rejects_no_crs():
     assert count_parcels(crs84, FIXTURE).classes["parcel_count"].tolist() == [0]
     with pytest.raises(ValueError, match="EPSG:4326"):
         count_parcels(bare, FIXTURE)
+
+
+def test_count_parcels_assigns_split_account_to_zip_of_highest_class_polygon(tmp_path):
+    parcels = load_parcels(FIXTURE)
+    two = parcels.iloc[:2].copy().reset_index(drop=True)
+    # One account split over two polygons in different ZIPs: polygon 0 in 77001, polygon 1 in 77002.
+    # Class 19.05 covers both; class 25.4 covers only polygon 1 (77002).
+    two["hcad_num"] = ["0000000000001", "0000000000001"]
+    two["zip"] = ["77001", "77002"]
+    path = tmp_path / "split.gpkg"
+    two.rename(columns={v: k for k, v in ALLOWED.items()}).to_file(
+        path, layer="Parcels", driver="GPKG"
+    )
+    two_4326 = two.to_crs("EPSG:4326")
+    outer = shapely.box(*two_4326.total_bounds)
+    inner = shapely.box(*two_4326.iloc[1].geometry.bounds)
+
+    result = count_parcels(_swath_frame([outer, inner]), path)
+
+    assert result.classes["parcel_count"].tolist() == [1, 1]
+    assert _zip_rows(result) == {("77002", 19.05): 1, ("77002", 25.4): 1}
