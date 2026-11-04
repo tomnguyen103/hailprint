@@ -26,6 +26,8 @@ from hailprint import (
     swath,
 )
 
+PARTIAL_EXIT = 3  # the exit code of a publish that failed some dates and built at least one
+
 
 class Dirs(NamedTuple):
     """The directories of one publish run."""
@@ -35,6 +37,17 @@ class Dirs(NamedTuple):
     power: Path
     internet: Path
     site: Path
+
+
+class PartialPublish(ValueError):
+    """Some storm dates failed and at least one date published; `failed` names the dates.
+
+    The CLI exits `PARTIAL_EXIT` for it, and the cloud task still uploads.
+    """
+
+    def __init__(self, failed: list[str]) -> None:
+        super().__init__(f"publish failed for: {', '.join(failed)}")
+        self.failed = failed
 
 
 def archive_summary() -> dict | None:
@@ -266,5 +279,5 @@ def run(
     remove_stale(stale, with_internet)
     print(f"confidence: {swath.CONFIDENCE}")
     if failed:
-        raise ValueError(f"publish failed for: {', '.join(failed)}")
+        raise PartialPublish(failed)
     return written

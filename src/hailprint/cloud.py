@@ -17,7 +17,7 @@ from typing import Any
 import boto3
 import pandas as pd
 
-from hailprint import candidates, files, net, odin, paths
+from hailprint import candidates, files, net, odin, paths, publish_run
 
 ENV_VARS: tuple[str, ...] = (
     "SUPABASE_S3_ENDPOINT",
@@ -527,7 +527,8 @@ def run_cloud(
         if task == "nightly"
         else backfill(runner, resolved_root, env)
     )
-    if rc != 0:
+    # a partial publish still uploads the dates it built, then returns its exit code
+    if rc not in (0, publish_run.PARTIAL_EXIT):
         return rc
 
     sync_up(

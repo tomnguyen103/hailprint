@@ -219,6 +219,9 @@ def main(argv: list[str] | None = None) -> int:
             return cloud.run_cloud(args.task)
         elif args.command == "live":
             live_now()
+    except publish_run.PartialPublish as exc:
+        print(exc, file=sys.stderr)
+        return publish_run.PARTIAL_EXIT
     except (RuntimeError, OSError, ValueError, *runs.UNREADABLE) as exc:
         print(exc, file=sys.stderr)
         return 1

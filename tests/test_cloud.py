@@ -626,6 +626,63 @@ def test_run_cloud_nightly_skips_sync_up_when_cli_returns_nonzero_even_with_exis
     assert ("hailprint-public", "storms/2024-05-28/swath.geojson") not in s3.objects
 
 
+def _publish_cli(tmp_path: Path, publish_rc: int, calls: list[list[str]]):
+    """A fake CLI: an empty candidate file, and a publish that writes one file and exits rc."""
+
+    def fake_cli(argv: list[str]) -> int:
+        calls.append(list(argv))
+        if argv[:2] == ["candidates", "--missing"]:
+            cand_dir = tmp_path / "data" / "derived" / "index"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            (cand_dir / "candidate-days.csv").write_text(
+                "storm_date,report_count,max_size_in,has_12z,report_source\n",
+                encoding="utf-8",
+            )
+        if argv == ["publish"]:
+            storm_dir = tmp_path / "site" / "data" / "storms" / "2024-05-28"
+            storm_dir.mkdir(parents=True, exist_ok=True)
+            (storm_dir / "swath.geojson").write_bytes(b'{"type":"FeatureCollection"}')
+            scores = tmp_path / "data" / "derived" / "scores"
+            scores.mkdir(parents=True, exist_ok=True)
+            (scores / "pooled.parquet").write_bytes(b"pooled")
+            return publish_rc
+        return 0
+
+    return fake_cli
+
+
+@pytest.mark.parametrize("task", ["nightly", "backfill"])
+def test_run_cloud_uploads_state_and_public_files_after_a_partial_publish_and_returns_3(
+    tmp_path: Path, task: str
+):
+    s3 = FakeS3({("hailprint-public", "storms.json"): b'{"storms":[]}'})
+    calls: list[list[str]] = []
+
+    rc = cloud.run_cloud(
+        task, client=s3, root=tmp_path, env=VALID_ENV, run_cli=_publish_cli(tmp_path, 3, calls)
+    )
+
+    assert rc == 3
+    assert ["publish"] in calls
+    assert ("hailprint-state", "derived/scores/pooled.parquet") in s3.objects
+    assert ("hailprint-public", "storms/2024-05-28/swath.geojson") in s3.objects
+
+
+def test_run_cloud_nightly_uploads_nothing_when_index_fails_before_publish(tmp_path: Path):
+    s3 = FakeS3({("hailprint-public", "storms.json"): b'{"storms":[]}'})
+    calls: list[list[str]] = []
+    publish_cli = _publish_cli(tmp_path, 0, calls)
+
+    def failing_index(argv: list[str]) -> int:
+        return 1 if argv == ["index"] else publish_cli(argv)
+
+    rc = cloud.run_cloud("nightly", client=s3, root=tmp_path, env=VALID_ENV, run_cli=failing_index)
+
+    assert rc == 1
+    assert calls == []
+    assert s3.puts == []
+
+
 def test_sync_up_enforces_max_bytes_boundary(tmp_path: Path, monkeypatch):
     monkeypatch.setattr(cloud, "MAX_BYTES", 10)
     s3 = FakeS3()

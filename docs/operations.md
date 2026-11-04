@@ -11,7 +11,7 @@ This guide covers the Trigger.dev tasks, the Supabase Storage buckets, and the e
   2. Runs `index` and `candidates --missing --top $MAX_INGEST` (default `5`).
   3. Runs `ingest` for each missing candidate day (and `parcels` when `data/raw/hcad/extracted/Parcels.gdb` exists). A failed ingest logs one line and skips to the next date.
   4. Runs `score`, `warnings --missing`, `power --missing`, and `internet --missing`. A failed score or layer step logs `<step> failed; publish goes on`.
-  5. Runs `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`, per `docs/DECISIONS.md` row 14).
+  5. Runs `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`, per `docs/DECISIONS.md` row 14). A `publish` that fails some dates and builds at least one exits 3 (`PartialPublish`); the task still runs step 6 and then returns 3. Any other non-zero exit uploads nothing.
   6. Uploads changed state files (excluding `derived/odin/`) to `HAILPRINT_STATE_BUCKET`, uploads changed per-date files to `HAILPRINT_PUBLIC_BUCKET` before `storms.json` and `pipeline.json` with `Cache-Control: max-age=60`, and deletes stale remote public objects last.
 - `hailprint cloud odin` (`trigger/odin.ts`, cron `0 * * * *` UTC on `small-1x`, queue concurrency 1):
   1. Downloads today's UTC ODIN file `derived/odin/odin-<YYYY-MM-DD>.parquet` when present.

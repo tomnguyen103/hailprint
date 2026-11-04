@@ -362,7 +362,7 @@ def test_a_swath_file_without_metadata_fails_its_date_and_keeps_the_other_comple
     env.add_day(EARLIER)
     bad = env.add_day(LATER, metadata=False)
 
-    assert cli.main(["publish"]) == 1
+    assert cli.main(["publish"]) == 3
 
     err = capsys.readouterr().err
     assert "2024-05-28" in err
@@ -386,9 +386,11 @@ def test_a_failed_validation_writes_nothing_for_that_date(env, monkeypatch, caps
     real = publish.validate
     monkeypatch.setattr(publish, "validate", lambda doc, kind: (reject(doc, kind), real(doc, kind)))
 
-    assert cli.main(["publish"]) == 1
+    assert cli.main(["publish"]) == 3
 
-    assert "2024-05-28" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "2024-05-28" in err
+    assert "publish failed for: 2024-05-28" in err
     assert not env.storm_dir(LATER).exists()
     assert (env.storm_dir(EARLIER) / "pairs.json").exists()
     assert [e["storm_date"] for e in env.index()["storms"]] == ["2023-06-23"]
@@ -1646,7 +1648,7 @@ def test_publish_fails_only_the_date_of_a_swath_file_it_cannot_read(env, capsys)
     meta = {"file_count": "1", "max_mesh_mm": str(MAX_MESH_MM)}
     files.write_atomic(gpd.read_parquet(broken).drop(columns="threshold_mm"), broken, meta)
 
-    assert cli.main(["publish"]) == 1
+    assert cli.main(["publish"]) == 3
 
     err = capsys.readouterr().err
     assert str(EARLIER) in err and "KeyError" in err
@@ -1660,7 +1662,7 @@ def test_publish_names_the_date_and_the_error_class_of_a_truncated_swath_file(en
     broken = env.add_day(EARLIER)
     broken.write_bytes(broken.read_bytes()[: broken.stat().st_size // 2])
 
-    assert cli.main(["publish"]) == 1
+    assert cli.main(["publish"]) == 3
 
     err = capsys.readouterr().err
     assert str(EARLIER) in err and "ArrowInvalid" in err
