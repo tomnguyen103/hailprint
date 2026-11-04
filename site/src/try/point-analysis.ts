@@ -19,8 +19,11 @@ import {
 import {
   type DirectWarning,
   type NearbyWarning,
+  type ReportHit,
   type ReportsProximity,
   type SwathDistance,
+  type SwathExposure,
+  type WarningsAtPoint,
   reportsWithinRadius,
   swathExposureAt,
   warningsAtPoint,
@@ -28,16 +31,35 @@ import {
 
 export { type InternetTroughSummary, type PowerPeakSummary, internetSeriesTrough, powerSeriesPeak };
 
-export interface AnalyzeStormInput {
+const MAX_DISTANCE_RADIUS_KM = 1000;
+
+export interface StormPointDistancesInput {
   storm: Storm;
   point: [number, number];
-  radiusKm: number;
   fips: string | null;
   swath: SwathFile | null;
   reports: ReportsFile | null;
   warnings: WarningsFile | null;
   power: PowerFile | null;
   internet: InternetFile | null;
+}
+
+export interface StormPointDistances {
+  storm: Storm;
+  stormDate: string;
+  point: [number, number];
+  fips: string | null;
+  swathExposure: SwathExposure;
+  reportHits: ReportHit[];
+  nearestReportHit: ReportHit | null;
+  warningsBase: WarningsAtPoint;
+  powerPeak: PowerPeakSummary | null;
+  internetTrough: InternetTroughSummary | null;
+  swathReceipt: Receipt | null;
+}
+
+export interface AnalyzeStormInput extends StormPointDistancesInput {
+  radiusKm: number;
 }
 
 export interface StormPinRow {
@@ -61,23 +83,75 @@ export interface StormPinRow {
   swathReceipt: Receipt | null;
 }
 
-/** Pure per-storm proximity & outage analysis for a pinned coordinate and Metro county FIPS. */
-export function analyzeStormAtPin(input: AnalyzeStormInput): StormPinRow {
-  const { storm, point, radiusKm, fips, swath, reports, warnings, power, internet } = input;
+/** Distance pass for one storm date: computes swath, report, and warning distances once per (point, files). */
+export function computeStormPointDistances(input: StormPointDistancesInput): StormPointDistances {
+  const { storm, point, fips, swath, reports, warnings, power, internet } = input;
   const stormDate = storm.storm_date;
-  const cropStatus = cropStatusAt(point, radiusKm);
-  const rawExposure = swathExposureAt(swath, point, radiusKm);
-  const covering = cropStatus === "outside-crop" ? null : rawExposure.covering;
-  const withinRadius = cropStatus === "outside-crop" ? null : rawExposure.withinRadius;
-  const nearest = rawExposure.nearest;
-  const reportsProx = reportsWithinRadius(point, reports, radiusKm);
-  const warnProx = warningsAtPoint(point, warnings, stormDate, radiusKm);
+  const swathExposure = swathExposureAt(swath, point, MAX_DISTANCE_RADIUS_KM);
+  const allReports = reportsWithinRadius(point, reports, MAX_DISTANCE_RADIUS_KM);
+  const warningsBase = warningsAtPoint(point, warnings, stormDate, MAX_DISTANCE_RADIUS_KM);
   const powerPeak = powerSeriesPeak(power, fips, stormDate);
   const internetTrough = internetSeriesTrough(internet, fips, stormDate);
+  return {
+    storm,
+    stormDate,
+    point,
+    fips,
+    swathExposure,
+    reportHits: allReports.within,
+    nearestReportHit: allReports.nearest,
+    warningsBase,
+    powerPeak,
+    internetTrough,
+    swathReceipt: swath?.receipt ?? null,
+  };
+}
+
+/** Cheap radius threshold pass over precomputed per-storm point distances. */
+export function applyRadiusToStormDistances(distances: StormPointDistances, radiusKm: number): StormPinRow {
+  const {
+    storm,
+    stormDate,
+    point,
+    fips,
+    swathExposure,
+    reportHits,
+    nearestReportHit,
+    warningsBase,
+    powerPeak,
+    internetTrough,
+    swathReceipt,
+  } = distances;
+  const radiusM = radiusKm * 1000;
+  const cropStatus = cropStatusAt(point, radiusKm);
+  const covering = cropStatus === "outside-crop" ? null : swathExposure.covering;
+  let withinRadius: SwathDistance | null = null;
+  if (cropStatus !== "outside-crop") {
+    for (const entry of swathExposure.classes) {
+      if (entry.distanceM <= radiusM && (withinRadius === null || entry.threshold_mm > withinRadius.threshold_mm)) {
+        withinRadius = entry;
+      }
+    }
+  }
+  const within = reportHits.filter((hit) => hit.distanceM <= radiusM);
+  let maxSizeIn: number | null = null;
+  for (const hit of within) {
+    if (maxSizeIn === null || hit.feature.properties.size_in > maxSizeIn) {
+      maxSizeIn = hit.feature.properties.size_in;
+    }
+  }
+  const reportsProx: ReportsProximity = {
+    count: within.length,
+    maxSizeIn,
+    nearest: nearestReportHit,
+    within,
+  };
+  const nearbyWarnings =
+    radiusKm > 0 ? warningsBase.nearbyWarnings.filter((w) => w.distanceKm * 1000 <= radiusM) : [];
   const hasActivityNearPin =
     withinRadius !== null ||
     reportsProx.count > 0 ||
-    warnProx.directWarnings.length > 0 ||
+    warningsBase.directWarnings.length > 0 ||
     (powerPeak?.peakShare ?? 0) >= 0.01 ||
     (internetTrough?.maxDrop ?? 0) >= 0.02;
 
@@ -90,17 +164,22 @@ export function analyzeStormAtPin(input: AnalyzeStormInput): StormPinRow {
     cropStatus,
     covering,
     withinRadius,
-    nearest,
+    nearest: swathExposure.nearest,
     reportsWithinRadius: reportsProx,
-    directWarnings: warnProx.directWarnings,
-    nearbyWarnings: warnProx.nearbyWarnings,
-    warningCounts: warnProx.warningCounts,
-    firstWarningStep: warnProx.firstWarningStep,
+    directWarnings: warningsBase.directWarnings,
+    nearbyWarnings,
+    warningCounts: warningsBase.warningCounts,
+    firstWarningStep: warningsBase.firstWarningStep,
     powerPeak,
     internetTrough,
     hasActivityNearPin,
-    swathReceipt: swath?.receipt ?? null,
+    swathReceipt,
   };
+}
+
+/** Pure per-storm proximity & outage analysis for a pinned coordinate and Metro county FIPS. */
+export function analyzeStormAtPin(input: AnalyzeStormInput): StormPinRow {
+  return applyRadiusToStormDistances(computeStormPointDistances(input), input.radiusKm);
 }
 
 export interface ArchivePinSummary {

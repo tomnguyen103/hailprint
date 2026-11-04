@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { WRITE_MS, createWriter, reconcile, shownStep, writeStep } from "./use-step";
+import { h, render } from "preact";
+import { act } from "preact/test-utils";
+import { WRITE_MS, createWriter, reconcile, shownStep, useStep, writeStep } from "./use-step";
 
 describe("shownStep", () => {
   it("shows the held move on its own storm date", () => {
@@ -111,5 +113,51 @@ describe("createWriter", () => {
     vi.advanceTimersByTime(WRITE_MS * 4);
     expect(write).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("useStep no-op write guard (US-12.3)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it("does not call replaceState when the next step equals the current path step", async () => {
+    const replaceState = vi.fn();
+    const win = {
+      location: { pathname: "/storms/2024-05-28/map/48" },
+      history: {
+        replaceState,
+      },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => true,
+    };
+    vi.stubGlobal("document", {});
+    vi.stubGlobal("window", win);
+    vi.stubGlobal("PopStateEvent", class extends Event {});
+
+    let latestSetStep: ((next: number) => void) | null = null;
+    function Probe() {
+      const { setStep } = useStep("2024-05-28");
+      latestSetStep = setStep;
+      return null;
+    }
+
+    const host = { firstChild: null, childNodes: [], namespaceURI: "http://www.w3.org/1999/xhtml" } as unknown as HTMLElement;
+    await act(() => render(h(Probe, {}), host));
+
+    await act(() => {
+      latestSetStep!(48);
+    });
+    await act(async () => void (await vi.advanceTimersByTimeAsync(WRITE_MS * 2)));
+    expect(replaceState).not.toHaveBeenCalled();
+
+    await act(() => {
+      latestSetStep!(50);
+    });
+    await act(async () => void (await vi.advanceTimersByTimeAsync(WRITE_MS * 2)));
+    expect(replaceState).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { ReportProps, SwathFile, WarningsFile } from "../../data/types";
 import {
   coveringAt,
-  coveringClass,
+  buildPick,
+  refreshPick,
   distanceKm,
   nearestReport,
   reportsWithinRadius,
@@ -62,21 +63,6 @@ describe("nearestReport and reportsWithinRadius", () => {
   });
 });
 
-describe("coveringClass", () => {
-  it("returns the highest threshold among the hit features", () => {
-    const hits = [
-      { properties: { threshold_mm: 19.05 } },
-      { properties: { threshold_mm: 38.1 } },
-      { properties: { threshold_mm: 25.4 } },
-    ];
-    expect(coveringClass(hits)).toBe(38.1);
-  });
-
-  it("returns null for no hit", () => {
-    expect(coveringClass([])).toBeNull();
-  });
-});
-
 const square = (x0: number, y0: number, x1: number, y1: number) => [
   [x0, y0],
   [x1, y0],
@@ -109,6 +95,23 @@ describe("coveringAt and swathExposureAt", () => {
     expect(exp.withinRadius?.threshold_mm).toBe(19.05);
     expect(exp.nearest?.threshold_mm).toBe(19.05);
     expect(exp.nearest?.distanceKm).toBeCloseTo(0.966, 2);
+    const pInside = buildPick("2024-05-28", [-95.48, 29.75], swath, null, null);
+    expect(pInside.coveringMm).toBe(25.4);
+    expect(pInside.nearestSwath).toBeNull();
+    const pOut = buildPick("2024-05-28", [-95.39, 29.75], swath, null, null);
+    expect(pOut.coveringMm).toBeNull();
+    expect(pOut.nearestSwath?.threshold_mm).toBe(19.05);
+    expect(pOut.nearestSwath?.distanceKm).toBeCloseTo(0.966, 2);
+    const pending = buildPick("2024-05-28", [-95.48, 29.75], null, null, null);
+    expect(pending.coveringMm).toBeNull();
+    expect(pending.nearestSwath).toBeNull();
+    const hydrated = refreshPick(pending, "2024-05-28", swath, null, null);
+    expect(hydrated?.coveringMm).toBe(25.4);
+    expect(hydrated?.nearestSwath).toBeNull();
+    const pendingOut = buildPick("2024-05-28", [-95.39, 29.75], null, null, null);
+    const hydratedOut = refreshPick(pendingOut, "2024-05-28", swath, null, null);
+    expect(hydratedOut?.coveringMm).toBeNull();
+    expect(hydratedOut?.nearestSwath?.threshold_mm).toBe(19.05);
   });
 });
 

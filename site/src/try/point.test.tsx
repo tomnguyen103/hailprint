@@ -43,10 +43,11 @@ import type {
   WarningsFile,
 } from "../data/types";
 import { clearFileCache } from "../state/pairs-all";
-import { getPinState, resetPinStore, setPresetPin } from "../state/pin";
+import { getPinState, resetPinStore, setPinRadiusKm, setPresetPin } from "../state/pin";
 import { MapPane } from "../storms/map-pane";
 import { Inspector, InspectorView } from "../storms/map/inspector";
 import { PointCheck } from "./point";
+import * as pointAnalysis from "./point-analysis";
 
 interface FakeDomNode {
   nodeType: number;
@@ -768,5 +769,24 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
     );
 
     expect(domText(host)).toContain("Open in Point check");
+  });
+
+  it("does not recompute computeStormPointDistances when only radiusKm changes in PointCheck (US-12.2)", async () => {
+    const spy = vi.spyOn(pointAnalysis, "computeStormPointDistances");
+    setPresetPin("memorial");
+    const host = makeFakeElement("div");
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+
+    const callsBeforeRadiusChange = spy.mock.calls.length;
+    expect(callsBeforeRadiusChange).toBeGreaterThan(0);
+
+    await act(() => {
+      setPinRadiusKm(12);
+    });
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    expect(spy.mock.calls.length).toBe(callsBeforeRadiusChange);
+    spy.mockRestore();
   });
 });

@@ -299,26 +299,35 @@ describe("createMap", () => {
     expect(validateStyleMin(style as unknown as StyleSpecification)).toEqual([]);
   });
 
-  it("probeBasemap returns true only for a non-HTML 200 response and false on 404, HTML fallback, or network failure", async () => {
+  it("probeBasemap returns true only for a non-HTML 200 response, memoizes successful probes, and clears cache after a failed probe", async () => {
     const actual = await vi.importActual<typeof import("./basemap")>("./basemap");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValueOnce({
-        ok: true,
-        headers: { get: () => "application/octet-stream" },
-      }),
-    );
+    actual.resetBasemapProbeForTests();
+    const okFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => "application/octet-stream" },
+    });
+    vi.stubGlobal("fetch", okFetch);
     expect(await actual.probeBasemap()).toBe(true);
+    expect(await actual.probeBasemap()).toBe(true);
+    expect(okFetch).toHaveBeenCalledTimes(1);
 
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValueOnce({
+    actual.resetBasemapProbeForTests();
+    const retryFetch = vi
+      .fn()
+      .mockResolvedValueOnce({
         ok: true,
         headers: { get: () => "text/html; charset=utf-8" },
-      }),
-    );
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => "application/octet-stream" },
+      });
+    vi.stubGlobal("fetch", retryFetch);
     expect(await actual.probeBasemap()).toBe(false);
+    expect(await actual.probeBasemap()).toBe(true);
+    expect(retryFetch).toHaveBeenCalledTimes(2);
 
+    actual.resetBasemapProbeForTests();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValueOnce({
@@ -328,7 +337,58 @@ describe("createMap", () => {
     );
     expect(await actual.probeBasemap()).toBe(false);
 
+    actual.resetBasemapProbeForTests();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(new Error("network down")));
     expect(await actual.probeBasemap()).toBe(false);
+  });
+
+  it("observes container with ResizeObserver, disconnects on destroy, skips setTheme no-op, and supports navigation: false", async () => {
+    const observed: Element[] = [];
+    let disconnected = 0;
+    let resizeCallback: (() => void) | null = null;
+    class FakeResizeObserver {
+      constructor(cb: () => void) {
+        resizeCallback = cb;
+      }
+      observe(el: Element) {
+        observed.push(el);
+      }
+      disconnect() {
+        disconnected += 1;
+      }
+    }
+    vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+
+    const container = {} as HTMLElement;
+    const state = track(createMap(container, "light", { navigation: false }));
+    await advance(0);
+    const [map] = stub.FakeMap.instances;
+    const resize = vi.fn();
+    const setPaintProperty = vi.fn();
+    Object.assign(map!, { resize, setPaintProperty });
+
+    map!.emit("load");
+    await advance(0);
+    expect(state.status).toBe("resolved");
+    const handle = state.value!;
+
+    expect(map!.addControl).not.toHaveBeenCalled();
+
+    expect(observed).toEqual([container]);
+    expect(resizeCallback).not.toBeNull();
+    resizeCallback!();
+    expect(resize).toHaveBeenCalledTimes(1);
+
+    handle.setTheme("light");
+    expect(setPaintProperty).not.toHaveBeenCalled();
+
+    handle.setTheme("dark");
+    const countAfterDark = setPaintProperty.mock.calls.length;
+    expect(countAfterDark).toBeGreaterThan(0);
+    handle.setTheme("dark");
+    expect(setPaintProperty.mock.calls.length).toBe(countAfterDark);
+
+    handle.destroy();
+    expect(disconnected).toBe(1);
   });
 });

@@ -15,7 +15,10 @@ import type {
 } from "../data/types";
 import { useInternetAll, usePowerAll, useReportsAll, useWarningsAll } from "../state/impact-all";
 import { clearFileCache, useSparseFiles } from "../state/pairs-all";
-import { analyzeStormAtPin, internetSeriesTrough, summarizeArchiveAtPin } from "./point-analysis";
+import { cropStatusAt } from "../geometry";
+import { reportsWithinRadius, swathExposureAt, warningsAtPoint } from "../storms/map/geo";
+import * as pointAnalysis from "./point-analysis";
+import { analyzeStormAtPin, internetSeriesTrough, powerSeriesPeak, summarizeArchiveAtPin } from "./point-analysis";
 
 const receipt: Receipt = {
   storm_date: "2024-05-28",
@@ -356,5 +359,87 @@ describe("analyzeStormAtPin and summarizeArchiveAtPin (US-02.3, US-02.4, US-02.5
       internet,
     });
     expect(quiet.hasActivityNearPin).toBe(false);
+  });
+});
+
+describe("point distance pass and radius threshold pass (US-12.2)", () => {
+  it("matches the distance and radius helpers at every radius from 1 to 20 km across inside and boundary points", () => {
+    const power = makePowerFixture();
+    const internet = makeInternetFixture();
+    const fnRecord = pointAnalysis as unknown as Record<string, (...args: unknown[]) => unknown>;
+    expect(typeof fnRecord["computeStormPointDistances"]).toBe("function");
+    expect(typeof fnRecord["applyRadiusToStormDistances"]).toBe("function");
+
+    const computeDistances = (input: unknown) => fnRecord["computeStormPointDistances"]!(input);
+    const applyRadius = (distances: unknown, radiusKm: number) =>
+      fnRecord["applyRadiusToStormDistances"]!(distances, radiusKm);
+
+    const points: [number, number][] = [
+      [-95.3698, 29.7604],
+      [-95.45, 29.62],
+    ];
+    const fips = "48201";
+    const stormDate = stormFixture.storm_date;
+    const countyPowerSummary = (file: PowerFile | null, countyFips: string | null) =>
+      powerSeriesPeak(file, countyFips, stormDate);
+    const countyInternetSummary = (file: InternetFile | null, countyFips: string | null) =>
+      internetSeriesTrough(file, countyFips, stormDate);
+
+    for (const point of points) {
+      const distances = computeDistances({
+        storm: stormFixture,
+        point,
+        fips,
+        swath: swathFixture,
+        reports: reportsFixture,
+        warnings: warningsFixture,
+        power,
+        internet,
+      });
+
+      const seenWithinRadius = new Set<number | null>();
+      for (let radiusKm = 1; radiusKm <= 20; radiusKm++) {
+        const fromSplit = applyRadius(distances, radiusKm);
+        const cropStatus = cropStatusAt(point, radiusKm);
+        const swathExp = swathExposureAt(swathFixture, point, radiusKm);
+        const reportsProx = reportsWithinRadius(point, reportsFixture, radiusKm);
+        const warningsProx = warningsAtPoint(point, warningsFixture, stormDate, radiusKm);
+        const powerPeak = countyPowerSummary(power, fips);
+        const internetTrough = countyInternetSummary(internet, fips);
+        const covering = cropStatus === "outside-crop" ? null : swathExp.covering;
+        const withinRadius = cropStatus === "outside-crop" ? null : swathExp.withinRadius;
+        seenWithinRadius.add(withinRadius?.threshold_mm ?? null);
+        const expected = {
+          storm: stormFixture,
+          stormDate,
+          point,
+          radiusKm,
+          fips,
+          cropStatus,
+          covering,
+          withinRadius,
+          nearest: swathExp.nearest,
+          reportsWithinRadius: reportsProx,
+          directWarnings: warningsProx.directWarnings,
+          nearbyWarnings: warningsProx.nearbyWarnings,
+          warningCounts: warningsProx.warningCounts,
+          firstWarningStep: warningsProx.firstWarningStep,
+          powerPeak,
+          internetTrough,
+          hasActivityNearPin:
+            withinRadius !== null ||
+            reportsProx.count > 0 ||
+            warningsProx.directWarnings.length > 0 ||
+            (powerPeak?.peakShare ?? 0) >= 0.01 ||
+            (internetTrough?.maxDrop ?? 0) >= 0.02,
+          swathReceipt: swathFixture.receipt,
+        };
+        expect(fromSplit).toEqual(expected);
+      }
+      if (point[0] === -95.45) {
+        expect(seenWithinRadius.has(null)).toBe(true);
+        expect(seenWithinRadius.size).toBeGreaterThan(1);
+      }
+    }
   });
 });

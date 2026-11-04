@@ -4,6 +4,26 @@ import { DataError } from "./types";
 
 export const FETCH_TIMEOUT_MS = 15_000;
 export const MAX_JSON_BYTES = 16 * 1024 * 1024;
+export const MAX_IN_FLIGHT = 6;
+
+// shortcut: fetch limiter is global, not per origin, upgrade when an external origin stalls site data
+let inFlight = 0;
+const waitQueue: Array<() => void> = [];
+
+function waitForSlot(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    waitQueue.push(resolve);
+  });
+}
+
+function releaseSlot(): void {
+  const next = waitQueue.shift();
+  if (next) {
+    next();
+  } else {
+    inFlight -= 1;
+  }
+}
 
 export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -37,6 +57,11 @@ export async function fetchUrlJson<T>(
   headers?: HeadersInit,
 ): Promise<T> {
   const run = impl ?? fetch;
+  if (inFlight < MAX_IN_FLIGHT) {
+    inFlight += 1;
+  } else {
+    await waitForSlot();
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let body: unknown;
@@ -84,6 +109,7 @@ export async function fetchUrlJson<T>(
     }
   } finally {
     clearTimeout(timer);
+    releaseSlot();
   }
   return guard(body);
 }

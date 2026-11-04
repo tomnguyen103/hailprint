@@ -21,7 +21,12 @@ import { useTheme } from "../state/theme";
 import type { MapHandle } from "../storms/map/create-map";
 import "../styles/map.css";
 import { pointCsvOf } from "./csv";
-import { type StormPinRow, analyzeStormAtPin, summarizeArchiveAtPin } from "./point-analysis";
+import {
+  type StormPinRow,
+  type StormPointDistances,
+  summarizeArchiveAtPin,
+} from "./point-analysis";
+import * as pointAnalysis from "./point-analysis";
 import { POINT_HINT, parsePoint } from "./point-form";
 
 const SWATH_FILE = "swath.geojson";
@@ -274,13 +279,12 @@ export function PointCheck({ index }: { index: StormsIndex }) {
       });
   };
 
-  const rows = useMemo((): StormPinRow[] => {
+  const distances = useMemo((): StormPointDistances[] => {
     if (activePoint === null || swathData === null) return [];
     return index.storms.map((storm, i) =>
-      analyzeStormAtPin({
+      pointAnalysis.computeStormPointDistances({
         storm,
         point: activePoint,
-        radiusKm,
         fips: pinnedFips,
         swath: swathData[i] ?? null,
         reports: reportsData?.[i] ?? null,
@@ -289,7 +293,12 @@ export function PointCheck({ index }: { index: StormsIndex }) {
         internet: internetData?.[i] ?? null,
       }),
     );
-  }, [activePoint, swathData, index.storms, radiusKm, pinnedFips, reportsData, warningsData, powerData, internetData]);
+  }, [activePoint, swathData, index.storms, pinnedFips, reportsData, warningsData, powerData, internetData]);
+
+  const rows = useMemo(
+    (): StormPinRow[] => distances.map((d) => pointAnalysis.applyRadiusToStormDistances(d, radiusKm)),
+    [distances, radiusKm],
+  );
 
   const stormIdxByDate = useMemo(
     () => new Map(index.storms.map((s, i) => [s.storm_date, i])),

@@ -125,7 +125,7 @@ function formatSignedFloat(value: number | null, digits: number, unit = ""): str
 }
 
 /** One MapLibre map in a container: created on mount, fitted to the county once, destroyed on unmount. */
-function useMap(theme: Theme) {
+function useMap(theme: Theme, navigation = true) {
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
   const [ready, setReady] = useState(false);
@@ -139,7 +139,7 @@ function useMap(theme: Theme) {
     setError(null);
     import("../storms/map/create-map")
       .then(async ({ createMap }) => {
-        const next = await createMap(node, theme);
+        const next = await createMap(node, theme, { navigation });
         if (!live) {
           next.destroy();
           return;
@@ -173,6 +173,7 @@ function useSide(
   metro: Load<FeatureCollection<MultiPolygon>> & { retry: () => void },
   showReports: boolean,
   hidden: ReadonlySet<number>,
+  navigation = true,
 ) {
   const storm = index.storms.find((s) => s.storm_date === date);
   const load = useAllFiles<SwathFile>(storm ? [storm.files.swath] : [], guardSwath, index.run_time);
@@ -185,7 +186,7 @@ function useSide(
   const reports = showReports && reportsLoad.status === "ready" ? (reportsLoad.data[0] ?? null) : null;
   const outlines = metro.status === "ready" ? metro.data : null;
   const countyData = useMemo(() => (outlines !== null ? harrisFeature(outlines) : null), [outlines]);
-  const map = useMap(theme);
+  const map = useMap(theme, navigation);
   useEffect(() => {
     if (map.ready) map.handle.current?.setData(swath, reports, countyData);
   }, [map.ready, swath, reports, countyData]);
@@ -221,8 +222,8 @@ export function Compare({ index }: { index: StormsIndex }) {
   const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set());
   const { resolved: theme } = useTheme();
   const metro = useLoad("counties", fetchCounties);
-  const a = useSide(index, dateA, theme, metro, showReports, hidden);
-  const b = useSide(index, dateB, theme, metro, showReports, hidden);
+  const a = useSide(index, dateA, theme, metro, showReports, hidden, true);
+  const b = useSide(index, dateB, theme, metro, showReports, hidden, false);
   const swipeId = useId();
 
   const toggleClass = useCallback((thresholdMm: number) => {

@@ -116,7 +116,7 @@ export function useStep(
         delayMs: WRITE_MS,
         write: (next) => {
           written.current = null;
-          if (!writeStep(date, next, PORTS) || next === pathStepRef.current) {
+          if (next === pathStepRef.current || !writeStep(date, next, PORTS)) {
             hold(null);
           } else {
             written.current = next;
