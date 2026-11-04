@@ -20,7 +20,7 @@ import { LiveStatusList } from "../../live/live-status-list";
 import { href } from "../../router";
 import { objectName } from "../../ruler";
 import { Link } from "../../shell/link";
-import { ReceiptChip } from "../../shell/receipt-chip";
+import { ReceiptChip, getActiveReceiptChipId } from "../../shell/receipt-chip"; import { useModalFocusTrap } from "../../shell/scope-drawer";
 import { clearPin, getPinState, isMetroCoordinate, setPin, usePin } from "../../state/pin";
 import {
   type DirectWarning,
@@ -315,13 +315,13 @@ export function InspectorView({
   onCounty,
   onClose,
   pinnedLngLat,
-  panelRef,
+  panelRef, isModalSheet = false,
   liveStatus = "idle",
   liveData = null,
   onLiveCheck,
 }: InspectorProps & {
   pinnedLngLat?: [number, number] | null;
-  panelRef?: { current: HTMLDivElement | null };
+  panelRef?: { current: HTMLDivElement | null }; isModalSheet?: boolean;
   liveStatus?: "idle" | "loading" | "ready";
   liveData?: LiveStatusResult | null;
   onLiveCheck?: () => void;
@@ -342,7 +342,7 @@ export function InspectorView({
   const reportsWithin5Km = reports !== null ? reportsWithinRadius(pick.lngLat, reports, 5).count : null;
 
   return (
-    <div ref={panelRef as never} class="inspector" role="dialog" aria-labelledby="inspector-title" tabIndex={-1}>
+    <div ref={panelRef as never} class="inspector" role="dialog" aria-modal={isModalSheet ? "true" : undefined} aria-labelledby="inspector-title" tabIndex={-1}>
       <div class="inspector-head">
         <h2 id="inspector-title">Point</h2>
         <div class="inspector-actions">
@@ -484,7 +484,7 @@ export function Inspector(props: InspectorProps) {
   const panel = useRef<HTMLDivElement>(null);
   const { pin } = usePin();
   const [liveState, setLiveState] = useState<InspectorLiveState>({ key: "", status: "idle" });
-  const liveEpochRef = useRef(0);
+  const [isMobile, setIsMobile] = useState<boolean>(() => typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 767px)").matches : false); useEffect(() => { if (typeof window === "undefined" || typeof window.matchMedia !== "function") return; const mql = window.matchMedia("(max-width: 767px)"); setIsMobile(mql.matches); const onChange = (event: { matches: boolean }) => setIsMobile(event.matches); mql.addEventListener?.("change", onChange); return () => mql.removeEventListener?.("change", onChange); }, []); useModalFocusTrap(isMobile, panel); const liveEpochRef = useRef(0);
   const liveFips = props.pick.countyFips !== undefined ? props.pick.countyFips : props.fips;
   const liveKey = `${props.pick.lngLat[0]},${props.pick.lngLat[1]},${liveFips ?? ""}`;
   const currentLive: InspectorLiveState =
@@ -508,9 +508,9 @@ export function Inspector(props: InspectorProps) {
   };
 
   useEffect(() => {
-    panel.current?.focus();
+    const isMobile = typeof window !== "undefined" && typeof window.matchMedia === "function" ? window.matchMedia("(max-width: 767px)").matches : false; if (!isMobile) panel.current?.focus();
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") props.onClose();
+      if (event.defaultPrevented || getActiveReceiptChipId() !== null) return; if (event.key === "Escape") props.onClose();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -520,7 +520,7 @@ export function Inspector(props: InspectorProps) {
     <InspectorView
       {...props}
       pinnedLngLat={pin?.lngLat ?? null}
-      panelRef={panel}
+      panelRef={panel} isModalSheet={isMobile}
       liveStatus={currentLive.status}
       liveData={currentLive.status === "ready" ? currentLive.data : null}
       onLiveCheck={runLiveCheck}
