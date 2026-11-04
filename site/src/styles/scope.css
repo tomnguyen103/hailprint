@@ -1,4 +1,4 @@
-/* Scope drawer: the workspace grid, the rail button, the sidebar, the drawer below 1280 px, the sheet below 768 px. */
+/* Scope drawer: the workspace grid, the scope bar button, the sidebar, the drawer below 1280 px, the sheet below 768 px. */
 
 .workspace {
   display: grid;
@@ -78,10 +78,9 @@
 }
 
 .scope-list a {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  gap: 4px;
+  align-content: center;
   min-height: 40px;
   padding: 6px 8px 6px 24px;
   border-radius: var(--radius-control);
@@ -98,11 +97,18 @@
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.scope-badges {
-  display: inline-flex;
+.scope-row-top {
+  display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.scope-badges {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
   min-width: 0;
   gap: 4px;
 }
@@ -115,6 +121,7 @@
   font-size: 0.75rem;
   font-weight: 500;
   line-height: 1.3;
+  white-space: nowrap;
 }
 
 .badge {
@@ -137,24 +144,18 @@
   display: none;
 }
 
-/* Rail: 768 to 1279 px */
+/* Horizontal scope bar: 768 to 1279 px */
 
 @media (max-width: 1279px) {
   .workspace {
-    grid-template-columns: 56px minmax(0, 1fr);
-    gap: 16px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
   }
 
   .scope-rail {
     display: flex;
-    justify-content: center;
-    position: sticky;
-    top: calc(var(--bar-height) + 24px);
-  }
-
-  .scope-rail .button {
-    writing-mode: vertical-rl;
-    padding: 12px 8px;
+    align-items: center;
+    justify-content: flex-start;
   }
 
   .scope {
@@ -201,26 +202,15 @@
 /* Sheet: below 768 px */
 
 @media (max-width: 767px) {
-  .workspace {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .scope-rail {
     display: none;
   }
 
-  /* Storms opens its sheet from the stamp; Method and Pipeline keep a horizontal rail button. */
+  /* Storms opens its sheet from the stamp; Method and Pipeline keep a horizontal scope bar button. */
   .method .scope-rail,
   .pipeline .scope-rail {
     display: flex;
-    position: static;
-    justify-content: start;
-  }
-
-  .method .scope-rail .button,
-  .pipeline .scope-rail .button {
-    writing-mode: horizontal-tb;
-    padding: 0 10px;
+    justify-content: flex-start;
   }
 
   .scope {
