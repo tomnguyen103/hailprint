@@ -86,13 +86,13 @@ def _retry_after(headers: Any, default: float) -> float:
     """The delta-seconds of a `Retry-After` header, capped; `default` for any other value."""
     raw = headers.get("Retry-After") if headers is not None else None
     text = str(raw).strip() if raw is not None else ""
-    if not text.isdigit():
+    if not (text.isascii() and text.isdigit()):
         return default
-    return float(min(int(text), MAX_RETRY_AFTER_S))
+    return float(min(int(text[:9]), MAX_RETRY_AFTER_S))
 
 
 def get(url: str, timeout: float = DEFAULT_TIMEOUT, max_bytes: int = MAX_BYTES) -> bytes:
-    """Return the body. Retry a network error, a short read, or an HTTP 5xx; a 4xx raises at once.
+    """Return the body. Retry a network error, a short read, or an HTTP 408, 429, or 5xx.
 
     After the last try the last error propagates.
     """
