@@ -27,18 +27,29 @@ export function spriteUrl(theme: Theme): string {
  * True when the basemap file answers a HEAD request inside the timeout. A dev server
  * answers a missing file with the HTML shell, so an HTML content type counts as absent.
  */
-export async function probeBasemap(): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  try {
-    const response = await fetch(BASEMAP_FILE, { method: "HEAD", signal: controller.signal });
-    return response.ok && !(response.headers.get("content-type") ?? "").includes("text/html");
-  } catch {
-    // A network error or the timeout means the same as a 404: no basemap file.
-    return false;
-  } finally {
-    window.clearTimeout(timer);
-  }
+let basemapProbePromise: Promise<boolean> | null = null;
+
+/** Clear the memoized basemap probe promise for unit tests. */
+export function resetBasemapProbeForTests(): void {
+  basemapProbePromise = null;
+}
+
+export function probeBasemap(): Promise<boolean> {
+  if (basemapProbePromise !== null) return basemapProbePromise;
+  basemapProbePromise = (async () => {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    try {
+      const response = await fetch(BASEMAP_FILE, { method: "HEAD", signal: controller.signal });
+      return response.ok && !(response.headers.get("content-type") ?? "").includes("text/html");
+    } catch {
+      // A network error or the timeout means the same as a 404: no basemap file.
+      return false;
+    } finally {
+      window.clearTimeout(timer);
+    }
+  })();
+  return basemapProbePromise;
 }
 
 /** Build the Protomaps color flavor mapped to the Hailprint theme tokens. */

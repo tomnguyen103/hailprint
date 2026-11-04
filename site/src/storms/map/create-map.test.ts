@@ -299,17 +299,19 @@ describe("createMap", () => {
     expect(validateStyleMin(style as unknown as StyleSpecification)).toEqual([]);
   });
 
-  it("probeBasemap returns true only for a non-HTML 200 response and false on 404, HTML fallback, or network failure", async () => {
+  it("probeBasemap returns true only for a non-HTML 200 response, memoizes the in-flight/settled promise, and returns false on 404, HTML fallback, or network failure", async () => {
     const actual = await vi.importActual<typeof import("./basemap")>("./basemap");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValueOnce({
-        ok: true,
-        headers: { get: () => "application/octet-stream" },
-      }),
-    );
+    actual.resetBasemapProbeForTests();
+    const okFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => "application/octet-stream" },
+    });
+    vi.stubGlobal("fetch", okFetch);
     expect(await actual.probeBasemap()).toBe(true);
+    expect(await actual.probeBasemap()).toBe(true);
+    expect(okFetch).toHaveBeenCalledTimes(1);
 
+    actual.resetBasemapProbeForTests();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValueOnce({
@@ -319,6 +321,7 @@ describe("createMap", () => {
     );
     expect(await actual.probeBasemap()).toBe(false);
 
+    actual.resetBasemapProbeForTests();
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValueOnce({
@@ -328,6 +331,7 @@ describe("createMap", () => {
     );
     expect(await actual.probeBasemap()).toBe(false);
 
+    actual.resetBasemapProbeForTests();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValueOnce(new Error("network down")));
     expect(await actual.probeBasemap()).toBe(false);
   });
