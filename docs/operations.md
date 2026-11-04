@@ -11,21 +11,22 @@ This guide covers the Trigger.dev tasks, the Supabase Storage buckets, and the e
   2. Runs `index` and `candidates --missing --top $MAX_INGEST` (default `5`).
   3. Runs `ingest` for each missing candidate day (and `parcels` when `data/raw/hcad/extracted/Parcels.gdb` exists). A failed ingest logs one line and skips to the next date.
   4. Runs `score`, `warnings --missing`, `power --missing`, and `internet --missing`. A failed score or layer step logs `<step> failed; publish goes on`.
-  5. Runs `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`, per `docs/DECISIONS.md` row 14). A `publish` that fails some dates and builds at least one exits 3 (`PartialPublish`); the task still runs step 6 and then returns 3. Any other non-zero exit uploads nothing.
-  6. Uploads changed state files (excluding `derived/odin/`) to `HAILPRINT_STATE_BUCKET`, uploads changed per-date files to `HAILPRINT_PUBLIC_BUCKET` before `storms.json` and `pipeline.json` with `Cache-Control: max-age=60`, and deletes stale remote public objects last.
+  5. Runs `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`, per `docs/DECISIONS.md` row 14). Per-date files whose content changes only in `receipt.run_time` keep their existing bytes on disk, so unchanged files are not re-uploaded. A `publish` that fails some dates and builds at least one exits 3 (`PartialPublish`); the task still runs step 6 and then returns 3. Any other non-zero exit uploads nothing.
+  6. Mints a fresh S3 client, uploads changed state files (excluding `derived/odin/`) to `HAILPRINT_STATE_BUCKET`, uploads changed per-date files to `HAILPRINT_PUBLIC_BUCKET` before `storms.json` and `pipeline.json` with `Cache-Control: max-age=60`, and deletes stale remote public objects last.
 - `hailprint cloud odin` (`trigger/odin.ts`, cron `0 * * * *` UTC on `small-1x`, queue concurrency 1):
-  1. Downloads today's UTC ODIN file `derived/odin/odin-<YYYY-MM-DD>.parquet` when present.
+  1. Downloads today's UTC ODIN file `derived/odin/odin-<YYYY-MM-DD>.parquet` when present (plus the next UTC day file near midnight).
   2. Runs `odin` to append the current 15-minute slot snapshot.
-  3. Uploads only `derived/odin/odin-<YYYY-MM-DD>.parquet`. Because `nightly` never uploads `derived/odin/`, the two schedules never race.
+  3. Uploads only the slot, post-slot, and next-day ODIN keys. Because `nightly` never uploads `derived/odin/`, the two schedules never race.
 - `hailprint cloud backfill` (`trigger/backfill.ts`, on-demand task on `medium-1x`, queue concurrency 1):
   1. Downloads state and public buckets.
   2. Runs `warnings --missing`, `eaglei` for any of `2020`, `2021`, `2022`, `2023`, `2024`, `2025` not yet in `derived/eaglei/`, `power --missing`, `internet --missing`, and `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`). A failed `warnings`, `eaglei`, `power`, or `internet` step logs `<step> failed; publish goes on`.
-  3. Uploads changed state and public files.
+  3. Mints a fresh S3 client and uploads changed state and public files on `publish` exit 0 or 3.
 - `hailprint cloud live` (`trigger/live.ts`, cron `*/10 * * * *` UTC on `small-2x`, queue `live` with concurrency 1):
   1. Downloads only the `live/` keys from `HAILPRINT_PUBLIC_BUCKET`. It reads no state file.
   2. Runs `live`. The command writes `site/data/live/swath.geojson`, `reports.geojson`, `warnings.geojson`, and then `now.json`.
   3. Uploads the changed `live/` keys with `Cache-Control: max-age=60`, and `live/now.json` last. A failed `live` run uploads nothing and returns 1, so the old public files stay and the site marks them stale.
 - `nightly` and `backfill` exclude `live/` from the public download, the upload, and the mirror delete. The `live` task never touches `storms/`, `storms.json`, or `pipeline.json`. The tasks never delete or overwrite a key of the other.
+- Outbound HTTP requests in `hailprint.net` send `User-Agent: hailprint/<version> (+https://hailprint.tomnguyen.me)` and retry HTTP 408, 429 (honouring numeric `Retry-After` up to 30 s), and 5xx.
 
 ## Environment variables
 
