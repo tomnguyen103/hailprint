@@ -9,6 +9,7 @@ import os
 import re
 import sys
 from collections.abc import Callable, Iterable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -35,6 +36,7 @@ LIVE_PREFIX = "live/"
 LIVE_INDEX = f"{LIVE_PREFIX}now.json"
 BACKFILL_EAGLEI_YEARS: tuple[int, ...] = (2020, 2021, 2022, 2023, 2024, 2025)
 MAX_BYTES = 64 * 1024 * 1024
+SYNC_THREADS = 8
 _PROJECT_REF_RE = re.compile(r"^[a-z0-9-]+$")
 _PUBLIC_KEY_RE = re.compile(
     r"^(storms\.json|pipeline\.json|storms/\d{4}-\d{2}-\d{2}/"
@@ -178,6 +180,14 @@ def _list_keys(client: Any, bucket: str, prefix: str, max_bytes: int = MAX_BYTES
     return [key for key, _ in _list_objects(client, bucket, prefix, max_bytes=max_bytes)]
 
 
+def _fetch_s3_object(client: Any, bucket: str, key: str, max_bytes: int) -> bytes:
+    resp = client.get_object(Bucket=bucket, Key=key)
+    body: bytes = resp["Body"].read(max_bytes + 1)
+    if len(body) > max_bytes:
+        raise RuntimeError(f"S3 object {key} exceeds {max_bytes} bytes")
+    return body
+
+
 def sync_down(
     client: Any,
     bucket: str,
@@ -187,11 +197,13 @@ def sync_down(
     max_bytes: int = MAX_BYTES,
     public: bool = False,
     exclude_prefixes: Iterable[str] = (),
+    prior_state: SyncState | None = None,
 ) -> SyncState:
     state = SyncState()
     seen: set[str] = set()
     prefix_tuple = tuple(prefixes)
     exclude_tuple = tuple(exclude_prefixes)
+    to_fetch: list[tuple[str, Path]] = []
     for prefix in prefix_tuple:
         for key, etag in _list_objects(client, bucket, prefix, max_bytes=max_bytes):
             if key in seen or any(key.startswith(ex) for ex in exclude_tuple):
@@ -201,21 +213,39 @@ def sync_down(
                 raise ValueError("unsafe S3 key")
             _validate_key(key, local_base, public=public)
             dest = local_base / key
-            if etag is not None and dest.is_file() and not dest.is_symlink():
+            prior_sha = prior_state.digests.get((bucket, key)) if prior_state is not None else None
+            has_digest = etag is not None or prior_sha is not None
+            if has_digest and dest.is_file() and not dest.is_symlink():
                 local_size = dest.stat().st_size
                 if local_size <= max_bytes:
                     local_body = dest.read_bytes()
-                    if hashlib.md5(local_body).hexdigest() == etag:  # noqa: S324
-                        state.digests[(bucket, key)] = hashlib.sha256(local_body).hexdigest()
+                    local_sha = hashlib.sha256(local_body).hexdigest()
+                    etag_matches = (
+                        etag is not None and hashlib.md5(local_body).hexdigest() == etag  # noqa: S324
+                    )
+                    sha_matches = etag is None and prior_sha is not None and local_sha == prior_sha
+                    if etag_matches or sha_matches:
+                        state.digests[(bucket, key)] = local_sha
                         state.remote_keys.add((bucket, key))
                         continue
-            resp = client.get_object(Bucket=bucket, Key=key)
-            body: bytes = resp["Body"].read(max_bytes + 1)
-            if len(body) > max_bytes:
-                raise RuntimeError(f"S3 object {key} exceeds {max_bytes} bytes")
+            to_fetch.append((key, dest))
+    if len(to_fetch) == 1:
+        key, dest = to_fetch[0]
+        body = _fetch_s3_object(client, bucket, key, max_bytes)
+        files.write_bytes_atomic(body, dest)
+        state.digests[(bucket, key)] = hashlib.sha256(body).hexdigest()
+        state.remote_keys.add((bucket, key))
+    elif len(to_fetch) > 1:
+        def _download_and_write(item: tuple[str, Path]) -> tuple[str, str]:
+            key, dest = item
+            body = _fetch_s3_object(client, bucket, key, max_bytes)
             files.write_bytes_atomic(body, dest)
-            state.digests[(bucket, key)] = hashlib.sha256(body).hexdigest()
-            state.remote_keys.add((bucket, key))
+            return key, hashlib.sha256(body).hexdigest()
+
+        with ThreadPoolExecutor(max_workers=min(SYNC_THREADS, len(to_fetch))) as pool:
+            for key, digest in pool.map(_download_and_write, to_fetch):
+                state.digests[(bucket, key)] = digest
+                state.remote_keys.add((bucket, key))
     return state
 
 

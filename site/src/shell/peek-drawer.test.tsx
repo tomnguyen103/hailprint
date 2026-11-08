@@ -80,14 +80,30 @@ describe("PeekDrawer, ProofStrip, and shared radius store", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("renders 4 route links in ProofStrip, preserves map step, and marks active tab with aria-current", () => {
-    const tree = ProofStrip({ date: "2024-05-28", activeTab: "score", step: 46 });
+  it("renders 4 route links in ProofStrip, preserves map step, shows live radius, and marks active tab with aria-current", () => {
+    setRadiusKm(12);
+    const tree = ProofStrip({
+      date: "2024-05-28",
+      activeTab: "score",
+      step: 46,
+      receipt: {
+        storm_date: "2024-05-28",
+        sources: [],
+        confidence: "settled",
+        run_time: "2026-04-01T00:00:00Z",
+        package_version: "0.2.0",
+      },
+    });
     const links = findNodes(tree, (v) => v.props?.["class"] === "proof-step");
     expect(links).toHaveLength(4);
     expect(links[0]!.props["href"]).toBe("/storms/2024-05-28/map/46");
     const active = links.find((l) => l.props["aria-current"] === "page")!;
     expect(textOf(active)).toContain("Skill Score");
+    expect(textOf(active)).toContain("R=12 km");
     expect(textOf(links[3])).toContain("Provenance files");
+    expect(findNodes(tree, (v) => v.props?.["class"] === "proof-strip-receipt")).toHaveLength(1);
   });
 });
+
+
 

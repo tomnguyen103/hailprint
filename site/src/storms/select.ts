@@ -35,6 +35,8 @@ export interface CaseStudy {
   storm_date: string;
   title: string;
   summary: string;
+  defaultTab: "map" | "score";
+  presetPin: "cypress" | "woodlands" | null;
 }
 
 export const CASE_STUDIES: readonly CaseStudy[] = [
@@ -42,21 +44,29 @@ export const CASE_STUDIES: readonly CaseStudy[] = [
     storm_date: "2024-05-28",
     title: "2024-05-28 · Derecho & hail",
     summary: "361,418 parcels · 251,830 Harris customers out (13.8%) · 9 SPC reports",
+    defaultTab: "map",
+    presetPin: "cypress",
   },
   {
     storm_date: "2024-12-24",
     title: "2024-12-24 · 0.50 HSS peak skill",
     summary: "37,881 parcels · 3 SPC reports · highest single-storm skill",
+    defaultTab: "score",
+    presetPin: null,
   },
   {
     storm_date: "2023-06-23",
     title: "2023-06-23 · 13 reports (up to 2.00 in)",
     summary: "221,695 parcels · 13 SPC reports · densest ground-truth report day",
+    defaultTab: "map",
+    presetPin: "woodlands",
   },
   {
     storm_date: "2024-03-15",
     title: "2024-03-15 · 76.6 mm peak MESH",
     summary: "49,315 parcels · 8 scored reports · 76.6 mm peak MESH",
+    defaultTab: "map",
+    presetPin: null,
   },
 ];
 

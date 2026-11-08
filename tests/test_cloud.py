@@ -1063,6 +1063,44 @@ def test_sync_down_skips_get_object_when_local_md5_matches_single_part_etag(tmp_
     )
 
 
+def test_sync_down_skips_prior_state_digest_and_fetches_remaining_in_parallel(
+    tmp_path: Path,
+):
+    payload_a = b"cached-by-sha256"
+    payload_b = b"remote-file-b"
+    payload_c = b"remote-file-c"
+    data_dir = tmp_path / "data"
+    local_a = data_dir / "derived" / "a.parquet"
+    local_a.parent.mkdir(parents=True, exist_ok=True)
+    local_a.write_bytes(payload_a)
+
+    prior = cloud.SyncState(
+        digests={("hailprint-state", "derived/a.parquet"): hashlib.sha256(payload_a).hexdigest()}
+    )
+    fetched: list[str] = []
+
+    class TrackingS3(FakeS3):
+        def get_object(self, *, Bucket: str, Key: str) -> dict:
+            fetched.append(Key)
+            return super().get_object(Bucket=Bucket, Key=Key)
+
+    s3 = TrackingS3(
+        {
+            ("hailprint-state", "derived/a.parquet"): payload_a,
+            ("hailprint-state", "derived/b.parquet"): payload_b,
+            ("hailprint-state", "derived/c.parquet"): payload_c,
+        }
+    )
+    state = cloud.sync_down(
+        s3, "hailprint-state", ("derived/",), data_dir, prior_state=prior
+    )
+    assert "derived/a.parquet" not in fetched
+    assert sorted(fetched) == ["derived/b.parquet", "derived/c.parquet"]
+    assert (data_dir / "derived" / "b.parquet").read_bytes() == payload_b
+    assert (data_dir / "derived" / "c.parquet").read_bytes() == payload_c
+    assert len(state.digests) == 3
+
+
 def test_trigger_tasks_handle_partial_exit_3_and_hello_checks_env():
     nightly_ts = (paths.ROOT / "trigger" / "nightly.ts").read_text(encoding="utf-8")
     backfill_ts = (paths.ROOT / "trigger" / "backfill.ts").read_text(encoding="utf-8")
@@ -1070,7 +1108,11 @@ def test_trigger_tasks_handle_partial_exit_3_and_hello_checks_env():
 
     assert "PARTIAL_EXIT = 3" in nightly_ts
     assert "partial: true" in nightly_ts
+    assert "console.warn" in nightly_ts
     assert "PARTIAL_EXIT = 3" in backfill_ts
     assert "partial: true" in backfill_ts
+    assert "console.warn" in backfill_ts
     assert "REQUIRED_ENV" in hello_ts
     assert "envReady" in hello_ts
+    assert "versions" in hello_ts
+
