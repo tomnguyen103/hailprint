@@ -11,6 +11,7 @@ import { PeekDrawer } from "../shell/peek-drawer";
 import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
+import { MetricText } from "../scorecard/metric-text";
 import { type Load, useLoad } from "../state/load";
 import { useRadiusKm } from "../state/radius";
 import { ReportClassifierTable } from "./report-classifier-table";
@@ -149,7 +150,9 @@ export function ScorePane({
               {METRICS.map((m) => (
                 <div key={m}>
                   <dt>{METRIC_LABELS[m]}</dt>
-                  <dd class="mono">{metricText(peekRow[m]).text}</dd>
+                  <dd class="mono">
+                    <MetricText value={peekRow[m]} />
+                  </dd>
                 </div>
               ))}
               <dt>Swath km²</dt>

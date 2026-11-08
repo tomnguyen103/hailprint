@@ -35,7 +35,7 @@ export function ProofStrip({
   step,
   radiusKm = getRadiusKm(),
   receipt,
-  file = "storms.json",
+  file = "reports.geojson",
 }: Props) {
   return (
     <nav class="proof-strip" aria-label="Verification proof workflow">

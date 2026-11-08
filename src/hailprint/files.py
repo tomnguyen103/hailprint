@@ -129,11 +129,15 @@ def _evict_stale_lock(path: Path) -> bool:
         except FileExistsError:
             pass
         except OSError:
-            if not path.exists():
+            try:
+                data = claim.read_bytes()
+                fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
                 try:
-                    os.replace(claim, path)
-                except OSError:
-                    pass
+                    os.write(fd, data)
+                finally:
+                    os.close(fd)
+            except OSError:
+                pass
         finally:
             claim.unlink(missing_ok=True)
         return False

@@ -10,6 +10,7 @@ import { ProofStrip } from "../shell/proof-strip";
 import { SubTabs } from "../shell/sub-tabs";
 import { useLoad } from "../state/load";
 import { setPresetPin } from "../state/pin";
+import { useRadiusKm } from "../state/radius";
 import { useStep } from "../time/use-step";
 import { DataPane } from "./data-pane";
 import { MapPane } from "./map-pane";
@@ -72,6 +73,7 @@ export function Workspace({ index, storm, tab }: Props) {
     run_time: index.run_time,
     package_version: index.package_version,
   };
+  const [liveRadiusKm] = useRadiusKm(index.radius_km_default);
   const caseStudies = availableCaseStudies(index.storms);
 
   let pane;
@@ -143,7 +145,14 @@ export function Workspace({ index, storm, tab }: Props) {
           <h2 class="visually-hidden">{TAB_LABELS[tab]}</h2>
           {pane}
         </section>
-        <ProofStrip date={storm.storm_date} activeTab={tab} step={step} receipt={indexReceipt} />
+        <ProofStrip
+          date={storm.storm_date}
+          activeTab={tab}
+          step={step}
+          radiusKm={liveRadiusKm}
+          receipt={reports.status === "ready" ? reports.data.receipt : undefined}
+          file={storm.files.reports}
+        />
       </div>
     </div>
   );
