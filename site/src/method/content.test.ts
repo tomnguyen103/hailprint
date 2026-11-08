@@ -2,7 +2,8 @@ import { expect, it } from "vitest";
 import { METHOD_PAGES } from "../router";
 import { CAVEAT } from "../shell/caveat";
 import { METHOD_CONTENT } from "./content";
-import { proseFindings, sentences } from "./prose";
+import { proseFindings, sentences, wordCount } from "./prose";
+
 
 it("keeps every Method page inside the prose budget", () => {
   expect(proseFindings(METHOD_CONTENT)).toEqual([]);
@@ -111,4 +112,14 @@ it("ends the Limits page with the caveat line", () => {
 
 it("names every page with its label", () => {
   for (const page of METHOD_PAGES) expect(METHOD_CONTENT[page].title.length).toBeGreaterThan(0);
+});
+
+it("keeps every prose block at or under 25 words (30-ui.md paragraph ceiling)", () => {
+  for (const page of METHOD_PAGES) {
+    for (const block of METHOD_CONTENT[page].blocks) {
+      if (block.kind === "prose") {
+        expect(wordCount(block.text)).toBeLessThanOrEqual(25);
+      }
+    }
+  }
 });

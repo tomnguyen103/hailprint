@@ -196,4 +196,24 @@ describe("LiveViewContent", () => {
       }
     }
   });
+
+  it("renders the quiet-sky case study banner with 4 preset buttons when 24h hail and report counts are zero (AUD-22)", () => {
+    const quietTree = LiveViewContent({
+      data: loadFixture("quiet"),
+      newest: "2026-08-28",
+      now: new Date("2026-11-03T14:15:00Z"),
+    });
+    const banners = findAll(quietTree, (v) => v.props["class"] === "quiet-sky-banner");
+    expect(banners).toHaveLength(1);
+    const pills = findAll(quietTree, (v) => String(v.props["class"] ?? "").includes("case-study-pill"));
+    expect(pills).toHaveLength(4);
+
+    const hailTree = LiveViewContent({
+      data: loadFixture("hail"),
+      newest: "2026-08-28",
+      now: new Date("2026-11-03T14:15:00Z"),
+    });
+    expect(findAll(hailTree, (v) => v.props["class"] === "quiet-sky-banner")).toHaveLength(0);
+  });
 });
+

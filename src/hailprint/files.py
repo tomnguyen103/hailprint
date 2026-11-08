@@ -52,7 +52,7 @@ def _pid_alive(pid: int) -> bool:
     """Return True when `pid` refers to a running operating-system process."""
     if pid <= 0:
         return False
-    if pid == os.getpid():
+    if pid in (1, os.getpid()):
         return True
     if os.name == "nt":
         kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]

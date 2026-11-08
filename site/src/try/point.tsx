@@ -150,6 +150,16 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const hintId = useId();
   const latId = useId();
   const lonId = useId();
+  const defaultPinApplied = useRef(false);
+
+  useEffect(() => {
+    if (!defaultPinApplied.current && pin === null) {
+      defaultPinApplied.current = true;
+      setPresetPin("cypress");
+    } else if (pin !== null) {
+      defaultPinApplied.current = true;
+    }
+  }, []);
 
   useEffect(() => {
     if (pin !== null) {

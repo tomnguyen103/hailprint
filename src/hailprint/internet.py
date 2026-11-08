@@ -165,7 +165,9 @@ def build(storm_date: date) -> pd.DataFrame:
     first = int(start.timestamp()) - BASELINE_DAYS * 86400
     last = int(end.timestamp())
     fips_list = sorted(impact.METRO_FIPS)
+    first_series = fetch(fips_list[0], first, last)
     with ThreadPoolExecutor(FETCH_THREADS) as pool:
-        fetched = list(pool.map(lambda fips: fetch(fips, first, last), fips_list))
-    series = dict(zip(fips_list, fetched, strict=True))
+        rest = list(pool.map(lambda fips: fetch(fips, first, last), fips_list[1:]))
+    series = dict(zip(fips_list, [first_series, *rest], strict=True))
     return derive(storm_date, series)
+

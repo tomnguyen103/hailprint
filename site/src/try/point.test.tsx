@@ -789,4 +789,16 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
     expect(spy.mock.calls.length).toBe(callsBeforeRadiusChange);
     spy.mockRestore();
   });
+
+  it("auto-pins Cypress (77433) on initial mount when pin is null so visitors immediately see archive results (AUD-23)", async () => {
+    expect(getPinState().pin).toBeNull();
+    const host = makeFakeElement("div");
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
+    await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
+
+    expect(getPinState().pin?.label).toBe("Cypress (77433)");
+    expect(domText(host)).toContain("Cypress (77433)");
+  });
 });
+

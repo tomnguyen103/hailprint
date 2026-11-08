@@ -4,12 +4,13 @@ import "../styles/live.css";
 import type { LiveFile } from "../data/types";
 import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../format";
 import { ODIN_LABEL } from "../impact/power";
-import { href } from "../router";
+import { go, href } from "../router";
 import { RULER } from "../ruler";
 import { Link } from "../shell/link";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type LiveData, useLive } from "../state/live";
 import { LiveMap } from "../storms/map/live-map";
+import { CASE_STUDIES } from "../storms/select";
 import { ageMinutes, freshness } from "./freshness";
 
 const LIVE_FILE = "live/now.json";
@@ -64,6 +65,7 @@ export function LiveViewContent({
   const reportsNote = live.reports.max_size_in !== null ? `max ${formatInches(live.reports.max_size_in)}` : "50 km buffer";
   const powerValue = live.power === null ? "\u2014" : formatCount(live.power.customers_out);
   const powerNote = live.power === null ? "unavailable" : ODIN_LABEL;
+  const isQuietSky = newest !== null && live.mesh.class_count === 0 && live.reports.count === 0;
 
   return (
     <div class="live-page">
@@ -91,6 +93,26 @@ export function LiveViewContent({
           Window {live.window.start} to {live.window.end}
         </p>
       </header>
+
+      {isQuietSky ? (
+        <section class="quiet-sky-banner" aria-label="Archive case studies">
+          <p class="quiet-sky-copy">
+            Quiet 24-hour window. Select a flagship archive storm to inspect high-density radar swaths.
+          </p>
+          <div class="quiet-sky-actions">
+            {CASE_STUDIES.map((cs) => (
+              <button
+                key={cs.storm_date}
+                type="button"
+                class="button button-small case-study-pill"
+                onClick={() => go(href({ area: "storms", date: cs.storm_date, tab: "map" }))}
+              >
+                <span class="mono">{cs.title}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {data.notes.length > 0 ? (
         <ul class="live-notes" aria-label="Layer warnings">
