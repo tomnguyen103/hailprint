@@ -6,6 +6,7 @@ import { guardInternet, guardPower, guardReports } from "../data/guard";
 import type { InternetFile, PowerFile, Receipt, Storm, StormsIndex } from "../data/types";
 import { harrisPeak, reportTicks } from "../impact/series";
 import { TABS, TAB_LABELS, go, href, type Tab } from "../router";
+import { ProofStrip } from "../shell/proof-strip";
 import { SubTabs } from "../shell/sub-tabs";
 import { useLoad } from "../state/load";
 import { useStep } from "../time/use-step";
@@ -129,6 +130,7 @@ export function Workspace({ index, storm, tab }: Props) {
           datesOpen={datesOpen}
           onOpenDates={() => setDatesOpen(true)}
         />
+        <ProofStrip date={storm.storm_date} activeTab={tab} />
         <SubTabs
           label="Storm panes"
           tabs={stormTabItems(storm.storm_date, step)}

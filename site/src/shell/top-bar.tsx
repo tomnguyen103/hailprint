@@ -1,4 +1,4 @@
-import { AREA_LABELS, AREAS, type Area, href } from "../router";
+import { NAV_LABELS, PRIMARY_AREAS, type Area, href } from "../router";
 import { AREA_ICONS, CodeIcon } from "./icons";
 import { Link } from "./link";
 import { ThemeToggle } from "./theme-toggle";
@@ -16,13 +16,20 @@ export function TopBar({ active }: { active: Area | null }) {
         Hailprint
       </Link>
       <nav class="area-nav" aria-label="Areas">
-        {AREAS.map((area) => (
+        {PRIMARY_AREAS.map((area) => (
           <Link key={area} href={areaHref(area)} aria-current={active === area ? "page" : undefined}>
-            {AREA_LABELS[area]}
+            {NAV_LABELS[area]}
           </Link>
         ))}
       </nav>
       <div class="top-bar-tools">
+        <Link
+          href={areaHref("pipeline")}
+          class="pipeline-status-link"
+          aria-current={active === "pipeline" ? "page" : undefined}
+        >
+          Pipeline
+        </Link>
         <ThemeToggle />
         <a class="icon-button" href={SOURCE_URL} aria-label="Source code" rel="noopener">
           <CodeIcon />
@@ -32,16 +39,16 @@ export function TopBar({ active }: { active: Area | null }) {
   );
 }
 
-/** Below 768 px the six areas move here: icon over label, sticky at the bottom. */
+/** Below 768 px the five primary areas move here: icon over label, sticky at the bottom. */
 export function BottomBar({ active }: { active: Area | null }) {
   return (
     <nav class="bottom-bar" aria-label="Areas">
-      {AREAS.map((area) => {
+      {PRIMARY_AREAS.map((area) => {
         const Icon = AREA_ICONS[area];
         return (
           <Link key={area} href={areaHref(area)} aria-current={active === area ? "page" : undefined}>
             <Icon size={22} />
-            <span>{AREA_LABELS[area]}</span>
+            <span>{NAV_LABELS[area]}</span>
           </Link>
         );
       })}

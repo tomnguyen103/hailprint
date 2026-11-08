@@ -6,9 +6,11 @@ import { isStep, parseStep } from "./time/step";
 
 export const AREAS = ["live", "storms", "scorecard", "try", "method", "pipeline"] as const;
 export type Area = (typeof AREAS)[number];
+export const PRIMARY_AREAS = ["live", "storms", "scorecard", "method", "try"] as const;
 
 export const TABS = ["map", "parcels", "score", "data"] as const;
 export type Tab = (typeof TABS)[number];
+export type StormTab = Tab;
 
 export const SCORECARD_VIEWS = ["table", "grid", "curve"] as const;
 export type ScorecardView = (typeof SCORECARD_VIEWS)[number];
@@ -23,6 +25,7 @@ export const PIPELINE_VIEWS = ["runs", "archive", "sources"] as const;
 export type PipelineView = (typeof PIPELINE_VIEWS)[number];
 
 export const AREA_LABELS: Record<Area, string> = { live: "Live", storms: "Storms", scorecard: "Scorecard", try: "Try it", method: "Method", pipeline: "Pipeline" };
+export const NAV_LABELS: Record<Area, string> = { live: "Live", storms: "Storms", scorecard: "Scorecard", try: "Try", method: "Method", pipeline: "Pipeline" };
 export const TAB_LABELS: Record<Tab, string> = { map: "Map", parcels: "Parcels", score: "Score", data: "Data" };
 export const METHOD_LABELS: Record<MethodPage, string> = {
   data: "Data", "storm-date": "Storm date", "size-classes": "Size classes", scoring: "Scoring", limits: "Limits", impacts: "Impacts",

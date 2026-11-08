@@ -93,6 +93,60 @@
   color: var(--ink-muted);
 }
 
+/* Proof strip */
+
+.proof-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.proof-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background: var(--sheet);
+  color: var(--ink);
+  text-align: left;
+  transition: border-color var(--motion), background-color var(--motion);
+}
+
+.proof-step:hover {
+  background: var(--sheet-muted);
+}
+
+.proof-step[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--sheet-muted);
+}
+
+.proof-step-num {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.proof-step-title {
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.proof-step-metric {
+  margin-left: auto;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 767px) {
+  .proof-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* Panes */
 
 .pane {
