@@ -84,7 +84,7 @@ describe("PeekDrawer, ProofStrip, and shared radius store", () => {
     const tree = ProofStrip({ date: "2024-05-28", activeTab: "score", step: 46 });
     const links = findNodes(tree, (v) => v.props?.["class"] === "proof-step");
     expect(links).toHaveLength(4);
-    expect(links[0]!.props["href"]).toBe("/storms/2024-05-28/map?step=46");
+    expect(links[0]!.props["href"]).toBe("/storms/2024-05-28/map/46");
     const active = links.find((l) => l.props["aria-current"] === "page")!;
     expect(textOf(active)).toContain("Skill Score");
     expect(textOf(links[3])).toContain("Provenance files");
