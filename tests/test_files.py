@@ -156,7 +156,7 @@ def test_evict_stale_lock_restores_lock_when_racing_process_writes_live_pid(tmp_
     orig_replace = os.replace
 
     def racing_replace(src, dst):
-        if Path(src) == path:
+        if src == path:
             path.write_text(str(os.getpid()), encoding="utf-8")
         return orig_replace(src, dst)
 
