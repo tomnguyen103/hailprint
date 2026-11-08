@@ -2,6 +2,7 @@ import { validateStyleMin, type StyleSpecification } from "@maplibre/maplibre-gl
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { GLYPHS_URL, basemapLabelLayers, basemapLayers, spriteUrl } from "./basemap";
 import { createMap } from "./create-map";
+import { oklchToHex, token } from "./layers";
 import { LOAD_TIMEOUT_MS } from "./when-loaded";
 
 const stub = vi.hoisted(() => {
@@ -390,5 +391,16 @@ describe("createMap", () => {
 
     handle.destroy();
     expect(disconnected).toBe(1);
+  });
+
+  it("converts oklch() CSS custom properties to #rrggbb hex strings for MapLibre style validation", async () => {
+    vi.stubGlobal("getComputedStyle", () => ({
+      getPropertyValue: () => "oklch(0.46 0.11 236)",
+    }));
+    expect(oklchToHex("oklch(0.972 0.008 258)")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(token("--accent")).toMatch(/^#[0-9a-f]{6}$/);
+    const { map } = await start();
+    const style = (map.options as { style: StyleSpecification }).style;
+    expect(validateStyleMin(style)).toEqual([]);
   });
 });

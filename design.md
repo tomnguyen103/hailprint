@@ -19,43 +19,44 @@ the size ruler, the storm stamp, the contingency grid, and the receipt chip.
 
 | Role | Family | Size / weight |
 |---|---|---|
-| Page title | Source Serif 4 | 32 px / 600, roman only |
-| Pane title | IBM Plex Sans | 18 px / 600 |
-| Body | IBM Plex Sans | 16 px / 400, line-height 1.55 |
-| Metadata, chips | IBM Plex Sans | 14 px / 500 |
-| Section label | IBM Plex Sans | 12 px / 600, uppercase, tracking 0.06em |
-| Dates, IDs, numbers | IBM Plex Mono | 14 px / 500, tabular-nums |
-| Stat value | IBM Plex Mono | 28 px / 500 |
+| Page title | Instrument Serif / Source Serif 4 | 32 px / 600, roman only |
+| Pane title | Source Sans 3 / IBM Plex Sans | 18 px / 600 |
+| Body | Source Sans 3 / IBM Plex Sans | 16 px / 400, line-height 1.55 |
+| Metadata, chips | Source Sans 3 / IBM Plex Sans | 14 px / 500 |
+| Section label | Source Sans 3 / IBM Plex Sans | 12 px / 600, uppercase, tracking 0.06em |
+| Dates, IDs, numbers | JetBrains Mono / IBM Plex Mono | 14 px / 500, tabular-nums |
+| Stat value | JetBrains Mono / IBM Plex Mono | 28 px / 500 |
 
-## Colour tokens
+## Colour tokens (Gulf Barograph OKLCH)
 
 | Token | Light | Dark | Use |
 |---|---|---|---|
-| `--paper` | `#F7F6F2` | `#151513` | page background |
-| `--sheet` | `#FDFCF9` | `#1C1C19` | panes, cards, inputs |
-| `--sheet-muted` | `#EFEDE6` | `#262622` | hover, inactive tab, zebra |
-| `--rule` | `#E2DFD5` | `#3A3934` | 1 px hairlines |
-| `--ink` | `#1F1E1B` | `#EEECE6` | body and titles |
-| `--ink-muted` | `#4A4840` | `#C4C1B6` | metadata |
-| `--accent` | `#1F5F8B` | `#8CC4E8` | links, focus ring, primary button |
-| `--on-accent` | `#FDFCF9` | `#151513` | text on accent |
-| `--report` | `#B3261E` | `#FF8A80` | SPC report markers only |
-| `--note-bg` / `--note-ink` | `#F4EEDC` / `#5C4A12` | `#2B2618` / `#EBD9A0` | caveat callout |
-| `--water` | `#E4EAE8` | `#1B2224` | basemap water bodies |
-| `--road-major` | `#CFCBC0` | `#4A4842` | basemap highways and major roads |
+| `--paper` | `oklch(0.972 0.008 258)` | `oklch(0.165 0.015 258)` | page background |
+| `--sheet` | `oklch(0.992 0.004 258)` | `oklch(0.205 0.018 258)` | panes, cards, inputs |
+| `--sheet-muted` | `oklch(0.942 0.012 258)` | `oklch(0.25 0.02 258)` | hover, inactive tab, zebra |
+| `--rule` | `oklch(0.875 0.015 258)` | `oklch(0.32 0.022 258)` | 1 px hairlines |
+| `--ink` | `oklch(0.21 0.022 258)` | `oklch(0.945 0.008 258)` | body and titles |
+| `--ink-muted` | `oklch(0.42 0.022 258)` | `oklch(0.76 0.016 258)` | metadata |
+| `--accent` | `oklch(0.46 0.11 236)` | `oklch(0.78 0.095 230)` | links, focus ring, primary button |
+| `--accent-amber` | `oklch(0.54 0.14 48)` | `oklch(0.76 0.14 48)` | barograph amber emphasis |
+| `--on-accent` | `oklch(0.992 0.004 258)` | `oklch(0.165 0.015 258)` | text on accent |
+| `--report` | `oklch(0.5 0.19 28)` | `oklch(0.76 0.14 25)` | SPC report markers only |
+| `--note-bg` / `--note-ink` | `oklch(0.945 0.032 84)` / `oklch(0.39 0.072 78)` | `oklch(0.26 0.035 84)` / `oklch(0.88 0.065 84)` | caveat callout |
+| `--water` | `oklch(0.922 0.014 210)` | `oklch(0.23 0.018 215)` | basemap water bodies |
+| `--road-major` | `oklch(0.84 0.014 85)` | `oklch(0.39 0.015 85)` | basemap highways and major roads |
 
 Hail ramp (data only, never chrome). Each class carries its object name; colour never
 works alone.
 
 | Class | Object | Light fill |
 |---|---|---|
-| >= 0.75 in | penny | `#DCEBF2` |
-| >= 1.00 in | quarter | `#A9D2E3` |
-| >= 1.25 in | half dollar | `#6FB0CF` |
-| >= 1.50 in | walnut | `#3F86B8` |
-| >= 1.75 in | golf ball | `#2E5E9E` |
-| >= 2.00 in | hen egg | `#33397A` |
-| >= 2.50 in | tennis ball | `#2A1748` |
+| >= 0.75 in | penny | `oklch(0.92 0.032 224)` |
+| >= 1.00 in | quarter | `oklch(0.84 0.058 222)` |
+| >= 1.25 in | half dollar | `oklch(0.73 0.088 226)` |
+| >= 1.50 in | walnut | `oklch(0.6 0.115 236)` |
+| >= 1.75 in | golf ball | `oklch(0.48 0.125 252)` |
+| >= 2.00 in | hen egg | `oklch(0.37 0.125 272)` |
+| >= 2.50 in | tennis ball | `oklch(0.26 0.11 296)` |
 
 ## Impact tokens
 

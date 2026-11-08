@@ -152,6 +152,10 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const lonId = useId();
 
   useEffect(() => {
+    if (pin === null) setPresetPin("cypress");
+  }, []);
+
+  useEffect(() => {
     if (pin !== null) {
       setLatText(pin.lngLat[1].toFixed(4));
       setLonText(pin.lngLat[0].toFixed(4));

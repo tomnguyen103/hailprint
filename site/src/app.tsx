@@ -9,7 +9,7 @@ import { Layout } from "./shell/layout";
 import { EmptyState, ErrorState, LoadingState } from "./shell/states";
 import { useIndex } from "./state/index";
 import { useRoute } from "./state/route";
-import { landingStorm } from "./storms/select";
+import { availableCaseStudies, landingStorm } from "./storms/select";
 import { Workspace } from "./storms/workspace";
 import { TryIt } from "./try/try";
 
@@ -40,7 +40,7 @@ export function App() {
   } else if (route.kind === "redirect-live") {
     body = null;
   } else if (route.kind === "live") {
-    body = <LiveView newest={newest?.storm_date ?? null} />;
+    body = <LiveView newest={newest?.storm_date ?? null} caseStudies={availableCaseStudies(storms)} />;
   } else if (route.kind === "method") {
     body = <Method page={route.page} />;
   } else if (route.kind === "pipeline") {

@@ -9,6 +9,7 @@ html {
   background: var(--paper);
   color: var(--ink);
   accent-color: var(--accent);
+  caret-color: var(--accent);
   scrollbar-color: var(--rule) var(--paper);
   -webkit-text-size-adjust: 100%;
 }

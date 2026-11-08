@@ -1,6 +1,8 @@
 """Atomic frame writes: a .tmp sibling, then one rename over the target."""
 
+import ctypes
 import os
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -10,6 +12,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+STALE_LOCK_S = 3600.0
 SOURCE = "noaa-mrms-pds"
 PRODUCT = "MESH_Max_1440min_00.50"
 CONFIDENCE = (
@@ -45,21 +48,115 @@ def _atomic(path: Path) -> Iterator[Path]:
         raise
 
 
+_WIN32_PROCS: tuple[object, object, object] | None = None
+
+
+def _win32_procs() -> tuple[object, object, object]:
+    """Return cached `(OpenProcess, GetExitCodeProcess, CloseHandle)` ctypes callables."""
+    global _WIN32_PROCS  # noqa: PLW0603
+    if _WIN32_PROCS is None:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+        open_proc = kernel32.OpenProcess
+        open_proc.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+        open_proc.restype = ctypes.c_void_p
+        get_exit = kernel32.GetExitCodeProcess
+        get_exit.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+        get_exit.restype = ctypes.c_int
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [ctypes.c_void_p]
+        close_handle.restype = ctypes.c_int
+        _WIN32_PROCS = (open_proc, get_exit, close_handle)
+    return _WIN32_PROCS
+
+
+def _pid_alive(pid: int) -> bool:
+    """Return True when `pid` refers to a running operating-system process."""
+    if pid <= 0:
+        return False
+    if pid == os.getpid() or (os.name != "nt" and pid == 1):
+        return True
+    if os.name == "nt":
+        open_proc, get_exit, close_handle = _win32_procs()
+        handle = open_proc(0x1000, 0, pid)  # type: ignore[operator]
+        if not handle:
+            return bool(ctypes.get_last_error() == 5)  # type: ignore[attr-defined]
+        try:
+            code = ctypes.c_ulong()
+            if not get_exit(handle, ctypes.byref(code)):  # type: ignore[operator]
+                return True
+            return bool(code.value == 259)
+        finally:
+            close_handle(handle)  # type: ignore[operator]
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _is_stale_lock(path: Path) -> bool:
+    """Return True when `path` is older than STALE_LOCK_S or holds a dead process PID."""
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+        stat = path.stat()
+    except OSError:
+        return False
+    if (time.time() - stat.st_mtime) > STALE_LOCK_S:
+        return True
+    if raw == "1":
+        return False
+    if raw.isdigit():
+        return not _pid_alive(int(raw))
+    return False
+
+
+def _evict_stale_lock(path: Path) -> bool:
+    """Atomically claim and remove a stale lock at `path`; return True if evicted."""
+    if not _is_stale_lock(path):
+        return False
+    claim = path.with_name(f".{path.name}.stale.{os.getpid()}.{time.time_ns()}")
+    try:
+        os.replace(path, claim)
+    except OSError:
+        return False
+    if not _is_stale_lock(claim):
+        try:
+            os.link(claim, path)
+        except FileExistsError:
+            pass
+        finally:
+            claim.unlink(missing_ok=True)
+        return False
+    claim.unlink(missing_ok=True)
+    return True
+
+
 @contextmanager
 def lock(path: Path) -> Iterator[None]:
     """Hold one run lock; a second run stops instead of a silent last-write-wins merge.
 
-    The lock file holds the pid of the run. A run that finds the file stops with RuntimeError
-    and leaves the file in place. The run that made the file removes it on exit.
+    The lock file holds the pid of the run. A stale lock from a dead pid is evicted once;
+    an active lock raises RuntimeError and leaves the file in place.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
-        raise RuntimeError(
-            f"{path} exists: another run holds it, or delete it after a crash"
-        ) from None
-    # shortcut: no pid liveness check, upgrade when a cron run needs self-healing after power loss
+        if _evict_stale_lock(path):
+            try:
+                fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                raise RuntimeError(
+                    f"{path} exists: another run holds it, or delete it after a crash"
+                ) from None
+        else:
+            raise RuntimeError(
+                f"{path} exists: another run holds it, or delete it after a crash"
+            ) from None
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(str(os.getpid()))

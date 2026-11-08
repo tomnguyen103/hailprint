@@ -5,6 +5,7 @@ import json
 import math
 import statistics
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
 import pandas as pd
@@ -18,6 +19,7 @@ SIGNAL_STEP_S = 600  # IODA answers ping-slash24 every 10 minutes
 STEP_S = int(impact.STEP.total_seconds())
 MAX_COUNT = 2**24  # the count of /24 blocks in all of IPv4; a larger value is not a signal
 BASELINE_DAYS = 7
+FETCH_THREADS = 4
 # A baseline needs at least half of its points: 504 of the 1008 in 7 days.
 BASELINE_MIN_POINTS = BASELINE_DAYS * 86400 // SIGNAL_STEP_S // 2
 # IODA county codes. The "Harris" name search also returns Harrison, so the codes stay constants.
@@ -162,5 +164,10 @@ def build(storm_date: date) -> pd.DataFrame:
     start, end = impact.window(storm_date)
     first = int(start.timestamp()) - BASELINE_DAYS * 86400
     last = int(end.timestamp())
-    series = {fips: fetch(fips, first, last) for fips in sorted(impact.METRO_FIPS)}
+    fips_list = sorted(impact.METRO_FIPS)
+    first_series = fetch(fips_list[0], first, last)
+    with ThreadPoolExecutor(FETCH_THREADS) as pool:
+        rest = list(pool.map(lambda fips: fetch(fips, first, last), fips_list[1:]))
+    series = dict(zip(fips_list, [first_series, *rest], strict=True))
     return derive(storm_date, series)
+

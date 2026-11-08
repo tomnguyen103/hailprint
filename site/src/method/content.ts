@@ -23,21 +23,18 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
   data: {
     title: METHOD_LABELS.data,
     blocks: [
+      { kind: "prose", text: "The pipeline reads seven sources." },
+      { kind: "prose", text: "MRMS MESH comes from the S3 bucket noaa-mrms-pds as gzipped GRIB2 files." },
+      { kind: "prose", text: "SPC publishes a daily preliminary hail CSV." },
+      { kind: "prose", text: "HCAD publishes the Harris County parcel geodatabase." },
+      { kind: "prose", text: "The Iowa Environmental Mesonet publishes the NWS warning polygons." },
+      { kind: "prose", text: "ORNL publishes the EAGLE-I and ODIN power outages." },
+      { kind: "prose", text: "IODA publishes the county internet reachability signal." },
       {
         kind: "prose",
-        text:
-          "The pipeline reads seven sources. MRMS MESH comes from the S3 bucket noaa-mrms-pds as gzipped GRIB2 files. " +
-          "SPC publishes a daily preliminary hail CSV. HCAD publishes the Harris County parcel geodatabase. " +
-          "The Iowa Environmental Mesonet publishes the NWS warning polygons. " +
-          "ORNL publishes the EAGLE-I and ODIN power outages. " +
-          "IODA publishes the county internet reachability signal.",
+        text: "Every published file carries a receipt: the source, the product, the file, the run time, the package version, and the confidence band.",
       },
-      {
-        kind: "prose",
-        text:
-          "Every published file carries a receipt: the source, the product, the file, the run time, the package version, and the confidence band. " +
-          "Every hail size on the site is a radar-estimated hail size.",
-      },
+      { kind: "prose", text: "Every hail size on the site is a radar-estimated hail size." },
       { kind: "figure", id: "receipt" },
       { kind: "heading", text: "Published files per storm date" },
       {
@@ -57,31 +54,26 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
   "storm-date": {
     title: METHOD_LABELS["storm-date"],
     blocks: [
-      {
-        kind: "prose",
-        text:
-          "A storm date is the SPC convective day. Day D runs from 12:00 UTC on D to 12:00 UTC on D+1. " +
-          "The daily max for D is the one MESH_Max_1440min file stamped 12:00 UTC in the D+1 folder. " +
-          "A report time in CST minus 6 hours gives its storm date.",
-      },
+      { kind: "prose", text: "A storm date is the SPC convective day." },
+      { kind: "prose", text: "Day D runs from 12:00 UTC on D to 12:00 UTC on D+1." },
+      { kind: "prose", text: "The daily max for D is the one MESH_Max_1440min file stamped 12:00 UTC in the D+1 folder." },
+      { kind: "prose", text: "A report time in CST minus 6 hours gives its storm date." },
       { kind: "list", items: ["Folder: D+1.", "File stamp: -120000.", "Product: MESH_Max_1440min_00.50."] },
       { kind: "figure", id: "stamp" },
-      {
-        kind: "prose",
-        text: "The storm stamp shows the 24 hours from 12Z to 12Z. A filled cell marks an hour with at least one report.",
-      },
+      { kind: "prose", text: "The storm stamp shows the 24 hours from 12Z to 12Z." },
+      { kind: "prose", text: "A filled cell marks an hour with at least one report." },
     ],
   },
   "size-classes": {
     title: METHOD_LABELS["size-classes"],
     blocks: [
+      { kind: "prose", text: "A size class is one hail-size threshold in millimetres." },
       {
         kind: "prose",
-        text:
-          "A size class is one hail-size threshold in millimetres. The seven thresholds are 19.05, 25.4, 31.75, 38.1, 44.45, 50.8, and 63.5 mm, or 0.75 to 2.5 inches. " +
-          "The swath for a class is the dissolved polygon of every cell at or above that threshold. " +
-          "The classes nest: a cell in the 2.5 inch class is in every smaller class.",
+        text: "The seven thresholds are 19.05, 25.4, 31.75, 38.1, 44.45, 50.8, and 63.5 mm, or 0.75 to 2.5 inches.",
       },
+      { kind: "prose", text: "The swath for a class is the dissolved polygon of every cell at or above that threshold." },
+      { kind: "prose", text: "The classes nest: a cell in the 2.5 inch class is in every smaller class." },
       {
         kind: "list",
         items: [
@@ -96,12 +88,10 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
   scoring: {
     title: METHOD_LABELS.scoring,
     blocks: [
-      {
-        kind: "prose",
-        text:
-          "The sample unit is the scored report. A size class is a forecast for a report when its swath lies within the scoring radius. " +
-          "The default radius is 5 km and the maximum is 20 km. The score excludes any report within the radius plus 1 km of the crop edge.",
-      },
+      { kind: "prose", text: "The sample unit is the scored report." },
+      { kind: "prose", text: "A size class is a forecast for a report when its swath lies within the scoring radius." },
+      { kind: "prose", text: "The default radius is 5 km and the maximum is 20 km." },
+      { kind: "prose", text: "The score excludes any report within the radius plus 1 km of the crop edge." },
       {
         kind: "list",
         items: [
@@ -112,26 +102,21 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
         ],
       },
       { kind: "figure", id: "grid" },
-      {
-        kind: "prose",
-        text:
-          "POD, FAR, CSI, and HSS come from the four counts. " +
-          "The pooled table sums the counts across every storm date at one radius and recomputes the metrics.",
-      },
+      { kind: "prose", text: "POD, FAR, CSI, and HSS come from the four counts." },
+      { kind: "prose", text: "The pooled table sums the counts across every storm date at one radius and recomputes the metrics." },
       { kind: "figure", id: "guess" },
-      { kind: "prose", text: "Guess the pooled HSS before the site reveals it. The literature skill is about 0.38 at 30 mm." },
+      { kind: "prose", text: "Guess the pooled HSS before the site reveals it." },
+      { kind: "prose", text: "The literature skill is about 0.38 at 30 mm." },
     ],
   },
   limits: {
     title: METHOD_LABELS.limits,
     blocks: [
-      {
-        kind: "prose",
-        text:
-          "Hailprint covers Harris County only and HCAD footprints only. SPC reports are preliminary and sparse. " +
-          "No ground truth of hail size exists at a parcel. " +
-          "The unverifiable area is swath farther than the scoring radius from every report. No report confirms or denies hail there.",
-      },
+      { kind: "prose", text: "Hailprint covers Harris County only and HCAD footprints only." },
+      { kind: "prose", text: "SPC reports are preliminary and sparse." },
+      { kind: "prose", text: "No ground truth of hail size exists at a parcel." },
+      { kind: "prose", text: "The unverifiable area is swath farther than the scoring radius from every report." },
+      { kind: "prose", text: "No report confirms or denies hail there." },
       {
         kind: "list",
         items: [
@@ -147,10 +132,7 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
   impacts: {
     title: METHOD_LABELS.impacts,
     blocks: [
-      {
-        kind: "prose",
-        text: "The layers show what happened in the same window as the storm. No layer says hail caused it.",
-      },
+      { kind: "prose", text: "The layers show what happened in the same window as the storm. No layer says hail caused it." },
       { kind: "figure", id: "bins" },
       { kind: "heading", text: "NWS warnings" },
       {
@@ -159,38 +141,27 @@ export const METHOD_CONTENT: Record<MethodPage, Page> = {
       },
       { kind: "prose", text: "Source: Iowa Environmental Mesonet (IEM). Credit IEM." },
       { kind: "heading", text: "Power out" },
-      {
-        kind: "prose",
-        text: "EAGLE-I counts customers without power. ODIN snapshots cover later storm dates. One file never mixes the two.",
-      },
+      { kind: "prose", text: "EAGLE-I counts customers without power." },
+      { kind: "prose", text: "ODIN snapshots cover later storm dates." },
+      { kind: "prose", text: "One file never mixes the two." },
       { kind: "prose", text: "Share out is customers out divided by the MCC, the 2022 modelled county customers." },
       { kind: "prose", text: "A utility count can pass the MCC. The share out then stops at 100%." },
       { kind: "prose", text: "ODIN lists CenterPoint customers only. Its share out is a lower bound." },
       { kind: "prose", text: "Source: EAGLE-I, Oak Ridge National Laboratory (ORNL), CC BY 4.0." },
       { kind: "prose", text: "Source: ODIN, ORNL." },
       { kind: "heading", text: "Internet reachability" },
-      {
-        kind: "prose",
-        text: "IODA counts the /24 address blocks in a county that answer active pings. The layer shows internet reachability below baseline.",
-      },
-      {
-        kind: "prose",
-        text: "The baseline is the median of the 7 days before the window starts. A county with fewer than half the baseline points has no baseline and no ratio.",
-      },
-      {
-        kind: "prose",
-        text: "The ratio is the signal divided by the baseline. The drop is 1 minus the ratio, never below zero. A drop says nothing about why.",
-      },
-      {
-        kind: "prose",
-        text:
-          "IODA has a county signal from 2022-03 to 2024-05 only. A date outside that range has no internet file. " +
-          "A county with no ratio at any step reads No county signal.",
-      },
-      {
-        kind: "prose",
-        text: "The publish step adds internet.json only with the --with-internet flag. A default publish leaves the layer out.",
-      },
+      { kind: "prose", text: "IODA counts the /24 address blocks in a county that answer active pings." },
+      { kind: "prose", text: "The layer shows internet reachability below baseline." },
+      { kind: "prose", text: "The baseline is the median of the 7 days before the window starts." },
+      { kind: "prose", text: "A county with fewer than half the baseline points has no baseline and no ratio." },
+      { kind: "prose", text: "The ratio is the signal divided by the baseline." },
+      { kind: "prose", text: "The drop is 1 minus the ratio, never below zero." },
+      { kind: "prose", text: "A drop says nothing about why." },
+      { kind: "prose", text: "IODA has a county signal from 2022-03 to 2024-05 only." },
+      { kind: "prose", text: "A date outside that range has no internet file." },
+      { kind: "prose", text: "A county with no ratio at any step reads No county signal." },
+      { kind: "prose", text: "The publish step adds internet.json only with the --with-internet flag." },
+      { kind: "prose", text: "A default publish leaves the layer out." },
       { kind: "prose", text: "Source: IODA, Georgia Tech. All Rights Reserved." },
       { kind: "heading", text: "Gaps" },
       { kind: "prose", text: "A step with no source row is null. The strip draws a gap, never a zero." },

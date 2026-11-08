@@ -17,6 +17,7 @@ import { ReceiptChip } from "../shell/receipt-chip";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { usePairsAll } from "../state/pairs-all";
+import { useRadiusKm } from "../state/radius";
 import { GridView } from "./grid-view";
 import { MetricText } from "./metric-text";
 import { TableView } from "./table-view";
@@ -34,7 +35,7 @@ const SENTENCE = "The scorecard pools the contingency table across every storm d
 export function Scorecard({ index, view }: { index: StormsIndex; view: ScorecardView }) {
   const pairs = usePairsAll(index);
   const [cohort, setCohort] = useState<CohortId>("all");
-  const [radius, setRadius] = useState(index.radius_km_default);
+  const [radius, setRadius] = useRadiusKm(index.radius_km_default);
   const [classMm, setClassMm] = useState(RULER[0]!.threshold_mm);
   const [metric, setMetric] = useState<MetricKey>("hss");
   const rawData = pairs.status === "ready" ? pairs.data : null;

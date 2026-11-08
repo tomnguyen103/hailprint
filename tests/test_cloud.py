@@ -1026,3 +1026,51 @@ def test_config_repr_hides_credentials_and_sync_down_rejects_out_of_prefix_keys(
     s3 = RogueS3({("hailprint-state", "other/secret.bin"): b"no"})
     with pytest.raises(ValueError, match="unsafe S3 key"):
         cloud.sync_down(s3, "hailprint-state", ("raw/spc/",), tmp_path / "data")
+
+
+def test_sync_down_skips_get_object_when_local_md5_matches_single_part_etag(tmp_path: Path):
+    payload = b"cached-wcm-bytes"
+    etag = f'"{hashlib.md5(payload).hexdigest()}"'  # noqa: S324
+
+    class ETagS3(FakeS3):
+        def list_objects_v2(
+            self,
+            *,
+            Bucket: str,
+            Prefix: str = "",
+            ContinuationToken: str | None = None,
+        ) -> dict:
+            return {
+                "Contents": [
+                    {"Key": "raw/spc/1955-2025_hail.csv.zip", "Size": len(payload), "ETag": etag}
+                ],
+                "IsTruncated": False,
+            }
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict:
+            raise AssertionError("get_object should be skipped when local MD5 matches ETag")
+
+    data_dir = tmp_path / "data"
+    local_file = data_dir / "raw" / "spc" / "1955-2025_hail.csv.zip"
+    local_file.parent.mkdir(parents=True, exist_ok=True)
+    local_file.write_bytes(payload)
+
+    s3 = ETagS3({("hailprint-state", "raw/spc/1955-2025_hail.csv.zip"): payload})
+    state = cloud.sync_down(s3, "hailprint-state", ("raw/spc/",), data_dir)
+    assert (
+        state.digests[("hailprint-state", "raw/spc/1955-2025_hail.csv.zip")]
+        == hashlib.sha256(payload).hexdigest()
+    )
+
+
+def test_trigger_tasks_handle_partial_exit_3_and_hello_checks_env():
+    nightly_ts = (paths.ROOT / "trigger" / "nightly.ts").read_text(encoding="utf-8")
+    backfill_ts = (paths.ROOT / "trigger" / "backfill.ts").read_text(encoding="utf-8")
+    hello_ts = (paths.ROOT / "trigger" / "hello.ts").read_text(encoding="utf-8")
+
+    assert "PARTIAL_EXIT = 3" in nightly_ts
+    assert "partial: true" in nightly_ts
+    assert "PARTIAL_EXIT = 3" in backfill_ts
+    assert "partial: true" in backfill_ts
+    assert "REQUIRED_ENV" in hello_ts
+    assert "envReady" in hello_ts

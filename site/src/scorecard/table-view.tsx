@@ -1,9 +1,12 @@
+import { useState } from "preact/hooks";
 import type { Receipt } from "../data/types";
+import { METRIC_LABELS, METRICS, formatInches } from "../format";
 import type { PooledRow } from "../pool";
-import { RULER } from "../ruler";
+import { RULER, objectName } from "../ruler";
+import { ContingencyGrid } from "../shell/contingency-grid";
+import { PeekDrawer } from "../shell/peek-drawer";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ClassPick } from "./class-pick";
-import { METRIC_LABELS, METRICS } from "../format";
 import { MetricText } from "./metric-text";
 
 export function TableView({
@@ -19,61 +22,90 @@ export function TableView({
   receipt: Receipt;
   file: string;
 }) {
+  const [peekMm, setPeekMm] = useState<number | null>(null);
+  const peekRow = peekMm !== null ? (rows.find((r) => r.threshold_mm === peekMm) ?? null) : null;
+
   return (
-    <div class="table-scroll">
-      <table class="table">
-        <thead>
-          <tr>
-            <th scope="col">Size class</th>
-            <th scope="col" class="num">Scored reports</th>
-            <th scope="col" class="num">Hits</th>
-            <th scope="col" class="num">Misses</th>
-            <th scope="col" class="num">False alarms</th>
-            <th scope="col" class="num">Correct negatives</th>
-            {METRICS.map((m) => (
-              <th key={m} scope="col" class="num">
-                {METRIC_LABELS[m]}
+    <>
+      <div class="table-scroll">
+        <table class="table">
+          <thead>
+            <tr>
+              <th scope="col">Size class</th>
+              <th scope="col" class="num">Scored reports</th>
+              <th scope="col" class="num">Hits</th>
+              <th scope="col" class="num">Misses</th>
+              <th scope="col" class="num">False alarms</th>
+              <th scope="col" class="num">Correct negatives</th>
+              {METRICS.map((m) => (
+                <th key={m} scope="col" class="num">
+                  {METRIC_LABELS[m]}
+                </th>
+              ))}
+              <th scope="col" class="num">Swath km²</th>
+              <th scope="col" class="num">Unverifiable km²</th>
+              <th scope="col">
+                <span class="visually-hidden">Receipt</span>
               </th>
-            ))}
-            <th scope="col" class="num">Swath km²</th>
-            <th scope="col" class="num">Unverifiable km²</th>
-            <th scope="col">
-              <span class="visually-hidden">Receipt</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            const mark = RULER.find((m) => m.threshold_mm === r.threshold_mm);
-            return (
-              <tr key={r.threshold_mm}>
-                <td>
-                  {mark ? (
-                    <ClassPick mark={mark} pressed={r.threshold_mm === classMm} onPick={onClass} />
-                  ) : (
-                    <span>{r.label}</span>
-                  )}
-                </td>
-                <td class="num">{r.report_count}</td>
-                <td class="num">{r.hits}</td>
-                <td class="num">{r.misses}</td>
-                <td class="num">{r.false_alarms}</td>
-                <td class="num">{r.correct_negatives}</td>
-                {METRICS.map((m) => (
-                  <td key={m} class="num">
-                    <MetricText value={r[m]} />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const mark = RULER.find((m) => m.threshold_mm === r.threshold_mm);
+              return (
+                <tr key={r.threshold_mm}>
+                  <td>
+                    {mark ? (
+                      <ClassPick
+                        mark={mark}
+                        pressed={r.threshold_mm === classMm}
+                        onPick={(mm) => {
+                          onClass(mm);
+                          setPeekMm(mm);
+                        }}
+                      />
+                    ) : (
+                      <span>{r.label}</span>
+                    )}
                   </td>
-                ))}
-                <td class="num">{r.swath_km2.toFixed(1)}</td>
-                <td class="num">{r.unverifiable_km2.toFixed(1)}</td>
-                <td>
-                  <ReceiptChip receipt={receipt} file={file} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+                  <td class="num">{r.report_count}</td>
+                  <td class="num">{r.hits}</td>
+                  <td class="num">{r.misses}</td>
+                  <td class="num">{r.false_alarms}</td>
+                  <td class="num">{r.correct_negatives}</td>
+                  {METRICS.map((m) => (
+                    <td key={m} class="num">
+                      <MetricText value={r[m]} />
+                    </td>
+                  ))}
+                  <td class="num">{r.swath_km2.toFixed(1)}</td>
+                  <td class="num">{r.unverifiable_km2.toFixed(1)}</td>
+                  <td>
+                    <ReceiptChip receipt={receipt} file={file} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <PeekDrawer
+        open={peekRow !== null}
+        title={
+          peekRow
+            ? (() => {
+                const obj = objectName(peekRow.threshold_mm);
+                return `Pooled >= ${formatInches(peekRow.threshold_in)}${obj ? ` (${obj})` : ""}`;
+              })()
+            : "Pooled threshold detail"
+        }
+        subtitle={peekRow ? `${peekRow.report_count} scored reports` : undefined}
+        receipt={receipt}
+        file={file}
+        onClose={() => setPeekMm(null)}
+      >
+        {peekRow ? <ContingencyGrid row={peekRow} /> : null}
+      </PeekDrawer>
+    </>
   );
-}
+}

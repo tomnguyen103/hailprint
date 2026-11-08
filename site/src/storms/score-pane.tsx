@@ -5,17 +5,18 @@ import { DataError, type ReportsFile, type Storm, type TableRow } from "../data/
 import { METRICS, METRIC_LABELS, formatInches, metricText } from "../format";
 import { scoredCount } from "../pool";
 import { rescore } from "../rescore";
-import { RULER } from "../ruler";
+import { RULER, objectName } from "../ruler";
 import { ContingencyGrid } from "../shell/contingency-grid";
+import { PeekDrawer } from "../shell/peek-drawer";
 import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type Load, useLoad } from "../state/load";
+import { useRadiusKm } from "../state/radius";
 import { ReportClassifierTable } from "./report-classifier-table";
 
 const FILE = "pairs.json";
 
-/** Render the per-class contingency table, contingency grid, and per-report classifier table for one storm date. */
 /** Render the single-storm verification scorecard and radius slider. */
 export function ScorePane({
   storm,
@@ -23,14 +24,16 @@ export function ScorePane({
   reports,
 }: {
   storm: Storm;
-  radiusKm: number;
+  radiusKm?: number;
   reports: Load<ReportsFile>;
 }) {
   const pairs = useLoad(storm.files.pairs, () => fetchJson(storm.files.pairs, guardPairs));
   const [selected, setSelected] = useState(RULER[0]!.threshold_mm);
-  const [radiusKm, setRadiusKm] = useState(defaultRadiusKm);
-
+  const [peekMm, setPeekMm] = useState<number | null>(null);
   const data = pairs.status === "ready" ? pairs.data : null;
+  const fallbackRadius = data?.radius_km_default ?? defaultRadiusKm ?? 5;
+  const [radiusKm, setRadiusKm] = useRadiusKm(fallbackRadius);
+
   const maxRadiusKm = pairs.status === "ready" ? pairs.data.radius_km_max : 20;
   const activeRadiusKm =
     pairs.status === "ready" ? Math.max(0, Math.min(pairs.data.radius_km_max, Math.round(radiusKm))) : radiusKm;
@@ -50,6 +53,7 @@ export function ScorePane({
 
   const receipt = pairs.data.receipt;
   const row = table.rows.find((r) => r.threshold_mm === selected) ?? table.rows[0];
+  const peekRow = peekMm !== null ? (table.rows.find((r) => r.threshold_mm === peekMm) ?? null) : null;
   const scored = scoredCount(pairs.data, activeRadiusKm);
   const reportsGeo = reports.status === "ready" ? reports.data : null;
   return (
@@ -91,7 +95,10 @@ export function ScorePane({
                         type="button"
                         class="class-pick"
                         aria-pressed={r.threshold_mm === selected}
-                        onClick={() => setSelected(r.threshold_mm)}
+                        onClick={() => {
+                          setSelected(r.threshold_mm);
+                          setPeekMm(r.threshold_mm);
+                        }}
                       >
                         &ge; {formatInches(r.threshold_in)}
                       </button>
@@ -132,6 +139,22 @@ export function ScorePane({
           thresholdIn={row.threshold_in}
         />
       ) : null}
+      <PeekDrawer
+        open={peekRow !== null}
+        title={
+          peekRow
+            ? (() => {
+                const obj = objectName(peekRow.threshold_mm);
+                return `Threshold >= ${formatInches(peekRow.threshold_in)}${obj ? ` (${obj})` : ""}`;
+              })()
+            : "Threshold detail"
+        }
+        subtitle={peekRow ? `${peekRow.threshold_mm} mm · ${activeRadiusKm} km radius` : undefined}
+        receipt={receipt}
+        onClose={() => setPeekMm(null)}
+      >
+        {peekRow ? <ContingencyGrid row={peekRow} /> : null}
+      </PeekDrawer>
     </>
   );
-}
+}

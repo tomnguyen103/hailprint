@@ -140,8 +140,13 @@ def _validate_key(key: str, local_base: Path | None = None, *, public: bool = Fa
             raise ValueError("unsafe S3 key")
 
 
-def _list_keys(client: Any, bucket: str, prefix: str, max_bytes: int = MAX_BYTES) -> list[str]:
-    keys: list[str] = []
+_SINGLE_PART_ETAG_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def _list_objects(
+    client: Any, bucket: str, prefix: str, max_bytes: int = MAX_BYTES
+) -> list[tuple[str, str | None]]:
+    items: list[tuple[str, str | None]] = []
     token: str | None = None
     while True:
         kwargs: dict[str, Any] = {"Bucket": bucket, "Prefix": prefix}
@@ -154,17 +159,25 @@ def _list_keys(client: Any, bucket: str, prefix: str, max_bytes: int = MAX_BYTES
                 size = obj.get("Size")
                 if isinstance(size, int) and size > max_bytes:
                     raise RuntimeError(f"S3 object {key} exceeds {max_bytes} bytes")
-                keys.append(key)
+                raw_etag = obj.get("ETag")
+                etag = (
+                    raw_etag.strip('"').lower()
+                    if isinstance(raw_etag, str)
+                    else None
+                )
+                items.append((key, etag if etag and _SINGLE_PART_ETAG_RE.fullmatch(etag) else None))
         if not resp.get("IsTruncated"):
             break
         token = resp.get("NextContinuationToken")
         if not token:
             break
-    return keys
+    return items
 
 
-# shortcut: sync_down downloads every state object on each nightly run (~11 MB),
-# upgrade to ETag/local cache if state exceeds 100 MB
+def _list_keys(client: Any, bucket: str, prefix: str, max_bytes: int = MAX_BYTES) -> list[str]:
+    return [key for key, _ in _list_objects(client, bucket, prefix, max_bytes=max_bytes)]
+
+
 def sync_down(
     client: Any,
     bucket: str,
@@ -180,18 +193,26 @@ def sync_down(
     prefix_tuple = tuple(prefixes)
     exclude_tuple = tuple(exclude_prefixes)
     for prefix in prefix_tuple:
-        for key in _list_keys(client, bucket, prefix, max_bytes=max_bytes):
+        for key, etag in _list_objects(client, bucket, prefix, max_bytes=max_bytes):
             if key in seen or any(key.startswith(ex) for ex in exclude_tuple):
                 continue
             seen.add(key)
             if not _matches_prefix(key, prefix_tuple):
                 raise ValueError("unsafe S3 key")
             _validate_key(key, local_base, public=public)
+            dest = local_base / key
+            if etag is not None and dest.is_file() and not dest.is_symlink():
+                local_size = dest.stat().st_size
+                if local_size <= max_bytes:
+                    local_body = dest.read_bytes()
+                    if hashlib.md5(local_body).hexdigest() == etag:  # noqa: S324
+                        state.digests[(bucket, key)] = hashlib.sha256(local_body).hexdigest()
+                        state.remote_keys.add((bucket, key))
+                        continue
             resp = client.get_object(Bucket=bucket, Key=key)
             body: bytes = resp["Body"].read(max_bytes + 1)
             if len(body) > max_bytes:
                 raise RuntimeError(f"S3 object {key} exceeds {max_bytes} bytes")
-            dest = local_base / key
             files.write_bytes_atomic(body, dest)
             state.digests[(bucket, key)] = hashlib.sha256(body).hexdigest()
             state.remote_keys.add((bucket, key))
