@@ -37,9 +37,16 @@ class _NoDowngradeRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+_STDLIB_URLOPEN = urllib.request.urlopen
 _opener = urllib.request.build_opener(_NoDowngradeRedirectHandler())
 _opener.addheaders = [("User-Agent", USER_AGENT)]
-urllib.request.install_opener(_opener)
+
+
+def urlopen(url_or_req: str | urllib.request.Request, *, timeout: float) -> Any:
+    """Open `url_or_req` with the module opener unless `urllib.request.urlopen` is patched."""
+    if urllib.request.urlopen is not _STDLIB_URLOPEN:
+        return urllib.request.urlopen(url_or_req, timeout=timeout)  # noqa: S310
+    return _opener.open(url_or_req, timeout=timeout)
 
 
 def _check_redirect(url: str, response: Any) -> None:
@@ -99,7 +106,7 @@ def get(url: str, timeout: float = DEFAULT_TIMEOUT, max_bytes: int = MAX_BYTES) 
     _check_url(url)
 
     def fetch() -> bytes:
-        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310
+        with urlopen(url, timeout=timeout) as response:
             _check_redirect(url, response)
             data = response.read(max_bytes + 1)
             if len(data) > max_bytes:
@@ -123,7 +130,7 @@ def post(
 
     def attempt() -> bytes:
         req = urllib.request.Request(url, data=data, headers=req_headers, method="POST")  # noqa: S310
-        with urllib.request.urlopen(req, timeout=timeout) as response:  # noqa: S310
+        with urlopen(req, timeout=timeout) as response:
             _check_redirect(url, response)
             raw = response.read(max_bytes + 1)
             if len(raw) > max_bytes:
@@ -196,5 +203,5 @@ def open_stream(
     # shortcut: open_stream retries the connect only and has no Range resume, upgrade when a
     # stream breaks more than once per year
     _check_url(url)
-    response = _retry(lambda: urllib.request.urlopen(url, timeout=timeout))  # noqa: S310
+    response = _retry(lambda: urlopen(url, timeout=timeout))
     return io.BufferedReader(_Body(response, url=url, max_bytes=max_bytes), CHUNK_BYTES)

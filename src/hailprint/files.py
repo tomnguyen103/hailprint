@@ -1,6 +1,8 @@
 """Atomic frame writes: a .tmp sibling, then one rename over the target."""
 
+import ctypes
 import os
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -10,6 +12,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+STALE_LOCK_S = 3600.0
 SOURCE = "noaa-mrms-pds"
 PRODUCT = "MESH_Max_1440min_00.50"
 CONFIDENCE = (
@@ -45,21 +48,70 @@ def _atomic(path: Path) -> Iterator[Path]:
         raise
 
 
+def _pid_alive(pid: int) -> bool:
+    """Return True when `pid` refers to a running operating-system process."""
+    if pid <= 0:
+        return False
+    if pid == os.getpid():
+        return True
+    if os.name == "nt":
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return bool(kernel32.GetLastError() == 5)
+        try:
+            code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+                return True
+            return bool(code.value == 259)
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+    return True
+
+
+def _is_stale_lock(path: Path) -> bool:
+    """Return True when `path` holds a dead PID or an unreadable lock older than STALE_LOCK_S."""
+    try:
+        raw = path.read_text(encoding="utf-8").strip()
+        stat = path.stat()
+    except OSError:
+        return False
+    if raw.isdigit():
+        return not _pid_alive(int(raw))
+    return (time.time() - stat.st_mtime) > STALE_LOCK_S
+
+
 @contextmanager
 def lock(path: Path) -> Iterator[None]:
     """Hold one run lock; a second run stops instead of a silent last-write-wins merge.
 
-    The lock file holds the pid of the run. A run that finds the file stops with RuntimeError
-    and leaves the file in place. The run that made the file removes it on exit.
+    The lock file holds the pid of the run. A stale lock from a dead pid is evicted once;
+    an active lock raises RuntimeError and leaves the file in place.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
-        raise RuntimeError(
-            f"{path} exists: another run holds it, or delete it after a crash"
-        ) from None
-    # shortcut: no pid liveness check, upgrade when a cron run needs self-healing after power loss
+        if _is_stale_lock(path):
+            path.unlink(missing_ok=True)
+            try:
+                fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                raise RuntimeError(
+                    f"{path} exists: another run holds it, or delete it after a crash"
+                ) from None
+        else:
+            raise RuntimeError(
+                f"{path} exists: another run holds it, or delete it after a crash"
+            ) from None
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(str(os.getpid()))

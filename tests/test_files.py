@@ -135,3 +135,14 @@ def test_write_bytes_atomic_writes_bytes_and_leaves_no_tmp_sibling(tmp_path):
     files.write_bytes_atomic(b"payload", path)
     assert path.read_bytes() == b"payload"
     assert list(path.parent.glob("*.tmp")) == []
+
+
+def test_lock_evicts_stale_dead_pid_and_acquires_lock(tmp_path, monkeypatch):
+    path = tmp_path / "a" / "publish.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("99999999", encoding="utf-8")
+    monkeypatch.setattr(files, "_pid_alive", lambda pid: False)
+
+    with files.lock(path):
+        assert path.read_text(encoding="utf-8") == str(os.getpid())
+    assert not path.exists()

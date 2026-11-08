@@ -54,6 +54,10 @@ def test_vercel_json_serves_security_headers():
     assert headers.get("X-Content-Type-Options") == "nosniff"
     assert headers.get("X-Frame-Options") == "DENY"
     assert headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+    assert (
+        headers.get("Permissions-Policy")
+        == "geolocation=(self), camera=(), microphone=()"
+    )
     csp = headers.get("Content-Security-Policy", "")
     assert "frame-ancestors 'none'" in csp
     assert "object-src 'none'" in csp

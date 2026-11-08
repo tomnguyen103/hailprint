@@ -316,3 +316,7 @@ def test_requests_send_hailprint_user_agent_unless_caller_provides_one(server):
     assert net.post(server.url("/ok"), b"{}", {"User-Agent": "custom/1.0"}) == b"ok"
 
     assert server.uas == [expected, expected, expected, "custom/1.0"]
+
+
+def test_net_does_not_install_global_urllib_opener():
+    assert urllib.request._opener is None

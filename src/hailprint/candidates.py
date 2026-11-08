@@ -51,9 +51,38 @@ def _check_wcm_zip(source: Path | io.BytesIO, label: Path | str | None = None) -
             )
 
 
+WCM_CHUNK_ROWS = 25_000
+
+
+def _filter_wcm_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
+    if chunk.empty:
+        return chunk
+    if "st" in chunk.columns and {"f1", "f2", "f3", "f4"}.issubset(chunk.columns):
+        harris = (chunk[["f1", "f2", "f3", "f4"]] == HARRIS_FIPS).any(axis=1)
+        keep = (chunk["st"] == "TX") & harris
+        if {"date", "time"}.issubset(chunk.columns):
+            stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"]) - pd.Timedelta(
+                CST_TO_CONVECTIVE
+            )
+            keep.loc[stamps.idxmax()] = True
+        return chunk.loc[keep]
+    if {"date", "time"}.issubset(chunk.columns):
+        stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"]) - pd.Timedelta(
+            CST_TO_CONVECTIVE
+        )
+        return chunk.loc[[stamps.idxmax()]]
+    return chunk
+
+
 def _read_wcm(path: Path, usecols: list[str] = USECOLS) -> pd.DataFrame:
     _check_wcm_zip(path)
-    return pd.read_csv(path, usecols=usecols)
+    chunks = [
+        _filter_wcm_chunk(c)
+        for c in pd.read_csv(path, usecols=usecols, chunksize=WCM_CHUNK_ROWS)
+    ]
+    if not chunks:
+        return pd.DataFrame(columns=usecols)
+    return pd.concat(chunks, ignore_index=True)
 
 
 def fetch_database(path: Path | None = None) -> Path:
