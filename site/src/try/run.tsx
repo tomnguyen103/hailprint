@@ -69,7 +69,6 @@ function selectText(node: HTMLElement) {
 
 export function Run({ index }: { index: StormsIndex }) {
   const [date, setDate] = useState(newestFirst(index.storms)[0]?.storm_date ?? "");
-  const [radiusKm, setRadiusKm] = useRadiusKm();
   const storm = index.storms.find((s) => s.storm_date === date);
   const pairs = useAllFiles<Pairs>(storm ? [storm.files.pairs] : [], guardPairs, index.run_time);
   const powerPath = storm?.files.power ?? null;
@@ -83,6 +82,8 @@ export function Run({ index }: { index: StormsIndex }) {
   const codes = useRef<(HTMLElement | null)[]>([]);
   useEffect(() => () => window.clearTimeout(timer.current), []);
   const pairsDoc = pairs.status === "ready" && pairs.data[0] ? pairs.data[0] : null;
+  const defaultRadius = pairsDoc ? pairsDoc.radius_km_default : index.radius_km_default;
+  const [radiusKm, setRadiusKm] = useRadiusKm(defaultRadius);
   const maxRadius = pairsDoc ? pairsDoc.radius_km_max : RADIUS_MAX_FALLBACK;
   const activeRadius = Math.min(radiusKm, maxRadius);
 

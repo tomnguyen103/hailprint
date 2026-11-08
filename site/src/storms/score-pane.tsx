@@ -20,6 +20,7 @@ const FILE = "pairs.json";
 /** Render the single-storm verification scorecard and radius slider. */
 export function ScorePane({
   storm,
+  radiusKm: defaultRadiusKm,
   reports,
 }: {
   storm: Storm;
@@ -29,9 +30,10 @@ export function ScorePane({
   const pairs = useLoad(storm.files.pairs, () => fetchJson(storm.files.pairs, guardPairs));
   const [selected, setSelected] = useState(RULER[0]!.threshold_mm);
   const [peekMm, setPeekMm] = useState<number | null>(null);
-  const [radiusKm, setRadiusKm] = useRadiusKm();
-
   const data = pairs.status === "ready" ? pairs.data : null;
+  const fallbackRadius = data?.radius_km_default ?? defaultRadiusKm ?? 5;
+  const [radiusKm, setRadiusKm] = useRadiusKm(fallbackRadius);
+
   const maxRadiusKm = pairs.status === "ready" ? pairs.data.radius_km_max : 20;
   const activeRadiusKm =
     pairs.status === "ready" ? Math.max(0, Math.min(pairs.data.radius_km_max, Math.round(radiusKm))) : radiusKm;

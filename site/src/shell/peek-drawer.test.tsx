@@ -26,11 +26,11 @@ describe("PeekDrawer, ProofStrip, and shared radius store", () => {
   });
 
   it("persists and resets shared verification radius across views", () => {
-    expect(getRadiusKm()).toBe(10);
+    expect(getRadiusKm()).toBe(5);
     setRadiusKm(20);
     expect(getRadiusKm()).toBe(20);
     resetRadiusKm();
-    expect(getRadiusKm()).toBe(10);
+    expect(getRadiusKm()).toBe(5);
   });
 
   it("renders PeekDrawer when open and closes on button click", () => {

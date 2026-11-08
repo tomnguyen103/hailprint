@@ -4,7 +4,7 @@ import ctypes
 import os
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 import geopandas as gpd
@@ -55,17 +55,26 @@ def _pid_alive(pid: int) -> bool:
     if pid in (1, os.getpid()):
         return True
     if os.name == "nt":
-        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
-        handle = kernel32.OpenProcess(0x1000, False, pid)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+        open_proc = kernel32.OpenProcess
+        open_proc.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
+        open_proc.restype = ctypes.c_void_p
+        get_exit = kernel32.GetExitCodeProcess
+        get_exit.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_ulong)]
+        get_exit.restype = ctypes.c_int
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [ctypes.c_void_p]
+        close_handle.restype = ctypes.c_int
+        handle = open_proc(0x1000, 0, pid)
         if not handle:
-            return bool(kernel32.GetLastError() == 5)
+            return bool(ctypes.get_last_error() == 5)  # type: ignore[attr-defined]
         try:
             code = ctypes.c_ulong()
-            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(code)):
+            if not get_exit(handle, ctypes.byref(code)):
                 return True
             return bool(code.value == 259)
         finally:
-            kernel32.CloseHandle(handle)
+            close_handle(handle)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -89,6 +98,23 @@ def _is_stale_lock(path: Path) -> bool:
     return (time.time() - stat.st_mtime) > STALE_LOCK_S
 
 
+def _evict_stale_lock(path: Path) -> bool:
+    """Atomically claim and remove a stale lock at `path`; return True if evicted."""
+    if not _is_stale_lock(path):
+        return False
+    claim = path.with_name(f".{path.name}.stale.{os.getpid()}")
+    try:
+        os.replace(path, claim)
+    except OSError:
+        return False
+    if not _is_stale_lock(claim):
+        with suppress(OSError):
+            os.replace(claim, path)
+        return False
+    claim.unlink(missing_ok=True)
+    return True
+
+
 @contextmanager
 def lock(path: Path) -> Iterator[None]:
     """Hold one run lock; a second run stops instead of a silent last-write-wins merge.
@@ -100,8 +126,7 @@ def lock(path: Path) -> Iterator[None]:
     try:
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
-        if _is_stale_lock(path):
-            path.unlink(missing_ok=True)
+        if _evict_stale_lock(path):
             try:
                 fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             except FileExistsError:

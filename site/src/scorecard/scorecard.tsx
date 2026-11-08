@@ -35,7 +35,7 @@ const SENTENCE = "The scorecard pools the contingency table across every storm d
 export function Scorecard({ index, view }: { index: StormsIndex; view: ScorecardView }) {
   const pairs = usePairsAll(index);
   const [cohort, setCohort] = useState<CohortId>("all");
-  const [radius, setRadius] = useRadiusKm();
+  const [radius, setRadius] = useRadiusKm(index.radius_km_default);
   const [classMm, setClassMm] = useState(RULER[0]!.threshold_mm);
   const [metric, setMetric] = useState<MetricKey>("hss");
   const rawData = pairs.status === "ready" ? pairs.data : null;

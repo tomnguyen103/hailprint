@@ -141,8 +141,28 @@ def test_lock_evicts_stale_dead_pid_and_acquires_lock(tmp_path, monkeypatch):
     path = tmp_path / "a" / "publish.lock"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("99999999", encoding="utf-8")
-    monkeypatch.setattr(files, "_pid_alive", lambda pid: False)
+    monkeypatch.setattr(files, "_pid_alive", lambda pid: pid == os.getpid())
 
     with files.lock(path):
         assert path.read_text(encoding="utf-8") == str(os.getpid())
     assert not path.exists()
+
+
+def test_evict_stale_lock_restores_lock_when_racing_process_writes_live_pid(tmp_path, monkeypatch):
+    path = tmp_path / "a" / "publish.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("99999999", encoding="utf-8")
+    monkeypatch.setattr(files, "_pid_alive", lambda pid: pid == os.getpid())
+    orig_replace = os.replace
+
+    def racing_replace(src, dst):
+        if Path(src) == path:
+            path.write_text(str(os.getpid()), encoding="utf-8")
+        return orig_replace(src, dst)
+
+    monkeypatch.setattr(files.os, "replace", racing_replace)
+    with pytest.raises(RuntimeError, match="another run holds it"):
+        with files.lock(path):
+            pass
+    assert path.read_text(encoding="utf-8") == str(os.getpid())
+

@@ -1,24 +1,28 @@
 // Shared verification radius store across Storms > Score, Scorecard, and Try > Run.
 import { useSyncExternalStore } from "preact/compat";
 
-export const DEFAULT_RADIUS_KM = 10;
+export const DEFAULT_RADIUS_KM = 5;
 
-let currentRadius: number = DEFAULT_RADIUS_KM;
+let customRadius: number | null = null;
 const listeners = new Set<() => void>();
 
 export function getRadiusKm(): number {
-  return currentRadius;
+  return customRadius ?? DEFAULT_RADIUS_KM;
+}
+
+function getSnapshot(): number | null {
+  return customRadius;
 }
 
 export function setRadiusKm(next: number): void {
-  const clamped = Math.max(0, Math.min(20, Math.round(next)));
-  if (currentRadius === clamped) return;
-  currentRadius = clamped;
+  const clamped = Math.max(0, Math.min(25, Math.round(next)));
+  if (customRadius === clamped) return;
+  customRadius = clamped;
   for (const listener of listeners) listener();
 }
 
-export function resetRadiusKm(value: number = DEFAULT_RADIUS_KM): void {
-  currentRadius = value;
+export function resetRadiusKm(value: number | null = null): void {
+  customRadius = value;
   for (const listener of listeners) listener();
 }
 
@@ -27,7 +31,8 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
-export function useRadiusKm(): [number, (next: number) => void] {
-  const radius = useSyncExternalStore(subscribe, getRadiusKm);
-  return [radius, setRadiusKm];
+export function useRadiusKm(fallback: number = DEFAULT_RADIUS_KM): [number, (next: number) => void] {
+  const radius = useSyncExternalStore(subscribe, getSnapshot);
+  return [radius ?? fallback, setRadiusKm];
 }
+
