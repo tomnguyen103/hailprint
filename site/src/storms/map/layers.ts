@@ -37,9 +37,40 @@ export const LINE_PX = 2;
 /** The map layers the control switches. */
 export type LayerName = "swath" | "reports" | "warnings";
 
+/** Convert a CSS `oklch(L C H)` color string into `#rrggbb` for MapLibre GL style spec and bitmap consumers. */
+export function oklchToHex(value: string): string {
+  const m = /^oklch\(\s*([0-9.]+)(%?)\s+([0-9.]+)\s+([0-9.]+)(?:deg)?\s*\)$/i.exec(value.trim());
+  if (!m) return value;
+  const L = m[2] === "%" ? Number(m[1]) / 100 : Number(m[1]);
+  const C = Number(m[3]);
+  const hRad = (Number(m[4]) * Math.PI) / 180;
+  const a = C * Math.cos(hRad);
+  const b = C * Math.sin(hRad);
+
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b;
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b;
+  const s_ = L - 0.0894841775 * a - 1.291485548 * b;
+
+  const l = l_ * l_ * l_;
+  const mCube = m_ * m_ * m_;
+  const s = s_ * s_ * s_;
+
+  const rLin = 4.0767416621 * l - 3.3077115913 * mCube + 0.2309699292 * s;
+  const gLin = -1.2684380046 * l + 2.6097574011 * mCube - 0.3413193965 * s;
+  const bLin = -0.0041960863 * l - 0.7034186147 * mCube + 1.707614701 * s;
+
+  const toByte = (c: number): number => {
+    const clamped = Math.max(0, Math.min(1, c));
+    const gamma = clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+    return Math.round(Math.max(0, Math.min(255, gamma * 255)));
+  };
+  const hex = (n: number): string => n.toString(16).padStart(2, "0");
+  return `#${hex(toByte(rLin))}${hex(toByte(gLin))}${hex(toByte(bLin))}`;
+}
+
 /** A design token's current value, read from the document so the theme drives it. */
 export function token(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return oklchToHex(getComputedStyle(document.documentElement).getPropertyValue(name).trim());
 }
 
 export function fillLayerId(thresholdMm: number): string {
