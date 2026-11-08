@@ -9,6 +9,7 @@ import { RULER } from "../ruler";
 import { Link } from "../shell/link";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type LiveData, useLive } from "../state/live";
+import { setPresetPin } from "../state/pin";
 import { LiveMap } from "../storms/map/live-map";
 import { CASE_STUDIES, type CaseStudy } from "../storms/select";
 import { ageMinutes, freshness } from "./freshness";
@@ -108,7 +109,10 @@ export function LiveViewContent({
                 key={cs.storm_date}
                 type="button"
                 class="button button-small case-study-pill"
-                onClick={() => go(href({ area: "storms", date: cs.storm_date, tab: "map" }))}
+                onClick={() => {
+                  if (cs.presetPin !== null) setPresetPin(cs.presetPin);
+                  go(href({ area: "storms", date: cs.storm_date, tab: cs.defaultTab }));
+                }}
               >
                 <span class="mono">{cs.title}</span>
               </button>

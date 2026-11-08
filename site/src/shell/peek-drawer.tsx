@@ -13,7 +13,7 @@ type Props = {
   children?: ComponentChildren;
 };
 
-let previousFocus: HTMLElement | null = null;
+let previousFocus: { focus?: () => void } | null = null;
 
 /** Render an on-demand slide-over peek drawer for secondary row details and provenance receipts. */
 export function PeekDrawer({ open, title, subtitle, receipt, file = "pairs.json", onClose, children }: Props) {
@@ -29,8 +29,9 @@ export function PeekDrawer({ open, title, subtitle, receipt, file = "pairs.json"
     <aside
       ref={(node: HTMLElement | null) => {
         if (!node) return;
-        if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement && document.activeElement !== node) {
-          previousFocus = document.activeElement;
+        const active = typeof document !== "undefined" ? (document.activeElement as { focus?: () => void } | null) : null;
+        if (active && active !== node) {
+          previousFocus = active;
         }
         node.focus?.();
       }}

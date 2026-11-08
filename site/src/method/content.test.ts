@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { METHOD_PAGES } from "../router";
 import { CAVEAT } from "../shell/caveat";
 import { METHOD_CONTENT } from "./content";
-import { proseFindings, sentences, wordCount } from "./prose";
+import { BLOCK_WORDS, blockFindings, proseFindings, sentences, wordCount } from "./prose";
 
 
 it("keeps every Method page inside the prose budget", () => {
@@ -115,11 +115,13 @@ it("names every page with its label", () => {
 });
 
 it("keeps every prose block at or under 25 words (30-ui.md paragraph ceiling)", () => {
+  expect(blockFindings(METHOD_CONTENT)).toEqual([]);
   for (const page of METHOD_PAGES) {
     for (const block of METHOD_CONTENT[page].blocks) {
       if (block.kind === "prose") {
-        expect(wordCount(block.text)).toBeLessThanOrEqual(25);
+        expect(wordCount(block.text)).toBeLessThanOrEqual(BLOCK_WORDS);
       }
     }
   }
 });
+

@@ -40,7 +40,11 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
     firstChild: null,
     parentNode: null,
     namespaceURI: "http://www.w3.org/1999/xhtml",
-    style: {},
+    style: {
+      setProperty(k: string, v: unknown) {
+        (el.style as Record<string, unknown>)[k] = v;
+      },
+    },
     onclick: null,
     setAttribute(k: string, v: unknown) {
       el[k] = v;
@@ -320,4 +324,45 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(await sendKey("ArrowDown")).toBe(true);
     expect(activeTabStopIdx()).toBe(0);
   });
+
+  it("caps Scorecard TableView and ReportClassifierTable primary rows at 4 columns and opens PeekDrawer on row click (AUD-14, AUD-15)", async () => {
+    const { ReportClassifierTable } = await import("../storms/report-classifier-table");
+    const index = makeIndex(["wcm"]);
+    mockPairsState.status = "ready";
+    mockPairsState.data = [makePairs("2024-05-10")];
+
+    const host = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index, view: "table" }), host as unknown as HTMLElement));
+
+    const tables = findDomNodes(host, (n) => n.tagName === "TABLE");
+    expect(tables.length).toBeGreaterThanOrEqual(1);
+    const primaryHeaders = findDomNodes(tables[0]!, (n) => n.tagName === "TH");
+    expect(primaryHeaders).toHaveLength(4);
+
+    // Click first class pick button to open PeekDrawer with secondary metrics
+    const classBtn = findDomNodes(tables[0]!, (n) => n.tagName === "BUTTON" && classOf(n).includes("class-pick"))[0]!;
+    await act(() => {
+      (classBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    expect(domText(host)).toContain("Unverifiable km²");
+    expect(domText(host)).toContain("Scored reports");
+
+    const host2 = makeFakeElement("div");
+    await act(() =>
+      render(
+        h(ReportClassifierTable, {
+          stormDate: "2024-05-10",
+          pairs: makePairs("2024-05-10"),
+          reportsGeo: null,
+          radiusKm: 5,
+          thresholdMm: 25.4,
+          thresholdIn: 1.0,
+        }),
+        host2 as unknown as HTMLElement,
+      ),
+    );
+    const classifierHeaders = findDomNodes(host2, (n) => n.tagName === "TH");
+    expect(classifierHeaders).toHaveLength(4);
+  });
 });
+

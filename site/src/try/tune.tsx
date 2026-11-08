@@ -11,6 +11,7 @@ import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
+import { useRadiusKm } from "../state/radius";
 import { ReportClassifierTable } from "../storms/report-classifier-table";
 import { ALL_SCOPE, ScopeSelect, useScopeRows } from "./try";
 
@@ -19,7 +20,7 @@ const DEFAULT_CLASS = 1; // quarter, 1.00 in
 /** Render the interactive radius and hail-size threshold tuning tool. */
 export function Tune({ index }: { index: StormsIndex }) {
   const [scope, setScope] = useState(ALL_SCOPE);
-  const [radius, setRadius] = useState(index.radius_km_default);
+  const [radius, setRadius] = useRadiusKm(index.radius_km_default);
   const [classIdx, setClassIdx] = useState(DEFAULT_CLASS);
   const [metric, setMetric] = useState<MetricKey>("hss");
   const { load, table, receipt, maxRadiusKm, activeRadius, file } = useScopeRows(index, scope, radius);

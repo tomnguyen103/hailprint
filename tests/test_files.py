@@ -184,4 +184,18 @@ def test_evict_stale_lock_restores_lock_when_racing_process_writes_live_pid(tmp_
     assert path.read_text(encoding="utf-8") == "424242"
     assert list(path.parent.glob("*.stale.*")) == []
 
+    # Third case: filesystem rejects os.link with OSError; fallback os.replace restores claim.
+    path.write_text("99999999", encoding="utf-8")
+    monkeypatch.setattr(
+        files.os,
+        "link",
+        lambda src, dst: (_ for _ in ()).throw(OSError("hard links unsupported")),
+    )
+    with pytest.raises(RuntimeError, match="another run holds it"):
+        with files.lock(path):
+            pass
+    assert path.read_text(encoding="utf-8") == str(os.getpid())
+    assert list(path.parent.glob("*.stale.*")) == []
+
+
 

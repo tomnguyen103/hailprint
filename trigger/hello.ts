@@ -15,12 +15,30 @@ export const helloTask = task({
   machine: "small-1x",
   run: async () => {
     const result = await python.runInline(
-      "import sys, hailprint.__main__, boto3, eccodes, pyogrio, rasterio, hailprint; print(sys.version)",
+      "import json, sys, boto3, eccodes, pyogrio, rasterio, hailprint, hailprint.__main__; " +
+        "print(json.dumps({'python': sys.version.split()[0], 'boto3': boto3.__version__, " +
+        "'pyogrio': pyogrio.__version__, 'rasterio': rasterio.__version__}))",
       { env: { PYTHONPATH: "src" } },
     );
-    const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
+    const missingEnv = REQUIRED_ENV.filter((key) => {
+      if (key === "SUPABASE_S3_ENDPOINT") {
+        return !process.env[key] && !process.env["AWS_ENDPOINT_URL"];
+      }
+      if (key === "HAILPRINT_STATE_BUCKET") {
+        return !process.env[key] && !process.env["HAILPRINT_BUCKET"];
+      }
+      return !process.env[key];
+    });
+    const raw = result.stdout.trim();
+    let versions: Record<string, string> = {};
+    try {
+      versions = JSON.parse(raw) as Record<string, string>;
+    } catch {
+      versions = { python: raw };
+    }
     return {
-      stdout: result.stdout.trim(),
+      stdout: raw,
+      versions,
       envReady: missingEnv.length === 0,
       missingEnv,
     };

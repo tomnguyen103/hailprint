@@ -128,6 +128,12 @@ def _evict_stale_lock(path: Path) -> bool:
             os.link(claim, path)
         except FileExistsError:
             pass
+        except OSError:
+            if not path.exists():
+                try:
+                    os.replace(claim, path)
+                except OSError:
+                    pass
         finally:
             claim.unlink(missing_ok=True)
         return False
@@ -219,7 +225,7 @@ def write_atomic(frame: pd.DataFrame, path: Path, metadata: dict[str, str] | Non
         else:
             if isinstance(frame, gpd.GeoDataFrame):
                 frame.to_parquet(tmp)
-                table = pq.read_table(tmp)
+                table = pq.read_table(tmp, memory_map=False)
             else:
                 table = pa.Table.from_pandas(frame, preserve_index=False)
             extra = {k.encode(): v.encode() for k, v in merged.items()}

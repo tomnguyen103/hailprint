@@ -9,6 +9,7 @@ import { TABS, TAB_LABELS, go, href, type Tab } from "../router";
 import { ProofStrip } from "../shell/proof-strip";
 import { SubTabs } from "../shell/sub-tabs";
 import { useLoad } from "../state/load";
+import { setPresetPin } from "../state/pin";
 import { useStep } from "../time/use-step";
 import { DataPane } from "./data-pane";
 import { MapPane } from "./map-pane";
@@ -113,7 +114,10 @@ export function Workspace({ index, storm, tab }: Props) {
                     class="button button-small case-study-pill"
                     aria-pressed={active}
                     title={cs.summary}
-                    onClick={() => go(href({ area: "storms", date: cs.storm_date, tab }))}
+                    onClick={() => {
+                      if (cs.presetPin !== null) setPresetPin(cs.presetPin);
+                      go(href({ area: "storms", date: cs.storm_date, tab: cs.defaultTab }));
+                    }}
                   >
                     <span class="mono">{cs.title}</span>
                   </button>
@@ -130,7 +134,6 @@ export function Workspace({ index, storm, tab }: Props) {
           datesOpen={datesOpen}
           onOpenDates={() => setDatesOpen(true)}
         />
-        <ProofStrip date={storm.storm_date} activeTab={tab} step={step} />
         <SubTabs
           label="Storm panes"
           tabs={stormTabItems(storm.storm_date, step)}
@@ -140,6 +143,7 @@ export function Workspace({ index, storm, tab }: Props) {
           <h2 class="visually-hidden">{TAB_LABELS[tab]}</h2>
           {pane}
         </section>
+        <ProofStrip date={storm.storm_date} activeTab={tab} step={step} receipt={indexReceipt} />
       </div>
     </div>
   );

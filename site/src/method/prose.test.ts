@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { FORBIDDEN_WORD, foldWords, proseFindings, sentences, wordCount } from "./prose";
+import { BLOCK_WORDS, FORBIDDEN_WORD, blockFindings, foldWords, proseFindings, sentences, wordCount } from "./prose";
 
 const words = (n: number) => Array.from({ length: n }, () => "word").join(" ");
 
@@ -64,3 +64,11 @@ it("names the forbidden word in any case and in any block", () => {
   const code = { title: "", blocks: [{ kind: "code" as const, text: FORBIDDEN_WORD }] };
   expect(proseFindings({ limits: code })).toEqual([{ page: "limits", rule: "forbidden", text: FORBIDDEN_WORD }]);
 });
+
+it("passes a prose block of 25 words and flags a prose block of 26 words via blockFindings (AUD-18)", () => {
+  expect(BLOCK_WORDS).toBe(25);
+  expect(blockFindings({ data: pageOf(`${words(25)}.`) })).toEqual([]);
+  const tooLong = `${words(15)}. ${words(11)}.`;
+  expect(blockFindings({ data: pageOf(tooLong) })).toEqual([{ page: "data", rule: "block", text: tooLong }]);
+});
+

@@ -64,27 +64,21 @@ export function ScorePane({
           <RadiusSlider value={activeRadiusKm} max={maxRadiusKm} onChange={setRadiusKm} />
           <p class="pane-note">
             Radius <span class="mono">{activeRadiusKm} km</span> &middot; <span class="mono">{scored}</span> scored reports &middot;{" "}
-            <span class="mono">{pairs.data.reports.length - scored}</span> near crop edge.
+            <span class="mono">{pairs.data.reports.length - scored}</span> near crop edge &middot;{" "}
+            <ReceiptChip receipt={receipt} file={FILE} />
           </p>
           <div class="table-scroll">
             <table class="table">
               <thead>
                 <tr>
                   <th scope="col">Size class</th>
-                  <th scope="col" class="num">Hits</th>
-                  <th scope="col" class="num">Misses</th>
-                  <th scope="col" class="num">False alarms</th>
-                  <th scope="col" class="num">Correct negatives</th>
-                  {METRICS.map((m) => (
-                    <th key={m} scope="col" class="num">
-                      {METRIC_LABELS[m]}
-                    </th>
-                  ))}
-                  <th scope="col" class="num">Swath km²</th>
-                  <th scope="col" class="num">Unverifiable km²</th>
-                  <th scope="col">
-                    <span class="visually-hidden">Receipt</span>
+                  <th scope="col" class="num">
+                    {METRIC_LABELS.csi}
                   </th>
+                  <th scope="col" class="num">
+                    {METRIC_LABELS.hss}
+                  </th>
+                  <th scope="col" class="num">Swath km²</th>
                 </tr>
               </thead>
               <tbody>
@@ -103,11 +97,7 @@ export function ScorePane({
                         &ge; {formatInches(r.threshold_in)}
                       </button>
                     </td>
-                    <td class="num">{r.hits}</td>
-                    <td class="num">{r.misses}</td>
-                    <td class="num">{r.false_alarms}</td>
-                    <td class="num">{r.correct_negatives}</td>
-                    {METRICS.map((m) => {
+                    {(["csi", "hss"] as const).map((m) => {
                       const { text, hidden } = metricText(r[m]);
                       return (
                         <td key={m} class="num">
@@ -117,10 +107,6 @@ export function ScorePane({
                       );
                     })}
                     <td class="num">{r.swath_km2.toFixed(1)}</td>
-                    <td class="num">{r.unverifiable_km2.toFixed(1)}</td>
-                    <td>
-                      <ReceiptChip receipt={receipt} file={FILE} />
-                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -151,9 +137,28 @@ export function ScorePane({
         }
         subtitle={peekRow ? `${peekRow.threshold_mm} mm · ${activeRadiusKm} km radius` : undefined}
         receipt={receipt}
+        file={FILE}
         onClose={() => setPeekMm(null)}
       >
-        {peekRow ? <ContingencyGrid row={peekRow} /> : null}
+        {peekRow ? (
+          <>
+            <ContingencyGrid row={peekRow} />
+            <dl class="receipt-list">
+              <dt>Scored reports</dt>
+              <dd class="mono">{scored}</dd>
+              {METRICS.map((m) => (
+                <div key={m}>
+                  <dt>{METRIC_LABELS[m]}</dt>
+                  <dd class="mono">{metricText(peekRow[m]).text}</dd>
+                </div>
+              ))}
+              <dt>Swath km²</dt>
+              <dd class="mono">{peekRow.swath_km2.toFixed(1)}</dd>
+              <dt>Unverifiable km²</dt>
+              <dd class="mono">{peekRow.unverifiable_km2.toFixed(1)}</dd>
+            </dl>
+          </>
+        ) : null}
       </PeekDrawer>
     </>
   );

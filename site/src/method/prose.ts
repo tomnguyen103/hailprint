@@ -4,6 +4,7 @@ import type { Block, Page } from "./content";
 
 export const FOLD_WORDS = 120;
 export const SENTENCE_WORDS = 25;
+export const BLOCK_WORDS = 25;
 /** `swath.FORBIDDEN_WORD` in Python; joined here so the word itself stays out of the site source. */
 export const FORBIDDEN_WORD = ["dam", "age"].join("");
 const PASSIVE_VOICE =
@@ -11,7 +12,7 @@ const PASSIVE_VOICE =
 
 export interface Finding {
   page: string;
-  rule: "fold" | "sentence" | "ing" | "passive" | "forbidden";
+  rule: "fold" | "sentence" | "block" | "ing" | "passive" | "forbidden";
   text: string;
 }
 
@@ -68,3 +69,17 @@ export function proseFindings(content: Record<string, Page>): Finding[] {
   }
   return findings;
 }
+
+/** Return findings for any prose paragraph block that exceeds BLOCK_WORDS (25 words). */
+export function blockFindings(content: Record<string, Page>): Finding[] {
+  const findings: Finding[] = [];
+  for (const [page, body] of Object.entries(content)) {
+    for (const block of body.blocks) {
+      if (block.kind === "prose" && wordCount(block.text) > BLOCK_WORDS) {
+        findings.push({ page, rule: "block", text: block.text });
+      }
+    }
+  }
+  return findings;
+}
+

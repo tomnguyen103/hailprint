@@ -32,21 +32,13 @@ export function TableView({
           <thead>
             <tr>
               <th scope="col">Size class</th>
-              <th scope="col" class="num">Scored reports</th>
-              <th scope="col" class="num">Hits</th>
-              <th scope="col" class="num">Misses</th>
-              <th scope="col" class="num">False alarms</th>
-              <th scope="col" class="num">Correct negatives</th>
-              {METRICS.map((m) => (
-                <th key={m} scope="col" class="num">
-                  {METRIC_LABELS[m]}
-                </th>
-              ))}
-              <th scope="col" class="num">Swath km²</th>
-              <th scope="col" class="num">Unverifiable km²</th>
-              <th scope="col">
-                <span class="visually-hidden">Receipt</span>
+              <th scope="col" class="num">
+                {METRIC_LABELS.csi}
               </th>
+              <th scope="col" class="num">
+                {METRIC_LABELS.hss}
+              </th>
+              <th scope="col" class="num">Swath km²</th>
             </tr>
           </thead>
           <tbody>
@@ -68,27 +60,22 @@ export function TableView({
                       <span>{r.label}</span>
                     )}
                   </td>
-                  <td class="num">{r.report_count}</td>
-                  <td class="num">{r.hits}</td>
-                  <td class="num">{r.misses}</td>
-                  <td class="num">{r.false_alarms}</td>
-                  <td class="num">{r.correct_negatives}</td>
-                  {METRICS.map((m) => (
-                    <td key={m} class="num">
-                      <MetricText value={r[m]} />
-                    </td>
-                  ))}
-                  <td class="num">{r.swath_km2.toFixed(1)}</td>
-                  <td class="num">{r.unverifiable_km2.toFixed(1)}</td>
-                  <td>
-                    <ReceiptChip receipt={receipt} file={file} />
+                  <td class="num">
+                    <MetricText value={r.csi} />
                   </td>
+                  <td class="num">
+                    <MetricText value={r.hss} />
+                  </td>
+                  <td class="num">{r.swath_km2.toFixed(1)}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      <p class="pane-note">
+        <ReceiptChip receipt={receipt} file={file} />
+      </p>
       <PeekDrawer
         open={peekRow !== null}
         title={
@@ -104,7 +91,27 @@ export function TableView({
         file={file}
         onClose={() => setPeekMm(null)}
       >
-        {peekRow ? <ContingencyGrid row={peekRow} /> : null}
+        {peekRow ? (
+          <>
+            <ContingencyGrid row={peekRow} />
+            <dl class="receipt-list">
+              <dt>Scored reports</dt>
+              <dd class="mono">{peekRow.report_count}</dd>
+              {METRICS.map((m) => (
+                <div key={m}>
+                  <dt>{METRIC_LABELS[m]}</dt>
+                  <dd class="mono">
+                    <MetricText value={peekRow[m]} />
+                  </dd>
+                </div>
+              ))}
+              <dt>Swath km²</dt>
+              <dd class="mono">{peekRow.swath_km2.toFixed(1)}</dd>
+              <dt>Unverifiable km²</dt>
+              <dd class="mono">{peekRow.unverifiable_km2.toFixed(1)}</dd>
+            </dl>
+          </>
+        ) : null}
       </PeekDrawer>
     </>
   );
