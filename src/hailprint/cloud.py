@@ -220,9 +220,11 @@ def sync_down(
                 if local_size <= max_bytes:
                     local_body = dest.read_bytes()
                     local_sha = hashlib.sha256(local_body).hexdigest()
-                    if (etag is not None and hashlib.md5(local_body).hexdigest() == etag) or (  # noqa: S324
-                        prior_sha is not None and local_sha == prior_sha
-                    ):
+                    etag_matches = (
+                        etag is not None and hashlib.md5(local_body).hexdigest() == etag  # noqa: S324
+                    )
+                    sha_matches = etag is None and prior_sha is not None and local_sha == prior_sha
+                    if etag_matches or sha_matches:
                         state.digests[(bucket, key)] = local_sha
                         state.remote_keys.add((bucket, key))
                         continue
@@ -234,17 +236,16 @@ def sync_down(
         state.digests[(bucket, key)] = hashlib.sha256(body).hexdigest()
         state.remote_keys.add((bucket, key))
     elif len(to_fetch) > 1:
-        with ThreadPoolExecutor(max_workers=min(SYNC_THREADS, len(to_fetch))) as pool:
-            bodies = list(
-                pool.map(
-                    lambda item: _fetch_s3_object(client, bucket, item[0], max_bytes),
-                    to_fetch,
-                )
-            )
-        for (key, dest), body in zip(to_fetch, bodies, strict=True):
+        def _download_and_write(item: tuple[str, Path]) -> tuple[str, str]:
+            key, dest = item
+            body = _fetch_s3_object(client, bucket, key, max_bytes)
             files.write_bytes_atomic(body, dest)
-            state.digests[(bucket, key)] = hashlib.sha256(body).hexdigest()
-            state.remote_keys.add((bucket, key))
+            return key, hashlib.sha256(body).hexdigest()
+
+        with ThreadPoolExecutor(max_workers=min(SYNC_THREADS, len(to_fetch))) as pool:
+            for key, digest in pool.map(_download_and_write, to_fetch):
+                state.digests[(bucket, key)] = digest
+                state.remote_keys.add((bucket, key))
     return state
 
 

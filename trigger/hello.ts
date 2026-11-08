@@ -20,15 +20,7 @@ export const helloTask = task({
         "'pyogrio': pyogrio.__version__, 'rasterio': rasterio.__version__}))",
       { env: { PYTHONPATH: "src" } },
     );
-    const missingEnv = REQUIRED_ENV.filter((key) => {
-      if (key === "SUPABASE_S3_ENDPOINT") {
-        return !process.env[key] && !process.env["AWS_ENDPOINT_URL"];
-      }
-      if (key === "HAILPRINT_STATE_BUCKET") {
-        return !process.env[key] && !process.env["HAILPRINT_BUCKET"];
-      }
-      return !process.env[key];
-    });
+    const missingEnv = REQUIRED_ENV.filter((key) => !process.env[key]);
     const raw = result.stdout.trim();
     let versions: Record<string, string> = {};
     try {
