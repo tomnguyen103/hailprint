@@ -7,7 +7,7 @@ function isPartialExit(err: unknown): boolean {
   if (typeof err === "object" && err !== null && "exitCode" in err) {
     return (err as { exitCode?: unknown }).exitCode === PARTIAL_EXIT;
   }
-  return err instanceof Error && /exit code 3\b/i.test(err.message);
+  return err instanceof Error && /exited with (?:a non-zero )?code 3\b|exit code 3\b/i.test(err.message);
 }
 
 export const backfillTask = task({

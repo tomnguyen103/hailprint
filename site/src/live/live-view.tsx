@@ -10,7 +10,7 @@ import { Link } from "../shell/link";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type LiveData, useLive } from "../state/live";
 import { LiveMap } from "../storms/map/live-map";
-import { CASE_STUDIES } from "../storms/select";
+import { CASE_STUDIES, type CaseStudy } from "../storms/select";
 import { ageMinutes, freshness } from "./freshness";
 
 const LIVE_FILE = "live/now.json";
@@ -30,13 +30,16 @@ function formatAge(iso: string, now: Date): string {
   return age === null ? "unknown" : `${age} min ago`;
 }
 
+/** Render the 24-hour Harris County live monitoring view content. */
 export function LiveViewContent({
   data,
   newest,
+  caseStudies = CASE_STUDIES,
   now = new Date(),
 }: {
   data: LiveData;
   newest: string | null;
+  caseStudies?: readonly CaseStudy[];
   now?: Date;
 }) {
   const { now: live } = data;
@@ -65,7 +68,7 @@ export function LiveViewContent({
   const reportsNote = live.reports.max_size_in !== null ? `max ${formatInches(live.reports.max_size_in)}` : "50 km buffer";
   const powerValue = live.power === null ? "\u2014" : formatCount(live.power.customers_out);
   const powerNote = live.power === null ? "unavailable" : ODIN_LABEL;
-  const isQuietSky = newest !== null && live.mesh.class_count === 0 && live.reports.count === 0;
+  const isQuietSky = newest !== null && live.mesh.class_count === 0 && live.reports.count === 0 && caseStudies.length > 0;
 
   return (
     <div class="live-page">
@@ -100,7 +103,7 @@ export function LiveViewContent({
             Quiet 24-hour window. Select a flagship archive storm to inspect high-density radar swaths.
           </p>
           <div class="quiet-sky-actions">
-            {CASE_STUDIES.map((cs) => (
+            {caseStudies.map((cs) => (
               <button
                 key={cs.storm_date}
                 type="button"
@@ -210,9 +213,16 @@ export function LiveViewContent({
 }
 
 /** The `/live` page: loads `live/now.json` and its three layer files, and renders the monitoring view. */
-export function LiveView({ newest }: { newest: string | null }) {
+export function LiveView({
+  newest,
+  caseStudies = CASE_STUDIES,
+}: {
+  newest: string | null;
+  caseStudies?: readonly CaseStudy[];
+}) {
   const live = useLive();
   if (live.status === "error") return <ErrorState error={live.error} onRetry={live.retry} />;
   if (live.status === "loading") return live.showLoading ? <LoadingState file={LIVE_FILE} /> : null;
-  return <LiveViewContent data={live.data} newest={newest} now={live.now} />;
+  return <LiveViewContent data={live.data} newest={newest} caseStudies={caseStudies} now={live.now} />;
 }
+

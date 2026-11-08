@@ -85,7 +85,7 @@ export function Run({ index }: { index: StormsIndex }) {
   const defaultRadius = pairsDoc ? pairsDoc.radius_km_default : index.radius_km_default;
   const [radiusKm, setRadiusKm] = useRadiusKm(defaultRadius);
   const maxRadius = pairsDoc ? pairsDoc.radius_km_max : RADIUS_MAX_FALLBACK;
-  const activeRadius = Math.min(radiusKm, maxRadius);
+  const activeRadius = Math.max(0, Math.min(maxRadius, Math.round(radiusKm)));
 
   const copy = async (i: number, text: string) => {
     const node = codes.current[i];

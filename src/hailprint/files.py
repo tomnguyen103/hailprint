@@ -4,7 +4,7 @@ import ctypes
 import os
 import time
 from collections.abc import Iterator
-from contextlib import contextmanager, suppress
+from contextlib import contextmanager
 from pathlib import Path
 
 import geopandas as gpd
@@ -48,13 +48,13 @@ def _atomic(path: Path) -> Iterator[Path]:
         raise
 
 
-def _pid_alive(pid: int) -> bool:
-    """Return True when `pid` refers to a running operating-system process."""
-    if pid <= 0:
-        return False
-    if pid in (1, os.getpid()):
-        return True
-    if os.name == "nt":
+_WIN32_PROCS: tuple[object, object, object] | None = None
+
+
+def _win32_procs() -> tuple[object, object, object]:
+    """Return cached `(OpenProcess, GetExitCodeProcess, CloseHandle)` ctypes callables."""
+    global _WIN32_PROCS  # noqa: PLW0603
+    if _WIN32_PROCS is None:
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
         open_proc = kernel32.OpenProcess
         open_proc.argtypes = [ctypes.c_ulong, ctypes.c_int, ctypes.c_ulong]
@@ -65,16 +65,28 @@ def _pid_alive(pid: int) -> bool:
         close_handle = kernel32.CloseHandle
         close_handle.argtypes = [ctypes.c_void_p]
         close_handle.restype = ctypes.c_int
-        handle = open_proc(0x1000, 0, pid)
+        _WIN32_PROCS = (open_proc, get_exit, close_handle)
+    return _WIN32_PROCS
+
+
+def _pid_alive(pid: int) -> bool:
+    """Return True when `pid` refers to a running operating-system process."""
+    if pid <= 0:
+        return False
+    if pid == os.getpid() or (os.name != "nt" and pid == 1):
+        return True
+    if os.name == "nt":
+        open_proc, get_exit, close_handle = _win32_procs()
+        handle = open_proc(0x1000, 0, pid)  # type: ignore[operator]
         if not handle:
             return bool(ctypes.get_last_error() == 5)  # type: ignore[attr-defined]
         try:
             code = ctypes.c_ulong()
-            if not get_exit(handle, ctypes.byref(code)):
+            if not get_exit(handle, ctypes.byref(code)):  # type: ignore[operator]
                 return True
             return bool(code.value == 259)
         finally:
-            close_handle(handle)
+            close_handle(handle)  # type: ignore[operator]
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -87,29 +99,37 @@ def _pid_alive(pid: int) -> bool:
 
 
 def _is_stale_lock(path: Path) -> bool:
-    """Return True when `path` holds a dead PID or an unreadable lock older than STALE_LOCK_S."""
+    """Return True when `path` is older than STALE_LOCK_S or holds a dead process PID."""
     try:
         raw = path.read_text(encoding="utf-8").strip()
         stat = path.stat()
     except OSError:
         return False
+    if (time.time() - stat.st_mtime) > STALE_LOCK_S:
+        return True
+    if raw == "1":
+        return False
     if raw.isdigit():
         return not _pid_alive(int(raw))
-    return (time.time() - stat.st_mtime) > STALE_LOCK_S
+    return False
 
 
 def _evict_stale_lock(path: Path) -> bool:
     """Atomically claim and remove a stale lock at `path`; return True if evicted."""
     if not _is_stale_lock(path):
         return False
-    claim = path.with_name(f".{path.name}.stale.{os.getpid()}")
+    claim = path.with_name(f".{path.name}.stale.{os.getpid()}.{time.time_ns()}")
     try:
         os.replace(path, claim)
     except OSError:
         return False
     if not _is_stale_lock(claim):
-        with suppress(OSError):
-            os.replace(claim, path)
+        try:
+            os.link(claim, path)
+        except FileExistsError:
+            pass
+        finally:
+            claim.unlink(missing_ok=True)
         return False
     claim.unlink(missing_ok=True)
     return True

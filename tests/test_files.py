@@ -131,6 +131,7 @@ def test_write_atomic_rejects_owner_columns_and_forbidden_word_in_metadata(tmp_p
 
 
 def test_write_bytes_atomic_writes_bytes_and_leaves_no_tmp_sibling(tmp_path):
+    """Verify write_bytes_atomic writes payload atomically and leaves no .tmp file."""
     path = tmp_path / "b" / "raw.bin"
     files.write_bytes_atomic(b"payload", path)
     assert path.read_bytes() == b"payload"
@@ -138,6 +139,7 @@ def test_write_bytes_atomic_writes_bytes_and_leaves_no_tmp_sibling(tmp_path):
 
 
 def test_lock_evicts_stale_dead_pid_and_acquires_lock(tmp_path, monkeypatch):
+    """Verify files.lock evicts a dead PID lock and acquires the lock for the current process."""
     path = tmp_path / "a" / "publish.lock"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("99999999", encoding="utf-8")
@@ -149,10 +151,11 @@ def test_lock_evicts_stale_dead_pid_and_acquires_lock(tmp_path, monkeypatch):
 
 
 def test_evict_stale_lock_restores_lock_when_racing_process_writes_live_pid(tmp_path, monkeypatch):
+    """Verify stale lock claim restores live locks and never overwrites a third-process lock."""
     path = tmp_path / "a" / "publish.lock"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("99999999", encoding="utf-8")
-    monkeypatch.setattr(files, "_pid_alive", lambda pid: pid == os.getpid())
+    monkeypatch.setattr(files, "_pid_alive", lambda pid: pid in (os.getpid(), 424242))
     orig_replace = os.replace
 
     def racing_replace(src, dst):
@@ -165,4 +168,20 @@ def test_evict_stale_lock_restores_lock_when_racing_process_writes_live_pid(tmp_
         with files.lock(path):
             pass
     assert path.read_text(encoding="utf-8") == str(os.getpid())
+
+    # Second race: a third process (424242) creates `path` right before `os.link(claim, path)`.
+    path.write_text("99999999", encoding="utf-8")
+    orig_link = os.link
+
+    def racing_link(src, dst):
+        path.write_text("424242", encoding="utf-8")
+        return orig_link(src, dst)
+
+    monkeypatch.setattr(files.os, "link", racing_link)
+    with pytest.raises(RuntimeError, match="another run holds it"):
+        with files.lock(path):
+            pass
+    assert path.read_text(encoding="utf-8") == "424242"
+    assert list(path.parent.glob("*.stale.*")) == []
+
 

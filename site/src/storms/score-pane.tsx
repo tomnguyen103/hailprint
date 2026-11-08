@@ -143,7 +143,10 @@ export function ScorePane({
         open={peekRow !== null}
         title={
           peekRow
-            ? `Threshold >= ${formatInches(peekRow.threshold_in)} (${objectName(peekRow.threshold_mm)})`
+            ? (() => {
+                const obj = objectName(peekRow.threshold_mm);
+                return `Threshold >= ${formatInches(peekRow.threshold_in)}${obj ? ` (${obj})` : ""}`;
+              })()
             : "Threshold detail"
         }
         subtitle={peekRow ? `${peekRow.threshold_mm} mm · ${activeRadiusKm} km radius` : undefined}
@@ -154,4 +157,4 @@ export function ScorePane({
       </PeekDrawer>
     </>
   );
-}
+}

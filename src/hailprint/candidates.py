@@ -55,6 +55,7 @@ WCM_CHUNK_ROWS = 25_000
 
 
 def _filter_wcm_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
+    """Keep Harris County rows and the latest dated row in a WCM chunk."""
     if chunk.empty:
         return chunk
     if "st" in chunk.columns and {"f1", "f2", "f3", "f4"}.issubset(chunk.columns):
@@ -64,13 +65,16 @@ def _filter_wcm_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
             stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"]) - pd.Timedelta(
                 CST_TO_CONVECTIVE
             )
-            keep.loc[stamps.idxmax()] = True
+            if stamps.notna().any():
+                keep.loc[stamps.idxmax()] = True
         return chunk.loc[keep]
     if {"date", "time"}.issubset(chunk.columns):
         stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"]) - pd.Timedelta(
             CST_TO_CONVECTIVE
         )
-        return chunk.loc[[stamps.idxmax()]]
+        if stamps.notna().any():
+            return chunk.loc[[stamps.idxmax()]]
+        return chunk.iloc[0:0]
     return chunk
 
 

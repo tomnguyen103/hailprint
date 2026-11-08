@@ -93,15 +93,19 @@ export function TableView({
         open={peekRow !== null}
         title={
           peekRow
-            ? `Pooled >= ${formatInches(peekRow.threshold_in)} (${objectName(peekRow.threshold_mm)})`
+            ? (() => {
+                const obj = objectName(peekRow.threshold_mm);
+                return `Pooled >= ${formatInches(peekRow.threshold_in)}${obj ? ` (${obj})` : ""}`;
+              })()
             : "Pooled threshold detail"
         }
         subtitle={peekRow ? `${peekRow.report_count} scored reports` : undefined}
         receipt={receipt}
+        file={file}
         onClose={() => setPeekMm(null)}
       >
         {peekRow ? <ContingencyGrid row={peekRow} /> : null}
       </PeekDrawer>
     </>
   );
-}
+}

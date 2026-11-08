@@ -48,9 +48,9 @@
   --warn-to: oklch(0.46 0.18 350);
   --warn-ff: oklch(0.48 0.09 202);
 
-  --serif: "Instrument Serif", "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
-  --sans: "Source Sans 3", "IBM Plex Sans", system-ui, sans-serif;
-  --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
+  --serif: "Source Serif 4 Variable", "Source Serif 4", "Instrument Serif", Georgia, serif;
+  --sans: "IBM Plex Sans", "Source Sans 3", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
   --font-display: var(--serif);
   --font-sans: var(--sans);
   --font-mono: var(--mono);

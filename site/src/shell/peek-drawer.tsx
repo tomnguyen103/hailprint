@@ -13,18 +13,34 @@ type Props = {
   children?: ComponentChildren;
 };
 
+let previousFocus: HTMLElement | null = null;
+
+/** Render an on-demand slide-over peek drawer for secondary row details and provenance receipts. */
 export function PeekDrawer({ open, title, subtitle, receipt, file = "pairs.json", onClose, children }: Props) {
   if (!open) return null;
 
+  const handleClose = () => {
+    onClose();
+    previousFocus?.focus?.();
+    previousFocus = null;
+  };
+
   return (
     <aside
+      ref={(node: HTMLElement | null) => {
+        if (!node) return;
+        if (typeof document !== "undefined" && document.activeElement instanceof HTMLElement && document.activeElement !== node) {
+          previousFocus = document.activeElement;
+        }
+        node.focus?.();
+      }}
       class="peek-drawer"
       role="dialog"
       aria-modal="false"
       aria-label={title}
       tabIndex={-1}
       onKeyDown={(event) => {
-        if (event.key === "Escape") onClose();
+        if (event.key === "Escape") handleClose();
       }}
     >
       <div class="peek-drawer-header">
@@ -32,7 +48,7 @@ export function PeekDrawer({ open, title, subtitle, receipt, file = "pairs.json"
           <h3 class="peek-drawer-title">{title}</h3>
           {subtitle ? <p class="peek-drawer-subtitle mono">{subtitle}</p> : null}
         </div>
-        <button type="button" class="button button-small" onClick={onClose} aria-label="Close detail drawer">
+        <button type="button" class="button button-small" onClick={handleClose} aria-label="Close detail drawer">
           Close
         </button>
       </div>
@@ -48,3 +64,4 @@ export function PeekDrawer({ open, title, subtitle, receipt, file = "pairs.json"
     </aside>
   );
 }
+

@@ -130,7 +130,7 @@ export function Workspace({ index, storm, tab }: Props) {
           datesOpen={datesOpen}
           onOpenDates={() => setDatesOpen(true)}
         />
-        <ProofStrip date={storm.storm_date} activeTab={tab} />
+        <ProofStrip date={storm.storm_date} activeTab={tab} step={step} />
         <SubTabs
           label="Storm panes"
           tabs={stormTabItems(storm.storm_date, step)}

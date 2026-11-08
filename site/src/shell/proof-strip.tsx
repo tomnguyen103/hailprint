@@ -1,5 +1,6 @@
 // Guided 4-step proof narrative strip on the storm workspace.
-import { go, href, type StormTab } from "../router";
+import { href, type StormTab } from "../router";
+import { Link } from "./link";
 
 type Step = {
   tab: StormTab;
@@ -12,34 +13,41 @@ const STEPS: readonly Step[] = [
   { tab: "map", step: "1", title: "Radar Swath", metric: "12Z-12Z MESH" },
   { tab: "parcels", step: "2", title: "HCAD Parcels", metric: "ZIP exposure" },
   { tab: "score", step: "3", title: "Skill Score", metric: "CSI & HSS" },
-  { tab: "data", step: "4", title: "Audit Receipt", metric: "SHA-256 files" },
+  { tab: "data", step: "4", title: "Audit Receipt", metric: "Provenance files" },
 ];
 
 type Props = {
   date: string;
   activeTab: StormTab;
+  step?: number;
 };
 
-export function ProofStrip({ date, activeTab }: Props) {
+/** Render the 4-step verification workflow navigation strip for a storm date. */
+export function ProofStrip({ date, activeTab, step }: Props) {
   return (
-    <div class="proof-strip" role="group" aria-label="Verification proof workflow">
+    <nav class="proof-strip" aria-label="Verification proof workflow">
       {STEPS.map((item) => {
         const active = item.tab === activeTab;
-        const target = href({ area: "storms", date, tab: item.tab });
+        const target = href({
+          area: "storms",
+          date,
+          tab: item.tab,
+          step: item.tab === "map" ? step : undefined,
+        });
         return (
-          <button
+          <Link
             key={item.tab}
-            type="button"
             class="proof-step"
-            aria-pressed={active}
-            onClick={() => go(target)}
+            href={target}
+            aria-current={active ? "page" : undefined}
           >
             <span class="proof-step-num mono">{item.step}</span>
             <span class="proof-step-title">{item.title}</span>
             <span class="proof-step-metric mono">{item.metric}</span>
-          </button>
+          </Link>
         );
       })}
-    </div>
+    </nav>
   );
 }
+

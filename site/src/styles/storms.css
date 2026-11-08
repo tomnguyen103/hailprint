@@ -113,6 +113,7 @@
   background: var(--sheet);
   color: var(--ink);
   text-align: left;
+  text-decoration: none;
   transition: border-color var(--motion), background-color var(--motion);
 }
 
@@ -120,6 +121,7 @@
   background: var(--sheet-muted);
 }
 
+.proof-step[aria-current="page"],
 .proof-step[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--sheet-muted);
