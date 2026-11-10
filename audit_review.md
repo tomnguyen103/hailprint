@@ -32,7 +32,7 @@ The following 6 high-confidence fixes were applied and verified in Milestone 1:
 1. **Bytecode Cache Sanitization**: Removed stale Python 3.14 `.pyc` files from `tests/__pycache__/` (`conftest.cpython-314-pytest-9.0.3.pyc`, `__init__.cpython-314.pyc`).
 2. **Frontend Unused Symbol Internalization**: Removed unneeded `export` keywords from 11 internal symbols across `site/src/` (`icons.tsx`, `rescore.ts`, `data/guard.ts`, `format.ts`, `ruler.ts`, `scorecard/curve.ts`, `try/csv.ts`, `state/radius.ts`, `theme.ts`, `shell/scope-drawer.tsx`, `shell/top-bar.tsx`).
 3. **Parcel Test Resilience**: Added `HAILPRINT_PARCEL_BUDGET_S` environment override with a 60.0-second default in `tests/test_parcels.py:256-257` while preserving exact parcel count assertions.
-4. **Mesh Decode Recovery Harmonization**: Extended exception handling in `src/hailprint/mesh.py:180` to catch `(RuntimeError, ValueError)` to self-heal bitmap and scan order anomalies alongside truncated files.
+4. **Mesh Decode Recovery Harmonization**: Wrapped truncated GRIB2 value-count `reshape` mismatches as `RuntimeError` in `src/hailprint/mesh.py` so `daily_max` self-heals corrupt caches while keeping `jScansPositively` and `bitmapPresent` format `ValueError` checks fail-fast.
 5. **Compare Domain Math Decoupling**: Extracted pure math and preset types from `site/src/try/compare.tsx` into `site/src/try/compare-data.ts`, speeding up `site/src/try/csv.test.ts` and isolating UI rendering from calculation logic.
 6. **Static Geometry Bounding Box Cache**: Cached static reprojected `_CROP_M` UTM 15N geometry in `src/hailprint/score.py` to prevent redundant coordinate transformations during report scoring.
 

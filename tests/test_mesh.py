@@ -277,6 +277,55 @@ def test_daily_max_recovers_from_truncated_cached_grib2_gz(tmp_path, monkeypatch
     assert float(da.max()) == 30.0
 
 
+def test_daily_max_propagates_format_value_error_without_deleting_cache_or_refetching(
+    tmp_path, monkeypatch
+):
+    _fake_eccodes(monkeypatch, bitmap=1)
+    local = mesh.local_path(KEY_12Z, tmp_path)
+    local.parent.mkdir(parents=True)
+    payload = gzip.compress(b"valid-grib-with-bitmap")
+    local.write_bytes(payload)
+
+    def fail_if_refetched(storm_date, raw_dir, client=None):
+        raise AssertionError("fetch_12z must not run on format ValueError")
+
+    monkeypatch.setattr(mesh, "fetch_12z", fail_if_refetched)
+
+    with pytest.raises(ValueError, match="bitmapPresent"):
+        mesh.daily_max(STORM_DATE, tmp_path)
+
+    assert local.exists()
+    assert local.read_bytes() == payload
+
+
+def test_daily_max_recovers_from_truncated_grib2_value_array(tmp_path, monkeypatch):
+    _fake_eccodes(monkeypatch, bitmap=0)
+    local = mesh.local_path(KEY_12Z, tmp_path)
+    local.parent.mkdir(parents=True)
+    local.write_bytes(gzip.compress(b"short-values"))
+    calls = {"count": 0}
+
+    def short_then_full(handle):
+        calls["count"] += 1
+        size = 5 if calls["count"] == 1 else 16
+        return np.full(size, 30.0, dtype=np.float64)
+
+    monkeypatch.setattr(mesh.eccodes, "codes_get_values", short_then_full)
+    refetched = []
+
+    def fake_fetch(storm_date, raw_dir, client=None):
+        refetched.append(storm_date)
+        local.write_bytes(gzip.compress(b"repaired"))
+        return local
+
+    monkeypatch.setattr(mesh, "fetch_12z", fake_fetch)
+
+    da = mesh.daily_max(STORM_DATE, tmp_path)
+
+    assert refetched == [STORM_DATE]
+    assert float(da.max()) == 30.0
+
+
 def test_decode_crops_conus_grid_within_memory_budget(tmp_path, monkeypatch):
     keys = {
         "Ni": 7000,

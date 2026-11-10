@@ -212,7 +212,7 @@ BIN_EDGES = (0.01, 0.05, 0.15, 0.30)
 
 
 def share_bin(share: float | None) -> str:
-    """Return the map bin for share out; Python parity oracle for site/src/impact/power.ts."""
+    """Return the map bin for share out; Python parity oracle for binOf in fill-spec.ts."""
     if share is None or math.isnan(share):
         return "gap"
     if share == 0:
