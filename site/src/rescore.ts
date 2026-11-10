@@ -37,7 +37,7 @@ function hundredths(inches: number): number {
 export type ReportOutcome = "hit" | "miss" | "false_alarm" | "correct_negative" | "excluded";
 
 /** Classify a single report at class index `k`, radius `radiusM`, edge margin `edgeMarginM`, and threshold `event`. */
-export function classifyOne(
+function classifyOne(
   report: Pairs["reports"][number],
   classCount: number,
   k: number,

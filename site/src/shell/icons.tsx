@@ -24,7 +24,7 @@ function Svg({ size = 20, children }: Props & { children: preact.ComponentChildr
   );
 }
 
-export function LiveIcon(p: Props) {
+function LiveIcon(p: Props) {
   return (
     <Svg {...p}>
       <circle cx="12" cy="12" r="2.2" />
@@ -33,7 +33,7 @@ export function LiveIcon(p: Props) {
   );
 }
 
-export function StormsIcon(p: Props) {
+function StormsIcon(p: Props) {
   return (
     <Svg {...p}>
       <path d="M7 15a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.2 8.5 3.5 3.5 0 0 1 17 15H7Z" />
@@ -44,7 +44,7 @@ export function StormsIcon(p: Props) {
   );
 }
 
-export function ScorecardIcon(p: Props) {
+function ScorecardIcon(p: Props) {
   return (
     <Svg {...p}>
       <rect x="4" y="4" width="16" height="16" rx="1.5" />
@@ -53,7 +53,7 @@ export function ScorecardIcon(p: Props) {
   );
 }
 
-export function TryIcon(p: Props) {
+function TryIcon(p: Props) {
   return (
     <Svg {...p}>
       <path d="M4 12h16" />
@@ -63,7 +63,7 @@ export function TryIcon(p: Props) {
   );
 }
 
-export function MethodIcon(p: Props) {
+function MethodIcon(p: Props) {
   return (
     <Svg {...p}>
       <path d="M6 3.5h10.5a1.5 1.5 0 0 1 1.5 1.5v15.5H7.5A1.5 1.5 0 0 1 6 19V3.5Z" />
@@ -72,7 +72,7 @@ export function MethodIcon(p: Props) {
   );
 }
 
-export function PipelineIcon(p: Props) {
+function PipelineIcon(p: Props) {
   return (
     <Svg {...p}>
       <circle cx="5" cy="12" r="2" />

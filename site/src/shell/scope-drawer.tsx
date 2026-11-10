@@ -20,7 +20,7 @@ function isElementVisible(el: HTMLElement): boolean {
   return true;
 }
 
-export function focusableItems(root: HTMLElement | null): HTMLElement[] {
+function focusableItems(root: HTMLElement | null): HTMLElement[] {
   if (!root) return [];
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
     (el) => (el.closest?.("details:not([open])") === null || el.tagName === "SUMMARY") && isElementVisible(el),

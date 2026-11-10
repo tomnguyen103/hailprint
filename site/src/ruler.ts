@@ -1,7 +1,7 @@
 // The size ruler: one mark per size class, drawn as a circle whose diameter scales with
 // the radar-estimated hail size in inches. The object names are the common comparison.
 
-export const PX_PER_INCH = 11.2;
+const PX_PER_INCH = 11.2;
 
 export interface Mark {
   threshold_mm: number;

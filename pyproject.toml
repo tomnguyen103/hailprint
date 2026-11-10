@@ -37,13 +37,17 @@ packages = ["src/hailprint"]
 
 [tool.ruff]
 line-length = 100
+extend-exclude = [".agents"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = ["ignore::RuntimeWarning:pyogrio.raw"]
+markers = ["benchmark: wall-clock performance check gated by HAILPRINT_RUN_BENCHMARKS=1"]
 
 [tool.pyright]
+# Keep Pyright scoped to production code; dynamic Pandas/GeoPandas test slicing stays ergonomic.
 include = ["src"]
 typeCheckingMode = "basic"
