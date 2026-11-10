@@ -54,10 +54,14 @@ def load_parcels(
 ) -> gpd.GeoDataFrame:
     """Read allow-listed parcel columns, renamed to snake_case, in the layer CRS (EPSG:2278).
 
-    A mask in EPSG:4326 is reprojected to the layer CRS so the driver filters at read time.
-    Any column outside ALLOWED raises ValueError so owner fields never enter memory.
+    Reproject an EPSG:4326 mask to the layer CRS so the driver filters at read time.
+    Any column outside ALLOWED or an empty column list raises ValueError so owner fields stay out.
     """
+    if isinstance(columns, (str, bytes)):
+        raise ValueError("columns must be a sequence of column names, not str or bytes")
     selected = list(ALLOWED) if columns is None else list(dict.fromkeys(columns))
+    if not selected:
+        raise ValueError("columns must include at least one allow-listed parcel column")
     disallowed = sorted(set(selected) - set(ALLOWED))
     if disallowed:
         raise ValueError(f"disallowed parcel columns: {disallowed}")

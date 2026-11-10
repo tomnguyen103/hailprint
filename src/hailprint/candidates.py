@@ -54,6 +54,7 @@ def _check_wcm_zip(source: Path | io.BytesIO, label: Path | str | None = None) -
 
 WCM_CHUNK_ROWS = 25_000
 _ISO_DATE_RE = r"^\d{4}-\d{2}-\d{2}$"
+_ISO_TIME_RE = r"^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$"
 
 
 def _latest_row_index(chunk: pd.DataFrame) -> Any | None:
@@ -62,15 +63,21 @@ def _latest_row_index(chunk: pd.DataFrame) -> Any | None:
     if not bool(valid.any()):
         return None
     dates = chunk.loc[valid, "date"].astype("string")
-    if bool(dates.str.fullmatch(_ISO_DATE_RE).all()):
+    times = chunk.loc[valid, "time"].astype("string")
+    if (
+        bool(dates.str.fullmatch(_ISO_DATE_RE).all())
+        and bool(times.str.fullmatch(_ISO_TIME_RE).all())
+        and bool(pd.to_datetime(dates, format="%Y-%m-%d", errors="coerce").notna().all())
+    ):
         max_date = dates.max()
         top = chunk.loc[dates.index[dates == max_date]]
-        stamps = pd.to_datetime(top["date"] + " " + top["time"], errors="coerce") - pd.Timedelta(
-            CST_TO_CONVECTIVE
-        )
-        if bool(stamps.notna().any()) and bool(stamps.notna().all()):
-            return stamps.idxmax()
-    stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"]) - pd.Timedelta(CST_TO_CONVECTIVE)
+        stamps = pd.to_datetime(
+            top["date"] + " " + top["time"], format="%Y-%m-%d %H:%M:%S"
+        ) - pd.Timedelta(CST_TO_CONVECTIVE)
+        return stamps.idxmax()
+    stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"], format="mixed") - pd.Timedelta(
+        CST_TO_CONVECTIVE
+    )
     return stamps.idxmax() if bool(stamps.notna().any()) else None
 
 

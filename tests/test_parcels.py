@@ -43,6 +43,10 @@ def test_load_parcels_subset_columns_and_rejects_disallowed_or_owner_fields():
         with pytest.raises(ValueError, match="disallowed parcel columns"):
             load_parcels(FIXTURE, columns=bad)
 
+    for bad_shape in ("", "zip", ()):
+        with pytest.raises(ValueError, match="columns must"):
+            load_parcels(FIXTURE, columns=bad_shape)
+
 
 def test_load_with_a_mask_reads_the_covered_parcels_only():
     parcels = load_parcels(FIXTURE).to_crs("EPSG:4326")

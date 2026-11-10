@@ -48,6 +48,6 @@ filterwarnings = ["ignore::RuntimeWarning:pyogrio.raw"]
 markers = ["benchmark: wall-clock performance check gated by HAILPRINT_RUN_BENCHMARKS=1"]
 
 [tool.pyright]
-# Keep Pyright scoped to production code; dynamic Pandas/GeoPandas test slicing stays ergonomic.
+# Keep Pyright scoped to src; dynamic Pandas and GeoPandas test fixtures stay unchecked.
 include = ["src"]
 typeCheckingMode = "basic"

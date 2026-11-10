@@ -607,3 +607,19 @@ def test_wcm_chunk_selection_handles_unsorted_dates_midnight_rollovers_nulls_and
         slash_zip, index=False, compression={"method": "zip", "archive_name": "wcm.csv"}
     )
     assert candidates.wcm_last_day(slash_zip) == date(2025, 6, 9)
+
+    for label, bad_date, bad_time in (
+        ("bad_time", "2024-05-20", "BAD_TIME"),
+        ("bad_month", "2024-99-99", "12:00:00"),
+        ("bad_feb30", "2024-02-30", "12:00:00"),
+    ):
+        corrupt = rows.iloc[:2].copy()
+        corrupt["date"] = [bad_date, "2025-06-10"]
+        corrupt["time"] = [bad_time, "18:00:00"]
+        corrupt["st"] = ["OK", "OK"]
+        corrupt_zip = tmp_path / f"{label}.csv.zip"
+        corrupt.to_csv(
+            corrupt_zip, index=False, compression={"method": "zip", "archive_name": "wcm.csv"}
+        )
+        with pytest.raises(ValueError):
+            candidates.wcm_last_day(corrupt_zip)

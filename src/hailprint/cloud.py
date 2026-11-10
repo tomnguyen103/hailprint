@@ -246,10 +246,14 @@ def _matches_prefix(key: str, prefixes: tuple[str, ...]) -> bool:
     return any(prefix == "" or key.startswith(prefix) for prefix in prefixes)
 
 
+def _is_reparse(path: Path) -> bool:
+    return path.is_symlink() or path.is_junction()
+
+
 def _has_symlink_ancestor(path: Path, stop: Path, stop_resolved: Path) -> bool:
     cur = path
     while cur != stop:
-        if cur.is_symlink():
+        if _is_reparse(cur):
             return True
         if cur.resolve() == stop_resolved or cur.parent == cur:
             return False
@@ -269,7 +273,7 @@ def _collect_local_keys(
     keys: list[str] = []
 
     def _add_candidate(path: Path) -> None:
-        if path.is_symlink() or not path.is_file():
+        if _is_reparse(path) or not path.is_file():
             return
         if not path.resolve().is_relative_to(base_resolved):
             return
@@ -288,44 +292,37 @@ def _collect_local_keys(
     if "" in prefixes:
         for path in local_base.rglob("*"):
             _add_candidate(path)
-        return keys
+        return sorted(keys)
 
     for prefix in prefixes:
-        if prefix.startswith("/") or "\\" in prefix or ".." in Path(prefix).parts:
+        if prefix.startswith("/") or "\\" in prefix or ":" in prefix:
             continue
-        if prefix.endswith("/"):
-            clean = prefix.rstrip("/")
-            if not clean:
-                continue
-            sub_dir = local_base / clean
-            if (
-                not sub_dir.exists()
-                or not sub_dir.resolve().is_relative_to(base_resolved)
-                or _has_symlink_ancestor(sub_dir, local_base, base_resolved)
-                or not sub_dir.is_dir()
-            ):
-                continue
+        dir_part, sep, name_prefix = prefix.rpartition("/")
+        if sep and (not dir_part or any(seg in ("", ".", "..") for seg in dir_part.split("/"))):
+            continue
+        if name_prefix == "..":
+            continue
+        sub_dir = local_base.joinpath(*dir_part.split("/")) if dir_part else local_base
+        if (
+            not sub_dir.exists()
+            or not sub_dir.resolve().is_relative_to(base_resolved)
+            or _has_symlink_ancestor(sub_dir, local_base, base_resolved)
+            or not sub_dir.is_dir()
+        ):
+            continue
+        if not name_prefix:
             for path in sub_dir.rglob("*"):
                 _add_candidate(path)
         else:
-            target = local_base / prefix
-            parent = target.parent
-            if (
-                not parent.exists()
-                or not parent.resolve().is_relative_to(base_resolved)
-                or _has_symlink_ancestor(parent, local_base, base_resolved)
-                or not parent.is_dir()
-            ):
-                continue
-            for entry in sorted(parent.iterdir(), key=lambda p: p.name):
-                if not entry.name.startswith(target.name) or entry.is_symlink():
+            for entry in sorted(sub_dir.iterdir(), key=lambda p: p.name):
+                if not entry.name.startswith(name_prefix) or _is_reparse(entry):
                     continue
                 if entry.is_file():
                     _add_candidate(entry)
                 elif entry.is_dir() and entry.resolve().is_relative_to(base_resolved):
                     for path in entry.rglob("*"):
                         _add_candidate(path)
-    return keys
+    return sorted(keys)
 
 
 def _key_rank(key: str, *, public: bool) -> int:
@@ -400,9 +397,15 @@ def sync_up(
         if not tier:
             continue
         if rank == 0 and len(tier) > 1:
-            with ThreadPoolExecutor(max_workers=min(SYNC_THREADS, len(tier))) as pool:
+            pool = ThreadPoolExecutor(max_workers=min(SYNC_THREADS, len(tier)))
+            try:
                 futures = [pool.submit(_upload_key, key) for key in tier]
                 completed = [fut.result() for fut in futures]
+            except BaseException:
+                pool.shutdown(wait=True, cancel_futures=True)
+                raise
+            else:
+                pool.shutdown(wait=True)
         else:
             completed = [_upload_key(key) for key in tier]
         for key, digest in completed:

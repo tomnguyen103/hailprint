@@ -44,19 +44,19 @@ All 15 findings below hold a resolved status on `chore/audit-remediation`:
 
 | ID | Title | Category | Location | Resolution | Status |
 |---|---|---|---|---|---|
-| **BRK-01** | Pyright Scope Limitation on Test Files | Broken | `pyproject.toml:49-51`, `tests/` | Document explicit `src/` Pyright boundary in `pyproject.toml`; keep Pandas/GeoPandas fixtures unchecked. | Resolved (Option A) |
-| **BRK-02** | Wall-Clock Performance Budgets in Integration Tests | Broken | `tests/test_parcels.py:246-258` | Keep count assertions unconditional; move wall-clock check to `@pytest.mark.benchmark` behind `HAILPRINT_RUN_BENCHMARKS=1`. | Resolved (Option A) |
-| **INC-01** | Sequential S3 Uploads vs Parallel Downloads | Inconsistent | `src/hailprint/cloud.py:351-405` | Parallelize Rank 0 S3 uploads via `ThreadPoolExecutor`; complete Rank 0 before sequential Rank 1 and Rank 2 uploads. | Resolved (Option A) |
+| **BRK-01** | Pyright Scope Limitation on Test Files | Broken | `pyproject.toml:50-53`, `tests/` | Document explicit `src/` Pyright boundary in `pyproject.toml`; keep Pandas and GeoPandas test fixtures unchecked. | Resolved (Option B) |
+| **BRK-02** | Wall-Clock Performance Budgets in Integration Tests | Broken | `tests/test_parcels.py:259-289` | Keep count assertions unconditional; move wall-clock check to `@pytest.mark.benchmark` behind `HAILPRINT_RUN_BENCHMARKS=1`. | Resolved (Option A) |
+| **INC-01** | Sequential S3 Uploads vs Parallel Downloads | Inconsistent | `src/hailprint/cloud.py:355-415` | Parallelize Rank 0 S3 uploads via `ThreadPoolExecutor` with failure cancellation; complete Rank 0 before sequential Rank 1 and Rank 2 uploads. | Resolved (Option A) |
 | **INC-02** | Duplicate Receipt Index Parsing in Publication Run | Inconsistent | `src/hailprint/publish_run.py:251, 267` | Reuse validated `untouched_receipts` and concatenate with `built_entries` receipts in memory. | Resolved (Option A) |
 | **INC-03** | Missing Root `package-lock.json` for Trigger Automation | Inconsistent | `package.json:1-18`, `package-lock.json` | Generate and commit root `package-lock.json` via `npm install --package-lock-only`. | Resolved (Option A) |
-| **INF-01** | Redundant Column Loading from FileGDB in Parcel Join | Inefficient | `src/hailprint/parcels.py:63, 109` | Add `columns` parameter to `load_parcels` validated against `ALLOWED`; load `("HCAD_NUM_1", "zip")` in `count_parcels`. | Resolved (Option A) |
-| **INF-02** | Unbounded Local File Traversal in Cloud Sync | Inefficient | `src/hailprint/cloud.py:260-328` | Scope `_collect_local_keys` to target prefix directories and reject symlink ancestors. | Resolved (Option A) |
-| **INF-03** | Double Disk I/O on GeoParquet Metadata Rewriting | Inefficient | `src/hailprint/files.py:230-238` | Serialize initial `GeoDataFrame` parquet to in-memory `io.BytesIO` before single atomic `pq.write_table`. | Resolved (Option A) |
+| **INF-01** | Redundant Column Loading from FileGDB in Parcel Join | Inefficient | `src/hailprint/parcels.py:49-81, 111` | Add non-empty sequence `columns` parameter to `load_parcels` validated against `ALLOWED`; pass `("HCAD_NUM_1", "zip")` in `count_parcels`. | Resolved (Option A) |
+| **INF-02** | Unbounded Local File Traversal in Cloud Sync | Inefficient | `src/hailprint/cloud.py:249-325` | Scope `_collect_local_keys` to target prefixes in sorted order and reject symlink, junction, and drive-colon paths. | Resolved (Option A) |
+| **INF-03** | Double Disk I/O on GeoParquet Metadata Rewriting | Inefficient | `src/hailprint/files.py:231-239` | Serialize initial `GeoDataFrame` parquet to in-memory `io.BytesIO` before single atomic `pq.write_table`. | Resolved (Option A) |
 | **INF-04** | Uncached Static GeoJSON Reads for County Boundaries | Inefficient | `src/hailprint/county.py:30-79` | Cache `_metro_frame`, `_outline_frame`, `bbox`, and `metro_bbox`; return defensive deep copies on `metro()` and `outline()`. | Resolved (Option A) |
-| **INF-05** | Unindexed Datetime Parsing on Large WCM CSV Chunks | Inefficient | `src/hailprint/candidates.py:59-75` | Filter ISO `YYYY-MM-DD` chunks to `max_date` rows before `pd.to_datetime`; fall back to full chunk on non-ISO dates. | Resolved (Option B) |
-| **INF-06** | MapLibre Bundle Chunk Size Exceeding 500 kB | Inefficient | `site/vite.config.ts:1-16` | Set `build.chunkSizeWarningLimit: 1200` for the lazy MapLibre GL chunk. | Resolved (Option A) |
+| **INF-05** | Unindexed Datetime Parsing on Large WCM CSV Chunks | Inefficient | `src/hailprint/candidates.py:55-80` | Validate ISO `YYYY-MM-DD` dates and `HH:MM:SS` times, then restrict `pd.to_datetime` to `max_date` rows; fall back to full chunk otherwise. | Resolved (Option A) |
+| **INF-06** | MapLibre Bundle Chunk Size Exceeding 500 kB | Inefficient | `site/vite.config.ts:1-13` | Set `build.chunkSizeWarningLimit: 1200` for the lazy MapLibre GL chunk. | Resolved (Option A) |
 | **INF-07** | Unused Internationalization Font Subsets Bundled in Assets | Inefficient | `site/src/main.tsx:1-5` | Import `latin-{400,500,600}.css` for IBM Plex Sans and `latin-500.css` for IBM Plex Mono (52 -> 14 `.woff*` assets). | Resolved (Option A) |
-| **OBS-01** | Test-Only Public Functions in Production Modules | Obsolete | `src/hailprint/candidates.py`, `county.py`, `power.py` | Retain public helpers and document public/parity-oracle contracts in ASD-STE100 docstrings. | Resolved (Option A) |
+| **OBS-01** | Test-Only Public Functions in Production Modules | Obsolete | `src/hailprint/candidates.py`, `county.py`, `power.py` | Retain public helpers and document public and parity-oracle contracts in ASD-STE100 docstrings. | Resolved (Option A) |
 | **OBS-02** | Starter Diagnostics Task Retention | Obsolete | `trigger/hello.ts:1-41` | Retain `hello` task and document its native extension and S3 environment health-check contract in JSDoc. | Resolved (Option A) |
 | **OBS-03** | Local Scratch Directory and Outdated Feature Specs | Obsolete | `.scratch/v020-workbench-upgrade/` | Remove stale local untracked `.scratch/v020-workbench-upgrade/` directory. | Resolved (Option A) |
 
@@ -492,22 +492,21 @@ All 15 findings below hold a resolved status on `chore/audit-remediation`:
 
 ---
 
-## Action Plan & Roadmap Recommendation
+## Remediation Execution Summary
 
-For future milestone planning, we recommend sequencing the findings into three prioritized tracks:
+All four execution phases completed on `chore/audit-remediation`:
 
-### Track 1: Immediate High-Impact Improvements (Milestone 3 Candidates)
-1. **INF-01 (Selective Parcel Loading)**: High return on effort. Reduces FileGDB attribute reading and join latency by 20%.
-2. **INC-03 (Root `package-lock.json`)**: High stability value. Run `npm install --package-lock-only` to lock root Trigger and TypeScript dependencies.
-3. **INF-03 (GeoParquet In-Memory Buffer)**: Eliminates disk round-trip overhead on all generated GeoParquet artifacts.
-4. **INF-04 (Static GeoJSON Caching)**: Eliminates redundant disk reads for county geometries.
+### Track 1: Backend I/O, Memory & CPU (`INF-01`, `INF-03`, `INF-04`, `INF-05`, `INC-03`)
+1. **INF-01**: `load_parcels` accepts allow-listed `columns`, and `count_parcels` reads only `("HCAD_NUM_1", "zip")`.
+2. **INC-03**: Root `package-lock.json` locks Trigger.dev and TypeScript dependencies (`npm ci --dry-run` passes).
+3. **INF-03**: `files.write_atomic` serializes `GeoDataFrame` metadata through `io.BytesIO` before one atomic write.
+4. **INF-04 & INF-05**: `county` caches parsed GeoJSON outlines/bounds, and `candidates` parses timestamps on `max_date` rows only after full ISO validation.
 
-### Track 2: Tooling & Build Noise Elimination
-1. **INF-06 (Vite Chunk Size Config)**: Add `chunkSizeWarningLimit: 1200` to silence build warnings.
-2. **INF-07 (Font Subsets)**: Switch to Latin font imports to remove unused `.woff2` files from assets.
-3. **BRK-02 (Benchmark Separation)**: Decouple parcel join timing from functional correctness tests to guarantee zero CI flakiness.
+### Track 2: Tooling, Assets & Benchmarks (`INF-06`, `INF-07`, `BRK-01`, `BRK-02`, `OBS-03`)
+1. **INF-06 & INF-07**: `site/vite.config.ts` sets `chunkSizeWarningLimit: 1200`, and `site/src/main.tsx` imports Latin font subsets (`52 -> 14` `.woff*` assets).
+2. **BRK-01, BRK-02 & OBS-03**: `pyproject.toml` documents `include = ["src"]` (`Option B`), isolates wall-clock parcel timing behind `HAILPRINT_RUN_BENCHMARKS=1`, and removes stale `.scratch/v020-workbench-upgrade/`.
 
-### Track 3: Architectural Reviews
-1. **INC-01 (Rank-Aware Parallel Uploads)**: Review cloud publishing performance requirements before introducing multi-threaded uploads.
-2. **INC-02 (Receipt Index Cache)**: Cache untouched receipts during publication run to speed up re-indexing.
-3. **OBS-01 & OBS-02 (Public Utilities & Diagnostic Task)**: Formally endorse as public utilities and deployment health check tools.
+### Track 3: Cloud Sync, Publication & Public Contracts (`INC-01`, `INC-02`, `INF-02`, `OBS-01`, `OBS-02`)
+1. **INC-01 & INF-02**: `cloud.sync_up` uploads Rank 0 files in parallel with failure cancellation before Rank 1/2 files, and `_collect_local_keys` scans target prefixes in sorted order.
+2. **INC-02**: `publish_run.run` reuses validated untouched receipts without a second disk pass.
+3. **OBS-01 & OBS-02**: ASD-STE100 docstrings and JSDoc document the retained public helpers, parity oracle, and `hello` diagnostic task.
