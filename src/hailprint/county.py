@@ -75,5 +75,5 @@ def bbox() -> tuple[float, float, float, float]:
 
 
 def metro_bbox() -> tuple[float, float, float, float]:
-    """Return the bounds of the 8 metro outlines padded by PAD_DEG."""
+    """Return the bounds of the 8 metro outlines padded by PAD_DEG; public metro extent helper."""
     return _metro_bbox_for(_METRO)

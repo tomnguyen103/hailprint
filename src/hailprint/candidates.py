@@ -125,7 +125,7 @@ def fetch_database(path: Path | None = None) -> Path:
 
 
 def convective_day(day: date, clock: time) -> date:
-    """SPC convective day of a WCM row; the shift is CST_TO_CONVECTIVE."""
+    """Return the SPC convective day of a WCM row after CST_TO_CONVECTIVE; public helper."""
     return (datetime.combine(day, clock) - CST_TO_CONVECTIVE).date()
 
 
@@ -142,7 +142,7 @@ def _harris_days_from_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def harris_days(path: Path) -> pd.DataFrame:
-    """Harris County, TX rows grouped by convective day: report_count and max_size_in."""
+    """Return Harris County WCM rows grouped by convective day; public WCM reader."""
     return _harris_days_from_df(_read_wcm(path, USECOLS))
 
 
@@ -155,7 +155,7 @@ def _wcm_last_day_from_df(df: pd.DataFrame) -> date:
 
 
 def wcm_last_day(path: Path) -> date:
-    """Last convective day of any row in the WCM database."""
+    """Return the last convective day in a WCM archive; public boundary helper."""
     return _wcm_last_day_from_df(_read_wcm(path, ["date", "time"]))
 
 

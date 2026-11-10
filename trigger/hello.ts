@@ -10,6 +10,9 @@ const REQUIRED_ENV = [
   "HAILPRINT_PUBLIC_BUCKET",
 ] as const;
 
+/**
+ * Verify Python native extensions (boto3, eccodes, pyogrio, rasterio) and Supabase S3 environment variables on demand.
+ */
 export const helloTask = task({
   id: "hello",
   machine: "small-1x",
