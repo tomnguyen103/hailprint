@@ -76,7 +76,7 @@ function filePath(file: string, value: unknown, path: string, pattern: RegExp): 
 }
 
 /** The receipt every published file carries; the receipt list renders each key. */
-export function guardReceipt(file: string, value: unknown, path = "receipt"): void {
+function guardReceipt(file: string, value: unknown, path = "receipt"): void {
   const receipt = rec(file, value, path);
   date(file, receipt["storm_date"], `${path}.storm_date`);
   list(file, receipt["sources"], `${path}.sources`).forEach((item, i) => {

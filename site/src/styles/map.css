@@ -401,8 +401,7 @@
   border-top-color: var(--rule);
 }
 
-.map-frame .maplibregl-ctrl-group button,
-.map-canvas .maplibregl-ctrl-group button {
+.map-frame .maplibregl-ctrl-group button {
   width: 40px;
   height: 40px;
 }

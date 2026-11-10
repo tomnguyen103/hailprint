@@ -8,6 +8,7 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -52,6 +53,32 @@ def _check_wcm_zip(source: Path | io.BytesIO, label: Path | str | None = None) -
 
 
 WCM_CHUNK_ROWS = 25_000
+_ISO_DATE_RE = r"^\d{4}-\d{2}-\d{2}$"
+_ISO_TIME_RE = r"^(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d$"
+
+
+def _latest_row_index(chunk: pd.DataFrame) -> Any | None:
+    """Return the index label of the latest valid dated row in `chunk`, or None."""
+    valid = chunk["date"].notna() & chunk["time"].notna()
+    if not bool(valid.any()):
+        return None
+    dates = chunk.loc[valid, "date"].astype("string")
+    times = chunk.loc[valid, "time"].astype("string")
+    if (
+        bool(dates.str.fullmatch(_ISO_DATE_RE).all())
+        and bool(times.str.fullmatch(_ISO_TIME_RE).all())
+        and bool(pd.to_datetime(dates, format="%Y-%m-%d", errors="coerce").notna().all())
+    ):
+        max_date = dates.max()
+        top = chunk.loc[dates.index[dates == max_date]]
+        stamps = pd.to_datetime(
+            top["date"] + " " + top["time"], format="%Y-%m-%d %H:%M:%S"
+        ) - pd.Timedelta(CST_TO_CONVECTIVE)
+        return stamps.idxmax()
+    stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"], format="mixed") - pd.Timedelta(
+        CST_TO_CONVECTIVE
+    )
+    return stamps.idxmax() if bool(stamps.notna().any()) else None
 
 
 def _filter_wcm_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
@@ -62,18 +89,14 @@ def _filter_wcm_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
         harris = (chunk[["f1", "f2", "f3", "f4"]] == HARRIS_FIPS).any(axis=1)
         keep = (chunk["st"] == "TX") & harris
         if {"date", "time"}.issubset(chunk.columns):
-            stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"]) - pd.Timedelta(
-                CST_TO_CONVECTIVE
-            )
-            if stamps.notna().any():
-                keep.loc[stamps.idxmax()] = True
+            latest = _latest_row_index(chunk)
+            if latest is not None:
+                keep.loc[latest] = True
         return chunk.loc[keep]
     if {"date", "time"}.issubset(chunk.columns):
-        stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"]) - pd.Timedelta(
-            CST_TO_CONVECTIVE
-        )
-        if stamps.notna().any():
-            return chunk.loc[[stamps.idxmax()]]
+        latest = _latest_row_index(chunk)
+        if latest is not None:
+            return chunk.loc[[latest]]
         return chunk.iloc[0:0]
     return chunk
 
@@ -81,8 +104,7 @@ def _filter_wcm_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
 def _read_wcm(path: Path, usecols: list[str] = USECOLS) -> pd.DataFrame:
     _check_wcm_zip(path)
     chunks = [
-        _filter_wcm_chunk(c)
-        for c in pd.read_csv(path, usecols=usecols, chunksize=WCM_CHUNK_ROWS)
+        _filter_wcm_chunk(c) for c in pd.read_csv(path, usecols=usecols, chunksize=WCM_CHUNK_ROWS)
     ]
     if not chunks:
         return pd.DataFrame(columns=usecols)
@@ -110,7 +132,7 @@ def fetch_database(path: Path | None = None) -> Path:
 
 
 def convective_day(day: date, clock: time) -> date:
-    """SPC convective day of a WCM row; the shift is CST_TO_CONVECTIVE."""
+    """Return the SPC convective day of a WCM row after CST_TO_CONVECTIVE; public helper."""
     return (datetime.combine(day, clock) - CST_TO_CONVECTIVE).date()
 
 
@@ -127,7 +149,7 @@ def _harris_days_from_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def harris_days(path: Path) -> pd.DataFrame:
-    """Harris County, TX rows grouped by convective day: report_count and max_size_in."""
+    """Return Harris County WCM rows grouped by convective day; public WCM reader."""
     return _harris_days_from_df(_read_wcm(path, USECOLS))
 
 
@@ -140,7 +162,7 @@ def _wcm_last_day_from_df(df: pd.DataFrame) -> date:
 
 
 def wcm_last_day(path: Path) -> date:
-    """Last convective day of any row in the WCM database."""
+    """Return the last convective day in a WCM archive; public boundary helper."""
     return _wcm_last_day_from_df(_read_wcm(path, ["date", "time"]))
 
 

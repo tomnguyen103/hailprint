@@ -3,8 +3,8 @@
 export const WIDTH = 640;
 export const HEIGHT = 320;
 export const MARGIN = { left: 48, right: 16, top: 16, bottom: 40 } as const;
-export const X_MIN_IN = 0.75;
-export const X_MAX_IN = 2.5;
+const X_MIN_IN = 0.75;
+const X_MAX_IN = 2.5;
 export const LITERATURE_HSS = 0.38;
 
 /** Threshold in inches to the plot x: 0.75 in at the left plot edge, 2.50 in at the right. */

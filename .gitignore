@@ -33,6 +33,7 @@ dist/
 .DS_Store
 .scratch/
 
-# code intelligence
+# code intelligence & agent scratch
+.agents/
 .codegraph/
 graphify-out/

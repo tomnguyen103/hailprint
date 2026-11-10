@@ -564,3 +564,62 @@ def test_wcm_zip_rejects_oversized_uncompressed_entry(tmp_path, monkeypatch):
     monkeypatch.setattr(candidates, "MAX_WCM_UNCOMPRESSED_BYTES", 10)
     with pytest.raises(RuntimeError, match="zip uncompressed size exceeds 10 bytes"):
         candidates.harris_days(path)
+
+
+def test_wcm_chunk_selection_handles_unsorted_dates_midnight_rollovers_nulls_and_non_iso(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(candidates, "WCM_CHUNK_ROWS", 3)
+    rows = pd.DataFrame(
+        {
+            "om": [1, 2, 3, 4, 5, 6],
+            "date": [
+                "2025-06-10",
+                "2024-05-28",
+                "2025-06-15",
+                "2025-06-10",
+                "2025-06-09",
+                "2024-05-29",
+            ],
+            "time": ["05:59:00", "14:00:00", None, "06:00:00", "23:50:00", "05:59:00"],
+            "st": ["OK", "TX", "OK", "OK", "OK", "TX"],
+            "mag": [1.0, 1.5, 1.0, 2.0, 1.25, 2.25],
+            "f1": [201, 201, 201, 1, 1, 201],
+            "f2": [0, 0, 0, 0, 0, 0],
+            "f3": [0, 0, 0, 0, 0, 0],
+            "f4": [0, 0, 0, 0, 0, 0],
+            "tz": [3, 3, 3, 3, 3, 3],
+        }
+    )
+    iso_zip = tmp_path / "unsorted.csv.zip"
+    rows.to_csv(iso_zip, index=False, compression={"method": "zip", "archive_name": "wcm.csv"})
+
+    assert candidates.wcm_last_day(iso_zip) == date(2025, 6, 10)
+    harris = candidates.harris_days(iso_zip)
+    assert harris["storm_date"].tolist() == [date(2024, 5, 28)]
+    assert harris["report_count"].tolist() == [2]
+    assert harris["max_size_in"].tolist() == [2.25]
+
+    slash_rows = rows.iloc[:2].copy()
+    slash_rows["date"] = ["06/10/2025", "05/28/2024"]
+    slash_zip = tmp_path / "slash.csv.zip"
+    slash_rows.to_csv(
+        slash_zip, index=False, compression={"method": "zip", "archive_name": "wcm.csv"}
+    )
+    assert candidates.wcm_last_day(slash_zip) == date(2025, 6, 9)
+
+    for label, bad_date, bad_time in (
+        ("bad_time", "2024-05-20", "BAD_TIME"),
+        ("bad_month", "2024-99-99", "12:00:00"),
+        ("bad_feb30", "2024-02-30", "12:00:00"),
+    ):
+        corrupt = rows.iloc[:2].copy()
+        corrupt["date"] = [bad_date, "2025-06-10"]
+        corrupt["time"] = [bad_time, "18:00:00"]
+        corrupt["st"] = ["OK", "OK"]
+        corrupt_zip = tmp_path / f"{label}.csv.zip"
+        corrupt.to_csv(
+            corrupt_zip, index=False, compression={"method": "zip", "archive_name": "wcm.csv"}
+        )
+        with pytest.raises(ValueError):
+            candidates.wcm_last_day(corrupt_zip)

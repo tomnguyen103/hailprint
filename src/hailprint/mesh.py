@@ -146,7 +146,10 @@ def decode(path: Path, max_bytes: int = MAX_DECODE_BYTES) -> xr.DataArray:
         # a bitmap hides cells; values would hold fill numbers instead of sizes
         if eccodes.codes_get(handle, "bitmapPresent"):
             raise ValueError(f"{path.name}: bitmapPresent is 1, expected 0")
-        values = eccodes.codes_get_values(handle).reshape(nj, ni)
+        try:
+            values = eccodes.codes_get_values(handle).reshape(nj, ni)
+        except ValueError as exc:
+            raise RuntimeError(f"bad GRIB2 message in {path}: {exc}") from exc
     except codes_err as exc:
         raise RuntimeError(f"bad GRIB2 message in {path}: {exc}") from exc
     finally:

@@ -2049,3 +2049,26 @@ def test_an_existing_file_that_is_not_json_is_rewritten(two_days):
     fixed_pairs = json.loads(pairs_path.read_text(encoding="utf-8"))
     publish.validate(fixed_pairs, "pairs")
     assert fixed_pairs["receipt"]["run_time"] == "2024-06-02T13:30:00Z"
+
+
+def test_publish_run_reuses_validated_untouched_receipts_without_second_disk_read(
+    two_days, monkeypatch
+):
+    assert cli.main(["publish", str(EARLIER)]) == 0
+    earlier_pairs = two_days.storm_dir(EARLIER) / "pairs.json"
+    saved_earlier = earlier_pairs.read_text(encoding="utf-8")
+    orig_write = files_module.write_text_atomic
+
+    def corrupt_untouched_after_precheck(body: str, path):
+        result = orig_write(body, path)
+        if path.name == "swath.geojson" and path.parent == two_days.storm_dir(LATER):
+            earlier_pairs.write_text("{mutated-mid-run", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(files_module, "write_text_atomic", corrupt_untouched_after_precheck)
+
+    _publish_later(two_days, NEXT_RUN)
+
+    earlier_pairs.write_text(saved_earlier, encoding="utf-8")
+    expected = publish.sources_of(publish.index_receipts(two_days.index()["storms"], two_days.site))
+    assert two_days.pipeline()["sources"] == expected

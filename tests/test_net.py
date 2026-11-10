@@ -326,4 +326,3 @@ def test_net_does_not_install_global_urllib_opener(monkeypatch):
     monkeypatch.setattr(urllib.request, "install_opener", lambda opener: calls.append(opener))
     importlib.reload(net)
     assert calls == []
-

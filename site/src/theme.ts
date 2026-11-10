@@ -3,7 +3,7 @@ export type Selection = "light" | "dark" | "system";
 export type Resolved = "light" | "dark";
 
 export const KEY = "theme";
-export const SELECTIONS: readonly Selection[] = ["light", "dark", "system"];
+const SELECTIONS: readonly Selection[] = ["light", "dark", "system"];
 
 interface Getter {
   getItem(key: string): string | null;
@@ -12,8 +12,8 @@ interface Setter {
   setItem(key: string, value: string): void;
 }
 
-export function isSelection(value: unknown): value is Selection {
-  return value === "light" || value === "dark" || value === "system";
+function isSelection(value: unknown): value is Selection {
+  return typeof value === "string" && (SELECTIONS as readonly string[]).includes(value);
 }
 
 /** The theme to paint: an explicit stored selection wins; anything else follows the system. */

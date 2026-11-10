@@ -9,6 +9,7 @@ import { PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { useAllFiles } from "../state/pairs-all";
 import { Compare } from "./compare";
+import { newestFirst } from "./compare-data";
 import { PointCheck } from "./point";
 import { Run } from "./run";
 import { Tune } from "./tune";
@@ -22,10 +23,7 @@ export const TOOL_LABELS: Record<TryTool, string> = {
 
 export const ALL_SCOPE = "all";
 
-/** Storm dates newest first. */
-export function newestFirst(storms: readonly Storm[]): Storm[] {
-  return [...storms].sort((a, b) => b.storm_date.localeCompare(a.storm_date));
-}
+export { newestFirst };
 
 /** A labelled native select: "All storm dates" (when `withAll`) then every storm date newest first. */
 export function ScopeSelect({

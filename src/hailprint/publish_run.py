@@ -248,7 +248,7 @@ def run(
         if not with_internet
         else frozenset()
     )
-    publish.index_receipts(
+    untouched_receipts = publish.index_receipts(
         publish.merge_entries(untouched, [], dirs.site, absent=untouched_absent), dirs.site
     )
     for storm_date, texts, entry in built:
@@ -263,7 +263,8 @@ def run(
         print(f"{storm_date}: published {len(texts)} files")
     stale = stale_files(written, with_internet, dirs.site)
     merged = publish.merge_entries(old, entries, dirs.site, absent=frozenset(stale))
-    receipts = publish.index_receipts(merged, dirs.site)
+    built_entries = [e for e in merged if e["storm_date"] in built_dates]
+    receipts = untouched_receipts + publish.index_receipts(built_entries, dirs.site)
     doc = publish.storms_doc(merged, run_time)
     this_run = [entry["storm_date"] for entry in entries]
     pipeline = pipeline_doc(old_runs, this_run, receipts, summary, file_count, run_time)

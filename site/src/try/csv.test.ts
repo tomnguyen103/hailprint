@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PooledRow } from "../pool";
+import { COMPARE_PRESETS, compareDelta, defaultComparePair } from "./compare-data";
 import { csvOf } from "./csv";
 
 const HEADER =
@@ -163,8 +164,7 @@ describe("pointCsvOf", () => {
 });
 
 describe("Compare helpers", () => {
-  it("defaults to 2024-05-28 vs 2023-06-23 when present and computes A-vs-B deltas", async () => {
-    const { COMPARE_PRESETS, defaultComparePair, compareDelta } = await import("./compare");
+  it("defaults to 2024-05-28 vs 2023-06-23 when present and computes A-vs-B deltas", () => {
     expect(COMPARE_PRESETS.map((p) => [p.dateA, p.dateB])).toEqual([
       ["2024-05-28", "2023-06-23"],
       ["2024-05-28", "2024-03-15"],

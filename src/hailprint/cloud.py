@@ -162,11 +162,7 @@ def _list_objects(
                 if isinstance(size, int) and size > max_bytes:
                     raise RuntimeError(f"S3 object {key} exceeds {max_bytes} bytes")
                 raw_etag = obj.get("ETag")
-                etag = (
-                    raw_etag.strip('"').lower()
-                    if isinstance(raw_etag, str)
-                    else None
-                )
+                etag = raw_etag.strip('"').lower() if isinstance(raw_etag, str) else None
                 items.append((key, etag if etag and _SINGLE_PART_ETAG_RE.fullmatch(etag) else None))
         if not resp.get("IsTruncated"):
             break
@@ -174,10 +170,6 @@ def _list_objects(
         if not token:
             break
     return items
-
-
-def _list_keys(client: Any, bucket: str, prefix: str, max_bytes: int = MAX_BYTES) -> list[str]:
-    return [key for key, _ in _list_objects(client, bucket, prefix, max_bytes=max_bytes)]
 
 
 def _fetch_s3_object(client: Any, bucket: str, key: str, max_bytes: int) -> bytes:
@@ -236,6 +228,7 @@ def sync_down(
         state.digests[(bucket, key)] = hashlib.sha256(body).hexdigest()
         state.remote_keys.add((bucket, key))
     elif len(to_fetch) > 1:
+
         def _download_and_write(item: tuple[str, Path]) -> tuple[str, str]:
             key, dest = item
             body = _fetch_s3_object(client, bucket, key, max_bytes)
@@ -253,43 +246,97 @@ def _matches_prefix(key: str, prefixes: tuple[str, ...]) -> bool:
     return any(prefix == "" or key.startswith(prefix) for prefix in prefixes)
 
 
+def _is_reparse(path: Path) -> bool:
+    return path.is_symlink() or path.is_junction()
+
+
+def _has_symlink_ancestor(path: Path, stop: Path, stop_resolved: Path) -> bool:
+    cur = path
+    while cur != stop:
+        if _is_reparse(cur):
+            return True
+        if cur.resolve() == stop_resolved or cur.parent == cur:
+            return False
+        cur = cur.parent
+    return False
+
+
 def _collect_local_keys(
     local_base: Path,
     prefixes: tuple[str, ...],
     exclude_prefixes: tuple[str, ...],
 ) -> list[str]:
-    if not local_base.exists():
+    if not local_base.exists() or not prefixes:
         return []
     base_resolved = local_base.resolve()
+    seen: set[str] = set()
     keys: list[str] = []
-    for path in local_base.rglob("*"):
-        if path.is_symlink() or not path.is_file():
-            continue
+
+    def _add_candidate(path: Path) -> None:
+        if _is_reparse(path) or not path.is_file():
+            return
         if not path.resolve().is_relative_to(base_resolved):
-            continue
+            return
+        if _has_symlink_ancestor(path, local_base, base_resolved):
+            return
         if path.suffix in (".lock", ".tmp"):
-            continue
+            return
         rel = path.relative_to(local_base).as_posix()
-        if not _matches_prefix(rel, prefixes):
-            continue
+        if rel in seen or not _matches_prefix(rel, prefixes):
+            return
         if any(rel.startswith(ex) for ex in exclude_prefixes):
-            continue
+            return
+        seen.add(rel)
         keys.append(rel)
-    return keys
+
+    if "" in prefixes:
+        for path in local_base.rglob("*"):
+            _add_candidate(path)
+        return sorted(keys)
+
+    for prefix in prefixes:
+        if prefix.startswith("/") or "\\" in prefix or ":" in prefix:
+            continue
+        dir_part, sep, name_prefix = prefix.rpartition("/")
+        if sep and (not dir_part or any(seg in ("", ".", "..") for seg in dir_part.split("/"))):
+            continue
+        if name_prefix == "..":
+            continue
+        sub_dir = local_base.joinpath(*dir_part.split("/")) if dir_part else local_base
+        if (
+            not sub_dir.exists()
+            or not sub_dir.resolve().is_relative_to(base_resolved)
+            or _has_symlink_ancestor(sub_dir, local_base, base_resolved)
+            or not sub_dir.is_dir()
+        ):
+            continue
+        if not name_prefix:
+            for path in sub_dir.rglob("*"):
+                _add_candidate(path)
+        else:
+            for entry in sorted(sub_dir.iterdir(), key=lambda p: p.name):
+                if not entry.name.startswith(name_prefix) or _is_reparse(entry):
+                    continue
+                if entry.is_file():
+                    _add_candidate(entry)
+                elif entry.is_dir() and entry.resolve().is_relative_to(base_resolved):
+                    for path in entry.rglob("*"):
+                        _add_candidate(path)
+    return sorted(keys)
+
+
+def _key_rank(key: str, *, public: bool) -> int:
+    if not public or key.startswith("storms/"):
+        return 0
+    return 1 if key.startswith(LIVE_PREFIX) and key != LIVE_INDEX else 2
 
 
 def _order_keys(keys: list[str], *, public: bool) -> list[str]:
     if not public:
         return sorted(keys)
-
     # Per-date files under storms/ and the live layers upload before the index files
     # (storms.json, pipeline.json, live/now.json) that name them
-    def rank(key: str) -> int:
-        if key.startswith("storms/"):
-            return 0
-        return 1 if key.startswith(LIVE_PREFIX) and key != LIVE_INDEX else 2
-
-    return sorted(keys, key=lambda k: (rank(k), k))
+    return sorted(keys, key=lambda k: (_key_rank(k, public=True), k))
 
 
 def _public_headers(key: str) -> dict[str, str]:
@@ -298,6 +345,11 @@ def _public_headers(key: str) -> dict[str, str]:
         "CacheControl": "max-age=60",
         "ContentType": content_type,
     }
+
+
+def _sha256_file(path: Path) -> str:
+    with path.open("rb") as handle:
+        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def sync_up(
@@ -324,17 +376,43 @@ def sync_up(
         if (local_base / key).stat().st_size > MAX_BYTES:
             raise RuntimeError(f"local file {key} exceeds {MAX_BYTES} bytes")
 
+    # Stream SHA-256 first so memory stays O(1) on small-1x workers before worker uploads.
+    tiers: dict[int, list[str]] = {0: [], 1: [], 2: []}
     for key in local_keys:
-        path = local_base / key
-        body = path.read_bytes()
-        digest = hashlib.sha256(body).hexdigest()
+        digest = _sha256_file(local_base / key)
         if state.digests.get((bucket, key)) == digest:
             continue
+        tiers[_key_rank(key, public=public)].append(key)
+
+    def _upload_key(key: str) -> tuple[str, str]:
+        body = (local_base / key).read_bytes()
+        if len(body) > MAX_BYTES:
+            raise RuntimeError(f"local file {key} exceeds {MAX_BYTES} bytes")
+        digest = hashlib.sha256(body).hexdigest()
         extra = _public_headers(key) if public else {}
         client.put_object(Bucket=bucket, Key=key, Body=body, **extra)
-        state.digests[(bucket, key)] = digest
-        state.remote_keys.add((bucket, key))
-        uploaded.append(key)
+        return key, digest
+
+    for rank in (0, 1, 2):
+        tier = tiers[rank]
+        if not tier:
+            continue
+        if rank == 0 and len(tier) > 1:
+            pool = ThreadPoolExecutor(max_workers=min(SYNC_THREADS, len(tier)))
+            try:
+                futures = [pool.submit(_upload_key, key) for key in tier]
+                completed = [fut.result() for fut in futures]
+            except BaseException:
+                pool.shutdown(wait=True, cancel_futures=True)
+                raise
+            else:
+                pool.shutdown(wait=True)
+        else:
+            completed = [_upload_key(key) for key in tier]
+        for key, digest in completed:
+            state.digests[(bucket, key)] = digest
+            state.remote_keys.add((bucket, key))
+            uploaded.append(key)
 
     if mirror:
         stale_keys = sorted(

@@ -3,7 +3,7 @@ import { AREA_ICONS, CodeIcon } from "./icons";
 import { Link } from "./link";
 import { ThemeToggle } from "./theme-toggle";
 
-export const SOURCE_URL = "https://github.com/tomnguyen103/hailprint";
+const SOURCE_URL = "https://github.com/tomnguyen103/hailprint";
 
 function areaHref(area: Area): string {
   return area === "storms" ? "/storms" : href({ area });

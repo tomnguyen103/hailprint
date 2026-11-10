@@ -1,7 +1,7 @@
 import type { PooledRow } from "../pool";
 import type { StormPinRow } from "./point-analysis";
 
-export const COLUMNS = [
+const COLUMNS = [
   "threshold_mm",
   "threshold_in",
   "label",
@@ -18,7 +18,7 @@ export const COLUMNS = [
   "unverifiable_km2",
 ] as const satisfies readonly (keyof PooledRow)[];
 
-export const CSV_HEADER = COLUMNS.join(",");
+const CSV_HEADER = COLUMNS.join(",");
 
 function cell(value: string | number | null): string {
   if (value === null) return "";
@@ -33,7 +33,7 @@ export function csvOf(rows: readonly PooledRow[]): string {
   return `${lines.join("\n")}\n`;
 }
 
-export const ZIP_CSV_HEADER = "storm_date,threshold_mm,zip,parcel_count,share_of_class";
+const ZIP_CSV_HEADER = "storm_date,threshold_mm,zip,parcel_count,share_of_class";
 
 /** Format a storm class ZIP table as CSV. */
 export function zipCsvOf(
@@ -56,7 +56,7 @@ export function zipCsvOf(
   return `${lines.join("\n")}\n`;
 }
 
-export const POINT_CSV_HEADER =
+const POINT_CSV_HEADER =
   "storm_date,lat,lon,radius_km,crop_status,covering_mm,within_radius_mm,nearest_swath_km,reports_within_radius,direct_warnings,power_peak_share,power_peak_out,internet_max_drop";
 
 /** Format the point history ledger at a pinned coordinate across published storm dates as CSV. */

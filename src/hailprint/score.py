@@ -1,5 +1,6 @@
 """Verification scorer: one 2x2 table per size class from SPC reports and the swath."""
 
+import functools
 import math
 from datetime import date
 from typing import NamedTuple, cast
@@ -138,10 +139,16 @@ def distances(swaths: gpd.GeoDataFrame, reports: gpd.GeoDataFrame) -> pd.DataFra
     )
 
 
+@functools.cache
+def _crop_m(bounds: tuple[float, float, float, float]) -> shapely.Polygon:
+    crop = shapely.segmentize(shapely.box(*bounds), SEGMENT_DEG)
+    series = gpd.GeoSeries([crop], crs="EPSG:4326").to_crs(METRIC_CRS)
+    return cast(shapely.Polygon, series.iloc[0])
+
+
 def edge_m(reports: gpd.GeoDataFrame) -> pd.Series:
     """Signed metres from each report to the swath crop edge: positive inside, negative outside."""
-    crop = shapely.segmentize(shapely.box(*county.bbox()), SEGMENT_DEG)
-    crop_m = gpd.GeoSeries([crop], crs="EPSG:4326").to_crs(METRIC_CRS).iloc[0]
+    crop_m = _crop_m(county.bbox())
     points = reports.geometry.to_crs(METRIC_CRS)
     metres = points.distance(crop_m.exterior)
     return metres.where(points.within(crop_m), -metres)

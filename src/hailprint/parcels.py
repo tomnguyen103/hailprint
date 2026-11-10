@@ -1,6 +1,7 @@
 """HCAD parcel loader and the per-class parcel count. Owner fields never load."""
 
 import gc
+from collections.abc import Sequence
 from pathlib import Path
 from typing import NamedTuple, cast
 
@@ -46,12 +47,24 @@ class ParcelCounts(NamedTuple):
 
 
 def load_parcels(
-    path: Path, layer: str = "Parcels", mask: BaseGeometry | None = None
+    path: Path,
+    layer: str = "Parcels",
+    mask: BaseGeometry | None = None,
+    columns: Sequence[str] | None = None,
 ) -> gpd.GeoDataFrame:
-    """Read the allow-listed parcel columns, renamed to snake_case, in the layer CRS (EPSG:2278).
+    """Read allow-listed parcel columns, renamed to snake_case, in the layer CRS (EPSG:2278).
 
-    A mask in EPSG:4326 is reprojected to the layer CRS so the driver filters at read time.
+    Reproject an EPSG:4326 mask to the layer CRS so the driver filters at read time.
+    Any column outside ALLOWED or an empty column list raises ValueError so owner fields stay out.
     """
+    if isinstance(columns, (str, bytes)):
+        raise ValueError("columns must be a sequence of column names, not str or bytes")
+    selected = list(ALLOWED) if columns is None else list(dict.fromkeys(columns))
+    if not selected:
+        raise ValueError("columns must include at least one allow-listed parcel column")
+    disallowed = sorted(set(selected) - set(ALLOWED))
+    if disallowed:
+        raise ValueError(f"disallowed parcel columns: {disallowed}")
     if mask is not None:
         layer_crs = pyogrio.read_info(path, layer=layer)["crs"]
         if layer_crs is None:
@@ -60,11 +73,11 @@ def load_parcels(
     was_enabled = gc.isenabled()
     gc.disable()
     try:
-        gdf = gpd.read_file(path, layer=layer, columns=list(ALLOWED), mask=mask, engine="pyogrio")
+        gdf = gpd.read_file(path, layer=layer, columns=selected, mask=mask, engine="pyogrio")
     finally:
         if was_enabled:
             gc.enable()
-    return cast(gpd.GeoDataFrame, gdf.rename(columns=ALLOWED))
+    return cast(gpd.GeoDataFrame, gdf.rename(columns={col: ALLOWED[col] for col in selected}))
 
 
 def zip5(values: pd.Series) -> pd.Series:
@@ -91,7 +104,12 @@ def count_parcels(
     densified = swaths.set_geometry(swaths.geometry.segmentize(SEGMENT_DEG))
     # shortcut: the read mask keeps the straight edges of the lowest class, so 3 of 361,418
     # parcels in a chord sliver are not read (2024-05-28); upgrade when the count must be exact
-    parcels = load_parcels(parcels_path, layer=layer, mask=swaths.geometry.iloc[0])
+    parcels = load_parcels(
+        parcels_path,
+        layer=layer,
+        mask=swaths.geometry.iloc[0],
+        columns=("HCAD_NUM_1", "zip"),
+    )
     if parcels.crs is None:
         raise ValueError(f"{parcels_path.name} layer {layer} has no CRS")
     swaths_native = densified.to_crs(parcels.crs)

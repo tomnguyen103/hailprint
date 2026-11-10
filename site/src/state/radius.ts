@@ -1,7 +1,7 @@
 // Shared verification radius store across Storms > Score, Scorecard, and Try > Run.
 import { useSyncExternalStore } from "preact/compat";
 
-export const DEFAULT_RADIUS_KM = 5;
+const DEFAULT_RADIUS_KM = 5;
 
 let customRadius: number | null = null;
 const listeners = new Set<() => void>();

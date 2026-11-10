@@ -1,10 +1,10 @@
 // Pure point-in-polygon and WGS84 ellipsoidal tangent-plane distance math. No MapLibre import.
 import type { MultiPolygon, Polygon, Position } from "geojson";
 
-export const WGS84_A = 6378137.0;
-export const WGS84_E2 = 0.0066943799901413165;
-export const UTM15N_K0 = 0.99969;
-export const CROP_EDGE_M = 1000;
+const WGS84_A = 6378137.0;
+const WGS84_E2 = 0.0066943799901413165;
+const UTM15N_K0 = 0.99969;
+const CROP_EDGE_M = 1000;
 
 export type Bbox = [minLon: number, minLat: number, maxLon: number, maxLat: number];
 
@@ -51,7 +51,7 @@ export function containsPoint(geometry: Polygon | MultiPolygon, point: [number, 
 }
 
 /** Metres per degree of `[longitude, latitude]` at `latDeg` on the WGS84 ellipsoid scaled by UTM 15N (`k0 = 0.99969`). */
-export function metersPerDegree(latDeg: number): [number, number] {
+function metersPerDegree(latDeg: number): [number, number] {
   const rad = (latDeg * Math.PI) / 180;
   const sin = Math.sin(rad);
   const cos = Math.cos(rad);

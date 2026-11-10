@@ -170,4 +170,3 @@ def build(storm_date: date) -> pd.DataFrame:
         rest = list(pool.map(lambda fips: fetch(fips, first, last), fips_list[1:]))
     series = dict(zip(fips_list, [first_series, *rest], strict=True))
     return derive(storm_date, series)
-

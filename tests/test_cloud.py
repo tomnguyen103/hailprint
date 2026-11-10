@@ -1,5 +1,7 @@
 import hashlib
+import os
 import subprocess
+import threading
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -1091,9 +1093,7 @@ def test_sync_down_skips_prior_state_digest_and_fetches_remaining_in_parallel(
             ("hailprint-state", "derived/c.parquet"): payload_c,
         }
     )
-    state = cloud.sync_down(
-        s3, "hailprint-state", ("derived/",), data_dir, prior_state=prior
-    )
+    state = cloud.sync_down(s3, "hailprint-state", ("derived/",), data_dir, prior_state=prior)
     assert "derived/a.parquet" not in fetched
     assert sorted(fetched) == ["derived/b.parquet", "derived/c.parquet"]
     assert (data_dir / "derived" / "b.parquet").read_bytes() == payload_b
@@ -1104,15 +1104,203 @@ def test_sync_down_skips_prior_state_digest_and_fetches_remaining_in_parallel(
 def test_trigger_tasks_handle_partial_exit_3_and_hello_checks_env():
     nightly_ts = (paths.ROOT / "trigger" / "nightly.ts").read_text(encoding="utf-8")
     backfill_ts = (paths.ROOT / "trigger" / "backfill.ts").read_text(encoding="utf-8")
+    common_ts = (paths.ROOT / "trigger" / "common.ts").read_text(encoding="utf-8")
     hello_ts = (paths.ROOT / "trigger" / "hello.ts").read_text(encoding="utf-8")
 
-    assert "PARTIAL_EXIT = 3" in nightly_ts
+    assert "PARTIAL_EXIT = 3" in common_ts
+    assert "PARTIAL_EXIT" in nightly_ts
     assert "partial: true" in nightly_ts
     assert "console.warn" in nightly_ts
-    assert "PARTIAL_EXIT = 3" in backfill_ts
+    assert "PARTIAL_EXIT" in backfill_ts
     assert "partial: true" in backfill_ts
     assert "console.warn" in backfill_ts
     assert "REQUIRED_ENV" in hello_ts
     assert "envReady" in hello_ts
     assert "versions" in hello_ts
 
+
+def test_sync_up_uploads_rank0_in_parallel_before_rank2_and_aborts_before_index_on_rank0_error(
+    tmp_path: Path,
+):
+    site_dir = tmp_path / "site" / "data"
+    storm_dir = site_dir / "storms" / "2025-05-01"
+    storm_dir.mkdir(parents=True)
+    (storm_dir / "pairs.json").write_bytes(b'{"pairs":[]}')
+    (storm_dir / "swath.geojson").write_bytes(b'{"type":"FeatureCollection"}')
+    (site_dir / "pipeline.json").write_bytes(b'{"runs":[]}')
+    (site_dir / "storms.json").write_bytes(b'{"storms":["2025-05-01"]}')
+
+    barrier = threading.Barrier(2, timeout=2.0)
+    lock = threading.Lock()
+    active_rank0 = 0
+
+    class BarrierS3(FakeS3):
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes, **extra: str) -> None:
+            nonlocal active_rank0
+            if Key.startswith("storms/"):
+                with lock:
+                    active_rank0 += 1
+                try:
+                    barrier.wait()
+                    with lock:
+                        super().put_object(Bucket=Bucket, Key=Key, Body=Body, **extra)
+                finally:
+                    with lock:
+                        active_rank0 -= 1
+            else:
+                with lock:
+                    assert active_rank0 == 0
+                    assert ("hailprint-public", "storms/2025-05-01/pairs.json") in self.objects
+                    assert ("hailprint-public", "storms/2025-05-01/swath.geojson") in self.objects
+                    super().put_object(Bucket=Bucket, Key=Key, Body=Body, **extra)
+
+    s3 = BarrierS3()
+    state = cloud.SyncState()
+    uploaded = cloud.sync_up(s3, "hailprint-public", ("",), site_dir, state, public=True)
+    assert uploaded == [
+        "storms/2025-05-01/pairs.json",
+        "storms/2025-05-01/swath.geojson",
+        "pipeline.json",
+        "storms.json",
+    ]
+
+    class FailingRank0S3(FakeS3):
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes, **extra: str) -> None:
+            if Key == "storms/2025-05-01/swath.geojson":
+                raise RuntimeError("s3 rank 0 boom")
+            with lock:
+                super().put_object(Bucket=Bucket, Key=Key, Body=Body, **extra)
+
+    fail_s3 = FailingRank0S3()
+    with pytest.raises(RuntimeError, match="s3 rank 0 boom"):
+        cloud.sync_up(fail_s3, "hailprint-public", ("",), site_dir, cloud.SyncState(), public=True)
+    assert ("hailprint-public", "storms.json") not in fail_s3.objects
+    assert ("hailprint-public", "pipeline.json") not in fail_s3.objects
+
+    queue_dir = tmp_path / "queued"
+    queue_dir.mkdir()
+    for idx in range(5):
+        (queue_dir / f"f{idx:02d}.parquet").write_bytes(b"payload")
+    started: list[str] = []
+
+    class CancelS3(FakeS3):
+        def put_object(self, *, Bucket: str, Key: str, Body: bytes, **extra: str) -> None:
+            with lock:
+                started.append(Key)
+            if Key == "f00.parquet":
+                raise RuntimeError("abort rank 0 queue")
+            super().put_object(Bucket=Bucket, Key=Key, Body=Body, **extra)
+
+    orig_threads = cloud.SYNC_THREADS
+    cloud.SYNC_THREADS = 1
+    try:
+        with pytest.raises(RuntimeError, match="abort rank 0 queue"):
+            cloud.sync_up(CancelS3(), "hailprint-state", ("",), queue_dir, cloud.SyncState())
+    finally:
+        cloud.SYNC_THREADS = orig_threads
+    assert len(started) < 5
+
+
+def test_sync_up_scopes_traversal_to_prefixes_and_rejects_symlinks(tmp_path: Path, monkeypatch):
+    data_dir = tmp_path / "data"
+    (data_dir / "raw" / "mesh").mkdir(parents=True)
+    (data_dir / "raw" / "mesh" / "20240529.grib2").write_bytes(b"mesh")
+    (data_dir / "raw" / "hcad").mkdir(parents=True)
+    (data_dir / "raw" / "hcad" / "huge.gdb").write_bytes(b"hcad")
+    (data_dir / "raw" / "spc").mkdir(parents=True)
+    (data_dir / "raw" / "spc" / "wcm.zip").write_bytes(b"wcm")
+    (data_dir / "derived" / "odin").mkdir(parents=True)
+    (data_dir / "derived" / "scores.parquet").write_bytes(b"scores")
+    (data_dir / "derived" / "scores.parquet.tmp").write_bytes(b"tmp")
+    (data_dir / "derived" / "odin" / "odin-2026-10-28.parquet").write_bytes(b"old")
+    (data_dir / "derived" / "odin" / "odin-2026-10-29.parquet").write_bytes(b"today")
+    (data_dir / "derived" / "odin" / "odin-2026-10-30.parquet").write_bytes(b"next")
+    (data_dir / "derived" / "odin" / "odin-2026-10-31").mkdir(parents=True)
+    (data_dir / "derived" / "odin" / "odin-2026-10-31" / "slot.parquet").write_bytes(b"sub")
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    secret = outside / "secret.parquet"
+    secret.write_bytes(b"secret")
+    try:
+        (data_dir / "derived" / "leak.parquet").symlink_to(secret)
+        (data_dir / "derived" / "linked_dir").symlink_to(outside, target_is_directory=True)
+    except OSError:
+        pass
+
+    orig_scandir = os.scandir
+
+    def guarded_scandir(path=None):
+        text = os.fspath(path).replace("\\", "/") if path is not None else ""
+        if text.endswith(("/raw/mesh", "/raw/hcad")):
+            raise RuntimeError(f"unscoped scan entered {text}")
+        return orig_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", guarded_scandir)
+
+    s3 = FakeS3()
+    uploaded_state = cloud.sync_up(
+        s3,
+        "hailprint-state",
+        cloud.STATE_PREFIXES,
+        data_dir,
+        cloud.SyncState(),
+        exclude_prefixes=(cloud.ODIN_PREFIX,),
+    )
+    assert uploaded_state == ["derived/scores.parquet", "raw/spc/wcm.zip"]
+
+    uploaded_exact = cloud.sync_up(
+        s3,
+        "hailprint-state",
+        ("derived/odin/odin-2026-10-29.parquet",),
+        data_dir,
+        cloud.SyncState(),
+    )
+    assert uploaded_exact == ["derived/odin/odin-2026-10-29.parquet"]
+
+    uploaded_partial = cloud.sync_up(
+        s3,
+        "hailprint-state",
+        ("derived/odin/odin-2026-10-3",),
+        data_dir,
+        cloud.SyncState(),
+    )
+    assert uploaded_partial == [
+        "derived/odin/odin-2026-10-30.parquet",
+        "derived/odin/odin-2026-10-31/slot.parquet",
+    ]
+    assert cloud.sync_up(s3, "hailprint-state", (), data_dir, cloud.SyncState()) == []
+
+
+def test_collect_local_keys_sorts_results_handles_dot_prefixes_and_rejects_drive_colons(
+    tmp_path: Path, monkeypatch
+):
+    base = tmp_path / "data"
+    (base / "z_dir").mkdir(parents=True)
+    (base / "a_dir").mkdir(parents=True)
+    (base / "derived").mkdir(parents=True)
+    (base / "derived_extra").mkdir(parents=True)
+    (base / "z_dir" / "z.parquet").write_bytes(b"z")
+    (base / "a_dir" / "a.parquet").write_bytes(b"a")
+    (base / ".keep").write_bytes(b"k")
+    (base / "derived" / ".keep").write_bytes(b"dk")
+    (base / "derived_extra" / "b.parquet").write_bytes(b"b")
+
+    orig_scandir = os.scandir
+
+    def forbid_sibling(path=None):
+        text = os.fspath(path).replace("\\", "/") if path is not None else ""
+        if text.endswith("/derived_extra"):
+            raise RuntimeError(f"dot prefix scanned sibling {text}")
+        return orig_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", forbid_sibling)
+
+    assert cloud._collect_local_keys(base, ("z_dir/", "a_dir/", "a_dir/a.parquet"), ()) == [
+        "a_dir/a.parquet",
+        "z_dir/z.parquet",
+    ]
+    assert cloud._collect_local_keys(base, (".",), ()) == [".keep"]
+    assert cloud._collect_local_keys(base, ("derived/.",), ()) == ["derived/.keep"]
+    for unsafe in ("C:derived/", "./derived/", "derived//odin/", "..", "derived/.."):
+        assert cloud._collect_local_keys(base, (unsafe,), ()) == []

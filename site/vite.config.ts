@@ -9,5 +9,5 @@ export default defineConfig({
     preact(),
     viteStaticCopy({ targets: [{ src: "data/**/*", dest: "." }], silent: true }),
   ],
-  build: { target: "es2022" },
+  build: { target: "es2022", chunkSizeWarningLimit: 1200 },
 });

@@ -114,3 +114,19 @@ def test_missing_metro_file_raises_and_names_the_path(tmp_path, monkeypatch):
 
 def test_metro_returns_a_geodataframe():
     assert isinstance(metro(), gpd.GeoDataFrame)
+
+
+def test_county_caches_geojson_parse_and_isolates_caller_mutations(monkeypatch):
+    first = metro()
+    first.loc["48201", "name"] = "Mutated"
+    first_outline = outline()
+    first_outline.loc[0, "name"] = "Mutated"
+
+    def forbid_read(*args, **kwargs):
+        raise AssertionError("expected cached metro GeoDataFrame")
+
+    monkeypatch.setattr(gpd, "read_file", forbid_read)
+
+    assert metro().loc["48201", "name"] == "Harris"
+    assert outline().loc[0, "name"] == "Harris"
+    assert bbox() == (ORACLE[0] - 0.05, ORACLE[1] - 0.05, ORACLE[2] + 0.05, ORACLE[3] + 0.05)

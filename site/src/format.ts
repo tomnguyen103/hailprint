@@ -1,7 +1,7 @@
 // Shared display helpers and metric keys. Pure, no Preact import.
 import type { Metric } from "./data/types";
 
-export const NULL_METRIC_TEXT = "undefined, zero denominator";
+const NULL_METRIC_TEXT = "undefined, zero denominator";
 export const BELOW_FIRST_CLASS = "below 0.75 in";
 
 export const METRICS = ["pod", "far", "csi", "hss"] as const;
