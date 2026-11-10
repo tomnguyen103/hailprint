@@ -64,6 +64,8 @@ All 15 findings below hold a resolved status on `chore/audit-remediation`:
 
 ## Detailed Finding Catalog
 
+> Note: Historical catalog entries below preserve original audit session observations; see the summary table above for final resolutions.
+
 ### Category 1: Broken Code & Brittleness
 
 #### BRK-01: Pyright Scope Limitation on Test Files

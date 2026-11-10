@@ -376,6 +376,7 @@ def sync_up(
         if (local_base / key).stat().st_size > MAX_BYTES:
             raise RuntimeError(f"local file {key} exceeds {MAX_BYTES} bytes")
 
+    # Stream SHA-256 first so memory stays O(1) on small-1x workers before worker uploads.
     tiers: dict[int, list[str]] = {0: [], 1: [], 2: []}
     for key in local_keys:
         digest = _sha256_file(local_base / key)

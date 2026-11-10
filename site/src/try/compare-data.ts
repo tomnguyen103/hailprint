@@ -31,7 +31,8 @@ export const COMPARE_PRESETS: readonly ComparePreset[] = [
   },
 ];
 
-function newestFirst(storms: readonly Storm[]): Storm[] {
+/** Return storm dates sorted newest first. */
+export function newestFirst(storms: readonly Storm[]): Storm[] {
   return [...storms].sort((a, b) => b.storm_date.localeCompare(a.storm_date));
 }
 
