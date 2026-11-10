@@ -14,25 +14,7 @@ import type { Theme } from "../storms/map/layers";
 import { RulerLegend } from "../storms/map/ruler-legend";
 import "../styles/map.css";
 import { ScopeSelect } from "./try";
-import {
-  COMPARE_PRESETS,
-  defaultComparePair,
-  compareDelta,
-  type CompareDelta,
-  type ComparePair,
-  type ComparePreset,
-  type DeltaSummary,
-} from "./compare-data";
-
-export {
-  COMPARE_PRESETS,
-  defaultComparePair,
-  compareDelta,
-  type CompareDelta,
-  type ComparePair,
-  type ComparePreset,
-  type DeltaSummary,
-};
+import { COMPARE_PRESETS, compareDelta, defaultComparePair } from "./compare-data";
 
 const SWATH_FILE = "swath.geojson";
 

@@ -63,8 +63,6 @@ export interface CompareDelta {
   deltaHss: number | null;
 }
 
-export type DeltaSummary = CompareDelta;
-
 function peakHss(storm: Storm | undefined): number | null {
   if (!storm) return null;
   const values = storm.table.map((r) => r.hss).filter((v): v is number => v !== null);
