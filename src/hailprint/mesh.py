@@ -178,7 +178,7 @@ def daily_max(storm_date: date, raw_dir: Path) -> xr.DataArray:
         raise FileNotFoundError(f"no MESH file at {path}")
     try:
         da = decode(path)
-    except RuntimeError:
+    except (RuntimeError, ValueError):
         path.unlink(missing_ok=True)
         fetch_12z(storm_date, raw_dir)
         da = decode(path)

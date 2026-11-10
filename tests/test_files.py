@@ -29,13 +29,25 @@ def test_write_atomic_parquet_carries_source_product_and_confidence(tmp_path):
     assert meta[b"confidence"].decode().startswith("radar-estimated hail size")
 
 
-def test_write_atomic_writes_a_geodataframe_with_extra_metadata(tmp_path):
+def test_write_atomic_writes_a_geodataframe_with_extra_metadata(tmp_path, monkeypatch):
     path = tmp_path / "g.parquet"
-    gdf = gpd.GeoDataFrame({"n": [1]}, geometry=[Point(0, 0)], crs="EPSG:4326")
+    gdf = gpd.GeoDataFrame({"n": [1]}, geometry=[Point(100.0, 200.0)], crs="EPSG:2278")
+    targets: list[object] = []
+    orig_to_parquet = gpd.GeoDataFrame.to_parquet
+
+    def spy_to_parquet(self, dest, *args, **kwargs):
+        targets.append(dest)
+        return orig_to_parquet(self, dest, *args, **kwargs)
+
+    monkeypatch.setattr(gpd.GeoDataFrame, "to_parquet", spy_to_parquet)
 
     files.write_atomic(gdf, path, metadata={"file_count": "1"})
 
-    assert len(gpd.read_parquet(path)) == 1
+    assert len(targets) == 1 and hasattr(targets[0], "getvalue")
+    roundtrip = gpd.read_parquet(path)
+    assert len(roundtrip) == 1
+    assert roundtrip.crs.to_epsg() == 2278
+    assert roundtrip.geometry.iloc[0].equals(Point(100.0, 200.0))
     meta = pq.read_schema(path).metadata
     assert meta[b"source"] == b"noaa-mrms-pds"
     assert meta[b"file_count"] == b"1"

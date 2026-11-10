@@ -1,6 +1,7 @@
 """Atomic frame writes: a .tmp sibling, then one rename over the target."""
 
 import ctypes
+import io
 import os
 import time
 from collections.abc import Iterator
@@ -228,8 +229,10 @@ def write_atomic(frame: pd.DataFrame, path: Path, metadata: dict[str, str] | Non
             frame.to_csv(tmp, index=False)
         else:
             if isinstance(frame, gpd.GeoDataFrame):
-                frame.to_parquet(tmp)
-                table = pq.read_table(tmp, memory_map=False)
+                buf = io.BytesIO()
+                frame.to_parquet(buf)
+                buf.seek(0)
+                table = pq.read_table(buf)
             else:
                 table = pa.Table.from_pandas(frame, preserve_index=False)
             extra = {k.encode(): v.encode() for k, v in merged.items()}

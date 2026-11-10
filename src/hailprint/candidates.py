@@ -8,6 +8,7 @@ import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -52,6 +53,25 @@ def _check_wcm_zip(source: Path | io.BytesIO, label: Path | str | None = None) -
 
 
 WCM_CHUNK_ROWS = 25_000
+_ISO_DATE_RE = r"^\d{4}-\d{2}-\d{2}$"
+
+
+def _latest_row_index(chunk: pd.DataFrame) -> Any | None:
+    """Return the index label of the latest valid dated row in `chunk`, or None."""
+    valid = chunk["date"].notna() & chunk["time"].notna()
+    if not bool(valid.any()):
+        return None
+    dates = chunk.loc[valid, "date"].astype("string")
+    if bool(dates.str.fullmatch(_ISO_DATE_RE).all()):
+        max_date = dates.max()
+        top = chunk.loc[dates.index[dates == max_date]]
+        stamps = pd.to_datetime(top["date"] + " " + top["time"], errors="coerce") - pd.Timedelta(
+            CST_TO_CONVECTIVE
+        )
+        if bool(stamps.notna().any()) and bool(stamps.notna().all()):
+            return stamps.idxmax()
+    stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"]) - pd.Timedelta(CST_TO_CONVECTIVE)
+    return stamps.idxmax() if bool(stamps.notna().any()) else None
 
 
 def _filter_wcm_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
@@ -62,18 +82,14 @@ def _filter_wcm_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
         harris = (chunk[["f1", "f2", "f3", "f4"]] == HARRIS_FIPS).any(axis=1)
         keep = (chunk["st"] == "TX") & harris
         if {"date", "time"}.issubset(chunk.columns):
-            stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"]) - pd.Timedelta(
-                CST_TO_CONVECTIVE
-            )
-            if stamps.notna().any():
-                keep.loc[stamps.idxmax()] = True
+            latest = _latest_row_index(chunk)
+            if latest is not None:
+                keep.loc[latest] = True
         return chunk.loc[keep]
     if {"date", "time"}.issubset(chunk.columns):
-        stamps = pd.to_datetime(chunk["date"] + " " + chunk["time"]) - pd.Timedelta(
-            CST_TO_CONVECTIVE
-        )
-        if stamps.notna().any():
-            return chunk.loc[[stamps.idxmax()]]
+        latest = _latest_row_index(chunk)
+        if latest is not None:
+            return chunk.loc[[latest]]
         return chunk.iloc[0:0]
     return chunk
 
@@ -81,8 +97,7 @@ def _filter_wcm_chunk(chunk: pd.DataFrame) -> pd.DataFrame:
 def _read_wcm(path: Path, usecols: list[str] = USECOLS) -> pd.DataFrame:
     _check_wcm_zip(path)
     chunks = [
-        _filter_wcm_chunk(c)
-        for c in pd.read_csv(path, usecols=usecols, chunksize=WCM_CHUNK_ROWS)
+        _filter_wcm_chunk(c) for c in pd.read_csv(path, usecols=usecols, chunksize=WCM_CHUNK_ROWS)
     ]
     if not chunks:
         return pd.DataFrame(columns=usecols)

@@ -33,6 +33,17 @@ def test_load_keeps_only_the_allow_list_in_the_layer_crs():
     assert len(gdf) == 5
 
 
+def test_load_parcels_subset_columns_and_rejects_disallowed_or_owner_fields():
+    gdf = load_parcels(FIXTURE, columns=("HCAD_NUM_1", "HCAD_NUM_1", "zip"))
+    assert list(gdf.columns) == ["hcad_num", "zip", "geometry"]
+    assert gdf.crs.to_epsg() == 2278
+    assert len(gdf) == 5
+
+    for bad in (("HCAD_NUM_1", "CurrOwner"), ("LocAddr",), ("unknown_col",)):
+        with pytest.raises(ValueError, match="disallowed parcel columns"):
+            load_parcels(FIXTURE, columns=bad)
+
+
 def test_load_with_a_mask_reads_the_covered_parcels_only():
     parcels = load_parcels(FIXTURE).to_crs("EPSG:4326")
     mask = shapely.box(*parcels.iloc[:2].total_bounds)
