@@ -8,7 +8,7 @@ import json
 import os
 import re
 import sys
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -126,7 +126,13 @@ def s3_client(config: Config) -> Any:
 
 
 def _validate_key(key: str, local_base: Path | None = None, *, public: bool = False) -> None:
-    if not key or key.startswith("/") or "\\" in key or ":" in key or ".." in key.split("/"):
+    if (
+        not key
+        or key.startswith("/")
+        or "\\" in key
+        or ":" in key
+        or any(seg in ("", ".", "..") for seg in key.split("/"))
+    ):
         raise ValueError("unsafe S3 key")
     if public and not _PUBLIC_KEY_RE.fullmatch(key):
         raise ValueError("unsafe S3 key")
@@ -147,9 +153,9 @@ _SINGLE_PART_ETAG_RE = re.compile(r"^[0-9a-f]{32}$")
 
 def _list_objects(
     client: Any, bucket: str, prefix: str
-) -> list[tuple[str, str | None, int | None]]:
-    items: list[tuple[str, str | None, int | None]] = []
+) -> Iterator[tuple[str, str | None, int | None]]:
     token: str | None = None
+    seen_tokens: set[str] = set()
     while True:
         kwargs: dict[str, Any] = {"Bucket": bucket, "Prefix": prefix}
         if token is not None:
@@ -167,13 +173,15 @@ def _list_objects(
                 raw_etag = obj.get("ETag")
                 etag = raw_etag.strip('"').lower() if isinstance(raw_etag, str) else None
                 valid_etag = etag if etag and _SINGLE_PART_ETAG_RE.fullmatch(etag) else None
-                items.append((key, valid_etag, size))
+                yield (key, valid_etag, size)
         if not resp.get("IsTruncated"):
             break
         token = resp.get("NextContinuationToken")
-        if not token:
+        if not isinstance(token, str) or not token:
             break
-    return items
+        if token in seen_tokens:
+            raise RuntimeError("cyclic S3 continuation token")
+        seen_tokens.add(token)
 
 
 def _fetch_s3_object(client: Any, bucket: str, key: str, max_bytes: int) -> bytes:

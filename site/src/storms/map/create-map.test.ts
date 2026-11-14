@@ -475,4 +475,24 @@ describe("createMap", () => {
     expect(oklchToHex("lab(50 0 0 / bad)")).toBe("lab(50 0 0 / bad)");
     expect(oklchToHex("#12345")).toBe("#12345");
   });
+
+  it("parses scientific notation, CSS Color 4 none keywords, and clamped channels in oklchToHex", () => {
+    expect(oklchToHex("oklch(0.5 1.2e-5 0)")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(oklchToHex("oklch(0.5 1.2e-5 0)")).toBe(oklchToHex("oklch(0.5 0.000012 0)"));
+    expect(oklchToHex("oklch(0.5 0.1 1E-4deg)")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(oklchToHex("oklch(0.5 0.1 1E-4deg)")).toBe(oklchToHex("oklch(0.5 0.1 0.0001deg)"));
+
+    const oklchNeutral = oklchToHex("oklch(0.5 0 0)");
+    expect(oklchNeutral).toMatch(/^#[0-9a-f]{6}$/);
+    expect(oklchToHex("oklch(0.5 0 none)")).toBe(oklchNeutral);
+    const labNeutral = oklchToHex("lab(50% 0 0)");
+    expect(labNeutral).toMatch(/^#[0-9a-f]{6}$/);
+    expect(oklchToHex("lab(50% 0 none / none)")).toBe(labNeutral);
+    expect(oklchToHex("rgb(255 0 none / none)")).toBe("#ff0000");
+    expect(oklchToHex("rgb(none, 0, 0)")).toBe("rgb(none, 0, 0)");
+
+    expect(oklchToHex("oklch(0.5 -0.2 0)")).toBe(oklchToHex("oklch(0.5 0 0)"));
+    expect(oklchToHex("oklch(-0.5 0.2 0)")).toBe(oklchToHex("oklch(0 0.2 0)"));
+    expect(oklchToHex("lab(-20% 50 0)")).toBe(oklchToHex("lab(0% 50 0)"));
+  });
 });

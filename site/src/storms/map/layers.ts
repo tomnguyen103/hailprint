@@ -37,23 +37,24 @@ export const LINE_PX = 2;
 /** The map layers the control switches. */
 export type LayerName = "swath" | "reports" | "warnings";
 
-const NUM_TOKEN_RE = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(%?)$/;
-const HUE_TOKEN_RE = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(deg|rad|grad|turn)?$/i;
+const NUM_TOKEN_RE = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(%?)$/i;
+const HUE_TOKEN_RE = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(deg|rad|grad|turn)?$/i;
 const HEX_COLOR_RE = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const RGB_COMMA_RE = /^rgba?\(\s*([^,\s)]+)\s*,\s*([^,\s)]+)\s*,\s*([^,\s)]+)(?:\s*,\s*([^,\s)]+))?\s*\)$/i;
 const RGB_SPACE_RE = /^rgba?\(\s*([^\s/,)]+)\s+([^\s/,)]+)\s+([^\s/,)]+)(?:\s*\/\s*([^\s/,)]+))?\s*\)$/i;
 const OKLCH_RE = /^oklch\(\s*([^\s/,)]+)\s+([^\s/,)]+)\s+([^\s/,)]+)(?:\s*\/\s*([^\s/,)]+))?\s*\)$/i;
 const LAB_RE = /^lab\(\s*([^\s/,)]+)\s+([^\s/,)]+)\s+([^\s/,)]+)(?:\s*\/\s*([^\s/,)]+))?\s*\)$/i;
 
-function parseNumToken(tokenStr: string): { value: number; pct: boolean } | null {
+function parseNumToken(tokenStr: string, allowNone = false): { value: number; pct: boolean } | null {
+  if (allowNone && tokenStr.toLowerCase() === "none") return { value: 0, pct: false };
   const m = NUM_TOKEN_RE.exec(tokenStr);
   if (!m) return null;
   const value = Number(m[1]);
   return Number.isFinite(value) ? { value, pct: m[2] === "%" } : null;
 }
 
-function validAlpha(alpha: string | undefined): boolean {
-  return alpha === undefined || parseNumToken(alpha) !== null;
+function validAlpha(alpha: string | undefined, allowNone = false): boolean {
+  return alpha === undefined || parseNumToken(alpha, allowNone) !== null;
 }
 
 function hexByte(n: number): string {
@@ -80,11 +81,13 @@ function parseHexColor(trimmed: string): string | null {
 }
 
 function parseRgbColor(trimmed: string): string | null {
-  const m = RGB_COMMA_RE.exec(trimmed) ?? RGB_SPACE_RE.exec(trimmed);
-  if (!m || !validAlpha(m[4])) return null;
-  const rTok = parseNumToken(m[1]!);
-  const gTok = parseNumToken(m[2]!);
-  const bTok = parseNumToken(m[3]!);
+  const commaMatch = RGB_COMMA_RE.exec(trimmed);
+  const m = commaMatch ?? RGB_SPACE_RE.exec(trimmed);
+  const allowNone = commaMatch === null;
+  if (!m || !validAlpha(m[4], allowNone)) return null;
+  const rTok = parseNumToken(m[1]!, allowNone);
+  const gTok = parseNumToken(m[2]!, allowNone);
+  const bTok = parseNumToken(m[3]!, allowNone);
   if (!rTok || !gTok || !bTok) return null;
   const toChannel = (tok: { value: number; pct: boolean }): number => (tok.pct ? (tok.value / 100) * 255 : tok.value);
   return `#${hexByte(toChannel(rTok))}${hexByte(toChannel(gTok))}${hexByte(toChannel(bTok))}`;
@@ -92,25 +95,30 @@ function parseRgbColor(trimmed: string): string | null {
 
 function parseOklchColor(trimmed: string): string | null {
   const m = OKLCH_RE.exec(trimmed);
-  if (!m || !validAlpha(m[4])) return null;
-  const lTok = parseNumToken(m[1]!);
-  const cTok = parseNumToken(m[2]!);
-  const hMatch = HUE_TOKEN_RE.exec(m[3]!);
-  if (!lTok || !cTok || !hMatch) return null;
-  const hVal = Number(hMatch[1]);
-  if (!Number.isFinite(hVal)) return null;
+  if (!m || !validAlpha(m[4], true)) return null;
+  const lTok = parseNumToken(m[1]!, true);
+  const cTok = parseNumToken(m[2]!, true);
+  if (!lTok || !cTok) return null;
 
-  const L = lTok.pct ? lTok.value / 100 : lTok.value;
-  const C = cTok.pct ? cTok.value * 0.004 : cTok.value;
-  const unit = hMatch[2]?.toLowerCase() ?? "deg";
-  const hRad =
-    unit === "rad"
-      ? hVal
-      : unit === "grad"
-        ? (hVal * Math.PI) / 200
-        : unit === "turn"
-          ? hVal * 2 * Math.PI
-          : (hVal * Math.PI) / 180;
+  let hRad = 0;
+  if (m[3]!.toLowerCase() !== "none") {
+    const hMatch = HUE_TOKEN_RE.exec(m[3]!);
+    if (!hMatch) return null;
+    const hVal = Number(hMatch[1]);
+    if (!Number.isFinite(hVal)) return null;
+    const unit = hMatch[2]?.toLowerCase() ?? "deg";
+    hRad =
+      unit === "rad"
+        ? hVal
+        : unit === "grad"
+          ? (hVal * Math.PI) / 200
+          : unit === "turn"
+            ? hVal * 2 * Math.PI
+            : (hVal * Math.PI) / 180;
+  }
+
+  const L = Math.max(0, Math.min(1, lTok.pct ? lTok.value / 100 : lTok.value));
+  const C = Math.max(0, cTok.pct ? cTok.value * 0.004 : cTok.value);
   const a = C * Math.cos(hRad);
   const b = C * Math.sin(hRad);
 
@@ -130,13 +138,13 @@ function parseOklchColor(trimmed: string): string | null {
 
 function parseLabColor(trimmed: string): string | null {
   const m = LAB_RE.exec(trimmed);
-  if (!m || !validAlpha(m[4])) return null;
-  const lTok = parseNumToken(m[1]!);
-  const aTok = parseNumToken(m[2]!);
-  const bTok = parseNumToken(m[3]!);
+  if (!m || !validAlpha(m[4], true)) return null;
+  const lTok = parseNumToken(m[1]!, true);
+  const aTok = parseNumToken(m[2]!, true);
+  const bTok = parseNumToken(m[3]!, true);
   if (!lTok || !aTok || !bTok) return null;
 
-  const L = lTok.value;
+  const L = Math.max(0, Math.min(100, lTok.value));
   const a = aTok.pct ? aTok.value * 1.25 : aTok.value;
   const b = bTok.pct ? bTok.value * 1.25 : bTok.value;
 

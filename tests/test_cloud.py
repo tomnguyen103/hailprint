@@ -1459,3 +1459,93 @@ def test_sync_down_denies_traversal_and_foreign_prefix_keys_before_writes(
         cloud.sync_down(s3, bucket, prefixes, target, public=public)
 
     assert not (target / valid_key).exists()
+
+
+@pytest.mark.parametrize(
+    "bad_key",
+    ["derived/./odin/a.parquet", "derived//odin/a.parquet", "derived/."],
+)
+def test_sync_down_rejects_dot_and_empty_segments_before_exclude_and_writes(
+    tmp_path: Path, bad_key: str
+):
+    class ListingS3(FakeS3):
+        def list_objects_v2(
+            self,
+            *,
+            Bucket: str,
+            Prefix: str = "",
+            ContinuationToken: str | None = None,
+        ) -> dict:
+            return {
+                "Contents": [
+                    {"Key": bad_key, "Size": 4},
+                    {"Key": "derived/scores.parquet", "Size": 4},
+                ],
+                "IsTruncated": False,
+            }
+
+    s3 = ListingS3({("hailprint-state", "derived/scores.parquet"): b"good"})
+    data_dir = tmp_path / "data"
+
+    with pytest.raises(ValueError, match="unsafe S3 key"):
+        cloud.sync_down(
+            s3,
+            "hailprint-state",
+            ("derived/",),
+            data_dir,
+            public=False,
+            exclude_prefixes=("derived/odin/",),
+        )
+
+    assert not data_dir.exists() or list(data_dir.rglob("*")) == []
+
+
+def test_sync_down_fails_fast_on_page_one_oversized_managed_key(tmp_path: Path):
+    tokens_seen: list[str | None] = []
+
+    class PaginatedOversizedS3(FakeS3):
+        def list_objects_v2(
+            self,
+            *,
+            Bucket: str,
+            Prefix: str = "",
+            ContinuationToken: str | None = None,
+        ) -> dict:
+            tokens_seen.append(ContinuationToken)
+            if ContinuationToken is None:
+                return {
+                    "Contents": [{"Key": "derived/huge.parquet", "Size": 100}],
+                    "IsTruncated": True,
+                    "NextContinuationToken": "page-2",
+                }
+            raise AssertionError("page 2 should not be fetched")
+
+    s3 = PaginatedOversizedS3()
+    with pytest.raises(RuntimeError, match="exceeds 64 bytes"):
+        cloud.sync_down(s3, "hailprint-state", ("derived/",), tmp_path / "data", max_bytes=64)
+
+    assert tokens_seen == [None]
+
+
+def test_list_objects_and_sync_down_reject_cyclic_continuation_token(tmp_path: Path):
+    class CyclicS3(FakeS3):
+        def list_objects_v2(
+            self,
+            *,
+            Bucket: str,
+            Prefix: str = "",
+            ContinuationToken: str | None = None,
+        ) -> dict:
+            return {
+                "Contents": [{"Key": "derived/a.parquet", "Size": 1}],
+                "IsTruncated": True,
+                "NextContinuationToken": "repeat-token",
+            }
+
+    s3 = CyclicS3({("hailprint-state", "derived/a.parquet"): b"a"})
+
+    with pytest.raises(RuntimeError, match="cyclic S3 continuation token"):
+        list(cloud._list_objects(s3, "hailprint-state", "derived/"))
+
+    with pytest.raises(RuntimeError, match="cyclic S3 continuation token"):
+        cloud.sync_down(s3, "hailprint-state", ("derived/",), tmp_path / "data")
