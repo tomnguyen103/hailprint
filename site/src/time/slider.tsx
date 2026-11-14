@@ -162,6 +162,7 @@ export function SliderView({
       <input
         class="time-range"
         type="range"
+        name="map-time"
         min={0}
         max={LAST_STEP}
         step={1}

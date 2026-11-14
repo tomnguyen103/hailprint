@@ -1,5 +1,6 @@
 import { validateStyleMin, type StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
+import { hexRgb } from "../../impact/power";
 import { GLYPHS_URL, basemapLabelLayers, basemapLayers, spriteUrl } from "./basemap";
 import { createMap } from "./create-map";
 import { oklchToHex, token } from "./layers";
@@ -402,5 +403,76 @@ describe("createMap", () => {
     const { map } = await start();
     const style = (map.options as { style: StyleSpecification }).style;
     expect(validateStyleMin(style)).toEqual([]);
+  });
+
+  it("normalizes LightningCSS lab() tokens, validates MapLibre style, feeds hexRgb, and keeps theme switches idempotent (US-01.1, US-01.4)", async () => {
+    const lightTokens: Record<string, string> = {
+      "--paper": "lab(96.7304% -.513285 -2.97188)",
+      "--ink": "lab(8.26392% -.742577 -7.89793)",
+      "--ink-muted": "lab(32.6442% -1.114 -8.02775)",
+      "--sheet": "lab(99.0615% -.261664 -1.48883)",
+      "--rule": "lab(85.4572% -.922233 -5.55018)",
+      "--report": "lab(40.1143% 59.6761 45.0277)",
+      "--warn-sv": "lab(40.4802% 21.5733 60.3275)",
+      "--warn-to": "lab(34.9174% 56.6023 -11.0666)",
+      "--warn-ff": "lab(40.5096% -27.4936 -12.5739)",
+    };
+    const darkTokens: Record<string, string> = {
+      ...lightTokens,
+      "--paper": "lab(4.01855% -.360526 -4.00815)",
+      "--ink": "lab(93.5983% -.512779 -2.97157)",
+      "--ink-muted": "lab(72.1133% -.964701 -5.91025)",
+    };
+    let active = lightTokens;
+    vi.stubGlobal("getComputedStyle", () => ({
+      getPropertyValue: (name: string) => active[name] ?? "lab(50% 0 0)",
+    }));
+
+    expect(token("--paper")).toBe("#f2f6fb");
+    expect(hexRgb(token("--ink-muted"))).toEqual([70, 78, 89]);
+
+    const { state, map } = await start();
+    const setPaintProperty = vi.fn();
+    Object.assign(map, { setPaintProperty });
+    const style = (map.options as { style: StyleSpecification }).style;
+    expect(validateStyleMin(style)).toEqual([]);
+
+    map.emit("load");
+    await advance(0);
+    expect(state.status).toBe("resolved");
+    const handle = state.value!;
+
+    active = darkTokens;
+    expect(token("--paper")).toBe("#0a0f15");
+    expect(hexRgb(token("--ink-muted"))).toEqual([171, 178, 187]);
+
+    handle.setTheme("dark");
+    const callsAfterDark = setPaintProperty.mock.calls.length;
+    expect(callsAfterDark).toBeGreaterThan(0);
+    expect(setPaintProperty).toHaveBeenCalledWith("paper", "background-color", "#0a0f15");
+    handle.setTheme("dark");
+    expect(setPaintProperty.mock.calls.length).toBe(callsAfterDark);
+  });
+
+  it("normalizes CSS Color 4 lab, oklch, rgb, and hex boundary forms and preserves sentinels (US-01.2, US-01.3)", () => {
+    expect(oklchToHex("lab(0% 0 0)")).toBe("#000000");
+    expect(oklchToHex("lab(100% 0 0)")).toBe("#ffffff");
+    expect(oklchToHex("lab(81.4946% .427455 5.35632)")).toBe("#cfcac0");
+    expect(oklchToHex("lab(50% 40% -20% / 0.8)")).toBe("#b750a3");
+    expect(oklchToHex("oklch(97.2% 0.008 258)")).toBe("#f2f6fb");
+    expect(oklchToHex("oklch(50% 50% 180deg / 0.5)")).toBe("#008368");
+    expect(oklchToHex("#abc")).toBe("#aabbcc");
+    expect(oklchToHex("#abcd")).toBe("#aabbcc");
+    expect(oklchToHex("#F2F6FB80")).toBe("#f2f6fb");
+    expect(oklchToHex("rgb(242, 246, 251)")).toBe("#f2f6fb");
+    expect(oklchToHex("rgba(242, 246, 251, 0.5)")).toBe("#f2f6fb");
+    expect(oklchToHex("rgb(242 246 251 / 50%)")).toBe("#f2f6fb");
+    expect(oklchToHex("rgb(100% 0% 50%)")).toBe("#ff0080");
+
+    expect(oklchToHex("light--unknown")).toBe("light--unknown");
+    expect(oklchToHex("currentColor")).toBe("currentColor");
+    expect(oklchToHex("lab(nan 0 0)")).toBe("lab(nan 0 0)");
+    expect(oklchToHex("lab(50 0 0 / bad)")).toBe("lab(50 0 0 / bad)");
+    expect(oklchToHex("#12345")).toBe("#12345");
   });
 });

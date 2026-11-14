@@ -541,11 +541,20 @@ def test_sync_down_rejects_oversized_s3_object_and_disallowed_public_key(tmp_pat
         cloud.sync_down(s3_big, "hailprint-state", ("raw/spc/",), tmp_path / "data", max_bytes=10)
     assert not (tmp_path / "data" / "raw" / "spc" / "big.bin").exists()
 
-    s3_bad_pub = FakeS3({("hailprint-public", "storms/2024-05-28/evil.html"): b"<html>"})
-    with pytest.raises(ValueError, match="unsafe S3 key"):
+    s3_big_pub = FakeS3({("hailprint-public", "storms.json"): b"12345678901"})
+    with pytest.raises(RuntimeError, match="storms\\.json.*exceeds"):
         cloud.sync_down(
-            s3_bad_pub, "hailprint-public", ("",), tmp_path / "site" / "data", public=True
+            s3_big_pub,
+            "hailprint-public",
+            ("",),
+            tmp_path / "site" / "data",
+            max_bytes=10,
+            public=True,
         )
+    assert not (tmp_path / "site" / "data" / "storms.json").exists()
+
+    with pytest.raises(ValueError, match="unsafe S3 key"):
+        cloud._validate_key("storms/2024-05-28/evil.html", tmp_path / "site" / "data", public=True)
 
 
 def test_collect_local_keys_ignores_symlinks(tmp_path: Path):
@@ -1304,3 +1313,149 @@ def test_collect_local_keys_sorts_results_handles_dot_prefixes_and_rejects_drive
     assert cloud._collect_local_keys(base, ("derived/.",), ()) == ["derived/.keep"]
     for unsafe in ("C:derived/", "./derived/", "derived//odin/", "..", "derived/.."):
         assert cloud._collect_local_keys(base, (unsafe,), ()) == []
+
+
+def test_public_sync_down_skips_unmanaged_and_oversized_ignored_keys_idempotently(tmp_path: Path):
+    gets: list[str] = []
+
+    class TrackingSizeS3(FakeS3):
+        def list_objects_v2(
+            self,
+            *,
+            Bucket: str,
+            Prefix: str = "",
+            ContinuationToken: str | None = None,
+        ) -> dict:
+            resp = super().list_objects_v2(
+                Bucket=Bucket, Prefix=Prefix, ContinuationToken=ContinuationToken
+            )
+            for item in resp["Contents"]:
+                item["Size"] = len(self.objects[(Bucket, item["Key"])])
+            return resp
+
+        def get_object(self, *, Bucket: str, Key: str) -> dict:
+            gets.append(Key)
+            return super().get_object(Bucket=Bucket, Key=Key)
+
+    storms_bytes = b'{"storms":[]}'
+    pipeline_bytes = b'{"runs":[]}'
+    s3 = TrackingSizeS3(
+        {
+            ("hailprint-public", "storms.json"): storms_bytes,
+            ("hailprint-public", "pipeline.json"): pipeline_bytes,
+            ("hailprint-public", "pooled-golden.json"): b'{"extra":1}',
+            ("hailprint-public", ".emptyFolderPlaceholder"): b"",
+            ("hailprint-public", "storms/2024-05-28/evil.html"): b"<html>",
+            ("hailprint-public", "oversized-unmanaged.json"): b"x" * 200,
+        }
+    )
+    site_dir = tmp_path / "site" / "data"
+
+    state1 = cloud.sync_down(s3, "hailprint-public", ("",), site_dir, max_bytes=64, public=True)
+    assert sorted(gets) == ["pipeline.json", "storms.json"]
+    assert (site_dir / "storms.json").read_bytes() == storms_bytes
+    assert (site_dir / "pipeline.json").read_bytes() == pipeline_bytes
+    for ignored in (
+        "pooled-golden.json",
+        ".emptyFolderPlaceholder",
+        "storms/2024-05-28/evil.html",
+        "oversized-unmanaged.json",
+    ):
+        assert not (site_dir / ignored).exists()
+        assert ("hailprint-public", ignored) not in state1.remote_keys
+        assert ("hailprint-public", ignored) not in state1.digests
+
+    gets.clear()
+    state2 = cloud.sync_down(
+        s3,
+        "hailprint-public",
+        ("",),
+        site_dir,
+        max_bytes=64,
+        public=True,
+        prior_state=state1,
+    )
+    assert gets == []
+    assert state2.remote_keys == {
+        ("hailprint-public", "storms.json"),
+        ("hailprint-public", "pipeline.json"),
+    }
+    assert set(state2.digests) == state2.remote_keys
+
+
+def test_run_cloud_nightly_ignores_unmanaged_public_object_and_keeps_local_extras(tmp_path: Path):
+    s3 = FakeS3(
+        {
+            ("hailprint-public", "storms.json"): b'{"storms":[]}',
+            ("hailprint-public", "pipeline.json"): b'{"runs":[]}',
+            ("hailprint-public", "pooled-golden.json"): b'{"golden":true}',
+        }
+    )
+    site_dir = tmp_path / "site" / "data"
+    site_dir.mkdir(parents=True)
+    (site_dir / "storms.json").write_bytes(b'{"storms":["old"]}')
+    (site_dir / "local-note.txt").write_bytes(b"keep-local")
+
+    def fake_cli(argv: list[str]) -> int:
+        if argv[:2] == ["candidates", "--missing"]:
+            cand_dir = tmp_path / "data" / "derived" / "index"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            (cand_dir / "candidate-days.csv").write_text(
+                "storm_date,report_count,max_size_in,has_12z,report_source\n",
+                encoding="utf-8",
+            )
+        if argv == ["publish"]:
+            assert (site_dir / "storms.json").read_bytes() == b'{"storms":[]}'
+            assert (site_dir / "pipeline.json").read_bytes() == b'{"runs":[]}'
+            (site_dir / "storms.json").write_bytes(b'{"storms":["2024-05-28"]}')
+        return 0
+
+    rc = cloud.run_cloud("nightly", client=s3, root=tmp_path, env=VALID_ENV, run_cli=fake_cli)
+    assert rc == 0
+    assert not (site_dir / "pooled-golden.json").exists()
+    assert (site_dir / "local-note.txt").read_bytes() == b"keep-local"
+    assert (site_dir / "storms.json").read_bytes() == b'{"storms":["2024-05-28"]}'
+    assert ("hailprint-public", "pooled-golden.json") in s3.objects
+    assert ("hailprint-public", "pooled-golden.json") not in s3.deletes
+
+
+@pytest.mark.parametrize("public", [False, True])
+@pytest.mark.parametrize(
+    ("prefixes", "bad_key"),
+    [
+        (("",), "../escape.json"),
+        (("",), "storms/2024-05-28/../evil.html"),
+        (("",), "/abs.json"),
+        (("",), "C:/win.json"),
+        (("",), "a\\b.json"),
+        (("storms/",), "other/secret.json"),
+    ],
+)
+def test_sync_down_denies_traversal_and_foreign_prefix_keys_before_writes(
+    tmp_path: Path, public: bool, prefixes: tuple[str, ...], bad_key: str
+):
+    bucket = "hailprint-public" if public else "hailprint-state"
+    valid_key = "storms/2024-05-28/swath.geojson"
+
+    class RogueListS3(FakeS3):
+        def list_objects_v2(
+            self,
+            *,
+            Bucket: str,
+            Prefix: str = "",
+            ContinuationToken: str | None = None,
+        ) -> dict:
+            # Return every bucket key regardless of Prefix to model an out-of-prefix S3 listing.
+            keys = sorted(k for (b, k) in self.objects if b == Bucket)
+            return {
+                "Contents": [{"Key": k, "Size": len(self.objects[(Bucket, k)])} for k in keys],
+                "IsTruncated": False,
+            }
+
+    s3 = RogueListS3({(bucket, valid_key): b"{}", (bucket, bad_key): b"bad"})
+    target = tmp_path / ("site" if public else "data")
+
+    with pytest.raises(ValueError, match="unsafe S3 key"):
+        cloud.sync_down(s3, bucket, prefixes, target, public=public)
+
+    assert not (target / valid_key).exists()
