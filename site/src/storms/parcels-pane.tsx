@@ -141,6 +141,7 @@ function ParcelsTable({
               <div class="parcels-toolbar">
                 <input
                   type="search"
+                  name="zip-filter"
                   class="zip-search mono"
                   placeholder="Filter 77xxx ZIP…"
                   aria-label="Filter ZIP codes"

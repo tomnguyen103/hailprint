@@ -8,7 +8,7 @@ import json
 import os
 import re
 import sys
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -126,7 +126,13 @@ def s3_client(config: Config) -> Any:
 
 
 def _validate_key(key: str, local_base: Path | None = None, *, public: bool = False) -> None:
-    if not key or key.startswith("/") or "\\" in key or ":" in key or ".." in key.split("/"):
+    if (
+        not key
+        or key.startswith("/")
+        or "\\" in key
+        or ":" in key
+        or any(seg in ("", ".", "..") for seg in key.split("/"))
+    ):
         raise ValueError("unsafe S3 key")
     if public and not _PUBLIC_KEY_RE.fullmatch(key):
         raise ValueError("unsafe S3 key")
@@ -146,10 +152,10 @@ _SINGLE_PART_ETAG_RE = re.compile(r"^[0-9a-f]{32}$")
 
 
 def _list_objects(
-    client: Any, bucket: str, prefix: str, max_bytes: int = MAX_BYTES
-) -> list[tuple[str, str | None]]:
-    items: list[tuple[str, str | None]] = []
+    client: Any, bucket: str, prefix: str
+) -> Iterator[tuple[str, str | None, int | None]]:
     token: str | None = None
+    seen_tokens: set[str] = set()
     while True:
         kwargs: dict[str, Any] = {"Bucket": bucket, "Prefix": prefix}
         if token is not None:
@@ -158,18 +164,24 @@ def _list_objects(
         for obj in resp.get("Contents", []) or []:
             key = obj.get("Key", "")
             if key and not key.endswith("/"):
-                size = obj.get("Size")
-                if isinstance(size, int) and size > max_bytes:
-                    raise RuntimeError(f"S3 object {key} exceeds {max_bytes} bytes")
+                raw_size = obj.get("Size")
+                size = (
+                    raw_size
+                    if isinstance(raw_size, int) and not isinstance(raw_size, bool)
+                    else None
+                )
                 raw_etag = obj.get("ETag")
                 etag = raw_etag.strip('"').lower() if isinstance(raw_etag, str) else None
-                items.append((key, etag if etag and _SINGLE_PART_ETAG_RE.fullmatch(etag) else None))
+                valid_etag = etag if etag and _SINGLE_PART_ETAG_RE.fullmatch(etag) else None
+                yield (key, valid_etag, size)
         if not resp.get("IsTruncated"):
             break
         token = resp.get("NextContinuationToken")
-        if not token:
+        if not isinstance(token, str) or not token:
             break
-    return items
+        if token in seen_tokens:
+            raise RuntimeError("cyclic S3 continuation token")
+        seen_tokens.add(token)
 
 
 def _fetch_s3_object(client: Any, bucket: str, key: str, max_bytes: int) -> bytes:
@@ -197,13 +209,19 @@ def sync_down(
     exclude_tuple = tuple(exclude_prefixes)
     to_fetch: list[tuple[str, Path]] = []
     for prefix in prefix_tuple:
-        for key, etag in _list_objects(client, bucket, prefix, max_bytes=max_bytes):
-            if key in seen or any(key.startswith(ex) for ex in exclude_tuple):
+        for key, etag, size in _list_objects(client, bucket, prefix):
+            if key in seen:
                 continue
             seen.add(key)
             if not _matches_prefix(key, prefix_tuple):
                 raise ValueError("unsafe S3 key")
-            _validate_key(key, local_base, public=public)
+            _validate_key(key, local_base, public=False)
+            if any(key.startswith(ex) for ex in exclude_tuple):
+                continue
+            if public and not _PUBLIC_KEY_RE.fullmatch(key):
+                continue
+            if size is not None and size > max_bytes:
+                raise RuntimeError(f"S3 object {key} exceeds {max_bytes} bytes")
             dest = local_base / key
             prior_sha = prior_state.digests.get((bucket, key)) if prior_state is not None else None
             has_digest = etag is not None or prior_sha is not None

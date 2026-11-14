@@ -48,9 +48,9 @@ function view(date: string, step: number) {
 }
 
 describe("the range input", () => {
-  it("spans the 192 steps and carries the readout as aria-valuetext", () => {
+  it("spans the 192 steps, sets a form name, and carries the readout as aria-valuetext", () => {
     const { range } = view("2024-05-28", 48);
-    expect(range.props).toMatchObject({ type: "range", min: 0, max: 191, step: 1, value: 48 });
+    expect(range.props).toMatchObject({ type: "range", name: "map-time", min: 0, max: 191, step: 1, value: 48 });
     expect(range.props["aria-valuetext"]).toBe("00:00 UTC Wed 29 May · 19:00 CDT Tue 28 May");
   });
 

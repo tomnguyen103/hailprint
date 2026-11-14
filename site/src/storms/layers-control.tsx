@@ -25,7 +25,7 @@ export function LayersControl({ layers, warnings, onToggle }: ControlProps) {
         const off = name === "warnings" && !warnings.available;
         return (
           <label key={name} class="layer-row">
-            <input type="checkbox" checked={layers[name] && !off} disabled={off} onChange={(event) => onToggle(name, event.currentTarget.checked)} />
+            <input type="checkbox" name={`layer-${name}`} checked={layers[name] && !off} disabled={off} onChange={(event) => onToggle(name, event.currentTarget.checked)} />
             <span>{label}</span>
           </label>
         );

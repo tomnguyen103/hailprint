@@ -37,13 +37,88 @@ export const LINE_PX = 2;
 /** The map layers the control switches. */
 export type LayerName = "swath" | "reports" | "warnings";
 
-/** Convert a CSS `oklch(L C H)` color string into `#rrggbb` for MapLibre GL style spec and bitmap consumers. */
-export function oklchToHex(value: string): string {
-  const m = /^oklch\(\s*([0-9.]+)(%?)\s+([0-9.]+)\s+([0-9.]+)(?:deg)?\s*\)$/i.exec(value.trim());
-  if (!m) return value;
-  const L = m[2] === "%" ? Number(m[1]) / 100 : Number(m[1]);
-  const C = Number(m[3]);
-  const hRad = (Number(m[4]) * Math.PI) / 180;
+const NUM_TOKEN_RE = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(%?)$/i;
+const HUE_TOKEN_RE = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?)(deg|rad|grad|turn)?$/i;
+const HEX_COLOR_RE = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+const RGB_COMMA_RE = /^rgba?\(\s*([^,\s)]+)\s*,\s*([^,\s)]+)\s*,\s*([^,\s)]+)(?:\s*,\s*([^,\s)]+))?\s*\)$/i;
+const RGB_SPACE_RE = /^rgba?\(\s*([^\s/,)]+)\s+([^\s/,)]+)\s+([^\s/,)]+)(?:\s*\/\s*([^\s/,)]+))?\s*\)$/i;
+const OKLCH_RE = /^oklch\(\s*([^\s/,)]+)\s+([^\s/,)]+)\s+([^\s/,)]+)(?:\s*\/\s*([^\s/,)]+))?\s*\)$/i;
+const LAB_RE = /^lab\(\s*([^\s/,)]+)\s+([^\s/,)]+)\s+([^\s/,)]+)(?:\s*\/\s*([^\s/,)]+))?\s*\)$/i;
+
+function parseNumToken(tokenStr: string, allowNone = false): { value: number; pct: boolean } | null {
+  if (allowNone && tokenStr.toLowerCase() === "none") return { value: 0, pct: false };
+  const m = NUM_TOKEN_RE.exec(tokenStr);
+  if (!m) return null;
+  const value = Number(m[1]);
+  return Number.isFinite(value) ? { value, pct: m[2] === "%" } : null;
+}
+
+function validAlpha(alpha: string | undefined, allowNone = false): boolean {
+  return alpha === undefined || parseNumToken(alpha, allowNone) !== null;
+}
+
+function hexByte(n: number): string {
+  return Math.round(Math.max(0, Math.min(255, n)))
+    .toString(16)
+    .padStart(2, "0");
+}
+
+function linearSrgbToHex(rLin: number, gLin: number, bLin: number): string {
+  const toByte = (c: number): number => {
+    const clamped = Math.max(0, Math.min(1, c));
+    const gamma = clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
+    return gamma * 255;
+  };
+  return `#${hexByte(toByte(rLin))}${hexByte(toByte(gLin))}${hexByte(toByte(bLin))}`;
+}
+
+function parseHexColor(trimmed: string): string | null {
+  const m = HEX_COLOR_RE.exec(trimmed);
+  if (!m) return null;
+  const h = m[1]!.toLowerCase();
+  if (h.length <= 4) return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`;
+  return `#${h.slice(0, 6)}`;
+}
+
+function parseRgbColor(trimmed: string): string | null {
+  const commaMatch = RGB_COMMA_RE.exec(trimmed);
+  const m = commaMatch ?? RGB_SPACE_RE.exec(trimmed);
+  const allowNone = commaMatch === null;
+  if (!m || !validAlpha(m[4], allowNone)) return null;
+  const rTok = parseNumToken(m[1]!, allowNone);
+  const gTok = parseNumToken(m[2]!, allowNone);
+  const bTok = parseNumToken(m[3]!, allowNone);
+  if (!rTok || !gTok || !bTok) return null;
+  const toChannel = (tok: { value: number; pct: boolean }): number => (tok.pct ? (tok.value / 100) * 255 : tok.value);
+  return `#${hexByte(toChannel(rTok))}${hexByte(toChannel(gTok))}${hexByte(toChannel(bTok))}`;
+}
+
+function parseOklchColor(trimmed: string): string | null {
+  const m = OKLCH_RE.exec(trimmed);
+  if (!m || !validAlpha(m[4], true)) return null;
+  const lTok = parseNumToken(m[1]!, true);
+  const cTok = parseNumToken(m[2]!, true);
+  if (!lTok || !cTok) return null;
+
+  let hRad = 0;
+  if (m[3]!.toLowerCase() !== "none") {
+    const hMatch = HUE_TOKEN_RE.exec(m[3]!);
+    if (!hMatch) return null;
+    const hVal = Number(hMatch[1]);
+    if (!Number.isFinite(hVal)) return null;
+    const unit = hMatch[2]?.toLowerCase() ?? "deg";
+    hRad =
+      unit === "rad"
+        ? hVal
+        : unit === "grad"
+          ? (hVal * Math.PI) / 200
+          : unit === "turn"
+            ? hVal * 2 * Math.PI
+            : (hVal * Math.PI) / 180;
+  }
+
+  const L = Math.max(0, Math.min(1, lTok.pct ? lTok.value / 100 : lTok.value));
+  const C = Math.max(0, cTok.pct ? cTok.value * 0.004 : cTok.value);
   const a = C * Math.cos(hRad);
   const b = C * Math.sin(hRad);
 
@@ -58,14 +133,51 @@ export function oklchToHex(value: string): string {
   const rLin = 4.0767416621 * l - 3.3077115913 * mCube + 0.2309699292 * s;
   const gLin = -1.2684380046 * l + 2.6097574011 * mCube - 0.3413193965 * s;
   const bLin = -0.0041960863 * l - 0.7034186147 * mCube + 1.707614701 * s;
+  return linearSrgbToHex(rLin, gLin, bLin);
+}
 
-  const toByte = (c: number): number => {
-    const clamped = Math.max(0, Math.min(1, c));
-    const gamma = clamped <= 0.0031308 ? 12.92 * clamped : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055;
-    return Math.round(Math.max(0, Math.min(255, gamma * 255)));
-  };
-  const hex = (n: number): string => n.toString(16).padStart(2, "0");
-  return `#${hex(toByte(rLin))}${hex(toByte(gLin))}${hex(toByte(bLin))}`;
+function parseLabColor(trimmed: string): string | null {
+  const m = LAB_RE.exec(trimmed);
+  if (!m || !validAlpha(m[4], true)) return null;
+  const lTok = parseNumToken(m[1]!, true);
+  const aTok = parseNumToken(m[2]!, true);
+  const bTok = parseNumToken(m[3]!, true);
+  if (!lTok || !aTok || !bTok) return null;
+
+  const L = Math.max(0, Math.min(100, lTok.value));
+  if (L === 0) return "#000000";
+  if (L === 100) return "#ffffff";
+  const a = aTok.pct ? aTok.value * 1.25 : aTok.value;
+  const b = bTok.pct ? bTok.value * 1.25 : bTok.value;
+
+  // W3C CSS Color 4: CIE Lab (D50) -> XYZ (D50) -> Bradford XYZ (D65) -> linear sRGB
+  const kappa = 24389 / 27;
+  const epsilon = 216 / 24389;
+  const f1 = (L + 16) / 116;
+  const f0 = a / 500 + f1;
+  const f2 = f1 - b / 200;
+  const x = f0 * f0 * f0 > epsilon ? f0 * f0 * f0 : (116 * f0 - 16) / kappa;
+  const y = L > kappa * epsilon ? f1 * f1 * f1 : L / kappa;
+  const z = f2 * f2 * f2 > epsilon ? f2 * f2 * f2 : (116 * f2 - 16) / kappa;
+
+  const X50 = x * (0.3457 / 0.3585);
+  const Y50 = y;
+  const Z50 = z * ((1.0 - 0.3457 - 0.3585) / 0.3585);
+
+  const X65 = 0.9554734527042182 * X50 - 0.023098536874261423 * Y50 + 0.0632593086610217 * Z50;
+  const Y65 = -0.028369706963208136 * X50 + 1.0099954580058226 * Y50 + 0.021041398966943008 * Z50;
+  const Z65 = 0.012314001688319899 * X50 - 0.020507696433477912 * Y50 + 1.3303659366080753 * Z50;
+
+  const rLin = 3.2409699419045213 * X65 - 1.5373831775700935 * Y65 - 0.4986107602930033 * Z65;
+  const gLin = -0.9692436362808798 * X65 + 1.8759675015077206 * Y65 + 0.04155505740717561 * Z65;
+  const bLin = 0.05563007969699361 * X65 - 0.20397695888897657 * Y65 + 1.0569715142428786 * Z65;
+  return linearSrgbToHex(rLin, gLin, bLin);
+}
+
+/** Normalize a CSS Color 4 string (lab, oklch, rgb/rgba, or hex) to lowercase `#rrggbb` for MapLibre GL and bitmap consumers. */
+export function oklchToHex(value: string): string {
+  const trimmed = value.trim();
+  return parseHexColor(trimmed) ?? parseRgbColor(trimmed) ?? parseOklchColor(trimmed) ?? parseLabColor(trimmed) ?? value;
 }
 
 /** A design token's current value, read from the document so the theme drives it. */
