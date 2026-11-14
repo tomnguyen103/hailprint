@@ -493,6 +493,9 @@ describe("createMap", () => {
 
     expect(oklchToHex("oklch(0.5 -0.2 0)")).toBe(oklchToHex("oklch(0.5 0 0)"));
     expect(oklchToHex("oklch(-0.5 0.2 0)")).toBe(oklchToHex("oklch(0 0.2 0)"));
-    expect(oklchToHex("lab(-20% 50 0)")).toBe(oklchToHex("lab(0% 50 0)"));
+    expect(oklchToHex("lab(0% 50 0)")).toBe("#000000");
+    expect(oklchToHex("lab(-20% 50 0)")).toBe("#000000");
+    expect(oklchToHex("lab(100% 50 -50)")).toBe("#ffffff");
+    expect(oklchToHex("lab(120% 50 0)")).toBe("#ffffff");
   });
 });

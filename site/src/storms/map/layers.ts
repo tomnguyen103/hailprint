@@ -145,6 +145,8 @@ function parseLabColor(trimmed: string): string | null {
   if (!lTok || !aTok || !bTok) return null;
 
   const L = Math.max(0, Math.min(100, lTok.value));
+  if (L === 0) return "#000000";
+  if (L === 100) return "#ffffff";
   const a = aTok.pct ? aTok.value * 1.25 : aTok.value;
   const b = bTok.pct ? bTok.value * 1.25 : bTok.value;
 
