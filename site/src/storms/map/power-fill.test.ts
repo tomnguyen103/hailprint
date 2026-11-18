@@ -43,8 +43,8 @@ vi.mock("maplibre-gl", () => ({
 
 const THEME = { now: "light" as "light" | "dark" };
 const KNOWN = {
-  light: { "--ink-muted": "#5f6b7a" },
-  dark: { "--ink-muted": "#a3adba" },
+  light: { "--text-muted": "#5f6b7a" },
+  dark: { "--text-muted": "#a3adba" },
 };
 
 beforeEach(() => {

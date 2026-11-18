@@ -14,8 +14,8 @@
 }
 
 .cohort-label {
-  color: var(--ink-muted);
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .cohort-pills {
@@ -25,21 +25,34 @@
 }
 
 .cohort-pill:disabled {
-  color: var(--ink-muted);
+  color: var(--text-muted);
   cursor: not-allowed;
   opacity: 0.5;
 }
 
 .cohort-pill[aria-pressed="true"],
 .sensitivity-cell[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--sheet-muted);
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-subtle);
   font-weight: 500;
 }
 
 .sensitivity-section {
   margin-top: 32px;
+}
+
+.sensitivity-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.sensitivity-header h2 {
+  margin: 0;
 }
 
 .sensitivity-cell {
@@ -76,24 +89,24 @@
 }
 
 .curve text {
-  font: 12px var(--mono);
-  fill: var(--ink-muted);
+  font: 12px var(--font-mono);
+  fill: var(--text-muted);
 }
 
 .curve .axis {
-  stroke: var(--rule);
+  stroke: var(--border);
   stroke-width: 1;
 }
 
 .curve .series {
   fill: none;
-  stroke: var(--ink);
+  stroke: var(--text);
   stroke-width: 2;
   stroke-linejoin: round;
 }
 
 .curve .literature {
-  stroke: var(--ink-muted);
+  stroke: var(--text-muted);
   stroke-width: 1;
   stroke-dasharray: 6 4;
 }
@@ -104,8 +117,8 @@
 }
 
 .curve .marker {
-  fill: var(--accent);
-  stroke: var(--sheet);
+  fill: var(--primary);
+  stroke: var(--surface);
   stroke-width: 2;
   cursor: pointer;
   transition:
@@ -115,13 +128,13 @@
 
 .curve .marker:focus-visible {
   outline: none;
-  stroke: var(--ink);
+  stroke: var(--text);
   stroke-width: 3;
 }
 
 .curve .highlight {
   fill: none;
-  stroke: var(--accent);
+  stroke: var(--primary);
   stroke-width: 2;
   transition:
     cx var(--motion),
@@ -133,12 +146,12 @@
 }
 
 .curve-tooltip rect {
-  fill: var(--sheet);
-  stroke: var(--rule);
+  fill: var(--surface);
+  stroke: var(--border);
 }
 
 .curve-tooltip text {
-  fill: var(--ink);
+  fill: var(--text);
 }
 
 @media (prefers-reduced-motion: reduce) {

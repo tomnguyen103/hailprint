@@ -399,7 +399,7 @@ describe("createMap", () => {
       getPropertyValue: () => "oklch(0.46 0.11 236)",
     }));
     expect(oklchToHex("oklch(0.972 0.008 258)")).toMatch(/^#[0-9a-f]{6}$/);
-    expect(token("--accent")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(token("--primary")).toMatch(/^#[0-9a-f]{6}$/);
     const { map } = await start();
     const style = (map.options as { style: StyleSpecification }).style;
     expect(validateStyleMin(style)).toEqual([]);
@@ -407,11 +407,12 @@ describe("createMap", () => {
 
   it("normalizes LightningCSS lab() tokens, validates MapLibre style, feeds hexRgb, and keeps theme switches idempotent (US-01.1, US-01.4)", async () => {
     const lightTokens: Record<string, string> = {
-      "--paper": "lab(96.7304% -.513285 -2.97188)",
-      "--ink": "lab(8.26392% -.742577 -7.89793)",
-      "--ink-muted": "lab(32.6442% -1.114 -8.02775)",
-      "--sheet": "lab(99.0615% -.261664 -1.48883)",
+      "--bg": "lab(96.7304% -.513285 -2.97188)",
+      "--text": "lab(8.26392% -.742577 -7.89793)",
+      "--text-muted": "lab(32.6442% -1.114 -8.02775)",
+      "--surface": "lab(99.0615% -.261664 -1.48883)",
       "--rule": "lab(85.4572% -.922233 -5.55018)",
+      "--border": "lab(85.4572% -.922233 -5.55018)",
       "--report": "lab(40.1143% 59.6761 45.0277)",
       "--warn-sv": "lab(40.4802% 21.5733 60.3275)",
       "--warn-to": "lab(34.9174% 56.6023 -11.0666)",
@@ -419,17 +420,17 @@ describe("createMap", () => {
     };
     const darkTokens: Record<string, string> = {
       ...lightTokens,
-      "--paper": "lab(4.01855% -.360526 -4.00815)",
-      "--ink": "lab(93.5983% -.512779 -2.97157)",
-      "--ink-muted": "lab(72.1133% -.964701 -5.91025)",
+      "--bg": "lab(4.01855% -.360526 -4.00815)",
+      "--text": "lab(93.5983% -.512779 -2.97157)",
+      "--text-muted": "lab(72.1133% -.964701 -5.91025)",
     };
     let active = lightTokens;
     vi.stubGlobal("getComputedStyle", () => ({
       getPropertyValue: (name: string) => active[name] ?? "lab(50% 0 0)",
     }));
 
-    expect(token("--paper")).toBe("#f2f6fb");
-    expect(hexRgb(token("--ink-muted"))).toEqual([70, 78, 89]);
+    expect(token("--bg")).toBe("#f2f6fb");
+    expect(hexRgb(token("--text-muted"))).toEqual([70, 78, 89]);
 
     const { state, map } = await start();
     const setPaintProperty = vi.fn();
@@ -443,8 +444,8 @@ describe("createMap", () => {
     const handle = state.value!;
 
     active = darkTokens;
-    expect(token("--paper")).toBe("#0a0f15");
-    expect(hexRgb(token("--ink-muted"))).toEqual([171, 178, 187]);
+    expect(token("--bg")).toBe("#0a0f15");
+    expect(hexRgb(token("--text-muted"))).toEqual([171, 178, 187]);
 
     handle.setTheme("dark");
     const callsAfterDark = setPaintProperty.mock.calls.length;

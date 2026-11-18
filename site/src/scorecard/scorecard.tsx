@@ -94,7 +94,12 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
   if (pairs.status === "error") body = <ErrorState error={pairs.error} onRetry={pairs.retry} />;
   else if (pairs.status === "loading") body = pairs.showLoading ? <LoadingState file={FILE} /> : null;
   else if (filtered !== null && filtered.storms.length === 0) {
-    body = <EmptyState sentence="No storm dates in this cohort." />;
+    body = (
+      <EmptyState
+        sentence="No storm dates in this cohort."
+        link={{ href: "/storms", label: "Browse storms" }}
+      />
+    );
   } else if (filtered !== null && filtered.pairs.length === 0) {
     body = <ErrorState error={new DataError(FILE, "no matching pairs for cohort")} onRetry={pairs.retry} />;
   } else if (table === null) body = null;
@@ -165,10 +170,11 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
         {body}
         {view === "curve" && matrix.length > 0 && receipt !== null ? (
           <section class="sensitivity-section" aria-label="Radius by threshold HSS sensitivity matrix">
-            <h2>HSS sensitivity matrix</h2>
-            <div class="pane-note">
-              Active:{" "}
-              <span class="mono">R = {activeRadius} km</span>, <span class="mono">&ge; {classMm} mm</span>.
+            <div class="sensitivity-header">
+              <h2>HSS sensitivity matrix</h2>
+              <span class="view-meta">
+                Active: <span class="mono">R = {activeRadius} km</span>, <span class="mono">&ge; {classMm} mm</span>.
+              </span>
             </div>
             <div class="table-scroll">
               <table class="table sensitivity-matrix">

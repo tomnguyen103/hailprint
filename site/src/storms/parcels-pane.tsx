@@ -18,7 +18,12 @@ const FILE = "zip-counts.json";
 export function ParcelsPane({ storm, index }: { storm: Storm; index?: StormsIndex }) {
   const path = storm.files.zip_counts;
   if (path === null) {
-    return <EmptyState sentence={`No parcel count for this storm date. Run hailprint parcels ${storm.storm_date}.`} />;
+    return (
+      <EmptyState
+        sentence={`No parcel count for this storm date. Run hailprint parcels ${storm.storm_date}.`}
+        link={{ href: href({ area: "try", tool: "run" }), label: "Open CLI commands" }}
+      />
+    );
   }
   return <ParcelsTable stormDate={storm.storm_date} path={path} index={index} />;
 }
@@ -85,9 +90,8 @@ function ParcelsTable({
       <div class="pane-grid">
         <section>
           <h2>Parcels by size class</h2>
-          <div class="pane-note">HCAD parcels, no address or owner data</div>
           <div class="table-scroll">
-            <table class="table">
+            <table class="table" aria-label="HCAD parcels by size class, no address or owner data">
               <thead>
                 <tr>
                   <th scope="col">Size class</th>
@@ -139,7 +143,10 @@ function ParcelsTable({
         <section>
           <h2>ZIPs &ge; {formatInches(mark.threshold_in)}</h2>
           {rawRows.length === 0 ? (
-            <EmptyState sentence={`No parcel at ${formatInches(mark.threshold_in)} on this storm date.`} />
+            <EmptyState
+              sentence={`No parcel at ${formatInches(mark.threshold_in)} on this storm date.`}
+              link={{ href: href({ area: "storms", date: stormDate, tab: "map" }), label: "Open storm map" }}
+            />
           ) : (
             <>
               <div class="parcels-toolbar">
@@ -218,7 +225,7 @@ function ParcelsTable({
         <section class="zip-ledger-section" aria-label={`Cross-storm exposure ledger for ZIP ${pickedZip}`}>
           <div class="zip-ledger-header">
             <h2>
-              ZIP <span class="mono">{pickedZip}</span> across storms (&ge; {formatInches(mark.threshold_in)})
+              ZIP <span class="mono">{pickedZip}</span> exposure
             </h2>
             <button type="button" class="button button-small" onClick={() => setPickedZip(null)}>
               Close ledger

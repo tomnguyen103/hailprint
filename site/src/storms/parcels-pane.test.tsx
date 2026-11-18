@@ -27,6 +27,7 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
     parentNode: null,
     namespaceURI: "http://www.w3.org/1999/xhtml",
     style: {},
+    onclick: null,
     setAttribute(k: string, v: unknown) {
       el[k] = v;
     },
@@ -136,14 +137,45 @@ describe("ParcelsPane form input name (US-01.1)", () => {
     vi.useRealTimers();
   });
 
-  it("gives the ZIP filter search input a non-empty name attribute", async () => {
+  it("gives the ZIP filter search input a non-empty name attribute, omits heading subtitles, and keeps ledger headings <=5 words (US-02.1, US-02.5)", async () => {
     const host = makeFakeElement("div");
-    await act(() => render(h(ParcelsPane, { storm }), host as unknown as HTMLElement));
+    const index = {
+      confidence: receipt.confidence,
+      run_time: receipt.run_time,
+      package_version: receipt.package_version,
+      radius_km_default: 5,
+      storms: [storm],
+    };
+    await act(() => render(h(ParcelsPane, { storm, index }), host as unknown as HTMLElement));
     await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
 
     const inputs = findDomNodes(host, (n) => n.tagName === "INPUT");
     expect(inputs).toHaveLength(1);
     expect(inputs[0]!["type"]).toBe("search");
     expect(inputs[0]!["name"]).toBe("zip-filter");
+
+    // Zero muted .pane-note subtitle directly beneath "Parcels by size class" heading
+    const notes = findDomNodes(host, (n) => n["class"] === "pane-note");
+    expect(notes).toHaveLength(0);
+
+    // Click ZIP button to open cross-storm ledger and confirm heading <= 5 words
+    const zipBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && String(n["class"] ?? "").includes("zip-pick"))[0]!;
+    await act(() => {
+      (zipBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+
+    const ledgerH2 = findDomNodes(host, (n) => n.tagName === "H2").at(-1)!;
+    const textOf = (n: FakeDomNode): string => (n.nodeType === 3 ? String(n.data ?? "") : n.childNodes.map(textOf).join(""));
+    const words = textOf(ledgerH2).trim().split(/\s+/).filter(Boolean);
+    expect(words.length).toBeLessThanOrEqual(5);
+
+    // Empty state when zip_counts is null includes an actionable recovery link
+    const emptyHost = makeFakeElement("div");
+    const missingZipStorm: Storm = { ...storm, files: { ...storm.files, zip_counts: null } };
+    await act(() => render(h(ParcelsPane, { storm: missingZipStorm }), emptyHost as unknown as HTMLElement));
+    const emptyLink = findDomNodes(emptyHost, (n) => n.tagName === "A")[0];
+    expect(emptyLink).toBeDefined();
+    expect(emptyLink!["href"]).toBe("/try/run");
   });
 });

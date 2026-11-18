@@ -94,7 +94,7 @@ function style(theme: Theme, basemap: boolean): StyleSpecification {
     sources,
     ...(basemap ? { glyphs: GLYPHS_URL, sprite: spriteUrl(theme) } : {}),
     layers: [
-      { id: "paper", type: "background", paint: { "background-color": token("--paper") } },
+      { id: "paper", type: "background", paint: { "background-color": token("--bg") } },
       ...(basemap ? basemapLayers(theme) : []),
       ...powerLayers(),
       ...fillLayers(),
@@ -197,7 +197,7 @@ export function makeHandle(
       for (const [prop, value] of Object.entries(paint) as [PaintName, string][]) map.setPaintProperty(id, prop, value);
     }
     if (map.hasImage(POWER_HATCH)) map.removeImage(POWER_HATCH);
-    map.addImage(POWER_HATCH, hatchPixels(hexRgb(token("--ink-muted"))));
+    map.addImage(POWER_HATCH, hatchPixels(hexRgb(token("--text-muted"))));
   };
   const clearCountyTags = () => {
     for (const marker of countyMarkers) marker.remove();
@@ -225,7 +225,7 @@ export function makeHandle(
         powerShown = false;
       }
       if (outlines !== null) {
-        map.setPaintProperty(POWER_OUTLINE, "line-color", token("--ink-muted"));
+        map.setPaintProperty(POWER_OUTLINE, "line-color", token("--text-muted"));
         geojson(POWER_SOURCE)?.setData(outlines);
         show(POWER_OUTLINE, true);
       } else {
@@ -273,7 +273,7 @@ export function makeHandle(
     setTheme(nextTheme) {
       if (nextTheme === currentTheme) return;
       currentTheme = nextTheme;
-      map.setPaintProperty("paper", "background-color", token("--paper"));
+      map.setPaintProperty("paper", "background-color", token("--bg"));
       for (const [id, paint] of Object.entries(themedPaint())) {
         for (const [prop, value] of Object.entries(paint) as [PaintName, string][]) map.setPaintProperty(id, prop, value);
       }
@@ -287,7 +287,7 @@ export function makeHandle(
         for (const layer of basemapLabelLayers(nextTheme)) map.addLayer(layer, warningLayerId("SV"));
       }
       if (powerShown) paintPower();
-      else if (outlines !== null) map.setPaintProperty(POWER_OUTLINE, "line-color", token("--ink-muted"));
+      else if (outlines !== null) map.setPaintProperty(POWER_OUTLINE, "line-color", token("--text-muted"));
     },
     setClassVisible(thresholdMm, visible) {
       if (visible) hiddenClasses.delete(thresholdMm);

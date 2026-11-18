@@ -13,14 +13,14 @@
 
 .map-frame {
   height: min(70dvh, 640px);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pane);
-  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
   overflow: hidden;
 }
 
 .map-frame:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
 
@@ -30,8 +30,8 @@
   z-index: 3;
   display: grid;
   place-items: center;
-  background: color-mix(in srgb, var(--paper) 70%, transparent);
-  border-radius: var(--radius-pane);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
+  border-radius: var(--radius);
 }
 
 .map-note {
@@ -41,11 +41,11 @@
   z-index: 2;
   margin: 0;
   padding: 4px 8px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
-  background: var(--sheet);
-  color: var(--ink-muted);
-  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 /* Controls: top right of the map, under the frame on a narrow screen */
@@ -66,18 +66,18 @@
   min-width: 0;
   margin: 0;
   padding: 0 12px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pane);
-  background: var(--sheet);
-  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
 }
 
 .power-fill legend {
   padding: 0 6px;
   border-radius: var(--radius);
-  background: var(--sheet);
-  color: var(--ink-muted);
-  font-size: 0.85rem;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 /* Legends: bottom left of the map; the power key sits beside the hail key so the top-left zoom control stays clear */
@@ -95,15 +95,15 @@
 
 .power-legend {
   padding: 8px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pane);
-  background: var(--sheet);
-  font-size: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 12px;
 }
 
 .power-legend-title {
   margin: 0 0 4px;
-  font-size: 0.85rem;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -124,7 +124,7 @@
 .power-legend-note {
   max-width: 22ch;
   margin: 8px 0 0;
-  color: var(--ink-muted);
+  color: var(--text-muted);
 }
 
 .power-swatch {
@@ -132,28 +132,28 @@
   box-sizing: border-box;
   width: 16px;
   height: 16px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .power-swatch-none {
-  background: var(--sheet);
+  background: var(--surface);
 }
 
 /* A missing step: the same 45 degree hatch the map draws, never the colour of a zero */
 .power-swatch-gap {
-  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--ink-muted) 3px 4px);
+  background: repeating-linear-gradient(135deg, transparent 0 3px, var(--text-muted) 3px 4px);
 }
 
 /* County labels: map markers with a sheet ground, so the text meets 4.5:1 on every fill */
 
 .county-tag {
   padding: 0 4px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
-  background: var(--sheet);
-  color: var(--ink);
-  font: 500 12px/1.4 var(--mono);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  font: 500 12px/1.4 var(--font-mono);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
@@ -230,7 +230,7 @@
 }
 
 .layer-row:has(input:disabled) {
-  color: var(--ink-muted);
+  color: var(--text-muted);
   cursor: default;
 }
 
@@ -240,7 +240,7 @@
   margin: 0;
   padding: 0 0 8px;
   list-style: none;
-  font-size: 0.85rem;
+  font-size: 12px;
 }
 
 .warning-key li {
@@ -273,8 +273,8 @@
   margin: 0;
   padding: 4px 0 8px;
   max-width: 28ch;
-  color: var(--ink-muted);
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 /* Warning text labels: map markers, shown from zoom 9 */
@@ -282,9 +282,9 @@
 .warning-tag {
   padding: 0 4px;
   border: 1px solid currentColor;
-  border-radius: var(--radius-control);
-  background: var(--sheet);
-  font: 500 12px/1.4 var(--mono);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font: 500 12px/1.4 var(--font-mono);
   pointer-events: none;
 }
 
@@ -307,7 +307,7 @@
 /* The storm stamp cell that holds the slider hour */
 
 .stamp-cell[data-slider="true"] {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--text);
 }
 
 /* Legend */
@@ -317,9 +317,9 @@
   flex-direction: column;
   gap: 0;
   padding: 4px 6px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pane);
-  background: var(--sheet);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 .legend-item {
@@ -329,21 +329,21 @@
   min-height: 40px;
   padding: 2px 6px;
   border: 0;
-  border-radius: var(--radius-control);
+  border-radius: var(--radius);
   background: none;
-  color: var(--ink);
+  color: var(--text);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
 
 .legend-item:hover {
-  background: var(--sheet-muted);
+  background: var(--surface-muted);
 }
 
 .legend-item[aria-pressed="false"] {
-  color: var(--ink-muted);
+  color: var(--text-muted);
 }
 
 .legend-item[aria-pressed="false"] .legend-circle {
@@ -357,7 +357,7 @@
 .legend-circle {
   flex: none;
   box-sizing: content-box;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border);
   border-radius: 50%;
   transition: opacity var(--motion);
 }
@@ -366,10 +366,9 @@
 
 .inspector {
   padding: 16px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pane);
-  background: var(--sheet);
-  box-shadow: var(--shadow);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
 }
 
 .inspector:focus {
@@ -393,12 +392,12 @@
 .inspector-county {
   margin-top: 16px;
   padding-top: 12px;
-  border-top: 1px solid var(--rule);
+  border-top: 1px solid var(--border);
 }
 
 .inspector-county h3 {
   margin: 0 0 8px;
-  font-size: 1rem;
+  font-size: 14px;
 }
 
 .inspector-county-source {
@@ -423,22 +422,22 @@
   width: 100%;
   min-height: 40px;
   padding: 4px 12px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
-  background: var(--sheet);
-  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
 .county-row:hover {
-  background: var(--sheet-muted);
+  background: var(--surface-muted);
 }
 
 /* The picked row reads from the outline and the weight, never from colour alone */
 .county-row[aria-pressed="true"] {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--text);
   font-weight: 600;
 }
 
@@ -449,13 +448,13 @@
 /* MapLibre chrome in the tokens */
 
 .map-frame .maplibregl-ctrl-group {
-  background: var(--sheet);
+  background: var(--surface);
   border: 0;
   box-shadow: var(--shadow);
 }
 
 .map-frame .maplibregl-ctrl-group button + button {
-  border-top-color: var(--rule);
+  border-top-color: var(--border);
 }
 
 .map-frame .maplibregl-ctrl-group button,
@@ -470,13 +469,13 @@
 }
 
 .map-frame .maplibregl-ctrl-attrib {
-  background: color-mix(in srgb, var(--sheet) 80%, transparent);
-  color: var(--ink-muted);
-  font-size: 0.75rem;
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .map-frame .maplibregl-ctrl-attrib a {
-  color: var(--ink-muted);
+  color: var(--text-muted);
 }
 
 @media (min-width: 1280px) {
@@ -488,6 +487,12 @@
     align-self: start;
     position: sticky;
     top: calc(var(--bar-height) + 24px);
+  }
+}
+
+@media (max-width: 1279px) {
+  .inspector {
+    box-shadow: var(--shadow);
   }
 }
 
@@ -557,7 +562,7 @@
     overflow-y: auto;
   }
 
-  /* A shorter frame keeps the map above the bottom bar; the overlay covers the frame only */
+  /* A shorter frame keeps the map above the bottom edge; the overlay covers the frame only */
   .map-frame,
   .map-overlay {
     height: min(50dvh, 420px);
@@ -574,7 +579,7 @@
   }
 
   .legend-item {
-    font-size: 0.75rem;
+    font-size: 12px;
   }
 
   .layer-row input,
@@ -592,7 +597,6 @@
   }
 }
 
-
 .map-pin-controls {
   display: flex;
   flex-wrap: wrap;
@@ -601,10 +605,10 @@
   min-width: 0;
   margin: 0;
   padding: 8px 12px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pane);
-  background: var(--sheet);
-  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
 }
 
 .inspector-actions {
@@ -630,5 +634,8 @@
 }
 
 .inspector-try-link {
-  display: inline-flex; align-items: center; min-height: 40px; color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  color: var(--primary);
 }

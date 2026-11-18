@@ -37,5 +37,18 @@
     },
     "slop_test": "pass",
     "notes": "No KPI card row, no eyebrow labels, no gradient text, no icon-card grid, no nested card. Prose under the 120-word fold and 25-word sentence budget by test. Native range for the guess slider. Share bar capped at 96 px inside its cell. Mono only on dates, numbers, versions, and code."
+  },
+  {
+    "date": "2026-11-18",
+    "surface": "Corporate Standard v1 shell and all six areas",
+    "design_md": "design.md",
+    "archetype": "monitoring + analytics + editor",
+    "macrostructure": "56px sticky top bar with single top-left hamburger toggle, centered Ctrl+K / search dialog, 3-state Light/Dark/System theme menu; collapsible 256px/56px left route sidebar (288px modal drawer <768px); underline sub-tabs; footer inside main",
+    "detector": {
+      "command": "node ~/.gemini/antigravity/skills/impeccable/scripts/detect.mjs --json site/index.html site/src",
+      "exit": 0
+    },
+    "slop_test": "pass",
+    "notes": "Corporate Standard v1 palette (#FFFFFF/#0C111D, navy #1E3A8A, IBM Plex Sans + Mono, 4px radius), weight <=600, zero resting shadow on docked inspector, canonical CSS tokens, forced-colors coverage, centered empty states with recovery links, 45/45 dom-audit route-viewport checks green."
   }
 ]

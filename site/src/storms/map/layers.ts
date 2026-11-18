@@ -253,7 +253,7 @@ export function powerLayers(): LayerSpecification[] {
       type: "line",
       source: POWER_SOURCE,
       layout: { visibility: "none" },
-      paint: { "line-color": token("--ink-muted"), "line-width": 1, "line-dasharray": [3, 2] },
+      paint: { "line-color": token("--text-muted"), "line-width": 1, "line-dasharray": [3, 2] },
     },
   ];
 }
@@ -262,7 +262,7 @@ export function powerLayers(): LayerSpecification[] {
 export function powerPaint(): Record<string, Record<string, unknown>> {
   return {
     [POWER_FILL]: { "fill-color": powerFillColor() },
-    [POWER_OUTLINE]: { "line-color": token("--ink-muted") },
+    [POWER_OUTLINE]: { "line-color": token("--text-muted") },
   };
 }
 
@@ -371,7 +371,7 @@ export function chromeLayers(): LayerSpecification[] {
       id: "county-line",
       type: "line",
       source: COUNTY_SOURCE,
-      paint: { "line-color": token("--ink"), "line-width": 1.5 },
+      paint: { "line-color": token("--text"), "line-width": 1.5 },
     },
     {
       id: REPORTS_LAYER,
@@ -381,7 +381,7 @@ export function chromeLayers(): LayerSpecification[] {
         "circle-radius": 5,
         "circle-color": token("--report"),
         "circle-stroke-width": 2,
-        "circle-stroke-color": token("--sheet"),
+        "circle-stroke-color": token("--surface"),
         "circle-opacity": ["coalesce", ["get", "alpha"], 1],
         "circle-stroke-opacity": ["coalesce", ["get", "alpha"], 1],
       },
@@ -394,7 +394,7 @@ export function chromeLayers(): LayerSpecification[] {
         "circle-radius": 6,
         "circle-color": token("--report"),
         "circle-stroke-width": 2,
-        "circle-stroke-color": token("--sheet"),
+        "circle-stroke-color": token("--surface"),
       },
     },
   ];

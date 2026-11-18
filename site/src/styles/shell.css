@@ -469,10 +469,14 @@
 
 .state {
   display: grid;
-  justify-items: start;
+  place-content: center;
+  justify-items: center;
   gap: 12px;
+  min-height: 220px;
   max-width: 680px;
-  padding: 24px 0;
+  margin: 0 auto;
+  padding: 24px 16px;
+  text-align: center;
   color: var(--text-muted);
 }
 
@@ -491,6 +495,10 @@
 
 .state-loading {
   display: block;
+  min-height: auto;
+  margin: 0;
+  padding: 12px 0;
+  text-align: left;
 }
 
 /* Buttons */
@@ -907,11 +915,22 @@
 }
 
 @media (forced-colors: active) {
-  .route-sidebar a[aria-current="page"] {
+  .route-sidebar a[aria-current="page"],
+  .scope-list a[aria-current="page"] {
     border-left: 2px solid Highlight;
   }
 
   .sub-tabs a[aria-selected="true"] {
     border-bottom: 2px solid Highlight;
+  }
+
+  .theme-menu-item[aria-checked="true"],
+  .search-option[aria-selected="true"] {
+    outline: 1px solid Highlight;
+  }
+
+  .button[aria-pressed="true"] {
+    border-color: Highlight;
+    outline: 1px solid Highlight;
   }
 }

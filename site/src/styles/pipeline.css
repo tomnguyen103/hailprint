@@ -29,11 +29,11 @@
 }
 
 .dot[data-state="ok"] {
-  background: var(--accent);
+  background: var(--primary);
 }
 
 .dot[data-state="missing"] {
-  box-shadow: inset 0 0 0 1.5px var(--ink-muted);
+  box-shadow: inset 0 0 0 1.5px var(--text-muted);
 }
 
 /* Run log rows */
@@ -45,20 +45,20 @@
   padding: 4px 8px;
   margin: -4px -8px;
   border: 0;
-  border-radius: var(--radius-control);
+  border-radius: var(--radius);
   background: none;
-  color: var(--ink);
+  color: var(--text);
   font: inherit;
   cursor: pointer;
 }
 
 .row-pick:hover {
-  background: var(--sheet-muted);
+  background: var(--surface-muted);
 }
 
 .row-pick[aria-pressed="true"] {
-  background: var(--sheet-muted);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  background: var(--primary-subtle);
+  box-shadow: inset 0 0 0 1px var(--primary);
 }
 
 .date-list {
@@ -91,11 +91,15 @@
 .pipeline .table tfoot th,
 .pipeline .table tfoot td {
   border-bottom: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
   font-weight: 600;
 }
 
 .pipeline .table th[scope="row"] {
-  color: var(--ink);
+  background: transparent;
+  color: var(--text);
   font-size: inherit;
   font-weight: 400;
 }

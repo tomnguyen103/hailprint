@@ -56,6 +56,11 @@ h3 {
   margin-top: 24px;
 }
 
+strong,
+b {
+  font-weight: 600;
+}
+
 a {
   color: var(--primary);
   text-underline-offset: 0.15em;

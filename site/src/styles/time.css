@@ -12,9 +12,9 @@
   gap: 0 16px;
   align-items: center;
   padding: 8px 16px 12px;
-  background: var(--sheet);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pane);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .button.time-play {
@@ -26,7 +26,7 @@
   width: 100%;
   height: 44px;
   margin: 0;
-  accent-color: var(--accent);
+  accent-color: var(--primary);
   cursor: pointer;
 }
 
@@ -71,9 +71,9 @@
 
 .time-stride button[aria-pressed="true"],
 .time-jump-chip[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--sheet-muted);
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--primary-subtle);
   font-weight: 500;
 }
 
@@ -82,15 +82,15 @@
 .timeline {
   min-width: 0;
   padding: 8px 16px 12px;
-  background: var(--sheet);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-pane);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
 }
 
 .timeline-heading {
   margin: 0 0 8px;
-  color: var(--ink-muted);
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -105,7 +105,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
-  color: var(--ink-muted);
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1;
 }
@@ -127,8 +127,8 @@
 }
 
 .timeline-strip {
-  fill: var(--sheet-muted);
-  stroke: var(--rule);
+  fill: var(--surface-muted);
+  stroke: var(--border);
   stroke-width: 1px;
   vector-effect: non-scaling-stroke;
   cursor: pointer;
@@ -144,7 +144,7 @@
 }
 
 .timeline-grid {
-  stroke: var(--rule);
+  stroke: var(--border);
   stroke-width: 1px;
 }
 
@@ -170,7 +170,7 @@
 }
 
 .timeline-cursor {
-  stroke: var(--accent);
+  stroke: var(--primary);
   stroke-width: 2px;
 }
 
@@ -184,15 +184,15 @@
 
 .timeline-power-line {
   fill: none;
-  stroke: var(--ink);
+  stroke: var(--text);
   stroke-width: 2px;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .timeline-power-gap {
-  fill: color-mix(in srgb, var(--ink-muted) 12%, transparent);
-  stroke: var(--ink-muted);
+  fill: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  stroke: var(--text-muted);
   stroke-width: 1px;
   stroke-dasharray: 4 3;
 }
@@ -208,34 +208,34 @@
 
 .timeline-net-line {
   fill: none;
-  stroke: var(--ink);
+  stroke: var(--text);
   stroke-width: 2px;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .timeline-net-base {
-  stroke: var(--ink-muted);
+  stroke: var(--text-muted);
   stroke-width: 1px;
   stroke-dasharray: 2 3;
 }
 
 .timeline-net-gap {
-  fill: color-mix(in srgb, var(--ink-muted) 12%, transparent);
-  stroke: var(--ink-muted);
+  fill: color-mix(in srgb, var(--text-muted) 12%, transparent);
+  stroke: var(--text-muted);
   stroke-width: 1px;
   stroke-dasharray: 4 3;
 }
 
 .timeline .timeline-power-note {
   margin: 4px 0 0;
-  color: var(--ink-muted);
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .timeline-power-source {
   display: block;
-  color: var(--ink);
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -249,8 +249,8 @@
   margin: 0;
   padding-inline: 4px;
   place-items: center;
-  color: var(--ink-muted);
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-size: 12px;
   text-align: center;
   pointer-events: none;
 }
@@ -272,7 +272,7 @@
   display: flex;
   justify-content: space-between;
   margin-top: 4px;
-  color: var(--ink-muted);
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 1.4;
 }
@@ -283,8 +283,8 @@
 
 .timeline-numbers .table caption {
   padding: 8px 0;
-  color: var(--ink-muted);
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-size: 12px;
   text-align: left;
 }
 
@@ -300,6 +300,6 @@
 
 .power-source {
   display: block;
-  color: var(--ink);
+  color: var(--text);
   font-weight: 600;
 }

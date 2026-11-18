@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -247,6 +249,9 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const empty = findDomNodes(host, (n) => classOf(n).includes("state-empty"));
     expect(empty).toHaveLength(1);
     expect(domText(empty[0]!)).toContain("No storm dates in this cohort.");
+    const emptyLinks = findDomNodes(empty[0]!, (n) => n.tagName === "A");
+    expect(emptyLinks).toHaveLength(1);
+    expect(emptyLinks[0]!["href"]).toBe("/storms");
 
     const mismatchedIndex = makeIndex(["wcm"]);
     mockPairsState.data = [makePairs("2024-05-11")];
@@ -416,6 +421,25 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     await act(() => render(h(Scorecard, { index, view: "curve" }), hostCurve as unknown as HTMLElement));
     expect(findDomNodes(hostCurve, (n) => classOf(n).includes("state-error"))).toHaveLength(0);
     expect(domText(hostCurve)).toContain("R = 10 km");
+  });
+
+  it("enforces Corporate Standard v1 bold cap, table surface tokens, zero docked inspector shadow, and centered empty states (US-02.1, US-02.2)", () => {
+    const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+    const baseCss = read("../styles/base.css");
+    const stormsCss = read("../styles/storms.css");
+    const mapCss = read("../styles/map.css");
+    const shellCss = read("../styles/shell.css");
+
+    expect(baseCss).toMatch(/strong,\s*b\s*\{[^}]*font-weight:\s*600/);
+    const tableTh = stormsCss.match(/\.table th\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(tableTh).toContain("var(--surface-muted)");
+    expect(tableTh).toContain("12px");
+    expect(stormsCss).toContain(".table tbody tr:hover");
+    const baseInspector = mapCss.match(/\/\* Inspector \*\/\s*\.inspector\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(baseInspector).not.toContain("box-shadow");
+    const stateBlock = shellCss.match(/\/\* States \*\/\s*\.state\s*\{([^}]*)\}/)?.[1] ?? "";
+    expect(stateBlock).toContain("justify-items: center");
+    expect(stateBlock).toContain("min-height: 220px");
   });
 });
 

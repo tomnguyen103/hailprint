@@ -8,7 +8,14 @@ import { EmptyState } from "../shell/states";
 export function Runs({ runs }: { runs: PipelineRun[] }) {
   const [selected, setSelected] = useState(0);
   const table = useRef<HTMLTableElement>(null);
-  if (runs.length === 0) return <EmptyState sentence="No publish runs in log." />;
+  if (runs.length === 0) {
+    return (
+      <EmptyState
+        sentence="No publish runs in log."
+        link={{ href: href({ area: "try", tool: "run" }), label: "Open CLI commands" }}
+      />
+    );
+  }
   const at = Math.min(selected, runs.length - 1);
   const run = runs[at]!;
 
