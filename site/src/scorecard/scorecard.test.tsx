@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -247,6 +249,9 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const empty = findDomNodes(host, (n) => classOf(n).includes("state-empty"));
     expect(empty).toHaveLength(1);
     expect(domText(empty[0]!)).toContain("No storm dates in this cohort.");
+    const emptyLinks = findDomNodes(empty[0]!, (n) => n.tagName === "A");
+    expect(emptyLinks).toHaveLength(1);
+    expect(emptyLinks[0]!["href"]).toBe("/storms");
 
     const mismatchedIndex = makeIndex(["wcm"]);
     mockPairsState.data = [makePairs("2024-05-11")];
@@ -342,6 +347,9 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const host = makeFakeElement("div");
     await act(() => render(h(Scorecard, { index, view: "table" }), host as unknown as HTMLElement));
 
+    expect(findDomNodes(host, (n) => classOf(n).includes("view-header"))).toHaveLength(1);
+    expect(findDomNodes(host, (n) => classOf(n).includes("view-body"))).toHaveLength(1);
+
     const tables = findDomNodes(host, (n) => n.tagName === "TABLE");
     expect(tables.length).toBeGreaterThanOrEqual(1);
     const primaryHeaders = findDomNodes(tables[0]!, (n) => n.tagName === "TH");
@@ -350,6 +358,9 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     // Click first class pick button to open PeekDrawer with ContingencyGrid and secondary metrics
     expect(findDomNodes(host, (n) => hasClass(n, "cgrid"))).toHaveLength(0);
     const classBtn = findDomNodes(tables[0]!, (n) => n.tagName === "BUTTON" && classOf(n).includes("class-pick"))[0]!;
+    expect(domText(classBtn).trim().split(/\s+/).filter(Boolean).length).toBeLessThanOrEqual(3);
+    const chipBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && classOf(n).includes("chip"))[0]!;
+    expect(domText(chipBtn).trim()).toBe("pairs.json");
     await act(() => {
       (classBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
     });
@@ -410,6 +421,32 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     await act(() => render(h(Scorecard, { index, view: "curve" }), hostCurve as unknown as HTMLElement));
     expect(findDomNodes(hostCurve, (n) => classOf(n).includes("state-error"))).toHaveLength(0);
     expect(domText(hostCurve)).toContain("R = 10 km");
+  });
+
+  it("enforces Corporate Standard v1 bold cap, table surface tokens, zero docked inspector shadow, and centered empty states (US-02.1, US-02.2)", () => {
+    const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+    const baseCss = read("../styles/base.css");
+    const stormsCss = read("../styles/storms.css");
+    const mapCss = read("../styles/map.css");
+    const shellCss = read("../styles/shell.css");
+
+    expect(baseCss).toMatch(/strong,\s*b\s*\{[^}]*font-weight:\s*600/);
+    const tableThMatch = stormsCss.match(/\.table th\s*\{([^}]*)\}/);
+    expect(tableThMatch).not.toBeNull();
+    expect(tableThMatch![1]).toContain("var(--surface-muted)");
+    expect(tableThMatch![1]).toContain("12px");
+    expect(stormsCss).toContain(".table tbody tr:hover");
+    const inspectorMatch = mapCss.match(/\/\* Inspector \*\/\s*\.inspector\s*\{([^}]*)\}/);
+    expect(inspectorMatch).not.toBeNull();
+    expect(inspectorMatch![1]).not.toContain("box-shadow");
+    expect(mapCss).not.toMatch(/@media\s*\(max-width:\s*1279px\)\s*\{[^}]*\.inspector[^}]*box-shadow/);
+    const mobileInspectorMatch = mapCss.match(/@media\s*\(width\s*<\s*768px\)\s*\{\s*\.inspector\s*\{([^}]*)\}/);
+    expect(mobileInspectorMatch).not.toBeNull();
+    expect(mobileInspectorMatch![1]).toContain("box-shadow: var(--shadow)");
+    const stateMatch = shellCss.match(/\/\* States \*\/\s*\.state\s*\{([^}]*)\}/);
+    expect(stateMatch).not.toBeNull();
+    expect(stateMatch![1]).toContain("justify-items: center");
+    expect(stateMatch![1]).toContain("min-height: 220px");
   });
 });
 

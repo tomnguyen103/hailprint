@@ -1,15 +1,15 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { fetchCounties, harrisFeature } from "../../county";
-import { DataError, type ReportsFile, type SwathFile, type WarningsFile } from "../../data/types";
+import { type ReportsFile, type SwathFile, type WarningsFile } from "../../data/types";
 import { RULER } from "../../ruler";
 import { ErrorState } from "../../shell/states";
 import { useLoad } from "../../state/load";
 import { useTheme } from "../../state/theme";
 import "../../styles/map.css";
-import type { MapHandle } from "./create-map";
 import { boundsOf } from "./geo";
 import { RulerLegend } from "./ruler-legend";
+import { useMap } from "./use-map";
 
 const NO_BASEMAP = "No basemap file.";
 
@@ -23,40 +23,8 @@ interface Props {
 export function LiveMap({ swath, reports, warnings }: Props) {
   const metro = useLoad("counties", fetchCounties);
   const { resolved: theme } = useTheme();
-  const container = useRef<HTMLDivElement>(null);
-  const handle = useRef<MapHandle | null>(null);
-  const [ready, setReady] = useState<{ basemap: boolean } | null>(null);
-  const [mapError, setMapError] = useState<DataError | null>(null);
-  const [attempt, setAttempt] = useState(0);
+  const { container, handle, ready, basemap, error: mapError, retry: retryMap } = useMap(theme);
   const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set());
-
-  useEffect(() => {
-    const node = container.current;
-    if (!node) return;
-    let live = true;
-    let created: MapHandle | null = null;
-    setMapError(null);
-    import("./create-map")
-      .then(async ({ createMap }) => {
-        const next = await createMap(node, theme);
-        if (!live) {
-          next.destroy();
-          return;
-        }
-        created = next;
-        handle.current = next;
-        setReady({ basemap: next.basemap });
-      })
-      .catch((error: unknown) => {
-        if (live) setMapError(new DataError("map", String(error)));
-      });
-    return () => {
-      live = false;
-      created?.destroy();
-      handle.current = null;
-      setReady(null);
-    };
-  }, [attempt]);
 
   const outlines: FeatureCollection<MultiPolygon> | null = metro.status === "ready" ? metro.data : null;
   const countyData = useMemo(() => (outlines !== null ? harrisFeature(outlines) : null), [outlines]);
@@ -74,17 +42,14 @@ export function LiveMap({ swath, reports, warnings }: Props) {
     if (ready) handle.current?.setWarnings(warnings);
   }, [ready, warnings]);
 
+  const swathRef = useRef(swath);
+  swathRef.current = swath;
   const swathRunTime = swath?.receipt.run_time ?? null;
   useEffect(() => {
     if (!ready || !handle.current) return;
-    handle.current.fit(swath ? boundsOf(swath) : null);
-    // Re-fit only when the map becomes ready or the swath valid time changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const current = swathRef.current;
+    handle.current.fit(current ? boundsOf(current) : null);
   }, [ready, swathRunTime]);
-
-  useEffect(() => {
-    if (ready) handle.current?.setTheme(theme);
-  }, [ready, theme]);
 
   useEffect(() => {
     if (!ready || !handle.current) return;
@@ -101,7 +66,7 @@ export function LiveMap({ swath, reports, warnings }: Props) {
   };
 
   return (
-    <div class="map-stage live-map-stage">
+    <div class="map-stage">
       <div
         ref={container}
         class="map-frame"
@@ -111,13 +76,13 @@ export function LiveMap({ swath, reports, warnings }: Props) {
       />
       {mapError ? (
         <div class="map-overlay">
-          <ErrorState error={mapError} onRetry={() => setAttempt((n) => n + 1)} />
+          <ErrorState error={mapError} onRetry={retryMap} />
         </div>
       ) : null}
       <div class="map-legends">
         <RulerLegend hidden={hidden} onToggle={toggleClass} />
       </div>
-      {ready && !ready.basemap ? <p class="map-note">{NO_BASEMAP}</p> : null}
+      {ready && !basemap ? <p class="map-note">{NO_BASEMAP}</p> : null}
     </div>
   );
 }

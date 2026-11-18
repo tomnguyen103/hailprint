@@ -9,26 +9,7 @@
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <script>
-      // Stamp the theme before first paint. Mirrors resolve() and read() in src/theme.ts.
-      (function () {
-        var stored = null;
-        try {
-          stored = localStorage.getItem("theme");
-        } catch (error) {
-          stored = null;
-        }
-        var resolved =
-          stored === "light" || stored === "dark"
-            ? stored
-            : typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches
-              ? "dark"
-              : "light";
-        var root = document.documentElement;
-        root.setAttribute("data-theme", resolved);
-        root.style.colorScheme = resolved;
-      })();
-    </script>
+    <script src="/theme-init.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </head>
   <body>

@@ -17,7 +17,7 @@ function notify(): void {
 
 media?.addEventListener("change", (event) => {
   systemDark = event.matches;
-  notify();
+  if (pref === "system") notify();
 });
 
 /** Store the preference, stamp the resolved theme on the root, and notify every subscriber. */

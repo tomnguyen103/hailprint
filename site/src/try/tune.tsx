@@ -19,7 +19,7 @@ export function Tune({ index }: { index: StormsIndex }) {
   const [radius, setRadius] = useRadiusKm(index.radius_km_default);
   const [classIdx, setClassIdx] = useState(DEFAULT_CLASS);
   const [metric, setMetric] = useState<MetricKey>("hss");
-  const { load, table, receipt, maxRadiusKm, activeRadius, file } = useScopeRows(index, scope, radius);
+  const { load, table, receipt, maxRadiusKm, activeRadius, file, summary } = useScopeRows(index, scope, radius);
   const sliderId = useId();
   const mark = RULER[classIdx] ?? RULER[DEFAULT_CLASS]!;
   const inches = `${mark.threshold_in.toFixed(2)} in`;
@@ -43,9 +43,9 @@ export function Tune({ index }: { index: StormsIndex }) {
               </div>
             ))}
           </div>
-          <p class="pane-note">
-            <ReceiptChip receipt={receipt} file={file} />
-          </p>
+          <div class="pane-note">
+            <ReceiptChip receipt={receipt} file={file} summary={summary} />
+          </div>
           <div class="pane-grid">
             <ContingencyGrid row={row} />
             <section>

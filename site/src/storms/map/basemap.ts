@@ -58,13 +58,13 @@ export function probeBasemap(): Promise<boolean> {
 
 /** Build the Protomaps color flavor mapped to the Hailprint theme tokens. */
 function basemapFlavor(theme: Theme): Flavor {
-  const paper = token("--paper");
-  const muted = token("--sheet-muted");
-  const rule = token("--rule");
+  const paper = token("--bg");
+  const muted = token("--surface-muted");
+  const rule = token("--border");
   const water = token("--water");
   const roadMajor = token("--road-major");
-  const ink = token("--ink");
-  const inkMuted = token("--ink-muted");
+  const ink = token("--text");
+  const inkMuted = token("--text-muted");
   return {
     ...namedFlavor(theme),
     background: paper,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import { STALE, fetchJson, latest } from "../data/fetch";
+import { STALE, fetchJson, latest, setFetchCacheScope } from "../data/fetch";
 import { guardIndex } from "../data/guard";
 import type { StormsIndex } from "../data/types";
 import { type Load, useLoad } from "./load";
@@ -117,9 +117,17 @@ export function usePolledLoad<T>(
  * the existing ready index untouched.
  */
 export function useIndex(): Load<StormsIndex> & { showLoading: boolean; retry: () => void; now: Date } {
+  const latestRunTime = useRef("");
   return usePolledLoad<StormsIndex>(
     INDEX_FILE,
-    () => fetchJson(INDEX_FILE, guardIndex),
+    () =>
+      fetchJson(INDEX_FILE, guardIndex).then((data) => {
+        if (data.run_time >= latestRunTime.current) {
+          latestRunTime.current = data.run_time;
+          setFetchCacheScope(data.run_time);
+        }
+        return data;
+      }),
     REFRESH_MS,
     (d) => d.run_time,
   );

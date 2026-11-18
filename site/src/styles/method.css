@@ -4,16 +4,20 @@
   max-width: 680px;
 }
 
+.reading.prose {
+  font-size: 16px;
+}
+
 .reading-title {
   margin: 0 0 24px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .reading h2 {
   margin: 32px 0 12px;
-  font-family: var(--serif);
-  font-size: 1.25rem;
-  font-weight: 500;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .reading p,
@@ -64,8 +68,8 @@
   display: flex;
   justify-content: space-between;
   width: calc(24 * 9px - 2px);
-  color: var(--ink-muted);
-  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .bins-figure {
@@ -91,7 +95,7 @@
 }
 
 .ruler-row .ruler-mark {
-  border-color: var(--rule);
+  border-color: var(--border);
 }
 
 /* Guess-then-reveal: class row, one native range, one button, three mono values after Reveal */
@@ -124,13 +128,13 @@
 }
 
 .guess-row dt {
-  color: var(--ink-muted);
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-size: 12px;
 }
 
 .guess-row dd {
   margin: 2px 0 0;
-  font-size: 1.25rem;
+  font-size: 20px;
 }
 
 /* Page tree: flat list, no year groups */
@@ -139,7 +143,7 @@
   padding-left: 8px;
 }
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   .stamp-hours {
     width: 100%;
   }

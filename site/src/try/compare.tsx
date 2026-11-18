@@ -160,12 +160,16 @@ export function Compare({ index }: { index: StormsIndex }) {
                 type="button"
                 class="button button-small"
                 aria-pressed={active}
+                title={preset.title}
                 onClick={() => {
                   setDateA(preset.dateA);
                   setDateB(preset.dateB);
                 }}
               >
-                {preset.label}
+                {preset.label}{" "}
+                <span class="mono">
+                  {preset.dateA} vs {preset.dateB}
+                </span>
               </button>
             );
           })}
@@ -181,7 +185,7 @@ export function Compare({ index }: { index: StormsIndex }) {
             aria-pressed={showReports}
             onClick={() => setShowReports((prev) => !prev)}
           >
-            SPC reports overlay ({showReports ? "on" : "off"})
+            SPC: {showReports ? "On" : "Off"}
           </button>
         </div>
       </div>

@@ -43,8 +43,8 @@ vi.mock("maplibre-gl", () => ({
 
 const THEME = { now: "light" as "light" | "dark" };
 const KNOWN = {
-  light: { "--ink-muted": "#5f6b7a" },
-  dark: { "--ink-muted": "#a3adba" },
+  light: { "--text-muted": "#5f6b7a" },
+  dark: { "--text-muted": "#a3adba" },
 };
 
 beforeEach(() => {
@@ -187,7 +187,7 @@ describe("the power layers and swath contours", () => {
     expect(swathOutline.paint["line-color"]).toEqual([
       "case",
       ...RULER.flatMap((m, i) => [["==", ["get", "threshold_mm"], m.threshold_mm], `light--hail-${i + 1}`]),
-      "light--rule",
+      "light--border",
     ]);
   });
 

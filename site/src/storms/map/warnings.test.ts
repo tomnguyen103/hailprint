@@ -317,7 +317,7 @@ describe("a toggle and a theme switch while the style loads", () => {
     expect(paint["swath-outline"]!["line-color"]).toEqual([
       "case",
       ...RULER.flatMap((m, i) => [["==", ["get", "threshold_mm"], m.threshold_mm], `dark--hail-${i + 1}`]),
-      "dark--rule",
+      "dark--border",
     ]);
   });
 

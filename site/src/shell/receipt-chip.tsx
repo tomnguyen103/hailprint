@@ -32,9 +32,11 @@ export function clampPopoverPosition(
   const belowTop = triggerRect.bottom + POP_GAP;
   const fitsBelow = belowTop + effectiveHeight <= viewport.height - VIEWPORT_PAD;
   const aboveTop = triggerRect.top - POP_GAP - effectiveHeight;
-  const top = fitsBelow
-    ? belowTop
-    : Math.min(Math.max(VIEWPORT_PAD, aboveTop), Math.max(VIEWPORT_PAD, viewport.height - effectiveHeight - VIEWPORT_PAD));
+  const rawTop = fitsBelow ? belowTop : aboveTop;
+  const top = Math.max(
+    VIEWPORT_PAD,
+    Math.min(rawTop, Math.max(VIEWPORT_PAD, viewport.height - VIEWPORT_PAD - effectiveHeight)),
+  );
   return { top, left, maxHeight };
 }
 
@@ -42,7 +44,7 @@ export function clampPopoverPosition(
  * A mono chip after a published number. It opens a small dialog with the receipt of
  * the file that holds the number. Escape or a click outside closes it; focus returns.
  */
-export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string }) {
+export function ReceiptChip({ receipt, file, summary }: { receipt: Receipt; file: string; summary?: string }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number }>({
@@ -77,8 +79,20 @@ export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string 
     };
     updatePos();
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
-        event.preventDefault(); event.stopPropagation(); openReceiptChip(null);
+        const active = document.activeElement as HTMLElement | null;
+        const insideSelf =
+          active !== null &&
+          (Boolean(chip.current?.contains(active)) || Boolean(pop.current?.contains(active)));
+        const otherOverlay = active?.closest?.('[role="dialog"], [role="menu"]') ?? null;
+        if (!insideSelf && otherOverlay !== null && !otherOverlay.contains(chip.current)) {
+          return;
+        }
+        event.preventDefault();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation?.();
+        openReceiptChip(null);
         chip.current?.focus();
       }
     };
@@ -106,7 +120,7 @@ export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string 
         class="chip mono"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-controls={id}
+        aria-controls={open ? id : undefined}
         onClick={() => openReceiptChip(open ? null : id)}
       >
         {file}
@@ -120,6 +134,7 @@ export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string 
           aria-label={`Receipt for ${file}`}
           style={{ top: `${pos.top}px`, left: `${pos.left}px`, maxHeight: `${pos.maxHeight}px` }}
         >
+          {summary ? <p class="receipt-summary">{summary}</p> : null}
           <ReceiptList receipt={receipt} file={file} />
         </div>
       ) : null}

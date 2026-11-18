@@ -12,6 +12,7 @@ export function useMap(theme: Theme, options?: UseMapOptions) {
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
   const [ready, setReady] = useState(false);
+  const [basemap, setBasemap] = useState(false);
   const [error, setError] = useState<DataError | null>(null);
   const [attempt, setAttempt] = useState(0);
 
@@ -50,6 +51,7 @@ export function useMap(theme: Theme, options?: UseMapOptions) {
         }
         created = next;
         handle.current = next;
+        setBasemap(next.basemap);
         setReady(true);
       })
       .catch((cause: unknown) => {
@@ -59,6 +61,7 @@ export function useMap(theme: Theme, options?: UseMapOptions) {
       live = false;
       created?.destroy();
       handle.current = null;
+      setBasemap(false);
       setReady(false);
     };
   }, [attempt, navigation]);
@@ -69,5 +72,5 @@ export function useMap(theme: Theme, options?: UseMapOptions) {
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
 
-  return { container, handle, ready, error, retry };
+  return { container, handle, ready, basemap, error, retry };
 }

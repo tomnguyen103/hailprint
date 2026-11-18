@@ -94,7 +94,7 @@ function style(theme: Theme, basemap: boolean): StyleSpecification {
     sources,
     ...(basemap ? { glyphs: GLYPHS_URL, sprite: spriteUrl(theme) } : {}),
     layers: [
-      { id: "paper", type: "background", paint: { "background-color": token("--paper") } },
+      { id: "paper", type: "background", paint: { "background-color": token("--bg") } },
       ...(basemap ? basemapLayers(theme) : []),
       ...powerLayers(),
       ...fillLayers(),
@@ -126,6 +126,20 @@ export interface MapHandle {
   setPoint(lngLat: [number, number] | null): void;
   flyTo(lngLat: [number, number], zoom: number): void;
   destroy(): void;
+}
+
+function setWarningTagClass(element: HTMLElement, code: string): void {
+  const variant = `warning-tag-${code.toLowerCase()}`;
+  if (element.classList && typeof element.classList.remove === "function" && typeof element.classList.add === "function") {
+    element.classList.remove("warning-tag-sv", "warning-tag-to", "warning-tag-ff");
+    element.classList.add("warning-tag", variant);
+    return;
+  }
+  const kept = (element.className || "")
+    .split(/\s+/)
+    .filter((cls) => cls.length > 0 && cls !== "warning-tag" && !cls.startsWith("warning-tag-"));
+  kept.push("warning-tag", variant);
+  element.className = kept.join(" ");
 }
 
 function reduceMotion(): boolean {
@@ -197,7 +211,7 @@ export function makeHandle(
       for (const [prop, value] of Object.entries(paint) as [PaintName, string][]) map.setPaintProperty(id, prop, value);
     }
     if (map.hasImage(POWER_HATCH)) map.removeImage(POWER_HATCH);
-    map.addImage(POWER_HATCH, hatchPixels(hexRgb(token("--ink-muted"))));
+    map.addImage(POWER_HATCH, hatchPixels(hexRgb(token("--text-muted"))));
   };
   const clearCountyTags = () => {
     for (const marker of countyMarkers) marker.remove();
@@ -225,7 +239,7 @@ export function makeHandle(
         powerShown = false;
       }
       if (outlines !== null) {
-        map.setPaintProperty(POWER_OUTLINE, "line-color", token("--ink-muted"));
+        map.setPaintProperty(POWER_OUTLINE, "line-color", token("--text-muted"));
         geojson(POWER_SOURCE)?.setData(outlines);
         show(POWER_OUTLINE, true);
       } else {
@@ -239,13 +253,23 @@ export function makeHandle(
       powerShown = true;
     }
     geojson(POWER_SOURCE)?.setData(layer.counties);
-    clearCountyTags();
-    countyMarkers = layer.tags.map((tag) => {
-      const element = document.createElement("div");
-      element.className = "county-tag";
-      element.textContent = tag.text;
-      return new Marker({ element }).setLngLat(tag.lngLat).addTo(map);
-    });
+    for (let i = 0; i < layer.tags.length; i++) {
+      const tag = layer.tags[i]!;
+      const existing = countyMarkers[i];
+      if (existing) {
+        const element = existing.getElement();
+        if (element.textContent !== tag.text) element.textContent = tag.text;
+        existing.setLngLat(tag.lngLat);
+      } else {
+        const element = document.createElement("div");
+        element.className = "county-tag";
+        element.textContent = tag.text;
+        countyMarkers.push(new Marker({ element }).setLngLat(tag.lngLat).addTo(map));
+      }
+    }
+    while (countyMarkers.length > layer.tags.length) {
+      countyMarkers.pop()!.remove();
+    }
   };
 
   const applySwath = () => {
@@ -273,7 +297,7 @@ export function makeHandle(
     setTheme(nextTheme) {
       if (nextTheme === currentTheme) return;
       currentTheme = nextTheme;
-      map.setPaintProperty("paper", "background-color", token("--paper"));
+      map.setPaintProperty("paper", "background-color", token("--bg"));
       for (const [id, paint] of Object.entries(themedPaint())) {
         for (const [prop, value] of Object.entries(paint) as [PaintName, string][]) map.setPaintProperty(id, prop, value);
       }
@@ -287,7 +311,7 @@ export function makeHandle(
         for (const layer of basemapLabelLayers(nextTheme)) map.addLayer(layer, warningLayerId("SV"));
       }
       if (powerShown) paintPower();
-      else if (outlines !== null) map.setPaintProperty(POWER_OUTLINE, "line-color", token("--ink-muted"));
+      else if (outlines !== null) map.setPaintProperty(POWER_OUTLINE, "line-color", token("--text-muted"));
     },
     setClassVisible(thresholdMm, visible) {
       if (visible) hiddenClasses.delete(thresholdMm);
@@ -315,13 +339,25 @@ export function makeHandle(
           ? activeWarnings(file, date, step)
           : (file?.features ?? []);
       geojson(WARNINGS_SOURCE)?.setData({ type: "FeatureCollection", features: active });
-      for (const tag of tags) tag.remove();
-      tags = warningTags(active).map((tag) => {
-        const element = document.createElement("div");
-        element.className = `warning-tag warning-tag-${tag.text.toLowerCase()}`;
-        element.textContent = tag.text;
-        return new Marker({ element }).setLngLat(tag.lngLat).addTo(map);
-      });
+      const nextTags = warningTags(active);
+      for (let i = 0; i < nextTags.length; i++) {
+        const tag = nextTags[i]!;
+        const existing = tags[i];
+        if (existing) {
+          const element = existing.getElement();
+          setWarningTagClass(element, tag.text);
+          if (element.textContent !== tag.text) element.textContent = tag.text;
+          existing.setLngLat(tag.lngLat);
+        } else {
+          const element = document.createElement("div");
+          element.className = `warning-tag warning-tag-${tag.text.toLowerCase()}`;
+          element.textContent = tag.text;
+          tags.push(new Marker({ element }).setLngLat(tag.lngLat).addTo(map));
+        }
+      }
+      while (tags.length > nextTags.length) {
+        tags.pop()!.remove();
+      }
       syncTags();
     },
     setCounties(next) {

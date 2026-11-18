@@ -15,24 +15,32 @@ import { crossStormZipLedger, zipRows } from "./select";
 const FILE = "zip-counts.json";
 
 /** Render the storm parcel exposure summary, threshold selector, and filterable ZIP table. */
-export function ParcelsPane({ storm, index }: { storm: Storm; index?: StormsIndex }) {
+export function ParcelsPane({ storm, index, runTime }: { storm: Storm; index?: StormsIndex; runTime?: string }) {
   const path = storm.files.zip_counts;
   if (path === null) {
-    return <EmptyState sentence={`No parcel count for this storm date. Run hailprint parcels ${storm.storm_date}.`} />;
+    return (
+      <EmptyState
+        sentence={`No parcel count for this storm date. Run hailprint parcels ${storm.storm_date}.`}
+        link={{ href: href({ area: "try", tool: "run" }), label: "Open CLI commands" }}
+      />
+    );
   }
-  return <ParcelsTable stormDate={storm.storm_date} path={path} index={index} />;
+  return <ParcelsTable stormDate={storm.storm_date} path={path} index={index} runTime={runTime} />;
 }
 
 function ParcelsTable({
   stormDate,
   path,
   index,
+  runTime,
 }: {
   stormDate: string;
   path: string;
   index?: StormsIndex;
+  runTime?: string;
 }) {
-  const zip = useLoad(path, () => fetchJson(path, guardZipCounts));
+  const zipKey = runTime ? `${runTime}:${path}` : path;
+  const zip = useLoad(zipKey, () => fetchJson(path, guardZipCounts));
   const [selected, setSelected] = useState(RULER[0]!.threshold_mm);
   const [query, setQuery] = useState("");
   const [pickedZip, setPickedZip] = useState<string | null>(null);
@@ -85,9 +93,8 @@ function ParcelsTable({
       <div class="pane-grid">
         <section>
           <h2>Parcels by size class</h2>
-          <p class="pane-note">HCAD parcels, no address or owner data</p>
           <div class="table-scroll">
-            <table class="table">
+            <table class="table" aria-label="HCAD parcels by size class, no address or owner data">
               <thead>
                 <tr>
                   <th scope="col">Size class</th>
@@ -103,23 +110,27 @@ function ParcelsTable({
                 {RULER.map((m) => {
                   // A class the file omits has no parcel; the table keeps all seven rows.
                   const count = classes.find((c) => c.threshold_mm === m.threshold_mm)?.parcel_count ?? 0;
+                  const obj = objectName(m.threshold_mm);
+                  const inches = formatInches(m.threshold_in);
                   return (
                     <tr key={m.threshold_mm}>
                       <td>
-                        <button
-                          type="button"
-                          class="class-pick"
-                          aria-pressed={m.threshold_mm === selected}
-                          onClick={() => setSelected(m.threshold_mm)}
-                        >
-                          <span
-                            class="ruler-mark"
-                            style={{ width: diameterPx(m.threshold_in), height: diameterPx(m.threshold_in) }}
-                          />
-                          <span>
-                            &ge; {formatInches(m.threshold_in)}, {objectName(m.threshold_mm)}
-                          </span>
-                        </button>
+                        <div class="class-pick-item">
+                          <button
+                            type="button"
+                            class="class-pick"
+                            aria-pressed={m.threshold_mm === selected}
+                            aria-label={`${obj}, >= ${inches}`}
+                            onClick={() => setSelected(m.threshold_mm)}
+                          >
+                            <span
+                              class="ruler-mark"
+                              style={{ width: diameterPx(m.threshold_in), height: diameterPx(m.threshold_in) }}
+                            />
+                            <span>&ge; {inches}</span>
+                          </button>
+                          <span class="class-object">{obj}</span>
+                        </div>
                       </td>
                       <td class="num">{formatCount(count)}</td>
                       <td>
@@ -133,9 +144,12 @@ function ParcelsTable({
           </div>
         </section>
         <section>
-          <h2>ZIP codes at &ge; {formatInches(mark.threshold_in)}</h2>
+          <h2>ZIPs &ge; {formatInches(mark.threshold_in)}</h2>
           {rawRows.length === 0 ? (
-            <EmptyState sentence={`No parcel at ${formatInches(mark.threshold_in)} on this storm date.`} />
+            <EmptyState
+              sentence={`No parcel at ${formatInches(mark.threshold_in)} on this storm date.`}
+              link={{ href: href({ area: "storms", date: stormDate, tab: "map" }), label: "Open storm map" }}
+            />
           ) : (
             <>
               <div class="parcels-toolbar">
@@ -214,7 +228,7 @@ function ParcelsTable({
         <section class="zip-ledger-section" aria-label={`Cross-storm exposure ledger for ZIP ${pickedZip}`}>
           <div class="zip-ledger-header">
             <h2>
-              ZIP <span class="mono">{pickedZip}</span> across storms (&ge; {formatInches(mark.threshold_in)})
+              ZIP <span class="mono">{pickedZip}</span> exposure
             </h2>
             <button type="button" class="button button-small" onClick={() => setPickedZip(null)}>
               Close ledger

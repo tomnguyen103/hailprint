@@ -74,7 +74,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
   const scored = table !== null && !("error" in table) ? table.scored : null;
   const matrix = useMemo(() => (data === null || data.length === 0 ? [] : sensitivityMatrix(data)), [data]);
   const receipt = useMemo(() => (data === null ? null : pooledReceipt(data, index)), [data, index]);
-  const file = `${FILE}, pooled over ${activeStormCount} storm ${activeStormCount === 1 ? "date" : "dates"}`;
+  const summary = `pooled over ${activeStormCount} storm ${activeStormCount === 1 ? "date" : "dates"}`;
 
   const cohortOptions: { id: CohortId; label: string; count: number }[] = [
     { id: "all", label: `All (${index.storms.length})`, count: index.storms.length },
@@ -94,82 +94,90 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
   if (pairs.status === "error") body = <ErrorState error={pairs.error} onRetry={pairs.retry} />;
   else if (pairs.status === "loading") body = pairs.showLoading ? <LoadingState file={FILE} /> : null;
   else if (filtered !== null && filtered.storms.length === 0) {
-    body = <EmptyState sentence="No storm dates in this cohort." />;
+    body = (
+      <EmptyState
+        sentence="No storm dates in this cohort."
+        link={{ href: "/storms", label: "Browse storms" }}
+      />
+    );
   } else if (filtered !== null && filtered.pairs.length === 0) {
     body = <ErrorState error={new DataError(FILE, "no matching pairs for cohort")} onRetry={pairs.retry} />;
   } else if (table === null) body = null;
   else if ("error" in table) body = <ErrorState error={table.error} onRetry={pairs.retry} />;
   else if (receipt === null) body = null;
   else if (view === "table") {
-    body = <TableView rows={table.rows} classMm={classMm} onClass={setClassMm} receipt={receipt} file={file} />;
+    body = <TableView rows={table.rows} classMm={classMm} onClass={setClassMm} receipt={receipt} file={FILE} summary={summary} />;
   } else if (view === "grid") {
-    body = <GridView rows={table.rows} classMm={classMm} onClass={setClassMm} receipt={receipt} file={file} />;
+    body = <GridView rows={table.rows} classMm={classMm} onClass={setClassMm} receipt={receipt} file={FILE} summary={summary} />;
   } else {
     body = (
       <>
         <ThresholdCurve rows={table.rows} metric={metric} onMetric={setMetric} highlightMm={classMm} />
-        <p class="pane-note">
-          <ReceiptChip receipt={receipt} file={file} />
-        </p>
+        <div class="pane-note">
+          <ReceiptChip receipt={receipt} file={FILE} summary={summary} />
+        </div>
       </>
     );
   }
 
   return (
     <>
-      <PageHeader title="Scorecard">
-        <p>
-          {scored === null ? (
-            SENTENCE
-          ) : (
-            <>
-              <span class="mono">{activeStormCount}</span> storm {activeStormCount === 1 ? "date" : "dates"},{" "}
-              <span class="mono">{scored}</span> scored reports
-            </>
-          )}
-        </p>
-      </PageHeader>
-      <div class="scorecard-controls">
-        <div class="cohort-bar" role="group" aria-label="Storm cohort filter">
-          <span class="cohort-label">Cohort</span>
-          <div class="cohort-pills">
-            {cohortOptions.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                class="button button-small cohort-pill"
-                disabled={opt.count === 0}
-                aria-pressed={cohort === opt.id}
-                onClick={() => setCohort(opt.id)}
-              >
-                {opt.label}
-              </button>
-            ))}
+      <header class="view-header">
+        <PageHeader title="Scorecard">
+          <div class="view-meta">
+            {scored === null ? (
+              SENTENCE
+            ) : (
+              <>
+                <span class="mono">{activeStormCount}</span> storm {activeStormCount === 1 ? "date" : "dates"},{" "}
+                <span class="mono">{scored}</span> scored reports
+              </>
+            )}
           </div>
+        </PageHeader>
+        <div class="scorecard-controls">
+          <div class="cohort-bar" role="group" aria-label="Storm cohort filter">
+            <span class="cohort-label">Cohort</span>
+            <div class="cohort-pills">
+              {cohortOptions.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  class="button button-small cohort-pill"
+                  disabled={opt.count === 0}
+                  aria-pressed={cohort === opt.id}
+                  onClick={() => setCohort(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <RadiusSlider
+            value={activeRadius}
+            max={maxRadiusKm}
+            onChange={(next) => setRadius(next, maxRadiusKm)}
+          />
         </div>
-        <RadiusSlider
-          value={activeRadius}
-          max={maxRadiusKm}
-          onChange={(next) => setRadius(next, maxRadiusKm)}
+        <SubTabs
+          label="Scorecard views"
+          tabs={SCORECARD_VIEWS.map((v) => ({ id: v, label: VIEW_LABELS[v], href: href({ area: "scorecard", view: v }) }))}
+          selected={view}
         />
-      </div>
-      <SubTabs
-        label="Scorecard views"
-        tabs={SCORECARD_VIEWS.map((v) => ({ id: v, label: VIEW_LABELS[v], href: href({ area: "scorecard", view: v }) }))}
-        selected={view}
-      />
-      <section class="pane" role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
+      </header>
+      <section class="pane view-body" role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
         <h2 class="visually-hidden">{VIEW_LABELS[view]}</h2>
         {body}
         {view === "curve" && matrix.length > 0 && receipt !== null ? (
           <section class="sensitivity-section" aria-label="Radius by threshold HSS sensitivity matrix">
-            <h2>Radius × threshold HSS sensitivity matrix</h2>
-            <p class="pane-note">
-              Active:{" "}
-              <span class="mono">R = {activeRadius} km</span>, <span class="mono">&ge; {classMm} mm</span>.
-            </p>
+            <div class="sensitivity-header">
+              <h2>HSS sensitivity matrix</h2>
+              <span class="view-meta">
+                Active: <span class="mono">R = {activeRadius} km</span>, <span class="mono">&ge; {classMm} mm</span>.
+              </span>
+            </div>
             <div class="table-scroll">
-              <table class="table sensitivity-matrix">
+              <table class="table">
                 <thead>
                   <tr>
                     <th scope="col">Radius</th>

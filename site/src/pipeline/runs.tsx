@@ -8,7 +8,14 @@ import { EmptyState } from "../shell/states";
 export function Runs({ runs }: { runs: PipelineRun[] }) {
   const [selected, setSelected] = useState(0);
   const table = useRef<HTMLTableElement>(null);
-  if (runs.length === 0) return <EmptyState sentence="No publish runs in log." />;
+  if (runs.length === 0) {
+    return (
+      <EmptyState
+        sentence="No publish runs in log."
+        link={{ href: href({ area: "method", page: "data" }), label: "Read data method" }}
+      />
+    );
+  }
   const at = Math.min(selected, runs.length - 1);
   const run = runs[at]!;
 
@@ -58,9 +65,9 @@ export function Runs({ runs }: { runs: PipelineRun[] }) {
         <h2>
           Run <span class="mono">{run.run_time}</span>
         </h2>
-        <p class="pane-note">
+        <div class="pane-note">
           <span class="mono">{run.file_count}</span> files, version <span class="mono">{run.package_version}</span>
-        </p>
+        </div>
         <ul class="date-list">
           {run.storm_dates.map((date) => (
             <li key={date}>

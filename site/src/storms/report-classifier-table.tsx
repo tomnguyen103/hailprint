@@ -57,8 +57,8 @@ export function ReportClassifierTable({
   if (classified.length === 0) {
     return (
       <section class="report-classifier-section">
-        <h2>Per-report contingency classifier</h2>
-        <p class="pane-note">Zero SPC reports on {stormDate}.</p>
+        <h2>Report outcomes</h2>
+        <div class="pane-note">Zero SPC reports on {stormDate}.</div>
       </section>
     );
   }
@@ -80,13 +80,13 @@ export function ReportClassifierTable({
 
   return (
     <section class="report-classifier-section" aria-label="Per-report contingency classifier">
-      <h2>Per-report contingency classifier</h2>
-      <p class="pane-note">
+      <h2>Report outcomes</h2>
+      <div class="pane-note">
         <span class="mono">R = {radiusKm} km</span> &middot;{" "}
         <span class="mono">
           &ge; {formatInches(thresholdIn)} ({thresholdMm} mm)
         </span>
-      </p>
+      </div>
       <div class="classifier-filter-bar" role="group" aria-label="Filter reports by contingency outcome">
         {filterPills.map((p) => (
           <button
@@ -101,7 +101,7 @@ export function ReportClassifierTable({
         ))}
       </div>
       <div class="table-scroll">
-        <table class="table report-classifier-table">
+        <table class="table">
           <thead>
             <tr>
               <th scope="col">Report</th>
@@ -132,15 +132,18 @@ export function ReportClassifierTable({
                 return (
                   <tr key={r.id} data-outcome={r.outcome}>
                     <td>
-                      <button
-                        type="button"
-                        class="class-pick"
-                        aria-pressed={peekId === r.id}
-                        onClick={() => setPeekId(r.id)}
-                      >
-                        <span class="mono">#{r.id + 1}</span>
-                        {r.location ? ` · ${r.location}` : ""}
-                      </button>
+                      <div class="report-cell">
+                        <button
+                          type="button"
+                          class="class-pick"
+                          aria-pressed={peekId === r.id}
+                          aria-label={r.location ? `Inspect #${r.id + 1}, ${r.location}` : `Inspect #${r.id + 1}`}
+                          onClick={() => setPeekId(r.id)}
+                        >
+                          <span class="mono">#{r.id + 1}</span>
+                        </button>
+                        {r.location ? <span class="report-loc">{r.location}</span> : null}
+                      </div>
                     </td>
                     <td class="num">
                       <span class="mono">{formatInches(r.size_in)}</span> ({objectForSize(r.size_in)})

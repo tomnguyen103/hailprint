@@ -94,7 +94,7 @@ function renderInternetCell(row: StormPinRow): string {
 
 function renderCellError(label: string, err: DataError, onRetry: () => void) {
   return (
-    <span class="point-cell-error">
+    <span>
       {label} off ({err.message}){" "}
       <button type="button" class="button button-small" onClick={onRetry}>
         Retry
@@ -281,7 +281,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     } else {
       const firstCropStatus = rows[0]?.cropStatus ?? "inside";
       resultsSection = (
-        <section class="point-results point-analysis" aria-label="Pinned location archive analysis">
+        <section class="point-results" aria-label="Pinned location archive analysis">
           {countyError !== null ? (
             <ErrorState error={countyError.error} onRetry={countyError.retry} />
           ) : impactLoading ? (
@@ -345,7 +345,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                     aria-pressed={filterMode === "all"}
                     onClick={() => setFilterMode("all")}
                   >
-                    All <span class="mono">{rows.length}</span> storm dates
+                    All <span class="mono">{rows.length}</span> dates
                   </button>
                   <button
                     type="button"
@@ -353,13 +353,13 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                     aria-pressed={filterMode === "active"}
                     onClick={() => setFilterMode("active")}
                   >
-                    Activity near pin only (<span class="mono">{activeCount}</span>)
+                    Near pin <span class="mono">{`(${activeCount})`}</span>
                   </button>
                   <button
                     type="button"
                     class="button button-small"
                     onClick={() => {
-                      const csv = pointCsvOf(rows, activePoint, radiusKm);
+                      const csv = pointCsvOf(visibleRows, activePoint, radiusKm);
                       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");
@@ -369,7 +369,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                       setTimeout(() => URL.revokeObjectURL(url), 1000);
                     }}
                   >
-                    Download {rows.length}-storm point history CSV
+                    Download CSV ({visibleRows.length})
                   </button>
                 </div>
                 <span class="point-preview-note">
@@ -502,7 +502,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
           aria-busy={geoStatus === "locating"}
           onClick={() => void locateUser()}
         >
-          {geoStatus === "locating" ? "Locate\u2026" : "Pin my location"}
+          {geoStatus === "locating" ? "Locate\u2026" : "Pin location"}
         </button>
         {hasPin ? (
           <button type="button" class="button" onClick={onClearPin}>

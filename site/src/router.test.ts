@@ -69,6 +69,9 @@ it("resolves Try it tools, Tune by default", () => {
 it("gives not-found for an unknown path or a bad date", () => {
   expect(match("/unknown")).toEqual({ kind: "not-found" });
   expect(match("/storms/yesterday")).toEqual({ kind: "not-found" });
+  expect(match("/storms/2024-02-31/map")).toEqual({ kind: "not-found" });
+  expect(match("/storms/2023-02-29/map")).toEqual({ kind: "not-found" });
+  expect(match("/storms/2024-02-29/map")).toEqual({ kind: "storms", date: "2024-02-29", tab: "map", step: null });
   expect(match("/storms/2024-05-28/map/5/extra")).toEqual({ kind: "not-found" });
   expect(match("/storms/2024-05-28/score/5")).toEqual({ kind: "not-found" });
   expect(match("/storms/2024-05-28/nope/5")).toEqual({ kind: "not-found" });

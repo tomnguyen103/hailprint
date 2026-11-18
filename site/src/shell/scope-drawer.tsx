@@ -1,50 +1,13 @@
 import type { ComponentChildren, RefObject } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import "../styles/scope.css";
+import { trapDrawerTab, useModalFocusTrap } from "./modal-focus";
+
+export { trapDrawerTab, useModalFocusTrap };
 
 const DESKTOP_MEDIA = "(min-width: 1280px)";
-const FOCUSABLE_SELECTOR =
-  'a[href], button:not([disabled]), summary, input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-function isElementVisible(el: HTMLElement): boolean {
-  if (el.hidden || el.getAttribute?.("aria-hidden") === "true") return false;
-  if (
-    typeof window !== "undefined" &&
-    typeof window.getComputedStyle === "function" &&
-    typeof Element !== "undefined" &&
-    el instanceof Element
-  ) {
-    const style = window.getComputedStyle(el);
-    if (style?.display === "none" || style?.visibility === "hidden") return false;
-  }
-  return true;
-}
-
-function focusableItems(root: HTMLElement | null): HTMLElement[] {
-  if (!root) return [];
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => (el.closest?.("details:not([open])") === null || el.tagName === "SUMMARY") && isElementVisible(el),
-  );
-}
-
-/** Wrap Tab and Shift+Tab inside the container while `open` is true. */
-export function trapDrawerTab(event: KeyboardEvent, root: HTMLElement | null, open: boolean): void {
-  if (!open || event.key !== "Tab" || !root) return;
-  const items = focusableItems(root);
-  if (items.length === 0) return;
-  const first = items[0]!;
-  const last = items[items.length - 1]!;
-  const active = document.activeElement as HTMLElement | null;
-  if (event.shiftKey && (active === first || !root.contains(active))) {
-    event.preventDefault();
-    last.focus();
-  } else if (!event.shiftKey && (active === last || !root.contains(active))) {
-    event.preventDefault();
-    first.focus();
-  }
-}
-
-/** Close on Escape while `open` is true and the event was not already handled by an inner overlay. */
+/** Close on Escape while `open` is true and the event was not already handled by an inner or top-bar overlay. */
 function useEscape(open: boolean, onClose: () => void): void {
   useEffect(() => {
     if (!open) return;
@@ -52,11 +15,13 @@ function useEscape(open: boolean, onClose: () => void): void {
       if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation?.();
         onClose();
       }
     };
-    document.addEventListener("keydown", onKey, true);
-    return () => document.removeEventListener("keydown", onKey, true);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 }
 
@@ -80,28 +45,6 @@ function useDrawerViewport(open: boolean, onClose: () => void): boolean {
     return () => mql.removeEventListener?.("change", onChange);
   }, [open, onClose]);
   return belowDesktop;
-}
-
-/** Move focus into `root` when `activeModal` becomes true, trap Tab at document level, and restore focus to the opener on close. */
-export function useModalFocusTrap(activeModal: boolean, rootRef: RefObject<HTMLElement>): void {
-  const opener = useRef<HTMLElement | null>(null);
-  useEffect(() => {
-    if (!activeModal) return;
-    const prev = document.activeElement;
-    opener.current = prev && typeof (prev as HTMLElement).focus === "function" ? (prev as HTMLElement) : null;
-    const root = rootRef.current;
-    const first = focusableItems(root)[0];
-    if (first) first.focus();
-    else root?.focus?.();
-    const onKey = (event: KeyboardEvent) => {
-      trapDrawerTab(event, rootRef.current, true);
-    };
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      opener.current?.focus?.();
-    };
-  }, [activeModal, rootRef]);
 }
 
 interface Props {

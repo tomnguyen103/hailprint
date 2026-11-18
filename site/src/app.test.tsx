@@ -225,6 +225,14 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
       { width: 1280, height: 800 },
     );
     expect(bottomFlipped.top).toBe(594);
+
+    // Scrolled trigger above top of viewport: clamps top to >= 8
+    const scrolledAbove = clampPopoverPosition(
+      { top: -60, bottom: -36, left: 200, right: 360 },
+      { width: 300, height: 160 },
+      { width: 1280, height: 800 },
+    );
+    expect(scrolledAbove.top).toBe(8);
   });
 
   it("wraps Tab focus inside ScopeDrawer when open", async () => {
@@ -352,7 +360,15 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
             radius_km_default: 5,
             radius_km_max: 20,
             edge_margin_m: 1110,
-            classes: [],
+            classes: [
+              {
+                threshold_mm: 19.05,
+                threshold_in: 0.75,
+                label: "a",
+                swath_km2: 10,
+                unverifiable_km2: Array.from({ length: 21 }, () => 0),
+              },
+            ],
             reports: [],
           }),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -567,7 +583,15 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
             radius_km_default: 5,
             radius_km_max: 20,
             edge_margin_m: 1110,
-            classes: [],
+            classes: [
+              {
+                threshold_mm: 19.05,
+                threshold_in: 0.75,
+                label: "a",
+                swath_km2: 10,
+                unverifiable_km2: Array.from({ length: 21 }, () => 0),
+              },
+            ],
             reports: [],
           }),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -640,6 +664,42 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     const topBarTree = TopBar({ active: "live" });
     const topBarNodes = walk(topBarTree);
     expect(topBarNodes.filter((n) => n.type === ThemeToggle)).toHaveLength(1);
+
+    // Real Layout renders TopBar, RouteSidebar, and puts <Footer /> inside <main> so .shell keeps <= 2 resting children
+    const { Layout: RealLayout } = await vi.importActual<typeof import("./shell/layout")>("./shell/layout");
+    const layoutHost = makeEl("div");
+    vi.stubGlobal("document", {
+      activeElement: null,
+      createElement: (tag: string) => makeEl(tag),
+      createElementNS: (_ns: string, tag: string) => makeEl(tag),
+      createTextNode: (text: string) => makeEl("#text", text),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    });
+    vi.stubGlobal("window", {
+      matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+      location: { pathname: "/live" },
+    });
+    try {
+      await act(() =>
+        render(
+          h(RealLayout, { active: "live", children: h("div", { id: "probe" }) }),
+          layoutHost as unknown as HTMLElement,
+        ),
+      );
+      const shellNode = layoutHost.childNodes.find((n) => n["class"] === "shell");
+      expect(shellNode).toBeDefined();
+      const shellChildren = shellNode!.childNodes;
+      expect(shellChildren.some((n) => n.tagName === "FOOTER")).toBe(false);
+      const mainEl = shellChildren.find((n) => n.tagName === "MAIN");
+      expect(mainEl).toBeDefined();
+      const hasFooterInsideMain = (node: FakeDomNode): boolean =>
+        node.tagName === "FOOTER" || node.childNodes.some(hasFooterInsideMain);
+      expect(hasFooterInsideMain(mainEl!)).toBe(true);
+    } finally {
+      await act(() => render(null, layoutHost as unknown as HTMLElement));
+      vi.unstubAllGlobals();
+    }
   });
 });
 

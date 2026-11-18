@@ -90,7 +90,9 @@ function Receipt({ index }: { index: StormsIndex }) {
 
 function StampFigure({ index }: { index: StormsIndex }) {
   const storm = index.storms.find((s) => s.storm_date === EXAMPLE_DATE) ?? index.storms[0]!;
-  const reports = useLoad(storm.files.reports, () => fetchJson(storm.files.reports, guardReports));
+  const reports = useLoad(`${index.run_time}:${storm.files.reports}`, () =>
+    fetchJson(storm.files.reports, guardReports),
+  );
   if (reports.status === "error") return <ErrorState error={reports.error} onRetry={reports.retry} />;
   if (reports.status === "loading") return reports.showLoading ? <LoadingState file="reports.geojson" /> : null;
   const filled = cells(reports.data.features.map((f) => f.properties.time));

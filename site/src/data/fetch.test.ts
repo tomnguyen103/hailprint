@@ -4,12 +4,14 @@ import {
   FETCH_TIMEOUT_MS,
   MAX_IN_FLIGHT,
   STALE,
+  clearFetchCache,
   fetchJson,
   fetchUrlJson,
   latest,
   normalizeBase,
   resolveDataBase,
   setFetch,
+  setFetchCacheScope,
 } from "./fetch";
 import { DataError } from "./types";
 
@@ -293,5 +295,80 @@ it("frees slots when 6 hung requests time out so queued requests start after eac
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("caches immutable storm JSON per (guard, url), evicts rejections, and respects scope and clearFetchCache (US-03.1, US-03.4, US-03.5)", async () => {
+  let calls = 0;
+  setFetch(async () => {
+    calls += 1;
+    return response(200, JSON.stringify({ seq: calls }));
+  });
+  const guardA = (v: unknown) => (v as { seq: number }).seq;
+  const guardB = (v: unknown) => `b:${(v as { seq: number }).seq}`;
+
+  // Concurrent calls with the same guard share one in-flight request
+  const [a, b] = await Promise.all([
+    fetchJson("storms/2024-05-28/pairs.json", guardA),
+    fetchJson("storms/2024-05-28/pairs.json", guardA),
+  ]);
+  expect(a).toBe(1);
+  expect(b).toBe(1);
+  expect(calls).toBe(1);
+
+  // Subsequent tab-switch read reuses cache for the same guard
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(1);
+  expect(calls).toBe(1);
+
+  // Different guard on the same URL never bypasses validation or reuses another guard's result
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardB)).toBe("b:2");
+  expect(calls).toBe(2);
+
+  // Empty scope is ignored and keeps cached entries intact
+  setFetchCacheScope("");
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(1);
+  expect(calls).toBe(2);
+
+  // Adopting a non-null scope after unscoped reads evicts pre-scope cached entries
+  setFetchCacheScope("2026-11-18T12:00:00Z");
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(3);
+  expect(calls).toBe(3);
+
+  // Identical scope keeps cache intact
+  setFetchCacheScope("2026-11-18T12:00:00Z");
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(3);
+  expect(calls).toBe(3);
+
+  // Advancing run_time scope invalidates cache
+  setFetchCacheScope("2026-11-18T13:00:00Z");
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(4);
+  expect(calls).toBe(4);
+
+  // clearFetchCache() resets cacheScope to null; any entry cached while unscoped is evicted once a scope is adopted
+  clearFetchCache();
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(5);
+  expect(calls).toBe(5);
+  setFetchCacheScope("2026-11-18T14:00:00Z");
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(6);
+  expect(calls).toBe(6);
+
+  // Mutable top-level storms.json is never cached
+  expect(await fetchJson("storms.json", guardA)).toBe(7);
+  expect(await fetchJson("storms.json", guardA)).toBe(8);
+  expect(calls).toBe(8);
+
+  // Failed storm fetch is evicted immediately so retry fetches fresh
+  clearFetchCache();
+  let failOnce = true;
+  setFetch(async () => {
+    calls += 1;
+    if (failOnce) {
+      failOnce = false;
+      return response(503, "down");
+    }
+    return response(200, JSON.stringify({ ok: true }));
+  });
+  const identity = (v: unknown) => v;
+  await expect(fetchJson("storms/2024-05-28/swath.geojson", identity)).rejects.toThrow(/HTTP 503/);
+  await expect(fetchJson("storms/2024-05-28/swath.geojson", identity)).resolves.toEqual({ ok: true });
 });
 

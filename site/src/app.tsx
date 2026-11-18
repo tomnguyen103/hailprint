@@ -1,4 +1,5 @@
 import { useEffect } from "preact/hooks";
+import type { Storm } from "./data/types";
 import { LiveView } from "./live/live-view";
 import { Method } from "./method/method";
 import { Pipeline } from "./pipeline/pipeline";
@@ -14,11 +15,12 @@ import { Workspace } from "./storms/workspace";
 import { TryIt } from "./try/try";
 
 const NO_INDEX = "No storm dates in catalog.";
+const EMPTY_STORMS: readonly Storm[] = [];
 
 export function App() {
   const { path, route } = useRoute();
   const index = useIndex();
-  const storms = index.status === "ready" ? index.data.storms : [];
+  const storms = index.status === "ready" ? index.data.storms : EMPTY_STORMS;
   const newest = storms[0];
   const landing = landingStorm(storms);
   useEffect(() => {
@@ -63,7 +65,7 @@ export function App() {
       : <EmptyState sentence={`No storm date ${route.date} in catalog.`} link={{ href: href({ area: "storms", date: newest.storm_date }), label: newest.storm_date }} />;
   }
   return (
-    <Layout active={active}>
+    <Layout active={active} routePath={path} storms={storms}>
       <AreaBoundary resetKey={path}>{body}</AreaBoundary>
     </Layout>
   );

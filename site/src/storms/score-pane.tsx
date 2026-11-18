@@ -20,14 +20,17 @@ const FILE = "pairs.json";
 /** Render the single-storm verification scorecard and radius slider. */
 export function ScorePane({
   storm,
+  runTime,
   radiusKm: defaultRadiusKm,
   reports,
 }: {
   storm: Storm;
+  runTime?: string;
   radiusKm?: number;
   reports: Load<ReportsFile>;
 }) {
-  const pairs = useLoad(storm.files.pairs, () => fetchJson(storm.files.pairs, guardPairs));
+  const pairsKey = runTime ? `${runTime}:${storm.files.pairs}` : storm.files.pairs;
+  const pairs = useLoad(pairsKey, () => fetchJson(storm.files.pairs, guardPairs));
   const [selected, setSelected] = useState(RULER[0]!.threshold_mm);
   const [peekMm, setPeekMm] = useState<number | null>(null);
   const data = pairs.status === "ready" ? pairs.data : null;
@@ -60,11 +63,11 @@ export function ScorePane({
       <section>
         <h2>Per-class table</h2>
         <RadiusSlider value={activeRadiusKm} max={maxRadiusKm} onChange={(next) => setRadiusKm(next, maxRadiusKm)} />
-        <p class="pane-note">
+        <div class="pane-note">
           Radius <span class="mono">{activeRadiusKm} km</span> &middot; <span class="mono">{scored}</span> scored reports &middot;{" "}
           <span class="mono">{pairs.data.reports.length - scored}</span> near crop edge &middot;{" "}
           <ReceiptChip receipt={receipt} file={FILE} />
-        </p>
+        </div>
         <div class="table-scroll">
           <table class="table">
             <thead>

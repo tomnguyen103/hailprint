@@ -93,7 +93,7 @@ live.py       the live view: newest_key (today or the previous UTC day folder) -
               write validates every file, then writes swath.geojson, reports.geojson, warnings.geojson, and now.json last (schema live.schema.json); a MESH failure writes nothing
 county.py     committed GeoJSON (package data): outline() and bbox() for Harris County; metro() and metro_bbox() for the 8 metro counties (the impact layers only)
 files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata;
-              lock(path): one publish run at a time, pid in site/data/publish.lock, a second run stops with exit 1
+              lock(path): one publish run at a time, pid in site/data/publish.lock; evicts stale locks (dead PID or age > STALE_LOCK_S), otherwise stops with exit 1
 paths.py      resolve_root() reads HAILPRINT_ROOT when set, else the repo root; ROOT, RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR hang from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; retries 408, 429 (honouring numeric Retry-After up to 30 s), and 5xx; closes retried error bodies; sends User-Agent `hailprint/<version> (+https://hailprint.tomnguyen.me)`
 __main__.py   argparse wiring, one function per command (the `ingest`, `score`, `eaglei`, `odin`, and `live` bodies stay here), printing, and the fixed paths under data/, out/, and site/data/; the `--missing` rules, the run loop, and the publish run sit in `runs` and `publish_run`;
@@ -111,7 +111,7 @@ The `<step>` in `/storms/<date>/map/<step>` is a number from 0 to 191. Step 0 st
 `site/src/time/` holds the step math and the time slider. `site/src/impact/` holds the storm timeline.
 In `site/src/impact/`, `fill-spec.ts` holds `FillSpec` and `binOf`, the one fill rule that `power.ts` and `internet.ts` share.
 `series.ts` holds the pure series math. `timeline-chart.tsx` draws the chart, `timeline-tables.tsx` draws the number tables, and `timeline.tsx` joins them.
-`site/src/data/constants.ts` holds the constants of the data layer (`METRO_FIPS`, `HARRIS_FIPS`, `DATE`, `STEP_MINUTES`, `STEPS`). `site/src/data/` imports nothing above itself.
+`site/src/data/constants.ts` holds the constants and date helper of the data layer (`METRO_FIPS`, `HARRIS_FIPS`, `METRO_COUNTIES`, `DATE`, `isValidCalendarDate`, `STEP_MINUTES`, `STEPS`). `site/src/data/` imports nothing above itself.
 `site/src/geometry.ts` holds `containsPoint`, the point-in-polygon test, with no MapLibre import.
 The warnings layer sits under `site/src/storms/map/`, and the layers control sits in `site/src/storms/layers-control.tsx`.
 The browser reads `site/data/live/now.json` on `/live` and never fetches NWS, ODIN, or IODA origins directly (`vercel.json` CSP `connect-src` restricts to `'self'`, Supabase, and Protomaps).

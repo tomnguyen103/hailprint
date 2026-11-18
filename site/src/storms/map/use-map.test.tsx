@@ -289,4 +289,36 @@ describe("useMap shared MapLibre lifecycle hook (US-02.1, US-02.3, US-02.4)", ()
     expect(stub.destroy).toHaveBeenCalledTimes(1);
     expect(latest!.handle.current).toBeNull();
   });
+
+  it("exposes basemap status from MapHandle and resets it on cleanup before re-mount (US-02.1, US-04.1)", async () => {
+    const stub1 = { ...makeStubHandle(), basemap: true };
+    const nextDeferred = deferred<MapHandle>();
+    createMapMock.mockResolvedValueOnce(stub1).mockReturnValueOnce(nextDeferred.promise);
+
+    let latest: ReturnType<typeof useMap> | null = null;
+    function Probe({ theme }: { theme: Theme }) {
+      const state = useMap(theme);
+      latest = state;
+      return h("div", { ref: state.container });
+    }
+
+    const host = makeFakeElement("div");
+    await act(() => render(h(Probe, { theme: "light" }), host as unknown as HTMLElement));
+    expect((latest as unknown as { basemap?: boolean }).basemap).toBe(false);
+
+    await flush();
+    expect(latest!.ready).toBe(true);
+    expect((latest as unknown as { basemap?: boolean }).basemap).toBe(true);
+
+    await act(() => {
+      latest!.retry();
+    });
+    expect(stub1.destroy).toHaveBeenCalledTimes(1);
+    expect((latest as unknown as { basemap?: boolean }).basemap).toBe(false);
+
+    nextDeferred.resolve({ ...makeStubHandle(), basemap: false });
+    await flush();
+    expect(latest!.ready).toBe(true);
+    expect((latest as unknown as { basemap?: boolean }).basemap).toBe(false);
+  });
 });

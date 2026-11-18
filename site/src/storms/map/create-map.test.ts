@@ -39,12 +39,41 @@ const stub = vi.hoisted(() => {
       return this.listeners.get(type)?.size ?? 0;
     }
   }
-  return { FakeMap, hasBasemap: false };
+  class FakeMarker {
+    static instances: FakeMarker[] = [];
+    static addToCalls = 0;
+    static removeCalls = 0;
+    lngLat: number[] = [];
+    readonly element: { className: string; textContent: string; hidden: boolean };
+    constructor(opts: { element: { className: string; textContent: string; hidden: boolean } }) {
+      this.element = opts.element;
+      this.element.className = this.element.className
+        ? `${this.element.className} maplibregl-marker`
+        : "maplibregl-marker";
+      FakeMarker.instances.push(this);
+    }
+    setLngLat(lngLat: number[]) {
+      this.lngLat = lngLat;
+      return this;
+    }
+    addTo() {
+      FakeMarker.addToCalls += 1;
+      return this;
+    }
+    remove() {
+      FakeMarker.removeCalls += 1;
+      return this;
+    }
+    getElement() {
+      return this.element;
+    }
+  }
+  return { FakeMap, FakeMarker, hasBasemap: false };
 });
 
 vi.mock("maplibre-gl", () => ({
   Map: stub.FakeMap,
-  Marker: class {},
+  Marker: stub.FakeMarker,
   NavigationControl: class {},
   addProtocol() {},
   setWorkerUrl() {},
@@ -158,14 +187,14 @@ describe("createMap", () => {
     expect(spriteUrl("dark")).toBe("https://protomaps.github.io/basemaps-assets/sprites/v4/dark");
 
     const tokenValues: Record<string, string> = {
-      "--paper": "#f7f6f2",
-      "--sheet": "#ffffff",
-      "--sheet-muted": "#efede6",
-      "--rule": "#e2dfd5",
+      "--bg": "#f7f6f2",
+      "--surface": "#ffffff",
+      "--surface-muted": "#efede6",
+      "--border": "#e2dfd5",
       "--water": "#e4eae8",
       "--road-major": "#cfcbc0",
-      "--ink": "#1f1e1b",
-      "--ink-muted": "#4a4840",
+      "--text": "#1f1e1b",
+      "--text-muted": "#4a4840",
       "--report": "#1f5a7a",
       "--warn-sv": "#8a5300",
       "--warn-to": "#a3175f",
@@ -399,7 +428,7 @@ describe("createMap", () => {
       getPropertyValue: () => "oklch(0.46 0.11 236)",
     }));
     expect(oklchToHex("oklch(0.972 0.008 258)")).toMatch(/^#[0-9a-f]{6}$/);
-    expect(token("--accent")).toMatch(/^#[0-9a-f]{6}$/);
+    expect(token("--primary")).toMatch(/^#[0-9a-f]{6}$/);
     const { map } = await start();
     const style = (map.options as { style: StyleSpecification }).style;
     expect(validateStyleMin(style)).toEqual([]);
@@ -407,11 +436,11 @@ describe("createMap", () => {
 
   it("normalizes LightningCSS lab() tokens, validates MapLibre style, feeds hexRgb, and keeps theme switches idempotent (US-01.1, US-01.4)", async () => {
     const lightTokens: Record<string, string> = {
-      "--paper": "lab(96.7304% -.513285 -2.97188)",
-      "--ink": "lab(8.26392% -.742577 -7.89793)",
-      "--ink-muted": "lab(32.6442% -1.114 -8.02775)",
-      "--sheet": "lab(99.0615% -.261664 -1.48883)",
-      "--rule": "lab(85.4572% -.922233 -5.55018)",
+      "--bg": "lab(96.7304% -.513285 -2.97188)",
+      "--text": "lab(8.26392% -.742577 -7.89793)",
+      "--text-muted": "lab(32.6442% -1.114 -8.02775)",
+      "--surface": "lab(99.0615% -.261664 -1.48883)",
+      "--border": "lab(85.4572% -.922233 -5.55018)",
       "--report": "lab(40.1143% 59.6761 45.0277)",
       "--warn-sv": "lab(40.4802% 21.5733 60.3275)",
       "--warn-to": "lab(34.9174% 56.6023 -11.0666)",
@@ -419,17 +448,17 @@ describe("createMap", () => {
     };
     const darkTokens: Record<string, string> = {
       ...lightTokens,
-      "--paper": "lab(4.01855% -.360526 -4.00815)",
-      "--ink": "lab(93.5983% -.512779 -2.97157)",
-      "--ink-muted": "lab(72.1133% -.964701 -5.91025)",
+      "--bg": "lab(4.01855% -.360526 -4.00815)",
+      "--text": "lab(93.5983% -.512779 -2.97157)",
+      "--text-muted": "lab(72.1133% -.964701 -5.91025)",
     };
     let active = lightTokens;
     vi.stubGlobal("getComputedStyle", () => ({
       getPropertyValue: (name: string) => active[name] ?? "lab(50% 0 0)",
     }));
 
-    expect(token("--paper")).toBe("#f2f6fb");
-    expect(hexRgb(token("--ink-muted"))).toEqual([70, 78, 89]);
+    expect(token("--bg")).toBe("#f2f6fb");
+    expect(hexRgb(token("--text-muted"))).toEqual([70, 78, 89]);
 
     const { state, map } = await start();
     const setPaintProperty = vi.fn();
@@ -443,8 +472,8 @@ describe("createMap", () => {
     const handle = state.value!;
 
     active = darkTokens;
-    expect(token("--paper")).toBe("#0a0f15");
-    expect(hexRgb(token("--ink-muted"))).toEqual([171, 178, 187]);
+    expect(token("--bg")).toBe("#0a0f15");
+    expect(hexRgb(token("--text-muted"))).toEqual([171, 178, 187]);
 
     handle.setTheme("dark");
     const callsAfterDark = setPaintProperty.mock.calls.length;
@@ -497,5 +526,128 @@ describe("createMap", () => {
     expect(oklchToHex("lab(-20% 50 0)")).toBe("#000000");
     expect(oklchToHex("lab(100% 50 -50)")).toBe("#ffffff");
     expect(oklchToHex("lab(120% 50 0)")).toBe("#ffffff");
+  });
+
+  it("reuses county and warning Marker instances in place across slider steps without DOM churn (M5, US-03.1)", async () => {
+    stub.FakeMarker.instances.length = 0;
+    stub.FakeMarker.addToCalls = 0;
+    stub.FakeMarker.removeCalls = 0;
+    vi.stubGlobal("document", {
+      documentElement: {},
+      createElement: () => ({ className: "", textContent: "", hidden: false }),
+    });
+    vi.stubGlobal("getComputedStyle", () => ({
+      getPropertyValue: () => "#5f6b7a",
+    }));
+
+    const mapStub = {
+      isStyleLoaded: () => true,
+      getZoom: () => 10,
+      on() {},
+      getSource: () => ({ setData() {} }),
+      setLayoutProperty() {},
+      setPaintProperty() {},
+      hasImage: () => false,
+      addImage() {},
+      removeImage() {},
+      getStyle: () => ({ layers: [] }),
+      removeLayer() {},
+      addLayer() {},
+      remove() {},
+    };
+    const { makeHandle } = await import("./create-map");
+    const handle = makeHandle(mapStub as never, false, "light");
+
+    const outlines = {
+      type: "FeatureCollection" as const,
+      features: [
+        {
+          type: "Feature" as const,
+          properties: { fips: "48201", name: "Harris" },
+          geometry: {
+            type: "MultiPolygon" as const,
+            coordinates: [[[[-95.8, 29.5], [-95.0, 29.5], [-95.0, 30.1], [-95.8, 30.1], [-95.8, 29.5]]]],
+          },
+        },
+      ],
+    };
+    const receipt = {
+      storm_date: "2024-05-28",
+      sources: [],
+      confidence: "radar-estimated hail size",
+      run_time: "2026-10-26T23:02:33Z",
+      package_version: "0.1.0",
+    };
+    const power = {
+      receipt,
+      window: { start: "2024-05-28T12:00:00Z", step_minutes: 15 as const, steps: 192 as const },
+      source: "eaglei" as const,
+      utilities: null,
+      counties: [
+        { fips: "48201", name: "Harris", customers: 1000, out: Array.from({ length: 192 }, (_, i) => (i === 60 ? 100 : 250)) },
+      ],
+    };
+    const warnings = {
+      type: "FeatureCollection" as const,
+      receipt,
+      features: [
+        {
+          type: "Feature" as const,
+          properties: {
+            phenomena: "SV" as const,
+            significance: "W" as const,
+            event_label: "Severe Thunderstorm Warning",
+            eventid: 1,
+            polygon_begin: "2024-05-28T12:00:00Z",
+            polygon_end: "2024-05-29T03:15:00Z",
+            product_id: "p1",
+          },
+          geometry: {
+            type: "MultiPolygon" as const,
+            coordinates: [[[[-95.6, 29.6], [-95.2, 29.6], [-95.2, 29.9], [-95.6, 29.9], [-95.6, 29.6]]]],
+          },
+        },
+        {
+          type: "Feature" as const,
+          properties: {
+            phenomena: "TO" as const,
+            significance: "W" as const,
+            event_label: "Tornado Warning",
+            eventid: 2,
+            polygon_begin: "2024-05-29T03:15:00Z",
+            polygon_end: "2024-05-30T12:00:00Z",
+            product_id: "p2",
+          },
+          geometry: {
+            type: "MultiPolygon" as const,
+            coordinates: [[[[-95.5, 29.7], [-95.1, 29.7], [-95.1, 30.0], [-95.5, 30.0], [-95.5, 29.7]]]],
+          },
+        },
+      ],
+    };
+
+    handle.setCounties(outlines);
+    handle.setFill("power", power, 60);
+    handle.setWarnings(warnings, "2024-05-28", 60);
+    expect(stub.FakeMarker.instances).toHaveLength(2);
+    expect(stub.FakeMarker.addToCalls).toBe(2);
+    expect(stub.FakeMarker.removeCalls).toBe(0);
+    expect(stub.FakeMarker.instances[0]!.element.textContent).toBe("Harris 10.0%");
+    expect(stub.FakeMarker.instances[1]!.element.textContent).toBe("SV");
+    expect(stub.FakeMarker.instances[1]!.element.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(["maplibregl-marker", "warning-tag", "warning-tag-sv"]),
+    );
+
+    // Scrubbing to step 61 switches SV -> TO in place while preserving maplibregl-marker with zero DOM churn
+    handle.setFill("power", power, 61);
+    handle.setWarnings(warnings, "2024-05-28", 61);
+    expect(stub.FakeMarker.instances).toHaveLength(2);
+    expect(stub.FakeMarker.addToCalls).toBe(2);
+    expect(stub.FakeMarker.removeCalls).toBe(0);
+    expect(stub.FakeMarker.instances[0]!.element.textContent).toBe("Harris 25.0%");
+    expect(stub.FakeMarker.instances[1]!.element.textContent).toBe("TO");
+    const reusedClasses = stub.FakeMarker.instances[1]!.element.className.split(/\s+/);
+    expect(reusedClasses).toEqual(expect.arrayContaining(["maplibregl-marker", "warning-tag", "warning-tag-to"]));
+    expect(reusedClasses).not.toContain("warning-tag-sv");
   });
 });

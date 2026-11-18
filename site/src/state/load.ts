@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import { STALE, latest } from "../data/fetch";
+import { STALE, clearFetchCache, latest } from "../data/fetch";
 import { DataError } from "../data/types";
 
 export type Load<T> =
@@ -24,11 +24,19 @@ export function useLoad<T>(
   const [state, setState] = useState<{ key: string; load: Load<T> }>({ key, load: { status: "loading" } });
   const [showLoading, setShowLoading] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const lastAttemptRef = useRef(0);
   const run = useRef(latest<T>());
+  const startRef = useRef(start);
+  startRef.current = start;
 
   useEffect(() => {
     let live = true;
     let shownAt = 0;
+    let settleTimer: number | null = null;
+    if (attempt > lastAttemptRef.current) {
+      lastAttemptRef.current = attempt;
+      clearFetchCache();
+    }
     setState({ key, load: { status: "loading" } });
     setShowLoading(false);
     const show = window.setTimeout(() => {
@@ -39,14 +47,20 @@ export function useLoad<T>(
       if (!live) return;
       window.clearTimeout(show);
       const wait = shownAt === 0 ? 0 : Math.max(0, KEEP_FOR_MS - (Date.now() - shownAt));
-      window.setTimeout(() => {
+      const apply = () => {
+        settleTimer = null;
         if (!live) return;
         setShowLoading(false);
         setState({ key, load: next });
-      }, wait);
+      };
+      if (wait === 0) {
+        apply();
+      } else {
+        settleTimer = window.setTimeout(apply, wait);
+      }
     };
     run
-      .current(start)
+      .current(() => startRef.current())
       .then((value) => {
         if (value !== STALE) settle({ status: "ready", data: value });
       })
@@ -58,9 +72,8 @@ export function useLoad<T>(
     return () => {
       live = false;
       window.clearTimeout(show);
+      if (settleTimer !== null) window.clearTimeout(settleTimer);
     };
-    // `start` is read once per key or attempt; a new closure alone restarts nothing.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, attempt]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);

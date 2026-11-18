@@ -1,30 +1,43 @@
-/* Hailprint design tokens: design.md (locked, Gulf Barograph OKLCH system). */
+/* Corporate Standard v1 tokens for Hailprint (design.md). */
 :root {
   color-scheme: light;
-  --paper: oklch(0.972 0.008 258);
-  --sheet: oklch(0.992 0.004 258);
-  --sheet-muted: oklch(0.942 0.012 258);
-  --rule: oklch(0.875 0.015 258);
-  --border: var(--rule);
-  --ink: oklch(0.21 0.022 258);
-  --ink-muted: oklch(0.42 0.022 258);
-  --accent: oklch(0.46 0.11 236);
-  --accent-amber: oklch(0.54 0.14 48);
-  --on-accent: oklch(0.992 0.004 258);
-  --report: oklch(0.5 0.19 28);
-  --note-bg: oklch(0.945 0.032 84);
-  --note-ink: oklch(0.39 0.072 78);
-  --water: oklch(0.922 0.014 210);
-  --road-major: oklch(0.84 0.014 85);
-  --shadow: 0 8px 24px -8px rgb(20 26 38 / 0.24);
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #f9fafb;
+  --border: #e4e7ec;
+  --border-input: #858d9b;
+  --text: #101828;
+  --text-muted: #475467;
+  --text-placeholder: #667085;
+  --primary: #1e3a8a;
+  --primary-hover: #172e6e;
+  --primary-subtle: #eff4ff;
+  --on-primary: #ffffff;
+  --success: #027a48;
+  --warning: #b54708;
+  --danger: #b42318;
+  --info: #175cd3;
+  --sidebar-bg: #f9fafb;
+  --sidebar-text: #344054;
+  --sidebar-active-bg: #eff4ff;
+  --sidebar-active-text: #1e3a8a;
+  --sidebar-active-edge: #1e3a8a;
 
-  /* contingency outcomes */
-  --hit: oklch(0.52 0.13 162);
-  --miss: oklch(0.54 0.18 28);
-  --false-alarm: oklch(0.58 0.14 68);
-  --correct-neg: oklch(0.52 0.02 258);
+  /* Map and domain surfaces */
+  --report: #b42318;
+  --note-bg: #fef3c7;
+  --note-ink: #78350f;
+  --water: #e5eff8;
+  --road-major: #cfd5df;
+  --shadow: 0 4px 12px rgb(16 24 40 / 0.08);
 
-  /* hail ramp, data only, never chrome */
+  /* Contingency outcomes */
+  --hit: var(--success);
+  --miss: var(--danger);
+  --false-alarm: var(--warning);
+  --correct-neg: var(--text-muted);
+
+  /* Hail ramp, data only, never chrome */
   --hail-1: oklch(0.92 0.032 224);
   --hail-2: oklch(0.84 0.058 222);
   --hail-3: oklch(0.73 0.088 226);
@@ -33,116 +46,131 @@
   --hail-6: oklch(0.37 0.125 272);
   --hail-7: oklch(0.26 0.11 296);
 
-  /* impact ramps and warning outlines: cool hues, so no step reads as a hail class */
-  --out-1: oklch(0.93 0.038 145);
-  --out-2: oklch(0.85 0.078 145);
-  --out-3: oklch(0.74 0.118 145);
-  --out-4: oklch(0.61 0.128 148);
-  --out-5: oklch(0.47 0.108 150);
-  --net-1: oklch(0.92 0.032 316);
-  --net-2: oklch(0.81 0.075 316);
-  --net-3: oklch(0.67 0.12 316);
-  --net-4: oklch(0.52 0.148 316);
-  --net-5: oklch(0.38 0.135 316);
-  --warn-sv: oklch(0.49 0.12 68);
-  --warn-to: oklch(0.46 0.18 350);
-  --warn-ff: oklch(0.48 0.09 202);
+  /* Impact ramps and warning outlines: cool hues, distinct from hail classes */
+  --out-1: #dcefd9;
+  --out-2: #a9d9a6;
+  --out-3: #6fbf72;
+  --out-4: #34995a;
+  --out-5: #1b6b3c;
+  --net-1: #f1e3f4;
+  --net-2: #dbb5e3;
+  --net-3: #bf80cc;
+  --net-4: #9a4aa6;
+  --net-5: #6e2478;
+  --warn-sv: #8a5300;
+  --warn-to: #a3175f;
+  --warn-ff: #0a6b73;
 
-  --serif: "Source Serif 4 Variable", "Source Serif 4", "Instrument Serif", Georgia, serif;
-  --sans: "IBM Plex Sans", "Source Sans 3", system-ui, sans-serif;
-  --mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, monospace;
-  --font-display: var(--serif);
-  --font-sans: var(--sans);
-  --font-mono: var(--mono);
+  --font-sans: "IBM Plex Sans Variable", "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 
-  --radius-pane: 6px;
-  --radius-control: 4px;
-  --gutter: 32px;
-  --bar-height: 64px;
-  --motion: 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  --radius: 4px;
+  --gutter: 24px;
+  --bar-height: 56px;
+  --sidebar-width: 256px;
+  --sidebar-rail: 56px;
+  --motion: 150ms cubic-bezier(0.2, 0, 0, 1);
   --ctrl-icon-filter: none;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --paper: oklch(0.165 0.015 258);
-  --sheet: oklch(0.205 0.018 258);
-  --sheet-muted: oklch(0.25 0.02 258);
-  --rule: oklch(0.32 0.022 258);
-  --border: var(--rule);
-  --ink: oklch(0.945 0.008 258);
-  --ink-muted: oklch(0.76 0.016 258);
-  --accent: oklch(0.78 0.095 230);
-  --accent-amber: oklch(0.76 0.14 48);
-  --on-accent: oklch(0.165 0.015 258);
-  --report: oklch(0.76 0.14 25);
-  --note-bg: oklch(0.26 0.035 84);
-  --note-ink: oklch(0.88 0.065 84);
-  --water: oklch(0.23 0.018 215);
-  --road-major: oklch(0.39 0.015 85);
-  --shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
+  --bg: #0c111d;
+  --surface: #161b26;
+  --surface-muted: #1f242f;
+  --border: #333741;
+  --border-input: #6b7385;
+  --text: #f5f5f6;
+  --text-muted: #94969c;
+  --text-placeholder: #85888e;
+  --primary: #a4bcfd;
+  --primary-hover: #c7d7fe;
+  --primary-subtle: #1f242f;
+  --on-primary: #0c111d;
+  --success: #47cd89;
+  --warning: #fdb022;
+  --danger: #f97066;
+  --info: #84caff;
+  --sidebar-bg: #0c111d;
+  --sidebar-text: #cecfd2;
+  --sidebar-active-bg: #1f242f;
+  --sidebar-active-text: #c7d7fe;
+  --sidebar-active-edge: #a4bcfd;
+
+  --report: #f97066;
+  --note-bg: #451a03;
+  --note-ink: #fde68a;
+  --water: #13233a;
+  --road-major: #3b4252;
+  --shadow: 0 4px 12px rgb(0 0 0 / 0.4);
   --ctrl-icon-filter: invert(1);
-  --hit: oklch(0.74 0.13 162);
-  --miss: oklch(0.74 0.15 28);
-  --false-alarm: oklch(0.78 0.14 72);
-  --correct-neg: oklch(0.7 0.02 258);
-  --out-1: oklch(0.29 0.04 148);
-  --out-2: oklch(0.42 0.08 148);
-  --out-3: oklch(0.56 0.11 148);
-  --out-4: oklch(0.71 0.12 148);
-  --out-5: oklch(0.85 0.1 148);
-  --net-1: oklch(0.28 0.045 316);
-  --net-2: oklch(0.41 0.085 316);
-  --net-3: oklch(0.55 0.125 316);
-  --net-4: oklch(0.7 0.13 316);
-  --net-5: oklch(0.82 0.1 316);
-  --warn-sv: oklch(0.8 0.13 78);
-  --warn-to: oklch(0.76 0.15 350);
-  --warn-ff: oklch(0.79 0.1 188);
+
+  --out-1: #1e3322;
+  --out-2: #2c5a35;
+  --out-3: #3f8a4d;
+  --out-4: #62b872;
+  --out-5: #9be0a5;
+  --net-1: #34203a;
+  --net-2: #5a3466;
+  --net-3: #8650a0;
+  --net-4: #b87bd0;
+  --net-5: #e0b0f2;
+  --warn-sv: #f2b84b;
+  --warn-to: #ff7eb6;
+  --warn-ff: #4dd0be;
 }
 
-/* no-script case: the head script did not run, so the OS scheme decides */
+/* No-script fallback: OS scheme decides before JS runs. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --paper: oklch(0.165 0.015 258);
-    --sheet: oklch(0.205 0.018 258);
-    --sheet-muted: oklch(0.25 0.02 258);
-    --rule: oklch(0.32 0.022 258);
-    --border: var(--rule);
-    --ink: oklch(0.945 0.008 258);
-    --ink-muted: oklch(0.76 0.016 258);
-    --accent: oklch(0.78 0.095 230);
-    --accent-amber: oklch(0.76 0.14 48);
-    --on-accent: oklch(0.165 0.015 258);
-    --report: oklch(0.76 0.14 25);
-    --note-bg: oklch(0.26 0.035 84);
-    --note-ink: oklch(0.88 0.065 84);
-    --water: oklch(0.23 0.018 215);
-    --road-major: oklch(0.39 0.015 85);
-    --shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
+    --bg: #0c111d;
+    --surface: #161b26;
+    --surface-muted: #1f242f;
+    --border: #333741;
+    --border-input: #6b7385;
+    --text: #f5f5f6;
+    --text-muted: #94969c;
+    --text-placeholder: #85888e;
+    --primary: #a4bcfd;
+    --primary-hover: #c7d7fe;
+    --primary-subtle: #1f242f;
+    --on-primary: #0c111d;
+    --success: #47cd89;
+    --warning: #fdb022;
+    --danger: #f97066;
+    --info: #84caff;
+    --sidebar-bg: #0c111d;
+    --sidebar-text: #cecfd2;
+    --sidebar-active-bg: #1f242f;
+    --sidebar-active-text: #c7d7fe;
+    --sidebar-active-edge: #a4bcfd;
+
+    --report: #f97066;
+    --note-bg: #451a03;
+    --note-ink: #fde68a;
+    --water: #13233a;
+    --road-major: #3b4252;
+    --shadow: 0 4px 12px rgb(0 0 0 / 0.4);
     --ctrl-icon-filter: invert(1);
-    --hit: oklch(0.74 0.13 162);
-    --miss: oklch(0.74 0.15 28);
-    --false-alarm: oklch(0.78 0.14 72);
-    --correct-neg: oklch(0.7 0.02 258);
-    --out-1: oklch(0.29 0.04 148);
-    --out-2: oklch(0.42 0.08 148);
-    --out-3: oklch(0.56 0.11 148);
-    --out-4: oklch(0.71 0.12 148);
-    --out-5: oklch(0.85 0.1 148);
-    --net-1: oklch(0.28 0.045 316);
-    --net-2: oklch(0.41 0.085 316);
-    --net-3: oklch(0.55 0.125 316);
-    --net-4: oklch(0.7 0.13 316);
-    --net-5: oklch(0.82 0.1 316);
-    --warn-sv: oklch(0.8 0.13 78);
-    --warn-to: oklch(0.76 0.15 350);
-    --warn-ff: oklch(0.79 0.1 188);
+
+    --out-1: #1e3322;
+    --out-2: #2c5a35;
+    --out-3: #3f8a4d;
+    --out-4: #62b872;
+    --out-5: #9be0a5;
+    --net-1: #34203a;
+    --net-2: #5a3466;
+    --net-3: #8650a0;
+    --net-4: #b87bd0;
+    --net-5: #e0b0f2;
+    --warn-sv: #f2b84b;
+    --warn-to: #ff7eb6;
+    --warn-ff: #4dd0be;
   }
 }
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   :root {
     --gutter: 16px;
   }

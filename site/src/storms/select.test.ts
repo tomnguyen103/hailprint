@@ -103,6 +103,7 @@ it("filters curated case studies against the published catalog", () => {
   expect(CASE_STUDIES).toHaveLength(4);
   for (const cs of CASE_STUDIES) {
     expect(cs.title).toContain(cs.storm_date);
+    expect(cs.title.trim().split(/\s+/).length).toBeLessThanOrEqual(3);
     expect(cs.summary.length).toBeGreaterThan(0);
     expect(cs.summary).not.toMatch(/\d/);
   }

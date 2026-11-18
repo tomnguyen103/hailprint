@@ -198,9 +198,10 @@ describe("Stamp copy feedback & UI polish contracts (US-16.1, US-16.2, US-16.3)"
     const pipelineCss = read("../styles/pipeline.css");
     const liveMapTsx = read("./map/live-map.tsx");
 
-    // Bottom bar active item has 2px top indicator and weight 600
-    expect(shellCss).toContain('.bottom-bar a[aria-current="page"]::before');
-    expect(shellCss).toContain("font-weight: 600");
+    // Route sidebar active item has 2px left edge indicator and weight 500/600; bottom bar is removed
+    expect(shellCss).not.toContain(".bottom-bar");
+    expect(shellCss).toContain('.route-sidebar a[aria-current="page"]');
+    expect(shellCss).toContain("--sidebar-active-edge");
     // Sub-tabs min-height 40px and forced-colors
     expect(shellCss).toContain("min-height: 40px");
     expect(shellCss).toContain("forced-colors: active");
@@ -211,17 +212,45 @@ describe("Stamp copy feedback & UI polish contracts (US-16.1, US-16.2, US-16.3)"
     expect(liveCss).toContain(":nth-child(3n)");
     expect(liveCss).toContain(":nth-child(n + 4)");
 
-    // .pane h2 uses design.md pane-heading face (--sans) and 18px / 600
+    // .pane h2 uses design.md pane-heading face (--font-sans) and 16px / 600
     const paneH2 = stormsCss.match(/\.pane h2\s*\{([^}]*)\}/)?.[1] ?? "";
-    expect(paneH2).toContain("var(--sans)");
+    expect(paneH2).toContain("var(--font-sans)");
     expect(paneH2).toContain("600");
 
-    // .share-bar uses chrome token (--accent), not a hail token
+    // .share-bar uses chrome token (--primary), not a hail token
     const shareBar = pipelineCss.match(/\.share-bar\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(shareBar).not.toContain("--hail-");
-    expect(shareBar).toContain("var(--accent)");
+    expect(shareBar).toContain("var(--primary)");
 
     // Live map frame uses tabIndex={-1}
     expect(liveMapTsx).toContain("tabIndex={-1}");
+  });
+
+  it("enforces zero --serif fallbacks, flat MapLibre controls, 40px native inputs, and <=3-word RulerLegend & Compare preset buttons (US-05.1, US-06.2, US-07.2)", async () => {
+    const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+    const liveCss = read("../styles/live.css");
+    const methodCss = read("../styles/method.css");
+    const mapCss = read("../styles/map.css");
+
+    expect(liveCss).not.toContain("--serif");
+    expect(methodCss).not.toContain("--serif");
+    expect(mapCss).toMatch(/\.map-frame\s+\.maplibregl-ctrl-group\s*\{[^}]*border:\s*0/);
+    expect(mapCss).toMatch(/\.layer-row\s+input\s*\{[^}]*width:\s*40px/);
+    expect(mapCss).toMatch(/\.layer-row\s+input\s*\{[^}]*height:\s*40px/);
+
+    const { COMPARE_PRESETS } = await import("../try/compare-data");
+    for (const preset of COMPARE_PRESETS) {
+      expect(preset.label.trim().split(/\s+/).length).toBeLessThanOrEqual(3);
+    }
+
+    const { RulerLegend } = await import("./map/ruler-legend");
+    const legendHost = makeFakeElement("div");
+    await act(() => render(h(RulerLegend, { hidden: new Set<number>(), onToggle: () => {} }), legendHost as unknown as HTMLElement));
+    const buttons = findDomNodes(legendHost, (n) => n.tagName === "BUTTON");
+    expect(buttons.length).toBe(7);
+    for (const btn of buttons) {
+      const words = domText(btn).trim().split(/\s+/).filter(Boolean);
+      expect(words.length).toBeLessThanOrEqual(3);
+    }
   });
 });

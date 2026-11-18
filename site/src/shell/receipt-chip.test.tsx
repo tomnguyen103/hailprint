@@ -18,6 +18,7 @@ interface FakeDomNode {
   namespaceURI: string;
   style: Record<string, unknown>;
   focus: () => void;
+  appendChild: (child: FakeDomNode) => FakeDomNode;
   contains: (target: unknown) => boolean;
   querySelectorAll: (selector?: string) => FakeDomNode[];
   [key: string]: unknown;
@@ -96,7 +97,15 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
       if (target === el) return true;
       return el.childNodes.some((c) => typeof c.contains === "function" && c.contains(target));
     },
-    closest(): FakeDomNode | null {
+    closest(selector?: string): FakeDomNode | null {
+      if (!selector) return null;
+      const roles = Array.from(selector.matchAll(/\[role="([^"]+)"\]/g), (m) => m[1]);
+      if (roles.length === 0) return null;
+      let cur: FakeDomNode | null = el;
+      while (cur) {
+        if (typeof cur["role"] === "string" && roles.includes(cur["role"])) return cur;
+        cur = cur.parentNode;
+      }
       return null;
     },
     querySelectorAll(): FakeDomNode[] {
@@ -127,7 +136,10 @@ function findDomNodes(root: FakeDomNode, match: (n: FakeDomNode) => boolean, out
   return out;
 }
 
-function dispatchDocumentKey(key: string, shiftKey = false): boolean {
+function dispatchDocumentKey(
+  key: string,
+  shiftKey = false,
+): { defaultPrevented: boolean; propagationStopped: boolean } {
   let defaultPrevented = false;
   let propagationStopped = false;
   const event = {
@@ -146,7 +158,7 @@ function dispatchDocumentKey(key: string, shiftKey = false): boolean {
   for (const fn of [...docKeyListeners]) {
     fn(event);
   }
-  return defaultPrevented && propagationStopped;
+  return { defaultPrevented, propagationStopped };
 }
 
 const receipt: Receipt = {
@@ -194,7 +206,7 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
       matchMedia: (query: string) => ({
         media: query,
         get matches() {
-          return query.includes("767px") ? isMobileViewport : false;
+          return query.includes("width < 768px") ? isMobileViewport : false;
         },
         addEventListener: () => {},
         removeEventListener: () => {},
@@ -239,11 +251,12 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
     expect(findDomNodes(host, (n) => n["class"] === "receipt-pop")).toHaveLength(1);
 
     // First Escape: closes popover, calls preventDefault + stopPropagation, leaves inspector open
-    let stoppedAndPrevented = false;
+    let result = { defaultPrevented: false, propagationStopped: false };
     await act(() => {
-      stoppedAndPrevented = dispatchDocumentKey("Escape");
+      result = dispatchDocumentKey("Escape");
     });
-    expect(stoppedAndPrevented).toBe(true);
+    expect(result.defaultPrevented).toBe(true);
+    expect(result.propagationStopped).toBe(true);
     expect(getActiveReceiptChipId()).toBeNull();
     expect(inspectorClosed).toBe(0);
 
@@ -318,5 +331,70 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
     const match = css.match(/\.inspector-try-link\s*\{([^}]*)\}/);
     expect(match).not.toBeNull();
     expect(match![1]).toContain("min-height: 40px");
+  });
+
+  it("renders concise file label on trigger and shows summary inside opened .receipt-pop (US-06.1)", async () => {
+    const host = makeFakeElement("div");
+    await act(() =>
+      render(
+        h(ReceiptChip, {
+          receipt,
+          file: "pairs.json",
+          summary: "pooled over 25 storm dates",
+        } as unknown as Parameters<typeof ReceiptChip>[0]),
+        host as unknown as HTMLElement,
+      ),
+    );
+    const chipBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && n["class"] === "chip mono")[0]!;
+    expect(chipBtn).toBeDefined();
+    expect(chipBtn.childNodes.map((c) => c.data ?? "").join("").trim()).toBe("pairs.json");
+    expect(chipBtn["aria-controls"]).toBeUndefined();
+
+    await act(() => {
+      (chipBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    const pop = findDomNodes(host, (n) => n["class"] === "receipt-pop")[0]!;
+    expect(pop).toBeDefined();
+    expect(chipBtn["aria-controls"]).toBe(pop["id"]);
+    const summaryEl = findDomNodes(pop, (n) => n["class"] === "receipt-summary")[0];
+    expect(summaryEl).toBeDefined();
+  });
+
+  it("docks mobile .scope sheet flush at bottom: 0 in scope.css (US-01.2)", () => {
+    const cssPath = fileURLToPath(new URL("../styles/scope.css", import.meta.url));
+    const css = readFileSync(cssPath, "utf8");
+    const mobileBlock = css.slice(css.indexOf("@media (width < 768px)"));
+    expect(mobileBlock).toContain("bottom: 0;");
+    expect(mobileBlock).not.toContain("bottom: 60px");
+  });
+
+  it("yields Escape when focus is inside another dialog or menu overlay", async () => {
+    const host = makeFakeElement("div");
+    await act(() =>
+      render(h(ReceiptChip, { receipt, file: "pairs.json" }), host as unknown as HTMLElement),
+    );
+    const chipBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && n["class"] === "chip mono")[0]!;
+    await act(() => {
+      (chipBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    expect(getActiveReceiptChipId()).not.toBeNull();
+
+    // Move focus into a separate role="menu" element outside the chip and popover
+    const externalMenu = makeFakeElement("div");
+    externalMenu["role"] = "menu";
+    const menuItem = makeFakeElement("button", "Dark");
+    externalMenu.appendChild(menuItem);
+    menuItem.focus();
+
+    let result = { defaultPrevented: false, propagationStopped: false };
+    await act(() => {
+      result = dispatchDocumentKey("Escape");
+    });
+    expect(result.defaultPrevented).toBe(false);
+    expect(result.propagationStopped).toBe(false);
+    expect(getActiveReceiptChipId()).not.toBeNull();
+    expect(activeEl).toBe(menuItem);
+
+    await act(() => render(null, host as unknown as HTMLElement));
   });
 });

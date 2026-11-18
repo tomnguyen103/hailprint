@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
-import { DATE } from "./constants";
+import { DATE, isValidCalendarDate } from "./constants";
 import { fetchJson, setFetch } from "./fetch";
 import {
   GEOJSON_PATH,
@@ -63,7 +63,15 @@ const pairs = {
   radius_km_default: 5,
   radius_km_max: 20,
   edge_margin_m: 1000,
-  classes: [{ threshold_mm: 19.05, threshold_in: 0.75, label: "a", swath_km2: 10, unverifiable_km2: [1] }],
+  classes: [
+    {
+      threshold_mm: 19.05,
+      threshold_in: 0.75,
+      label: "a",
+      swath_km2: 10,
+      unverifiable_km2: Array.from({ length: 21 }, () => 1),
+    },
+  ],
   reports: [{ id: 0, size_in: 1, edge_m: 4000, dist_m: [0] }],
 };
 
@@ -289,14 +297,24 @@ describe.each(cases)("%s", (_name, file, guard, good, paths) => {
   });
 });
 
-describe("the DATE pattern", () => {
-  it("accepts a zero-padded storm date", () => {
+describe("the DATE pattern and calendar validation", () => {
+  it("accepts a zero-padded storm date and leap-day 2024-02-29", () => {
     expect(DATE.test("2024-05-28")).toBe(true);
+    expect(isValidCalendarDate("2024-05-28")).toBe(true);
+    expect(isValidCalendarDate("2024-02-29")).toBe(true);
   });
 
   it.each(["2024-5-28", "2024-05-28x", "x2024-05-28", "2024-05-28\n", ""])("rejects %j", (text) => {
     expect(DATE.test(text)).toBe(false);
+    expect(isValidCalendarDate(text)).toBe(false);
   });
+
+  it.each(["2024-02-31", "2023-02-29", "2024-13-01", "2024-00-10", "2024-04-31"])(
+    "rejects impossible calendar date %j",
+    (text) => {
+      expect(isValidCalendarDate(text)).toBe(false);
+    },
+  );
 });
 
 describe("guardIndex", () => {
@@ -367,6 +385,78 @@ describe("guardIndex", () => {
     expect(() => guardIndex({ ...index, radius_km_default: Number.NaN })).toThrow(/radius_km_default is not a number/);
     expect(() => guardIndex({ ...index, radius_km_default: Number.POSITIVE_INFINITY })).toThrow(/radius_km_default is not a number/);
   });
+  it("enforces E8 integer radius, calendar-valid unique newest-first storm dates, and folder-date path matching (US-03.2, US-03.3)", () => {
+    expect(() => guardIndex({ ...index, radius_km_default: 5.5 })).toThrow(/radius_km_default/);
+    expect(() => guardIndex({ ...index, radius_km_default: -1 })).toThrow(/radius_km_default/);
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, storm_date: "2024-02-31" }] })).toThrow(/storm_date/);
+
+    const older = {
+      ...storm,
+      storm_date: "2023-06-23",
+      files: {
+        ...storm.files,
+        swath: "storms/2023-06-23/swath.geojson",
+        reports: "storms/2023-06-23/reports.geojson",
+        pairs: "storms/2023-06-23/pairs.json",
+        zip_counts: null,
+      },
+    };
+    expect(guardIndex({ ...index, storms: [storm, older] }).storms).toHaveLength(2);
+    expect(() => guardIndex({ ...index, storms: [storm, storm] })).toThrow(/storms\[1\]\.storm_date/);
+    expect(() => guardIndex({ ...index, storms: [older, storm] })).toThrow(/storms\[1\]\.storm_date/);
+
+    const mismatched = { ...storm.files, pairs: "storms/2023-01-01/pairs.json" };
+    expect(() => guardIndex({ ...index, storms: [{ ...storm, files: mismatched }] })).toThrow(/files\.pairs/);
+
+    const validRow = {
+      threshold_mm: 19.05,
+      hits: 2,
+      misses: 1,
+      false_alarms: 0,
+      correct_negatives: 5,
+      swath_km2: 12.5,
+      hss: 0.42,
+    };
+    expect(guardIndex({ ...index, storms: [{ ...storm, table: [validRow] }] }).storms[0]!.table).toHaveLength(1);
+    expect(
+      guardIndex({ ...index, storms: [{ ...storm, table: [{ ...validRow, hss: null }] }] }).storms[0]!.table,
+    ).toHaveLength(1);
+    expect(() =>
+      guardIndex({ ...index, storms: [{ ...storm, table: [{ ...validRow, swath_km2: -1 }] }] }),
+    ).toThrow(/table\[0\]\.swath_km2/);
+    expect(() =>
+      guardIndex({ ...index, storms: [{ ...storm, table: [{ ...validRow, hss: "bad" }] }] }),
+    ).toThrow(/table\[0\]\.hss/);
+
+    expect(() => guardIndex({ ...index, run_time: "2024-02-31T12:00:00Z" })).toThrow(/run_time is not a run time/);
+    expect(() => guardIndex({ ...index, run_time: "2024-05-28T24:00:00Z" })).toThrow(/run_time is not a run time/);
+    expect(() => guardIndex({ ...index, run_time: "2024-05-28T12:60:00Z" })).toThrow(/run_time is not a run time/);
+    expect(() => guardIndex({ ...index, run_time: "2024-05-28T12:00:60Z" })).toThrow(/run_time is not a run time/);
+  });
+  it("validates real published storms in site/data/ when present against hardened E8 guards (US-03.1)", () => {
+    const dataRoot = fileURLToPath(new URL("../../data/", import.meta.url));
+    if (!existsSync(`${dataRoot}storms.json`)) return;
+    const rawIndex = JSON.parse(readFileSync(`${dataRoot}storms.json`, "utf8")) as unknown;
+    const realIndex = guardIndex(rawIndex);
+    expect(realIndex.storms.length).toBeGreaterThan(0);
+    for (const s of realIndex.storms) {
+      const rawPairs = JSON.parse(readFileSync(`${dataRoot}${s.files.pairs}`, "utf8")) as unknown;
+      guardPairs(rawPairs);
+      const rawReports = JSON.parse(readFileSync(`${dataRoot}${s.files.reports}`, "utf8")) as unknown;
+      guardReports(rawReports);
+      const rawSwath = JSON.parse(readFileSync(`${dataRoot}${s.files.swath}`, "utf8")) as unknown;
+      guardSwath(rawSwath);
+      if (s.files.warnings) {
+        guardWarnings(JSON.parse(readFileSync(`${dataRoot}${s.files.warnings}`, "utf8")) as unknown);
+      }
+      if (s.files.power) {
+        guardPower(JSON.parse(readFileSync(`${dataRoot}${s.files.power}`, "utf8")) as unknown);
+      }
+      if (s.files.internet) {
+        guardInternet(JSON.parse(readFileSync(`${dataRoot}${s.files.internet}`, "utf8")) as unknown);
+      }
+    }
+  });
 });
 
 describe("guardPairs", () => {
@@ -377,12 +467,36 @@ describe("guardPairs", () => {
   it("rejects a non-number inside dist_m and unverifiable_km2", () => {
     const badDist = { ...pairs, reports: [{ ...pairs.reports[0], dist_m: ["0"] }] };
     expect(() => guardPairs(badDist)).toThrow(/pairs\.json: reports\[0\]\.dist_m\[0\]/);
-    const badArea = { ...pairs, classes: [{ ...pairs.classes[0], unverifiable_km2: ["1"] }] };
+    const badArea = {
+      ...pairs,
+      classes: [{ ...pairs.classes[0], unverifiable_km2: ["1", ...Array.from({ length: 20 }, () => 1)] }],
+    };
     expect(() => guardPairs(badArea)).toThrow(/pairs\.json: classes\[0\]\.unverifiable_km2\[0\]/);
   });
   it("accepts null inside dist_m", () => {
     const nullDist = { ...pairs, reports: [{ ...pairs.reports[0], dist_m: [null] }] };
     expect(guardPairs(nullDist).reports[0]!.dist_m[0]).toBeNull();
+  });
+  it("enforces E8 integer radii bounds, non-negative metrics, non-empty classes, and unverifiable_km2 length radius_km_max + 1 (US-03.2, US-03.3)", () => {
+    expect(() => guardPairs({ ...pairs, radius_km_default: 5.5 })).toThrow(/radius_km_default/);
+    expect(() => guardPairs({ ...pairs, radius_km_max: 20.5 })).toThrow(/radius_km_max/);
+    expect(() => guardPairs({ ...pairs, radius_km_default: 21, radius_km_max: 20 })).toThrow(/radius_km_default/);
+    expect(() => guardPairs({ ...pairs, edge_margin_m: -1 })).toThrow(/edge_margin_m is below 0/);
+    expect(() => guardPairs({ ...pairs, classes: [] })).toThrow(/classes is empty/);
+    expect(() => guardPairs({ ...pairs, classes: [{ ...pairs.classes[0], swath_km2: -0.5 }] })).toThrow(
+      /classes\[0\]\.swath_km2 is below 0/,
+    );
+    expect(() =>
+      guardPairs({
+        ...pairs,
+        classes: [{ ...pairs.classes[0], unverifiable_km2: [-1, ...Array.from({ length: 20 }, () => 1)] }],
+      }),
+    ).toThrow(/classes\[0\]\.unverifiable_km2\[0\] is below 0/);
+    expect(() => guardPairs({ ...pairs, reports: [{ ...pairs.reports[0], dist_m: [-5] }] })).toThrow(
+      /reports\[0\]\.dist_m\[0\] is below 0/,
+    );
+    const shortArea = { ...pairs, classes: [{ ...pairs.classes[0], unverifiable_km2: [1, 2] }] };
+    expect(() => guardPairs(shortArea)).toThrow(/classes\[0\]\.unverifiable_km2/);
   });
 });
 

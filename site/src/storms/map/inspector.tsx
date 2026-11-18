@@ -19,7 +19,7 @@ import { href } from "../../router";
 import { objectName } from "../../ruler";
 import { Link } from "../../shell/link";
 import { ReceiptChip, getActiveReceiptChipId } from "../../shell/receipt-chip";
-import { useModalFocusTrap } from "../../shell/scope-drawer";
+import { useModalFocusTrap } from "../../shell/modal-focus";
 import { clearPin, getPinState, isMetroCoordinate, setPin, usePin } from "../../state/pin";
 import {
   type DirectWarning,
@@ -474,12 +474,12 @@ export function Inspector(props: InspectorProps) {
   };
   const [isMobile, setIsMobile] = useState<boolean>(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function"
-      ? window.matchMedia("(max-width: 767px)").matches
+      ? window.matchMedia("(width < 768px)").matches
       : false,
   );
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const mql = window.matchMedia("(max-width: 767px)");
+    const mql = window.matchMedia("(width < 768px)");
     setIsMobile(mql.matches);
     const onChange = (event: { matches: boolean }) => setIsMobile(event.matches);
     mql.addEventListener?.("change", onChange);
@@ -496,7 +496,7 @@ export function Inspector(props: InspectorProps) {
   useEffect(() => {
     const mobile =
       typeof window !== "undefined" && typeof window.matchMedia === "function"
-        ? window.matchMedia("(max-width: 767px)").matches
+        ? window.matchMedia("(width < 768px)").matches
         : false;
     if (!mobile) panel.current?.focus();
     const onKey = (event: KeyboardEvent) => {

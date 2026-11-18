@@ -16,6 +16,7 @@ Site: https://hailprint.tomnguyen.me
 
 ## Features
 
+- **Live**: the rolling 24-hour Harris County monitoring view with current MESH swath, SPC hail reports, HGX warnings, ODIN power summary, and source clocks.
 - **Storms**: one workspace per storm date. The map draws seven nested size classes (0.75 to 2.50 in) and the SPC report points. A map click opens an inspector with the size class at that point and the nearest report.
 - **Parcels**: the parcel count per size class and per ZIP code, from HCAD footprints with the owner fields dropped at load.
 - **Score**: the contingency table (hits, misses, false alarms, correct negatives) with POD, FAR, CSI, and HSS. A slider re-scores in the browser at any radius from 0 to 20 km.

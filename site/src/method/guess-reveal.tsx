@@ -48,10 +48,14 @@ function GuessResult({ index, guess, classMm }: { index: StormsIndex; guess: num
         </div>
       </dl>
       {receipt ? (
-        <p class="pane-note">
+        <div class="pane-note">
           Pooled at <span class="mono">{index.radius_km_default} km</span>:{" "}
-          <ReceiptChip receipt={receipt} file={`${FILE}, pooled over ${index.storms.length} storm dates`} />
-        </p>
+          <ReceiptChip
+            receipt={receipt}
+            file={FILE}
+            summary={`pooled over ${index.storms.length} storm dates`}
+          />
+        </div>
       ) : null}
     </>
   );

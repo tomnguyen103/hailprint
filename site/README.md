@@ -26,7 +26,7 @@ page, and `/pipeline` opens Runs.
 The site reads published JSON from `DATA_BASE` (`import.meta.env.VITE_DATA_BASE ?? "/data/"` in `src/data/fetch.ts`). In production, `VITE_DATA_BASE` points to the public Supabase Storage bucket (`hailprint-public`), so a data refresh from Trigger.dev needs no site deploy.
 In local development, `uv run hailprint publish` at the repo root writes `site/data/storms.json` and one folder per
 storm date under `site/data/storms/<date>/`, served at `/data/`.
-If `storms.json` is missing, `fetchJson` returns an HTTP 404 error and the storm routes render an error state; when `storms.json` is valid and contains no storms, the site shows "No storm date is published yet."
+If `storms.json` is missing, `fetchJson` returns an HTTP 404 error and the storm routes render an error state; when `storms.json` is valid and contains no storms, the site shows "No storm dates in catalog."
 The same command writes `site/data/pipeline.json`: the run log, the archive coverage, and the source list for `/pipeline`.
 `uv run hailprint live` writes `site/data/live/now.json`, `swath.geojson`, `reports.geojson`, and `warnings.geojson` for `/live`; the browser never calls NWS, ODIN, or IODA directly.
 A storm date folder also holds `warnings.geojson` where `hailprint warnings` ran, `power.json` where `hailprint power` ran, and `internet.json` where `hailprint internet` ran and `publish` used `--with-internet`.
@@ -35,16 +35,16 @@ every whole radius; `src/pool.test.ts` checks the browser pool against it and sk
 
 ## Basemap
 
-`scripts/basemap.sh` extracts the 8-county metro bbox (`hailprint.county.metro_bbox()`) at
-maxzoom 12 from the Protomaps daily build into `public/basemap.pmtiles` with the `pmtiles`
+`site/scripts/basemap.sh` extracts the 8-county metro bbox (`hailprint.county.metro_bbox()`) at
+maxzoom 12 from the Protomaps daily build into `site/public/basemap.pmtiles` with the `pmtiles`
 CLI. The file is optional: the map draws paper and the county outlines when it is absent.
 Git tracks `public/basemap.pmtiles` (`!site/public/basemap.pmtiles`) so Vercel deployments serve the basemap. The impact layers (warnings, power, and internet) draw across the 8 counties.
-Rerun `scripts/basemap.sh` after a change to the metro bbox, and on a new host, so the extract covers all 8 counties.
+Rerun `site/scripts/basemap.sh` after a change to the metro bbox, and on a new host, so the extract covers all 8 counties.
 
 ## Vercel
 
 The root `vercel.json` sets the fields: install `cd site && npm ci`, build
-`cd site && npm run build`, output `site/dist`, a `Content-Security-Policy` (`script-src` allows `'unsafe-inline'` for the inline head boot script; `connect-src 'self' https://*.supabase.co https://*.protomaps.com https://protomaps.github.io`), and a rewrite of every path without a dot to `/index.html`. Because published data lives in the public Supabase Storage bucket (`VITE_DATA_BASE`), the Vercel build holds code only and git deployments are enabled for `main` (`git.deploymentEnabled.main: true` in `vercel.json`).
+`cd site && npm run build`, output `site/dist`, a `Content-Security-Policy` (`script-src 'self' blob:` with blocking `/theme-init.js` replacing inline boot JS; `connect-src 'self' https://*.supabase.co https://*.protomaps.com https://protomaps.github.io`), and a rewrite of every path without a dot to `/index.html`. Because published data lives in the public Supabase Storage bucket (`VITE_DATA_BASE`), the Vercel build holds code only and git deployments are enabled for `main` (`git.deploymentEnabled.main: true` in `vercel.json`).
 Cloud schedules and bucket setup live in [docs/operations.md](../docs/operations.md).
 
 ## Dev harness

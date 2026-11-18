@@ -1,35 +1,54 @@
-import { AREA_LABELS, PRIMARY_AREAS, type Area, href } from "../router";
-import { AREA_ICONS, CodeIcon } from "./icons";
+import type { Storm } from "../data/types";
+import { AREA_LABELS, type Area } from "../router";
+import { GlobalSearch } from "./global-search";
+import { CodeIcon, GlyphIcon, MenuIcon } from "./icons";
 import { Link } from "./link";
 import { ThemeToggle } from "./theme-toggle";
 
 const SOURCE_URL = "https://github.com/tomnguyen103/hailprint";
 
-function areaHref(area: Area): string {
-  return area === "storms" ? "/storms" : href({ area });
+interface Props {
+  active: Area | null;
+  storms?: readonly Storm[];
+  isDesktop?: boolean;
+  navExpanded?: boolean;
+  onToggleNav?: () => void;
 }
 
-export function TopBar({ active }: { active: Area | null }) {
+/** 56 px single-row sticky top bar: single hamburger toggle + brand + area title, center Ctrl+K search, right theme menu + source link. */
+export function TopBar({ active, storms, isDesktop = true, navExpanded = true, onToggleNav }: Props) {
+  const navLabel = isDesktop
+    ? navExpanded
+      ? "Collapse navigation"
+      : "Expand navigation"
+    : navExpanded
+      ? "Close navigation"
+      : "Open navigation";
+
   return (
     <header class="top-bar">
-      <Link href="/" class="wordmark">
-        Hailprint
-      </Link>
-      <nav class="area-nav" aria-label="Areas">
-        {PRIMARY_AREAS.map((area) => (
-          <Link key={area} href={areaHref(area)} aria-current={active === area ? "page" : undefined}>
-            {AREA_LABELS[area]}
-          </Link>
-        ))}
-      </nav>
-      <div class="top-bar-tools">
-        <Link
-          href={areaHref("pipeline")}
-          class="pipeline-status-link"
-          aria-current={active === "pipeline" ? "page" : undefined}
+      <div class="top-bar-left">
+        <button
+          type="button"
+          class="icon-button sidebar-toggle"
+          aria-label={navLabel}
+          aria-expanded={navExpanded}
+          aria-controls="route-sidebar"
+          title="Toggle navigation (Ctrl+B)"
+          onClick={onToggleNav}
         >
-          Pipeline
+          <MenuIcon size={20} />
+        </button>
+        <Link href="/" class="wordmark">
+          <GlyphIcon size={20} />
+          <span>Hailprint</span>
         </Link>
+        {active ? <span class="top-bar-area">{AREA_LABELS[active]}</span> : null}
+      </div>
+      <div class="top-bar-center">
+        <GlobalSearch storms={storms} />
+      </div>
+      <div class="top-bar-tools">
         <ThemeToggle />
         <a class="icon-button" href={SOURCE_URL} aria-label="Source code" rel="noopener">
           <CodeIcon />
@@ -38,21 +57,3 @@ export function TopBar({ active }: { active: Area | null }) {
     </header>
   );
 }
-
-/** Below 768 px the five primary areas move here: icon over label, sticky at the bottom. */
-export function BottomBar({ active }: { active: Area | null }) {
-  return (
-    <nav class="bottom-bar" aria-label="Areas">
-      {PRIMARY_AREAS.map((area) => {
-        const Icon = AREA_ICONS[area];
-        return (
-          <Link key={area} href={areaHref(area)} aria-current={active === area ? "page" : undefined}>
-            <Icon size={22} />
-            <span>{AREA_LABELS[area]}</span>
-          </Link>
-        );
-      })}
-    </nav>
-  );
-}
-

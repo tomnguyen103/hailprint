@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { fetchCounties, harrisFeature } from "../county";
 import { fetchJson } from "../data/fetch";
 import { guardSwath, guardWarnings } from "../data/guard";
-import { DataError, type InternetFile, type PowerFile, type ReportsFile, type Storm, type SwathFile, type WarningsFile } from "../data/types";
+import { type InternetFile, type PowerFile, type ReportsFile, type Storm, type SwathFile, type WarningsFile } from "../data/types";
 import type { Fill } from "../impact/power";
 import { fillNotes, InternetLegend, PowerFillControl, PowerLegend } from "../impact/power-fill";
 import { Timeline } from "../impact/timeline";
@@ -20,6 +20,7 @@ import { boundsOf, buildPick, refreshPick } from "./map/geo";
 import { Inspector, type Pick } from "./map/inspector";
 import { type LayerName, warningsNote } from "./map/layers";
 import { RulerLegend } from "./map/ruler-legend";
+import { useMap } from "./map/use-map";
 import { RULER } from "../ruler";
 import { defaultFill } from "./select";
 
@@ -29,6 +30,7 @@ const PIN_ZOOM = 11;
 
 interface Props {
   storm: Storm;
+  runTime?: string;
   reports: Load<ReportsFile> & { retry: () => void };
   /** The power file load; the workspace owns it because its Harris peak sets the default step. */
   power: Load<PowerFile | null>;
@@ -48,20 +50,16 @@ export function isPickForStorm(pick: DatedPick | null, stormDate: string): pick 
   return pick !== null && pick.date === stormDate;
 }
 
-export function MapPane({ storm, reports, power, internet, step, onStep, fips, onCounty }: Props) {
-  const swath = useLoad(storm.files.swath, () => fetchJson(storm.files.swath, guardSwath));
+export function MapPane({ storm, runTime, reports, power, internet, step, onStep, fips, onCounty }: Props) {
+  const keyOf = (file: string) => (runTime ? `${runTime}:${file}` : file);
+  const swath = useLoad(keyOf(storm.files.swath), () => fetchJson(storm.files.swath, guardSwath));
   const metro = useLoad("counties", fetchCounties);
   const warningsFile = storm.files.warnings;
-  const warnings = useLoad<WarningsFile | null>(warningsFile ?? "warnings:none", () =>
+  const warnings = useLoad<WarningsFile | null>(warningsFile === null ? "warnings:none" : keyOf(warningsFile), () =>
     warningsFile === null ? Promise.resolve(null) : fetchJson(warningsFile, guardWarnings),
   );
   const { resolved: theme } = useTheme();
   const { pin, geoStatus, message: geoMessage, clearPin, locateUser } = usePin();
-  const container = useRef<HTMLDivElement>(null);
-  const handle = useRef<MapHandle | null>(null);
-  const [ready, setReady] = useState<{ basemap: boolean } | null>(null);
-  const [mapError, setMapError] = useState<DataError | null>(null);
-  const [attempt, setAttempt] = useState(0);
   const [hidden, setHidden] = useState<ReadonlySet<number>>(new Set());
   const [layers, setLayers] = useState<LayerState>({ swath: true, reports: true, warnings: true });
   const [fill, setFill] = useState<Fill>(() => defaultFill(storm.files));
@@ -95,38 +93,18 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     setPick(next);
   }, []);
 
-  // Create the map once; MapLibre arrives in its own chunk. Retry runs the import again.
-  useEffect(() => {
-    const node = container.current;
-    if (!node) return;
-    let live = true;
-    let created: MapHandle | null = null;
-    setMapError(null);
-    import("./map/create-map")
-      .then(async ({ createMap }) => {
-        const next = await createMap(node, theme);
-        if (!live) {
-          next.destroy();
-          return;
-        }
-        created = next;
-        handle.current = next;
-        next.map.on("click", (event) => {
-          const lngLat: [number, number] = [event.lngLat.lng, event.lngLat.lat];
-          pickCoordinate(lngLat);
-        });
-        setReady({ basemap: next.basemap });
-      })
-      .catch((error: unknown) => {
-        if (live) setMapError(new DataError("map", String(error)));
+  const onMapReady = useCallback(
+    (next: MapHandle) => {
+      next.map.on("click", (event) => {
+        const lngLat: [number, number] = [event.lngLat.lng, event.lngLat.lat];
+        pickCoordinate(lngLat);
       });
-    return () => {
-      live = false;
-      created?.destroy();
-      handle.current = null;
-      setReady(null);
-    };
-  }, [attempt, pickCoordinate]);
+    },
+    [pickCoordinate],
+  );
+  const { container, handle, ready, basemap, error: mapError, retry: retryMap } = useMap(theme, {
+    onReady: onMapReady,
+  });
 
   // Data: the latest swath, reports, and county go to the sources; the camera fits the swath.
   const swathData = swath.status === "ready" ? swath.data : null;
@@ -182,9 +160,6 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     handle.current.setPoint(displayPoint);
   }, [ready, displayPoint]);
   useEffect(() => {
-    if (ready) handle.current?.setTheme(theme);
-  }, [ready, theme]);
-  useEffect(() => {
     if (!ready || !handle.current) return;
     for (const m of RULER) handle.current.setClassVisible(m.threshold_mm, !hidden.has(m.threshold_mm));
   }, [ready, hidden]);
@@ -214,7 +189,6 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     setPick(null);
     container.current?.focus();
   }, []);
-  const retryMap = useCallback(() => setAttempt((n) => n + 1), []);
   const onPinMyLocation = useCallback(() => {
     void locateUser().then((next) => {
       if (next.geoStatus === "ready" && next.pin !== null) {
@@ -239,12 +213,35 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     metro,
     storm.storm_date,
   );
+  const jumps = useMemo(
+    () =>
+      eventJumpChips({
+        date: storm.storm_date,
+        warnings: warningsData,
+        reports: reportsData,
+        power: powerData,
+        internet: internetData,
+        fips,
+      }),
+    [storm.storm_date, warningsData, reportsData, powerData, internetData, fips],
+  );
+  const resolvedPick = useMemo(
+    () =>
+      activePick === null
+        ? null
+        : outlines !== null
+          ? activePick.countyFips !== undefined
+            ? activePick
+            : { ...activePick, countyFips: countyAt(activePick.lngLat, outlines) }
+          : { ...activePick, countyFips: null },
+    [activePick, outlines],
+  );
   return (
     <div class="map-pane" data-inspector={activePick !== null}>
       <div class="map-main">
         <div class="map-stage">
           <div ref={container} class="map-frame" role="region" aria-label="Map of the hail swath" tabIndex={-1} />
-          {ready && !ready.basemap ? <p class="map-note">{NO_BASEMAP}</p> : null}
+          {ready && !basemap ? <p class="map-note">{NO_BASEMAP}</p> : null}
           {mapError ? (
             <div class="map-overlay">
               <ErrorState error={mapError} onRetry={retryMap} />
@@ -268,7 +265,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
                 aria-busy={geoStatus === "locating"}
                 onClick={onPinMyLocation}
               >
-                {geoStatus === "locating" ? "Locate\u2026" : "Pin my location"}
+                {geoStatus === "locating" ? "Locate\u2026" : "Pin location"}
               </button>
               {pin !== null ? (
                 <button
@@ -305,18 +302,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
         <TimeSlider
           date={storm.storm_date}
           step={step}
-          jumps={useMemo(
-            () =>
-              eventJumpChips({
-                date: storm.storm_date,
-                warnings: warningsData,
-                reports: reportsData,
-                power: powerData,
-                internet: internetData,
-                fips,
-              }),
-            [storm.storm_date, warningsData, reportsData, powerData, internetData, fips],
-          )}
+          jumps={jumps}
           onStep={onStep}
         />
         <Timeline
@@ -332,15 +318,9 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
           onStep={onStep}
         />
       </div>
-      {activePick !== null && receipt !== null ? (
+      {resolvedPick !== null && receipt !== null ? (
         <Inspector
-          pick={
-            outlines !== null
-              ? activePick.countyFips !== undefined
-                ? activePick
-                : { ...activePick, countyFips: countyAt(activePick.lngLat, outlines) }
-              : { ...activePick, countyFips: null }
-          }
+          pick={resolvedPick}
           receipt={receipt}
           swath={swathData}
           reports={reportsData}

@@ -10,8 +10,8 @@ export function Sources({ sources }: { sources: SourceRow[] }) {
     <>
       {sources.map((row) => (
         <section key={`${row.source} ${row.product}`}>
-          <h2>{row.product}</h2>
-          <p class="pane-note mono">{row.source}</p>
+          <h2 data-user-content="">{row.product}</h2>
+          <div class="pane-note mono">{row.source}</div>
           <ul class="date-list">
             {row.storm_dates.map((date) => (
               <li key={date}>
