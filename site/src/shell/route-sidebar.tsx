@@ -3,7 +3,7 @@ import { AREAS, AREA_LABELS, type Area, href } from "../router";
 import { useSidebar } from "../state/sidebar";
 import { AREA_ICONS } from "./icons";
 import { Link } from "./link";
-import { useModalFocusTrap } from "./scope-drawer";
+import { useModalFocusTrap } from "./modal-focus";
 
 function areaHref(area: Area): string {
   return area === "storms" ? "/storms" : href({ area });
@@ -40,6 +40,8 @@ export function RouteSidebar({ active, isDesktop, mobileOpen, onToggleMobile, on
         else toggle();
       } else if (isMobileModal && event.key === "Escape") {
         event.preventDefault();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation?.();
         onCloseMobile();
       }
     };

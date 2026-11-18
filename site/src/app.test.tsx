@@ -225,6 +225,14 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
       { width: 1280, height: 800 },
     );
     expect(bottomFlipped.top).toBe(594);
+
+    // Scrolled trigger above top of viewport: clamps top to >= 8
+    const scrolledAbove = clampPopoverPosition(
+      { top: -60, bottom: -36, left: 200, right: 360 },
+      { width: 300, height: 160 },
+      { width: 1280, height: 800 },
+    );
+    expect(scrolledAbove.top).toBe(8);
   });
 
   it("wraps Tab focus inside ScopeDrawer when open", async () => {
@@ -352,7 +360,15 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
             radius_km_default: 5,
             radius_km_max: 20,
             edge_margin_m: 1110,
-            classes: [],
+            classes: [
+              {
+                threshold_mm: 19.05,
+                threshold_in: 0.75,
+                label: "a",
+                swath_km2: 10,
+                unverifiable_km2: Array.from({ length: 21 }, () => 0),
+              },
+            ],
             reports: [],
           }),
           { status: 200, headers: { "content-type": "application/json" } },
@@ -567,7 +583,15 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
             radius_km_default: 5,
             radius_km_max: 20,
             edge_margin_m: 1110,
-            classes: [],
+            classes: [
+              {
+                threshold_mm: 19.05,
+                threshold_in: 0.75,
+                label: "a",
+                swath_km2: 10,
+                unverifiable_km2: Array.from({ length: 21 }, () => 0),
+              },
+            ],
             reports: [],
           }),
           { status: 200, headers: { "content-type": "application/json" } },

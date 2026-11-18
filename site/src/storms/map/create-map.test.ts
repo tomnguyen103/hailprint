@@ -47,6 +47,9 @@ const stub = vi.hoisted(() => {
     readonly element: { className: string; textContent: string; hidden: boolean };
     constructor(opts: { element: { className: string; textContent: string; hidden: boolean } }) {
       this.element = opts.element;
+      this.element.className = this.element.className
+        ? `${this.element.className} maplibregl-marker`
+        : "maplibregl-marker";
       FakeMarker.instances.push(this);
     }
     setLngLat(lngLat: number[]) {
@@ -596,12 +599,28 @@ describe("createMap", () => {
             event_label: "Severe Thunderstorm Warning",
             eventid: 1,
             polygon_begin: "2024-05-28T12:00:00Z",
-            polygon_end: "2024-05-30T12:00:00Z",
+            polygon_end: "2024-05-29T03:15:00Z",
             product_id: "p1",
           },
           geometry: {
             type: "MultiPolygon" as const,
             coordinates: [[[[-95.6, 29.6], [-95.2, 29.6], [-95.2, 29.9], [-95.6, 29.9], [-95.6, 29.6]]]],
+          },
+        },
+        {
+          type: "Feature" as const,
+          properties: {
+            phenomena: "TO" as const,
+            significance: "W" as const,
+            event_label: "Tornado Warning",
+            eventid: 2,
+            polygon_begin: "2024-05-29T03:15:00Z",
+            polygon_end: "2024-05-30T12:00:00Z",
+            product_id: "p2",
+          },
+          geometry: {
+            type: "MultiPolygon" as const,
+            coordinates: [[[[-95.5, 29.7], [-95.1, 29.7], [-95.1, 30.0], [-95.5, 30.0], [-95.5, 29.7]]]],
           },
         },
       ],
@@ -614,13 +633,21 @@ describe("createMap", () => {
     expect(stub.FakeMarker.addToCalls).toBe(2);
     expect(stub.FakeMarker.removeCalls).toBe(0);
     expect(stub.FakeMarker.instances[0]!.element.textContent).toBe("Harris 10.0%");
+    expect(stub.FakeMarker.instances[1]!.element.textContent).toBe("SV");
+    expect(stub.FakeMarker.instances[1]!.element.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(["maplibregl-marker", "warning-tag", "warning-tag-sv"]),
+    );
 
-    // Scrubbing to step 61 updates marker text in place with zero addTo() or remove() churn
+    // Scrubbing to step 61 switches SV -> TO in place while preserving maplibregl-marker with zero DOM churn
     handle.setFill("power", power, 61);
     handle.setWarnings(warnings, "2024-05-28", 61);
     expect(stub.FakeMarker.instances).toHaveLength(2);
     expect(stub.FakeMarker.addToCalls).toBe(2);
     expect(stub.FakeMarker.removeCalls).toBe(0);
     expect(stub.FakeMarker.instances[0]!.element.textContent).toBe("Harris 25.0%");
+    expect(stub.FakeMarker.instances[1]!.element.textContent).toBe("TO");
+    const reusedClasses = stub.FakeMarker.instances[1]!.element.className.split(/\s+/);
+    expect(reusedClasses).toEqual(expect.arrayContaining(["maplibregl-marker", "warning-tag", "warning-tag-to"]));
+    expect(reusedClasses).not.toContain("warning-tag-sv");
   });
 });

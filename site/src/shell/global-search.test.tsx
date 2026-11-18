@@ -2,7 +2,9 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Storm } from "../data/types";
+import { getSelectedCounty, resetSelectedCounty } from "../state/county";
 import { GlobalSearch } from "./global-search";
+import { ScopeDrawer } from "./scope-drawer";
 
 const navMock = vi.hoisted(() => ({
   go: vi.fn(),
@@ -38,21 +40,6 @@ vi.mock("../router", async (importOriginal) => {
   };
 });
 
-vi.mock("../state/index", () => ({
-  useIndex: () => ({
-    status: "ready",
-    data: {
-      confidence: "c",
-      run_time: "2026-04-01T00:00:00Z",
-      package_version: "0.2.0",
-      radius_km_default: 5,
-      storms: navMock.storms,
-    },
-    showLoading: false,
-    retry: () => {},
-  }),
-}));
-
 interface FakeDomNode {
   nodeType: number;
   tagName: string;
@@ -70,7 +57,41 @@ interface FakeDomNode {
 }
 
 let activeEl: FakeDomNode | null = null;
-const docListeners = new Map<string, Set<(e: unknown) => void>>();
+const captureListeners = new Map<string, Set<(e: unknown) => void>>();
+const bubbleListeners = new Map<string, Set<(e: unknown) => void>>();
+
+function dispatchKey(init: Record<string, unknown>): { defaultPrevented: boolean; stoppedImmediate: boolean } {
+  let defaultPrevented = false;
+  let stoppedImmediate = false;
+  const event = {
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...init,
+    get defaultPrevented() {
+      return defaultPrevented;
+    },
+    preventDefault() {
+      defaultPrevented = true;
+    },
+    stopPropagation() {},
+    stopImmediatePropagation() {
+      stoppedImmediate = true;
+    },
+  };
+  for (const fn of [...(captureListeners.get("keydown") ?? [])]) {
+    if (stoppedImmediate) break;
+    fn(event);
+  }
+  if (!stoppedImmediate) {
+    for (const fn of [...(bubbleListeners.get("keydown") ?? [])]) {
+      if (stoppedImmediate) break;
+      fn(event);
+    }
+  }
+  return { defaultPrevented, stoppedImmediate };
+}
 
 function makeFakeElement(tag: string, text = ""): FakeDomNode {
   const el: FakeDomNode = {
@@ -178,8 +199,10 @@ describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)"
 
   beforeEach(() => {
     navMock.go.mockClear();
+    resetSelectedCounty();
     activeEl = null;
-    docListeners.clear();
+    captureListeners.clear();
+    bubbleListeners.clear();
     storage.clear();
 
     vi.stubGlobal("localStorage", {
@@ -196,27 +219,29 @@ describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)"
       createElement: (tag: string) => makeFakeElement(tag),
       createElementNS: (_ns: string, tag: string) => makeFakeElement(tag),
       createTextNode: (text: string) => makeFakeElement("#text", text),
-      addEventListener: (type: string, fn: (e: unknown) => void) => {
-        let set = docListeners.get(type);
+      addEventListener: (type: string, fn: (e: unknown) => void, capture?: boolean) => {
+        const bucket = capture ? captureListeners : bubbleListeners;
+        let set = bucket.get(type);
         if (!set) {
           set = new Set();
-          docListeners.set(type, set);
+          bucket.set(type, set);
         }
         set.add(fn);
       },
-      removeEventListener: (type: string, fn: (e: unknown) => void) => {
-        docListeners.get(type)?.delete(fn);
+      removeEventListener: (type: string, fn: (e: unknown) => void, capture?: boolean) => {
+        (capture ? captureListeners : bubbleListeners).get(type)?.delete(fn);
       },
     });
   });
 
   afterEach(() => {
+    resetSelectedCounty();
     vi.unstubAllGlobals();
   });
 
-  it("opens on Ctrl+K, keeps single combobox on input, groups results, traps Tab, records recent searches, and handles Escape/No matches", async () => {
+  it("opens on Ctrl+K, keeps single combobox on input, includes Scorecard & Run, traps Tab/Shift+Tab, wires County selection, and clears query on Ctrl+K close", async () => {
     const host = makeFakeElement("div");
-    await act(() => render(h(GlobalSearch, null), host as unknown as HTMLElement));
+    await act(() => render(h(GlobalSearch, { storms: navMock.storms }), host as unknown as HTMLElement));
 
     const trigger = findDomNodes(host, (n) => n.tagName === "BUTTON" && n["aria-haspopup"] === "dialog")[0]!;
     expect(trigger).toBeDefined();
@@ -224,11 +249,15 @@ describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)"
     expect(trigger["aria-expanded"]).toBe(false);
     expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(0);
 
+    // Ctrl+Shift+K is ignored
+    await act(() => {
+      dispatchKey({ key: "k", ctrlKey: true, shiftKey: true });
+    });
+    expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(0);
+
     // Open with Ctrl+K
     await act(() => {
-      for (const fn of docListeners.get("keydown") ?? []) {
-        fn({ key: "k", ctrlKey: true, metaKey: false, altKey: false, preventDefault() {} });
-      }
+      dispatchKey({ key: "k", ctrlKey: true });
     });
 
     const dialog = findDomNodes(host, (n) => n["role"] === "dialog")[0]!;
@@ -247,61 +276,77 @@ describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)"
     const focusables = dialog.querySelectorAll();
     const last = focusables[focusables.length - 1]!;
     last.focus();
-    let tabPrevented = false;
+    let tabResult = { defaultPrevented: false, stoppedImmediate: false };
     await act(() => {
-      for (const fn of docListeners.get("keydown") ?? []) {
-        fn({
-          key: "Tab",
-          shiftKey: false,
-          defaultPrevented: false,
-          preventDefault() {
-            tabPrevented = true;
-          },
-        });
-      }
+      tabResult = dispatchKey({ key: "Tab", shiftKey: false });
     });
-    expect(tabPrevented).toBe(true);
+    expect(tabResult.defaultPrevented).toBe(true);
     expect(activeEl).toBe(focusables[0]);
+
+    // Shift+Tab when focus rests on the dialog root itself wraps to the last focusable
+    dialog.focus();
+    let shiftTabResult = { defaultPrevented: false, stoppedImmediate: false };
+    await act(() => {
+      shiftTabResult = dispatchKey({ key: "Tab", shiftKey: true });
+    });
+    expect(shiftTabResult.defaultPrevented).toBe(true);
+    expect(activeEl).toBe(last);
+
+    // Query Scorecard routes
+    await act(() => {
+      (input["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
+        type: "input",
+        currentTarget: { value: "scorecard" },
+      });
+    });
+    const scorecardText = domText(dialog);
+    expect(scorecardText).toContain("Table");
+    expect(scorecardText).toContain("Grid");
+    expect(scorecardText).toContain("Curve");
+
+    // Closing via Ctrl+K clears query
+    await act(() => {
+      dispatchKey({ key: "k", ctrlKey: true });
+    });
+    expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(0);
+    await act(() => {
+      dispatchKey({ key: "k", ctrlKey: true });
+    });
+    const dialog2 = findDomNodes(host, (n) => n["role"] === "dialog")[0]!;
+    const input2 = findDomNodes(dialog2, (n) => n.tagName === "INPUT")[0]!;
+    expect(input2["value"]).toBe("");
 
     // Query storm date / case tag
     await act(() => {
-      (input["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
+      (input2["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
         type: "input",
         currentTarget: { value: "Derecho" },
       });
     });
-    expect(domText(dialog)).toContain("2024-05-28");
-    expect(domText(dialog)).toContain("10 reports");
-
-    // Query county
-    await act(() => {
-      (input["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
-        type: "input",
-        currentTarget: { value: "Fort Bend" },
-      });
-    });
-    expect(domText(dialog)).toContain("Fort Bend");
+    expect(domText(dialog2)).toContain("2024-05-28");
+    expect(domText(dialog2)).toContain("10 reports");
 
     // Query unmatched -> "No matches"
     await act(() => {
-      (input["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
+      (input2["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
         type: "input",
         currentTarget: { value: "zzzz" },
       });
     });
-    expect(domText(dialog)).toContain("No matches");
+    expect(domText(dialog2)).toContain("No matches");
 
-    // Query Batch tool and press Enter -> navigates and records recent search
+    // Query Run tool via "Batch" keyword -> shows "Run" title and navigates to /try/run
     await act(() => {
-      (input["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
+      (input2["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
         type: "input",
         currentTarget: { value: "Batch" },
       });
     });
-    expect(domText(dialog)).toContain("Batch");
+    expect(domText(dialog2)).toContain("Run");
+    expect(domText(dialog2)).not.toContain("Batch");
 
     await act(() => {
-      (input["on_keydown"] as (e: { type: string; key: string; preventDefault(): void }) => void)({
+      (input2["on_keydown"] as (e: { type: string; key: string; preventDefault(): void }) => void)({
         type: "keydown",
         key: "Enter",
         preventDefault() {},
@@ -311,20 +356,39 @@ describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)"
     expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(0);
     expect(JSON.parse(storage.get("hailprint-recent-searches") ?? "[]")).toEqual(["tool-run"]);
 
-    // Open via trigger click -> shows Recent group first, then Escape restores focus to trigger
-    trigger.focus();
+    // Selecting a County updates shared selectedCounty store and routes to storm data
     await act(() => {
       (trigger["on_click"] as (e: { type: string }) => void)({ type: "click" });
     });
     const reopened = findDomNodes(host, (n) => n["role"] === "dialog")[0]!;
     const firstGroup = findDomNodes(reopened, (n) => n["role"] === "group")[0]!;
     expect(domText(firstGroup)).toContain("Recent");
-    expect(domText(firstGroup)).toContain("Batch");
+    expect(domText(firstGroup)).toContain("Run");
 
+    const input3 = findDomNodes(reopened, (n) => n.tagName === "INPUT")[0]!;
     await act(() => {
-      for (const fn of docListeners.get("keydown") ?? []) {
-        fn({ key: "Escape", preventDefault() {}, stopPropagation() {} });
-      }
+      (input3["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
+        type: "input",
+        currentTarget: { value: "Fort Bend" },
+      });
+    });
+    await act(() => {
+      (input3["on_keydown"] as (e: { type: string; key: string; preventDefault(): void }) => void)({
+        type: "keydown",
+        key: "Enter",
+        preventDefault() {},
+      });
+    });
+    expect(getSelectedCounty()).toBe("48157");
+    expect(navMock.go).toHaveBeenCalledWith("/storms/2024-05-28/data");
+
+    // Reopen and press Escape -> restores focus to trigger
+    trigger.focus();
+    await act(() => {
+      (trigger["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    await act(() => {
+      dispatchKey({ key: "Escape" });
     });
     expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(0);
     expect(activeEl).toBe(trigger);
@@ -335,35 +399,22 @@ describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)"
   it("opens on / shortcut outside editable targets, ignores / inside inputs, caps recent searches at 5, and recovers from corrupt storage", async () => {
     storage.set("hailprint-recent-searches", "{corrupt-json");
     const host = makeFakeElement("div");
-    await act(() => render(h(GlobalSearch, null), host as unknown as HTMLElement));
+    await act(() => render(h(GlobalSearch, { storms: navMock.storms }), host as unknown as HTMLElement));
 
     // '/' inside an input does NOT open search
     const inputTarget = makeFakeElement("input");
     await act(() => {
-      for (const fn of docListeners.get("keydown") ?? []) {
-        fn({ key: "/", ctrlKey: false, metaKey: false, altKey: false, target: inputTarget, preventDefault() {} });
-      }
+      dispatchKey({ key: "/", target: inputTarget });
     });
     expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(0);
 
     // '/' on a non-editable target opens search cleanly even with corrupt localStorage
     const bodyTarget = makeFakeElement("div");
-    let prevented = false;
+    let slashRes = { defaultPrevented: false, stoppedImmediate: false };
     await act(() => {
-      for (const fn of docListeners.get("keydown") ?? []) {
-        fn({
-          key: "/",
-          ctrlKey: false,
-          metaKey: false,
-          altKey: false,
-          target: bodyTarget,
-          preventDefault() {
-            prevented = true;
-          },
-        });
-      }
+      slashRes = dispatchKey({ key: "/", target: bodyTarget });
     });
-    expect(prevented).toBe(true);
+    expect(slashRes.defaultPrevented).toBe(true);
     expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(1);
 
     // Preload 5 items and select a 6th distinct item -> capped at 5 most recent
@@ -372,19 +423,17 @@ describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)"
       JSON.stringify(["live", "storm-2024-05-28", "tool-point", "tool-compare", "tool-tune"]),
     );
     await act(() => render(null, host as unknown as HTMLElement));
-    await act(() => render(h(GlobalSearch, null), host as unknown as HTMLElement));
+    await act(() => render(h(GlobalSearch, { storms: navMock.storms }), host as unknown as HTMLElement));
 
     await act(() => {
-      for (const fn of docListeners.get("keydown") ?? []) {
-        fn({ key: "/", ctrlKey: false, metaKey: false, altKey: false, target: bodyTarget, preventDefault() {} });
-      }
+      dispatchKey({ key: "/", target: bodyTarget });
     });
     const dialog = findDomNodes(host, (n) => n["role"] === "dialog")[0]!;
     const input = findDomNodes(dialog, (n) => n.tagName === "INPUT")[0]!;
     await act(() => {
       (input["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
         type: "input",
-        currentTarget: { value: "Batch" },
+        currentTarget: { value: "Run" },
       });
     });
     await act(() => {
@@ -397,6 +446,52 @@ describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)"
     const stored = JSON.parse(storage.get("hailprint-recent-searches") ?? "[]") as string[];
     expect(stored).toEqual(["tool-run", "live", "storm-2024-05-28", "tool-point", "tool-compare"]);
     expect(stored).toHaveLength(5);
+
+    await act(() => render(null, host as unknown as HTMLElement));
+  });
+
+  it("Escape closes only the top GlobalSearch overlay when ScopeDrawer is also open underneath", async () => {
+    const host = makeFakeElement("div");
+    let scopeClosed = 0;
+    await act(() =>
+      render(
+        h(
+          "div",
+          null,
+          h(GlobalSearch, { storms: navMock.storms }),
+          h(ScopeDrawer, {
+            id: "storms-scope",
+            label: "Storm dates",
+            title: "Storm dates",
+            open: true,
+            onClose: () => {
+              scopeClosed += 1;
+            },
+            children: h("a", { href: "/storms/2024-05-28/map" }, "2024-05-28"),
+          }),
+        ),
+        host as unknown as HTMLElement,
+      ),
+    );
+
+    // Open GlobalSearch on top of open ScopeDrawer
+    await act(() => {
+      dispatchKey({ key: "k", ctrlKey: true });
+    });
+    expect(findDomNodes(host, (n) => n["aria-label"] === "Search Hailprint" && n["role"] === "dialog")).toHaveLength(1);
+
+    // First Escape closes GlobalSearch only; ScopeDrawer stays open
+    await act(() => {
+      dispatchKey({ key: "Escape" });
+    });
+    expect(findDomNodes(host, (n) => n["aria-label"] === "Search Hailprint" && n["role"] === "dialog")).toHaveLength(0);
+    expect(scopeClosed).toBe(0);
+
+    // Second Escape closes ScopeDrawer
+    await act(() => {
+      dispatchKey({ key: "Escape" });
+    });
+    expect(scopeClosed).toBe(1);
 
     await act(() => render(null, host as unknown as HTMLElement));
   });

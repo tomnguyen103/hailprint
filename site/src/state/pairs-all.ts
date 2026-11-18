@@ -1,4 +1,4 @@
-import { fetchJson } from "../data/fetch";
+import { clearFetchCache, fetchJson, setFetchCacheScope } from "../data/fetch";
 import { guardPairs } from "../data/guard";
 import { DataError, type Pairs, type StormsIndex } from "../data/types";
 import { type Load, useLoad } from "./load";
@@ -13,9 +13,11 @@ let cachedRunTime: string | null = null;
 export function clearFileCache(): void {
   cache.clear();
   cachedRunTime = null;
+  clearFetchCache();
 }
 
 function cached<T>(runTime: string, path: string, guard: (value: unknown) => T): Promise<T> {
+  if (runTime) setFetchCacheScope(runTime);
   if (cachedRunTime !== null && cachedRunTime !== runTime) {
     cache.clear();
   }

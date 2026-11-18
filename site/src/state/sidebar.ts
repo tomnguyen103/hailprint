@@ -40,7 +40,6 @@ export function toggleSidebarExpanded(): void {
 export function useSidebar(): { expanded: boolean; setExpanded: (next: boolean) => void; toggle: () => void } {
   const [, bump] = useState(0);
   useEffect(() => {
-    expandedState = readExpanded();
     const fn = () => bump((n) => n + 1);
     listeners.add(fn);
     return () => {

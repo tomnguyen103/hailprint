@@ -30,9 +30,11 @@ export function ThemeToggle() {
     itemRefs.current[currentIdx >= 0 ? currentIdx : 0]?.focus?.();
 
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation?.();
         setOpen(false);
         triggerRef.current?.focus?.();
       } else if (event.key === "Tab") {

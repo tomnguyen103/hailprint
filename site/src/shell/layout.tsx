@@ -1,5 +1,6 @@
 import type { ComponentChildren } from "preact";
 import { useCallback, useEffect, useState } from "preact/hooks";
+import type { Storm } from "../data/types";
 import type { Area } from "../router";
 import { useSidebar } from "../state/sidebar";
 import { Footer } from "./footer";
@@ -15,7 +16,15 @@ function readDesktopNav(): boolean {
 }
 
 /** Corporate Standard v1 shell: skip link, 56px top bar with single hamburger toggle, collapsible route sidebar, main with footer inside. */
-export function Layout({ active, children }: { active: Area | null; children: ComponentChildren }) {
+export function Layout({
+  active,
+  storms,
+  children,
+}: {
+  active: Area | null;
+  storms?: readonly Storm[];
+  children: ComponentChildren;
+}) {
   const { expanded, toggle } = useSidebar();
   const [isDesktop, setIsDesktop] = useState<boolean>(readDesktopNav);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -57,6 +66,7 @@ export function Layout({ active, children }: { active: Area | null; children: Co
       </a>
       <TopBar
         active={active}
+        storms={storms}
         isDesktop={isDesktop}
         navExpanded={isDesktop ? expanded : mobileNavOpen}
         onToggleNav={onToggleNav}

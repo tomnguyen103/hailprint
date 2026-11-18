@@ -117,15 +117,18 @@ export function usePolledLoad<T>(
  * the existing ready index untouched.
  */
 export function useIndex(): Load<StormsIndex> & { showLoading: boolean; retry: () => void; now: Date } {
-  const index = usePolledLoad<StormsIndex>(
+  const latestRunTime = useRef("");
+  return usePolledLoad<StormsIndex>(
     INDEX_FILE,
-    () => fetchJson(INDEX_FILE, guardIndex),
+    () =>
+      fetchJson(INDEX_FILE, guardIndex).then((data) => {
+        if (data.run_time >= latestRunTime.current) {
+          latestRunTime.current = data.run_time;
+          setFetchCacheScope(data.run_time);
+        }
+        return data;
+      }),
     REFRESH_MS,
     (d) => d.run_time,
   );
-  const runTime = index.status === "ready" ? index.data.run_time : null;
-  useEffect(() => {
-    if (runTime !== null) setFetchCacheScope(runTime);
-  }, [runTime]);
-  return index;
 }

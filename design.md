@@ -96,7 +96,7 @@ Cool hues stay distinct from the hail ramp: green for power (`--out-1`..`--out-5
 
 ## Shell
 
-- Top bar (`56px`, `--bar-height`): far-left single hamburger toggle (`>=40px` desktop, `>=44px` `<768px`, toggles desktop sidebar <-> rail and `<768px` modal drawer; never a second bottom-left collapse button) + Hailprint mark + area title; center `360–480px` (`240–420px` at `768–1023px`) `Ctrl+K` / `/` global search trigger opening a `560–640px` modal search dialog (full-screen `<768px`) with focus trap, grouped results, and recent searches; right 3-state Light / Dark / System theme icon menu (`menuitemradio`, hover+focus `"Theme"` tooltip, 1-frame no-transition swap) + source link.
+- Top bar (`56px`, `--bar-height`): far-left single hamburger toggle (`>=40px` desktop, `>=44px` `<768px`, toggles desktop sidebar <-> rail and `<768px` modal drawer; never a second bottom-left collapse button) + Hailprint mark + area title; center `360–480px` (`200–360px` at `768–1023px`) `Ctrl+K` / `/` global search trigger opening a `560–640px` modal search dialog (full-screen `<768px`) with focus trap, grouped results, and recent searches; right 3-state Light / Dark / System theme icon menu (`menuitemradio`, hover+focus `"Theme"` tooltip, 1-frame no-transition swap) + source link.
 - Left route sidebar (`256px` expanded / `56px` icon rail on `>=768px`, `Ctrl/Cmd+B` persisted in `localStorage["hailprint-sidebar"]`; `288px` off-canvas modal drawer below `768px`): lists Live, Storms, Scorecard, Try it, Method, and Pipeline.
 - Sub-tabs: underline style only (`2px` `--primary` active bottom edge on a `1px` `--border` line).
 - Footer: renders inside `<main>` with the caveat line.

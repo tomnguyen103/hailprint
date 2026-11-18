@@ -1,12 +1,12 @@
 import { useState } from "preact/hooks";
 import "../styles/storms.css";
-import { HARRIS_FIPS } from "../data/constants";
 import { fetchJson } from "../data/fetch";
 import { guardInternet, guardPower, guardReports } from "../data/guard";
 import type { InternetFile, PowerFile, Receipt, Storm, StormsIndex } from "../data/types";
 import { harrisPeak, reportTicks } from "../impact/series";
 import { TABS, TAB_LABELS, go, href, type Tab } from "../router";
 import { SubTabs } from "../shell/sub-tabs";
+import { useSelectedCounty } from "../state/county";
 import { useLoad } from "../state/load";
 import { useStep } from "../time/use-step";
 import { DataPane } from "./data-pane";
@@ -33,8 +33,8 @@ export function stormTabItems(stormDate: string, step: number) {
 
 export function Workspace({ index, storm, tab }: Props) {
   const [datesOpen, setDatesOpen] = useState(false);
-  // The county of the power strip lives here, apart from the step and the play state: a pick moves neither.
-  const [fips, setFips] = useState<string>(HARRIS_FIPS);
+  // The county of the power strip lives in the shared county store, apart from the step and the play state: a pick moves neither.
+  const [fips, setFips] = useSelectedCounty();
   const powerFile = storm.files.power;
   const power = useLoad<PowerFile | null>(powerFile === null ? "power:none" : `${index.run_time}:${powerFile}`, () =>
     powerFile === null ? Promise.resolve(null) : fetchJson(powerFile, guardPower),

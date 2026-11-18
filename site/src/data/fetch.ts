@@ -30,23 +30,31 @@ export type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 let impl: Fetch | null = null;
 
 // shortcut: In-memory fetchJson cache holds storm JSON for one index.run_time; upgrade to LRU cap if published archive exceeds 200 storms.
-const responseCache = new Map<string, Promise<unknown>>();
+let responseCache = new WeakMap<object, Map<string, Promise<unknown>>>();
 let cacheScope: string | null = null;
+
+function cacheForGuard(guard: (value: unknown) => unknown): Map<string, Promise<unknown>> {
+  let byUrl = responseCache.get(guard);
+  if (byUrl === undefined) {
+    byUrl = new Map<string, Promise<unknown>>();
+    responseCache.set(guard, byUrl);
+  }
+  return byUrl;
+}
 
 /** Clear all cached storm JSON responses (used on retry, run_time advance, and in tests). */
 export function clearFetchCache(): void {
-  responseCache.clear();
+  responseCache = new WeakMap();
   cacheScope = null;
 }
 
 /** Invalidate cached storm JSON responses whenever the active publish `run_time` scope changes. */
 export function setFetchCacheScope(scope: string): void {
-  if (cacheScope !== scope) {
-    if (cacheScope !== null || responseCache.size > 0) {
-      responseCache.clear();
-    }
-    cacheScope = scope;
+  if (!scope) return;
+  if (cacheScope !== null && cacheScope !== scope) {
+    responseCache = new WeakMap();
   }
+  cacheScope = scope;
 }
 
 /** Tests and the dev harness inject a fake fetch; null restores the global one. */
@@ -135,25 +143,25 @@ export async function fetchUrlJson<T>(
   return guard(body);
 }
 
-/** Fetch `<base><path>` and pass the parsed body through `guard`. Immutable `storms/` payloads cache per `run_time` scope. */
+/** Fetch `<base><path>` and pass the parsed body through `guard`. Immutable `storms/` payloads cache per `(guard, url)` within one `run_time` scope. */
 export function fetchJson<T>(
   path: string,
   guard: (value: unknown) => T,
   base = DATA_BASE,
-  options?: { fresh?: boolean },
 ): Promise<T> {
   const file = path.slice(path.lastIndexOf("/") + 1);
   const url = base + path;
   const cacheable = path.startsWith("storms/");
-  if (cacheable && !options?.fresh) {
-    const cached = responseCache.get(url);
+  if (cacheable) {
+    const cached = responseCache.get(guard)?.get(url);
     if (cached !== undefined) return cached as Promise<T>;
   }
   const promise = fetchUrlJson(url, file, guard);
   if (cacheable) {
-    responseCache.set(url, promise);
+    const byUrl = cacheForGuard(guard);
+    byUrl.set(url, promise);
     void promise.then(undefined, () => {
-      if (responseCache.get(url) === promise) responseCache.delete(url);
+      if (byUrl.get(url) === promise) byUrl.delete(url);
     });
   }
   return promise;

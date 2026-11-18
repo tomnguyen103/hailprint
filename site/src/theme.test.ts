@@ -100,17 +100,29 @@ describe("state/theme preference store (US-03.5, US-04.1)", () => {
     expect(latest!.resolved).toBe("dark");
   });
 
-  it("suppresses transitions for one frame via data-theme-swap during apply() (US-01.1)", () => {
+  it("suppresses transitions across double-rAF, stamps theme before reflow, and cancels prior rAF on rapid apply() (US-01.1)", () => {
     const attrs = new Map<string, string>();
-    const callbacks: Array<() => void> = [];
+    let nextId = 1;
+    const pending = new Map<number, () => void>();
+    const cancelled: number[] = [];
     vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
-      callbacks.push(cb);
-      return 1;
+      const id = nextId++;
+      pending.set(id, cb);
+      return id;
     });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => {
+      cancelled.push(id);
+      pending.delete(id);
+    });
+    const reflowSeenThemes: Array<string | undefined> = [];
+    const dataset: Record<string, string> = {};
     const fakeRoot = {
-      dataset: {} as Record<string, string>,
+      dataset,
       style: { colorScheme: "" },
-      offsetHeight: 0,
+      get offsetHeight() {
+        reflowSeenThemes.push(dataset["theme"]);
+        return 0;
+      },
       setAttribute: (k: string, v: string) => attrs.set(k, v),
       removeAttribute: (k: string) => attrs.delete(k),
     } as unknown as HTMLElement;
@@ -118,10 +130,28 @@ describe("state/theme preference store (US-03.5, US-04.1)", () => {
     apply("dark", fakeRoot);
     expect(fakeRoot.dataset["theme"]).toBe("dark");
     expect(fakeRoot.style.colorScheme).toBe("dark");
+    expect(reflowSeenThemes).toEqual(["dark"]);
     expect(attrs.has("data-theme-swap")).toBe(true);
-    expect(callbacks).toHaveLength(1);
+    expect(pending.size).toBe(1);
 
-    callbacks[0]!();
+    // Rapid second apply cancels the first pending rAF
+    apply("light", fakeRoot);
+    expect(cancelled).toEqual([1]);
+    expect(reflowSeenThemes).toEqual(["dark", "light"]);
+    expect(attrs.has("data-theme-swap")).toBe(true);
+    expect(pending.size).toBe(1);
+
+    // First rAF schedules second rAF; data-theme-swap remains active until after paint
+    const firstCb = pending.get(2)!;
+    pending.delete(2);
+    firstCb();
+    expect(attrs.has("data-theme-swap")).toBe(true);
+    expect(pending.size).toBe(1);
+
+    // Second rAF removes data-theme-swap
+    const secondCb = pending.get(3)!;
+    pending.delete(3);
+    secondCb();
     expect(attrs.has("data-theme-swap")).toBe(false);
   });
 });

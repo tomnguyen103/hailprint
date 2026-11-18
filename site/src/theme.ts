@@ -50,17 +50,26 @@ export function store(selection: Selection, storage: Setter | null = localStorag
   }
 }
 
+let swapRaf: number | null = null;
+
 /** Stamp the resolved theme on the root element, suppressing transitions for one frame to avoid flash. */
 export function apply(resolved: Resolved, root: HTMLElement = document.documentElement): void {
+  if (swapRaf !== null && typeof cancelAnimationFrame === "function") {
+    cancelAnimationFrame(swapRaf);
+    swapRaf = null;
+  }
   root.setAttribute?.("data-theme-swap", "");
-  void root.offsetHeight;
   root.dataset["theme"] = resolved;
   root.style.colorScheme = resolved;
+  void root.offsetHeight;
   const cleanup = () => {
+    swapRaf = null;
     root.removeAttribute?.("data-theme-swap");
   };
   if (typeof requestAnimationFrame === "function") {
-    requestAnimationFrame(cleanup);
+    swapRaf = requestAnimationFrame(() => {
+      swapRaf = requestAnimationFrame(cleanup);
+    });
   } else {
     cleanup();
   }

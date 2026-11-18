@@ -431,15 +431,22 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const shellCss = read("../styles/shell.css");
 
     expect(baseCss).toMatch(/strong,\s*b\s*\{[^}]*font-weight:\s*600/);
-    const tableTh = stormsCss.match(/\.table th\s*\{([^}]*)\}/)?.[1] ?? "";
-    expect(tableTh).toContain("var(--surface-muted)");
-    expect(tableTh).toContain("12px");
+    const tableThMatch = stormsCss.match(/\.table th\s*\{([^}]*)\}/);
+    expect(tableThMatch).not.toBeNull();
+    expect(tableThMatch![1]).toContain("var(--surface-muted)");
+    expect(tableThMatch![1]).toContain("12px");
     expect(stormsCss).toContain(".table tbody tr:hover");
-    const baseInspector = mapCss.match(/\/\* Inspector \*\/\s*\.inspector\s*\{([^}]*)\}/)?.[1] ?? "";
-    expect(baseInspector).not.toContain("box-shadow");
-    const stateBlock = shellCss.match(/\/\* States \*\/\s*\.state\s*\{([^}]*)\}/)?.[1] ?? "";
-    expect(stateBlock).toContain("justify-items: center");
-    expect(stateBlock).toContain("min-height: 220px");
+    const inspectorMatch = mapCss.match(/\/\* Inspector \*\/\s*\.inspector\s*\{([^}]*)\}/);
+    expect(inspectorMatch).not.toBeNull();
+    expect(inspectorMatch![1]).not.toContain("box-shadow");
+    expect(mapCss).not.toMatch(/@media\s*\(max-width:\s*1279px\)\s*\{[^}]*\.inspector[^}]*box-shadow/);
+    const mobileInspectorMatch = mapCss.match(/@media\s*\(max-width:\s*767px\)\s*\{\s*\.inspector\s*\{([^}]*)\}/);
+    expect(mobileInspectorMatch).not.toBeNull();
+    expect(mobileInspectorMatch![1]).toContain("box-shadow: var(--shadow)");
+    const stateMatch = shellCss.match(/\/\* States \*\/\s*\.state\s*\{([^}]*)\}/);
+    expect(stateMatch).not.toBeNull();
+    expect(stateMatch![1]).toContain("justify-items: center");
+    expect(stateMatch![1]).toContain("min-height: 220px");
   });
 });
 

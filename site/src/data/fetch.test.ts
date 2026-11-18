@@ -297,42 +297,57 @@ it("frees slots when 6 hung requests time out so queued requests start after eac
   }
 });
 
-it("caches immutable storm JSON across calls and concurrent requests, evicts rejections, and respects scope/fresh (US-03.1, US-03.4, US-03.5)", async () => {
+it("caches immutable storm JSON per (guard, url), evicts rejections, and respects scope and clearFetchCache (US-03.1, US-03.4, US-03.5)", async () => {
   let calls = 0;
   setFetch(async () => {
     calls += 1;
     return response(200, JSON.stringify({ seq: calls }));
   });
+  const guardA = (v: unknown) => (v as { seq: number }).seq;
+  const guardB = (v: unknown) => `b:${(v as { seq: number }).seq}`;
 
-  // Concurrent calls share one in-flight request
+  // Concurrent calls with the same guard share one in-flight request
   const [a, b] = await Promise.all([
-    fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq),
-    fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq),
+    fetchJson("storms/2024-05-28/pairs.json", guardA),
+    fetchJson("storms/2024-05-28/pairs.json", guardA),
   ]);
   expect(a).toBe(1);
   expect(b).toBe(1);
   expect(calls).toBe(1);
 
-  // Subsequent tab-switch read reuses cache
-  expect(await fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq)).toBe(1);
+  // Subsequent tab-switch read reuses cache for the same guard
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(1);
   expect(calls).toBe(1);
 
-  // Explicit fresh bypasses cache
-  expect(await fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq, DATA_BASE, { fresh: true })).toBe(2);
+  // Different guard on the same URL never bypasses validation or reuses another guard's result
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardB)).toBe("b:2");
   expect(calls).toBe(2);
 
-  // run_time scope change invalidates cache
+  // Empty scope is ignored and initial cold-load scope stamp preserves entries already cached during load
+  setFetchCacheScope("");
   setFetchCacheScope("2026-11-18T12:00:00Z");
-  expect(await fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq)).toBe(3);
-  expect(calls).toBe(3);
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(1);
+  expect(calls).toBe(2);
+
+  // Identical scope keeps cache intact
   setFetchCacheScope("2026-11-18T12:00:00Z");
-  expect(await fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq)).toBe(3);
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(1);
+  expect(calls).toBe(2);
+
+  // Advancing run_time scope invalidates cache
+  setFetchCacheScope("2026-11-18T13:00:00Z");
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(3);
   expect(calls).toBe(3);
 
+  // clearFetchCache() forces a fresh network fetch
+  clearFetchCache();
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(4);
+  expect(calls).toBe(4);
+
   // Mutable top-level storms.json is never cached
-  expect(await fetchJson("storms.json", (v) => (v as { seq: number }).seq)).toBe(4);
-  expect(await fetchJson("storms.json", (v) => (v as { seq: number }).seq)).toBe(5);
-  expect(calls).toBe(5);
+  expect(await fetchJson("storms.json", guardA)).toBe(5);
+  expect(await fetchJson("storms.json", guardA)).toBe(6);
+  expect(calls).toBe(6);
 
   // Failed storm fetch is evicted immediately so retry fetches fresh
   clearFetchCache();
@@ -345,7 +360,8 @@ it("caches immutable storm JSON across calls and concurrent requests, evicts rej
     }
     return response(200, JSON.stringify({ ok: true }));
   });
-  await expect(fetchJson("storms/2024-05-28/swath.geojson", (v) => v)).rejects.toThrow(/HTTP 503/);
-  await expect(fetchJson("storms/2024-05-28/swath.geojson", (v) => v)).resolves.toEqual({ ok: true });
+  const identity = (v: unknown) => v;
+  await expect(fetchJson("storms/2024-05-28/swath.geojson", identity)).rejects.toThrow(/HTTP 503/);
+  await expect(fetchJson("storms/2024-05-28/swath.geojson", identity)).resolves.toEqual({ ok: true });
 });
 

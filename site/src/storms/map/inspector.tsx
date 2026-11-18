@@ -19,7 +19,7 @@ import { href } from "../../router";
 import { objectName } from "../../ruler";
 import { Link } from "../../shell/link";
 import { ReceiptChip, getActiveReceiptChipId } from "../../shell/receipt-chip";
-import { useModalFocusTrap } from "../../shell/scope-drawer";
+import { useModalFocusTrap } from "../../shell/modal-focus";
 import { clearPin, getPinState, isMetroCoordinate, setPin, usePin } from "../../state/pin";
 import {
   type DirectWarning,

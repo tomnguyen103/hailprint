@@ -31,6 +31,8 @@ export function PeekDrawer({ open, title, subtitle, receipt, file = "pairs.json"
       if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation?.();
         onCloseRef.current();
       }
     };

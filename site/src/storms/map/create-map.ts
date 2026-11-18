@@ -128,6 +128,20 @@ export interface MapHandle {
   destroy(): void;
 }
 
+function setWarningTagClass(element: HTMLElement, code: string): void {
+  const variant = `warning-tag-${code.toLowerCase()}`;
+  if (element.classList && typeof element.classList.remove === "function" && typeof element.classList.add === "function") {
+    element.classList.remove("warning-tag-sv", "warning-tag-to", "warning-tag-ff");
+    element.classList.add("warning-tag", variant);
+    return;
+  }
+  const kept = (element.className || "")
+    .split(/\s+/)
+    .filter((cls) => cls.length > 0 && cls !== "warning-tag" && !cls.startsWith("warning-tag-"));
+  kept.push("warning-tag", variant);
+  element.className = kept.join(" ");
+}
+
 function reduceMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -328,16 +342,15 @@ export function makeHandle(
       const nextTags = warningTags(active);
       for (let i = 0; i < nextTags.length; i++) {
         const tag = nextTags[i]!;
-        const nextClass = `warning-tag warning-tag-${tag.text.toLowerCase()}`;
         const existing = tags[i];
         if (existing) {
           const element = existing.getElement();
-          if (element.className !== nextClass) element.className = nextClass;
+          setWarningTagClass(element, tag.text);
           if (element.textContent !== tag.text) element.textContent = tag.text;
           existing.setLngLat(tag.lngLat);
         } else {
           const element = document.createElement("div");
-          element.className = nextClass;
+          element.className = `warning-tag warning-tag-${tag.text.toLowerCase()}`;
           element.textContent = tag.text;
           tags.push(new Marker({ element }).setLngLat(tag.lngLat).addTo(map));
         }

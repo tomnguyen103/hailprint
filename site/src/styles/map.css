@@ -490,12 +490,6 @@
   }
 }
 
-@media (max-width: 1279px) {
-  .inspector {
-    box-shadow: var(--shadow);
-  }
-}
-
 @media (max-width: 1023px) {
   .map-overlay {
     height: min(70dvh, 640px);
@@ -559,6 +553,7 @@
     z-index: 40;
     border: 0;
     border-radius: 0;
+    box-shadow: var(--shadow);
     overflow-y: auto;
   }
 

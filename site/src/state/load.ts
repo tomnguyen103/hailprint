@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import { STALE, clearFetchCache, latest, setFetchCacheScope } from "../data/fetch";
+import { STALE, clearFetchCache, latest } from "../data/fetch";
 import { DataError } from "../data/types";
 
 export type Load<T> =
@@ -24,6 +24,7 @@ export function useLoad<T>(
   const [state, setState] = useState<{ key: string; load: Load<T> }>({ key, load: { status: "loading" } });
   const [showLoading, setShowLoading] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const lastAttemptRef = useRef(0);
   const run = useRef(latest<T>());
   const startRef = useRef(start);
   startRef.current = start;
@@ -32,15 +33,9 @@ export function useLoad<T>(
     let live = true;
     let shownAt = 0;
     let settleTimer: number | null = null;
-    if (attempt > 0) {
+    if (attempt > lastAttemptRef.current) {
+      lastAttemptRef.current = attempt;
       clearFetchCache();
-    } else {
-      const nl = key.indexOf("\n");
-      if (nl >= 0) {
-        const rawScope = key.slice(0, nl);
-        const scope = rawScope.startsWith("0:") || rawScope.startsWith("1:") ? rawScope.slice(2) : rawScope;
-        setFetchCacheScope(scope);
-      }
     }
     setState({ key, load: { status: "loading" } });
     setShowLoading(false);

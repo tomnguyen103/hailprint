@@ -1,63 +1,21 @@
 import { useEffect, useId, useMemo, useRef, useState } from "preact/hooks";
-import {
-  METHOD_LABELS,
-  METHOD_PAGES,
-  PIPELINE_LABELS,
-  PIPELINE_VIEWS,
-  go,
-  href,
-} from "../router";
-import { useIndex } from "../state/index";
-import { CASE_STUDIES, landingStorm } from "../storms/select";
+import type { Storm } from "../data/types";
+import { go } from "../router";
+import { setSelectedCounty } from "../state/county";
 import { SearchIcon } from "./icons";
-import { useModalFocusTrap } from "./scope-drawer";
+import { useModalFocusTrap } from "./modal-focus";
+import {
+  RECENT_KEY,
+  buildSearchItems,
+  filterAndGroupSearchItems,
+  pushRecentId,
+  readRecentIds,
+  type GlobalSearchItem,
+} from "./search-index";
 
-export const RECENT_KEY = "hailprint-recent-searches";
-const MAX_RECENT = 5;
+export { RECENT_KEY, type GlobalSearchItem };
 
-export interface GlobalSearchItem {
-  id: string;
-  group: "Storm" | "County" | "Tool" | "Method" | "Pipeline" | "Live";
-  title: string;
-  subtitle: string;
-  route: string;
-  keywords: string;
-}
-
-interface SearchGroup {
-  key: string;
-  label: string;
-  items: GlobalSearchItem[];
-}
-
-function readRecentIds(): string[] {
-  try {
-    const raw = globalThis.localStorage?.getItem(RECENT_KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const item of parsed) {
-      if (typeof item === "string" && item.length > 0 && !seen.has(item)) {
-        seen.add(item);
-        out.push(item);
-        if (out.length >= MAX_RECENT) break;
-      }
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
-
-function writeRecentIds(ids: string[]): void {
-  try {
-    globalThis.localStorage?.setItem(RECENT_KEY, JSON.stringify(ids.slice(0, MAX_RECENT)));
-  } catch {
-    // Ignore blocked storage in restricted browser contexts.
-  }
-}
+const EMPTY_STORMS: readonly Storm[] = [];
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!target || typeof target !== "object") return false;
@@ -73,77 +31,8 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return ce === "" || ce === "true" || ce === "plaintext-only";
 }
 
-const GROUP_LABELS: Record<GlobalSearchItem["group"], string> = {
-  Live: "Live",
-  Storm: "Storms",
-  Tool: "Tools",
-  County: "Counties",
-  Method: "Method",
-  Pipeline: "Pipeline",
-};
-
-function groupItems(list: GlobalSearchItem[]): SearchGroup[] {
-  const byGroup = new Map<GlobalSearchItem["group"], GlobalSearchItem[]>();
-  for (const item of list) {
-    let bucket = byGroup.get(item.group);
-    if (!bucket) {
-      bucket = [];
-      byGroup.set(item.group, bucket);
-    }
-    bucket.push(item);
-  }
-  const out: SearchGroup[] = [];
-  for (const [group, items] of byGroup) {
-    out.push({ key: group.toLowerCase(), label: GROUP_LABELS[group], items });
-  }
-  return out;
-}
-
-const METRO_COUNTIES: readonly [string, string][] = [
-  ["48201", "Harris"],
-  ["48157", "Fort Bend"],
-  ["48339", "Montgomery"],
-  ["48039", "Brazoria"],
-  ["48167", "Galveston"],
-  ["48473", "Waller"],
-  ["48291", "Liberty"],
-  ["48071", "Chambers"],
-];
-
-const TRY_SEARCH_ITEMS: readonly { id: string; title: string; subtitle: string; route: string; keywords: string }[] = [
-  {
-    id: "tool-point",
-    title: "Point check",
-    subtitle: "Try it",
-    route: href({ area: "try", tool: "point" }),
-    keywords: "try point check coordinates pin location metro",
-  },
-  {
-    id: "tool-compare",
-    title: "Compare",
-    subtitle: "Try it",
-    route: href({ area: "try", tool: "compare" }),
-    keywords: "try compare swipe side by side",
-  },
-  {
-    id: "tool-tune",
-    title: "Tune",
-    subtitle: "Try it",
-    route: href({ area: "try", tool: "tune" }),
-    keywords: "try tune scoring radius threshold",
-  },
-  {
-    id: "tool-run",
-    title: "Batch",
-    subtitle: "Try it · Run",
-    route: href({ area: "try", tool: "run" }),
-    keywords: "try batch run cli commands csv export",
-  },
-];
-
 /** Center top-bar Ctrl+K and / search trigger and modal command palette. */
-export function GlobalSearch() {
-  const index = useIndex();
+export function GlobalSearch({ storms = EMPTY_STORMS }: { storms?: readonly Storm[] }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
@@ -158,107 +47,12 @@ export function GlobalSearch() {
 
   useModalFocusTrap(open, dialogRef);
 
-  const items = useMemo<GlobalSearchItem[]>(() => {
-    const storms = index.status === "ready" ? index.data.storms : [];
-    const landing = landingStorm(storms);
-    const caseByDate = new Map(CASE_STUDIES.map((cs) => [cs.storm_date, cs]));
+  const items = useMemo<GlobalSearchItem[]>(() => buildSearchItems(storms), [storms]);
 
-    const liveItem: GlobalSearchItem = {
-      id: "live",
-      group: "Live",
-      title: "Live",
-      subtitle: "Harris County 24 h",
-      route: href({ area: "live" }),
-      keywords: "live harris county radar now active",
-    };
-
-    const stormItems: GlobalSearchItem[] = storms.map((s) => {
-      const cs = caseByDate.get(s.storm_date);
-      const meshPart = typeof s.max_mesh_mm === "number" ? ` · ${s.max_mesh_mm.toFixed(0)} mm` : "";
-      const casePart = cs ? ` · ${cs.title}` : "";
-      return {
-        id: `storm-${s.storm_date}`,
-        group: "Storm",
-        title: s.storm_date,
-        subtitle: `${s.report_count ?? 0} reports${meshPart}${casePart}`,
-        route: href({ area: "storms", date: s.storm_date, tab: "map" }),
-        keywords: `${s.storm_date} ${s.report_source ?? ""} ${cs?.title ?? ""} ${cs?.summary ?? ""} storm`,
-      };
-    });
-
-    const countyRoute = landing ? href({ area: "storms", date: landing.storm_date, tab: "data" }) : "/storms";
-    const countyItems: GlobalSearchItem[] = METRO_COUNTIES.map(([fips, name]) => ({
-      id: `county-${fips}`,
-      group: "County",
-      title: `${name} County`,
-      subtitle: `FIPS ${fips}`,
-      route: countyRoute,
-      keywords: `${name} county fips ${fips} metro`,
-    }));
-
-    const toolItems: GlobalSearchItem[] = TRY_SEARCH_ITEMS.map((t) => ({
-      id: t.id,
-      group: "Tool",
-      title: t.title,
-      subtitle: t.subtitle,
-      route: t.route,
-      keywords: t.keywords,
-    }));
-
-    const methodItems: GlobalSearchItem[] = METHOD_PAGES.map((page) => ({
-      id: `method-${page}`,
-      group: "Method",
-      title: METHOD_LABELS[page],
-      subtitle: "Method",
-      route: href({ area: "method", page }),
-      keywords: `method ${METHOD_LABELS[page]} ${page}`,
-    }));
-
-    const pipelineItems: GlobalSearchItem[] = PIPELINE_VIEWS.map((view) => ({
-      id: `pipeline-${view}`,
-      group: "Pipeline",
-      title: PIPELINE_LABELS[view],
-      subtitle: "Pipeline",
-      route: href({ area: "pipeline", view }),
-      keywords: `pipeline ${PIPELINE_LABELS[view]} ${view}`,
-    }));
-
-    return [liveItem, ...stormItems, ...toolItems, ...countyItems, ...methodItems, ...pipelineItems];
-  }, [index]);
-
-  const { groups, results } = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) {
-      const byId = new Map(items.map((item) => [item.id, item]));
-      const recentItems: GlobalSearchItem[] = [];
-      const seen = new Set<string>();
-      for (const id of recentIds) {
-        const match = byId.get(id);
-        if (match && !seen.has(match.id)) {
-          seen.add(match.id);
-          recentItems.push(match);
-        }
-      }
-      const rest = items.filter((item) => !seen.has(item.id)).slice(0, 12);
-      const nextGroups: SearchGroup[] = [];
-      if (recentItems.length > 0) {
-        nextGroups.push({ key: "recent", label: "Recent", items: recentItems });
-      }
-      nextGroups.push(...groupItems(rest));
-      return { groups: nextGroups, results: nextGroups.flatMap((g) => g.items) };
-    }
-    const matched = items
-      .filter(
-        (item) =>
-          item.title.toLowerCase().includes(q) ||
-          item.subtitle.toLowerCase().includes(q) ||
-          item.group.toLowerCase().includes(q) ||
-          item.keywords.toLowerCase().includes(q),
-      )
-      .slice(0, 20);
-    const nextGroups = groupItems(matched);
-    return { groups: nextGroups, results: nextGroups.flatMap((g) => g.items) };
-  }, [items, query, recentIds]);
+  const { groups, results } = useMemo(
+    () => filterAndGroupSearchItems(items, query, recentIds),
+    [items, query, recentIds],
+  );
 
   const indexById = useMemo(() => new Map(results.map((item, idx) => [item.id, idx])), [results]);
 
@@ -269,9 +63,15 @@ export function GlobalSearch() {
   useEffect(() => {
     const onGlobalKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "k") {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setOpen((prev) => !prev);
+        if (openRef.current) {
+          setOpen(false);
+          setQuery("");
+          triggerRef.current?.focus?.();
+        } else {
+          setOpen(true);
+        }
       } else if (
         !openRef.current &&
         event.key === "/" &&
@@ -292,9 +92,11 @@ export function GlobalSearch() {
     if (!open) return;
     inputRef.current?.focus?.();
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         event.preventDefault();
-        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation?.();
         setOpen(false);
         setQuery("");
         triggerRef.current?.focus?.();
@@ -311,11 +113,8 @@ export function GlobalSearch() {
   };
 
   const selectItem = (item: GlobalSearchItem) => {
-    setRecentIds((prev) => {
-      const next = [item.id, ...prev.filter((id) => id !== item.id)].slice(0, MAX_RECENT);
-      writeRecentIds(next);
-      return next;
-    });
+    setRecentIds((prev) => pushRecentId(prev, item.id));
+    if (item.countyFips) setSelectedCounty(item.countyFips);
     setOpen(false);
     setQuery("");
     go(item.route);

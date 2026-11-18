@@ -61,8 +61,23 @@ function numOrNull(file: string, value: unknown, path: string): void {
   if (value !== null) num(file, value, path);
 }
 
+function nonNegNum(file: string, value: unknown, path: string): number {
+  const n = num(file, value, path);
+  if (n < 0) throw new DataError(file, `${path} is below 0`);
+  return n;
+}
+
 function runTime(file: string, value: unknown, path: string): void {
-  if (!RUN_TIME.test(str(file, value, path))) throw new DataError(file, `${path} is not a run time`);
+  const text = str(file, value, path);
+  if (!RUN_TIME.test(text) || !isValidCalendarDate(text.slice(0, 10))) {
+    throw new DataError(file, `${path} is not a run time`);
+  }
+  const hour = Number(text.slice(11, 13));
+  const minute = Number(text.slice(14, 16));
+  const second = Number(text.slice(17, 19));
+  if (hour > 23 || minute > 59 || second > 59) {
+    throw new DataError(file, `${path} is not a run time`);
+  }
 }
 
 /** A whole number of files or days, never negative. */
@@ -141,6 +156,8 @@ export function guardIndex(value: unknown): StormsIndex {
       for (const key of ["hits", "misses", "false_alarms", "correct_negatives"]) {
         count(file, row[key], `${rowAt}.${key}`);
       }
+      nonNegNum(file, row["swath_km2"], `${rowAt}.swath_km2`);
+      numOrNull(file, row["hss"], `${rowAt}.hss`);
     });
     const files = rec(file, storm["files"], `${at}.files`);
     for (const key of ["swath", "reports"]) filePath(file, files[key], `${at}.files.${key}`, GEOJSON_PATH, stormDate);
@@ -209,12 +226,14 @@ export function guardPairs(value: unknown): Pairs {
   if (radiusDefault > radiusMax) {
     throw new DataError(file, `radius_km_default (${radiusDefault}) exceeds radius_km_max (${radiusMax})`);
   }
-  num(file, root["edge_margin_m"], "edge_margin_m");
+  nonNegNum(file, root["edge_margin_m"], "edge_margin_m");
   const classes = list(file, root["classes"], "classes");
+  if (classes.length === 0) throw new DataError(file, "classes is empty");
   classes.forEach((item, i) => {
     const at = `classes[${i}]`;
     const cls = rec(file, item, at);
-    for (const key of ["threshold_mm", "threshold_in", "swath_km2"]) num(file, cls[key], `${at}.${key}`);
+    for (const key of ["threshold_mm", "threshold_in"]) num(file, cls[key], `${at}.${key}`);
+    nonNegNum(file, cls["swath_km2"], `${at}.swath_km2`);
     str(file, cls["label"], `${at}.label`);
     const unverifiable = list(file, cls["unverifiable_km2"], `${at}.unverifiable_km2`);
     if (unverifiable.length !== radiusMax + 1) {
@@ -223,7 +242,7 @@ export function guardPairs(value: unknown): Pairs {
         `${at}.unverifiable_km2 has ${unverifiable.length} entries, expected ${radiusMax + 1}`,
       );
     }
-    unverifiable.forEach((v, j) => num(file, v, `${at}.unverifiable_km2[${j}]`));
+    unverifiable.forEach((v, j) => nonNegNum(file, v, `${at}.unverifiable_km2[${j}]`));
   });
   list(file, root["reports"], "reports").forEach((item, i) => {
     const at = `reports[${i}]`;
@@ -233,7 +252,9 @@ export function guardPairs(value: unknown): Pairs {
     if (dist.length !== classes.length) {
       throw new DataError(file, `${at}.dist_m has ${dist.length} entries for ${classes.length} classes`);
     }
-    dist.forEach((v, j) => numOrNull(file, v, `${at}.dist_m[${j}]`));
+    dist.forEach((v, j) => {
+      if (v !== null) nonNegNum(file, v, `${at}.dist_m[${j}]`);
+    });
   });
   return value as Pairs;
 }

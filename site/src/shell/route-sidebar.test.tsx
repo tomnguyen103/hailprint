@@ -2,6 +2,7 @@ import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AREAS, AREA_LABELS } from "../router";
+import { setSidebarExpanded } from "../state/sidebar";
 import { Layout } from "./layout";
 import { RouteSidebar } from "./route-sidebar";
 
@@ -140,6 +141,7 @@ describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)"
         storage.set(k, v);
       },
     });
+    setSidebarExpanded(true);
     vi.stubGlobal("document", {
       get activeElement() {
         return activeEl;
@@ -304,6 +306,37 @@ describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)"
       }
     });
     expect(onCloseMobile).toHaveBeenCalledTimes(1);
+
+    await act(() => render(null, host as unknown as HTMLElement));
+  });
+
+  it("preserves in-memory collapsed sidebar state across mounts when localStorage throws (US-01.5)", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      setItem: () => {
+        throw new Error("SecurityError");
+      },
+    });
+
+    const host = makeFakeElement("div");
+    await act(() =>
+      render(h(Layout, { active: "storms", children: h("div", null, "Body") }), host as unknown as HTMLElement),
+    );
+    const header = findDomNodes(host, (n) => n.tagName === "HEADER")[0]!;
+    const hamburger = findDomNodes(header, (n) => n.tagName === "BUTTON" && n["aria-controls"] === "route-sidebar")[0]!;
+    await act(() => {
+      (hamburger["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    expect(findDomNodes(host, (n) => n.tagName === "ASIDE")[0]!["data-collapsed"]).toBe(true);
+
+    // Remounting another Layout must keep collapsed in-memory state instead of clobbering it from blocked storage
+    await act(() => render(null, host as unknown as HTMLElement));
+    await act(() =>
+      render(h(Layout, { active: "live", children: h("div", null, "Body") }), host as unknown as HTMLElement),
+    );
+    expect(findDomNodes(host, (n) => n.tagName === "ASIDE")[0]!["data-collapsed"]).toBe(true);
 
     await act(() => render(null, host as unknown as HTMLElement));
   });

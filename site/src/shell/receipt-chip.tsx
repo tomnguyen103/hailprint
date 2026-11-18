@@ -32,9 +32,11 @@ export function clampPopoverPosition(
   const belowTop = triggerRect.bottom + POP_GAP;
   const fitsBelow = belowTop + effectiveHeight <= viewport.height - VIEWPORT_PAD;
   const aboveTop = triggerRect.top - POP_GAP - effectiveHeight;
-  const top = fitsBelow
-    ? belowTop
-    : Math.min(Math.max(VIEWPORT_PAD, aboveTop), Math.max(VIEWPORT_PAD, viewport.height - effectiveHeight - VIEWPORT_PAD));
+  const rawTop = fitsBelow ? belowTop : aboveTop;
+  const top = Math.max(
+    VIEWPORT_PAD,
+    Math.min(rawTop, Math.max(VIEWPORT_PAD, viewport.height - VIEWPORT_PAD - effectiveHeight)),
+  );
   return { top, left, maxHeight };
 }
 
@@ -77,8 +79,12 @@ export function ReceiptChip({ receipt, file, summary }: { receipt: Receipt; file
     };
     updatePos();
     const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
-        event.preventDefault(); event.stopPropagation(); openReceiptChip(null);
+        event.preventDefault();
+        event.stopImmediatePropagation?.();
+        event.stopPropagation?.();
+        openReceiptChip(null);
         chip.current?.focus();
       }
     };
