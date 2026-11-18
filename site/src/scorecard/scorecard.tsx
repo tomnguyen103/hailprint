@@ -12,6 +12,7 @@ import {
 } from "../pool";
 import { SCORECARD_VIEWS, href, type ScorecardView } from "../router";
 import { RULER } from "../ruler";
+import { MetricText } from "../shell/metric-text";
 import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "../shell/states";
@@ -19,7 +20,6 @@ import { SubTabs } from "../shell/sub-tabs";
 import { usePairsAll } from "../state/pairs-all";
 import { DEFAULT_MAX_RADIUS_KM, clampRadiusKm, useRadiusKm } from "../state/radius";
 import { GridView } from "./grid-view";
-import { MetricText } from "./metric-text";
 import { TableView } from "./table-view";
 import { ThresholdCurve } from "./threshold-curve";
 

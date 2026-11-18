@@ -3,10 +3,10 @@ import type { Receipt } from "../data/types";
 import { METRIC_LABELS } from "../format";
 import type { PooledRow } from "../pool";
 import { RULER } from "../ruler";
+import { MetricText } from "../shell/metric-text";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ThresholdDrawer } from "../shell/threshold-drawer";
 import { ClassPick } from "./class-pick";
-import { MetricText } from "./metric-text";
 
 export function TableView({
   rows,

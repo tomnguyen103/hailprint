@@ -1,7 +1,7 @@
 import type { Metric } from "../data/types";
 import { metricText } from "../format";
 
-/** A metric to two decimals; null draws an en dash and reads "undefined, zero denominator". */
+/** Render a metric to two decimals, or an en dash with a screen-reader label when null. */
 export function MetricText({ value }: { value: Metric }) {
   const { text, hidden } = metricText(value);
   return (

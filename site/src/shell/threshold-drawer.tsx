@@ -3,7 +3,7 @@ import { Fragment } from "preact";
 import type { Receipt, TableRow } from "../data/types";
 import { METRICS, METRIC_LABELS, formatInches } from "../format";
 import { objectName } from "../ruler";
-import { MetricText } from "../scorecard/metric-text";
+import { MetricText } from "./metric-text";
 import { ContingencyGrid } from "./contingency-grid";
 import { PeekDrawer } from "./peek-drawer";
 

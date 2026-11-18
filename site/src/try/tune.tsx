@@ -2,9 +2,9 @@ import { useId, useState } from "preact/hooks";
 import type { StormsIndex } from "../data/types";
 import { METRICS, METRIC_LABELS, type MetricKey } from "../format";
 import { RULER, diameterPx } from "../ruler";
-import { MetricText } from "../scorecard/metric-text";
 import { ThresholdCurve } from "../scorecard/threshold-curve";
 import { ContingencyGrid } from "../shell/contingency-grid";
+import { MetricText } from "../shell/metric-text";
 import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
@@ -61,7 +61,7 @@ export function Tune({ index }: { index: StormsIndex }) {
     <>
       <div class="try-controls">
         <ScopeSelect storms={index.storms} value={scope} onChange={setScope} label="Scope" withAll />
-        <RadiusSlider value={activeRadius} max={maxRadiusKm} onChange={setRadius} />
+        <RadiusSlider value={activeRadius} max={maxRadiusKm} onChange={(next) => setRadius(next, maxRadiusKm)} />
         <div>
           <div class="radius-slider threshold-slider">
             <label for={sliderId}>Threshold</label>

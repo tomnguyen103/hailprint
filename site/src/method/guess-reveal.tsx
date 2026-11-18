@@ -3,7 +3,7 @@ import type { Metric, StormsIndex } from "../data/types";
 import { pooledReceipt, pooledRows } from "../pool";
 import { RULER } from "../ruler";
 import { ClassPick } from "../scorecard/class-pick";
-import { MetricText } from "../scorecard/metric-text";
+import { MetricText } from "../shell/metric-text";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { usePairsAll } from "../state/pairs-all";

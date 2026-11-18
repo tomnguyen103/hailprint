@@ -6,7 +6,7 @@ import { METRIC_LABELS, formatInches } from "../format";
 import { scoredCount } from "../pool";
 import { rescore } from "../rescore";
 import { RULER } from "../ruler";
-import { MetricText } from "../scorecard/metric-text";
+import { MetricText } from "../shell/metric-text";
 import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
