@@ -396,17 +396,42 @@ def test_a_failed_validation_writes_nothing_for_that_date(env, monkeypatch, caps
     assert [e["storm_date"] for e in env.index()["storms"]] == ["2023-06-23"]
 
 
-@pytest.mark.parametrize("outcome", [None, RuntimeError("no route")], ids=["404", "RuntimeError"])
-def test_a_date_whose_spc_csv_cannot_be_fetched_is_skipped_with_a_stderr_line(env, capsys, outcome):
+def test_a_date_with_no_spc_daily_csv_is_skipped_with_a_stderr_line(env, capsys):
     env.add_day(EARLIER)
     env.add_day(LATER)
-    env.served[LATER] = outcome
+    env.served[LATER] = None
 
     assert cli.main(["publish"]) == 0
 
     assert "2024-05-28" in capsys.readouterr().err
     assert not env.storm_dir(LATER).exists()
     assert [e["storm_date"] for e in env.index()["storms"]] == ["2023-06-23"]
+
+
+def test_an_spc_fetch_failure_fails_its_date_and_publishes_the_other(env, capsys):
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    env.served[LATER] = RuntimeError("no route")
+
+    assert cli.main(["publish"]) == 3
+
+    err = capsys.readouterr().err
+    assert "2024-05-28" in err and "publish failed for: 2024-05-28" in err
+    assert not env.storm_dir(LATER).exists()
+    assert [e["storm_date"] for e in env.index()["storms"]] == ["2023-06-23"]
+
+
+def test_the_run_fails_with_the_dates_when_every_spc_fetch_fails(env, capsys):
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    env.served[EARLIER] = RuntimeError("no route")
+    env.served[LATER] = RuntimeError("no route")
+
+    assert cli.main(["publish"]) == 1
+
+    err = capsys.readouterr().err
+    assert "failed: 2023-06-23, 2024-05-28" in err or "failed: 2024-05-28, 2023-06-23" in err
+    assert not (env.site / "storms.json").exists()
 
 
 def test_the_run_fails_when_no_date_published(env, capsys):
