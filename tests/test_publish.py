@@ -415,6 +415,9 @@ def test_multipolygon_keeps_polygons_nested_in_a_collection():
     assert rebuilt.geom_type == "MultiPolygon"
     assert len(rebuilt.geoms) == 2
     assert rebuilt.area == pytest.approx(_oracle_area(spiked, 4))
+    assert all(shapely.Polygon(poly[0]).exterior.is_ccw for poly in doc["coordinates"])
+    swath_doc = publish.swath_doc(_swath_frame(spiked), _receipt())
+    publish.validate(swath_doc, "swath")
 
 
 def test_multipolygon_bowtie_area_equals_the_repaired_area():
