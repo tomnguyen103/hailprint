@@ -240,7 +240,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
                 aria-busy={geoStatus === "locating"}
                 onClick={onPinMyLocation}
               >
-                {geoStatus === "locating" ? "Locate\u2026" : "Pin my location"}
+                {geoStatus === "locating" ? "Locate\u2026" : "Pin location"}
               </button>
               {pin !== null ? (
                 <button

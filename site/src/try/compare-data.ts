@@ -6,6 +6,7 @@ export type ComparePair = [string, string];
 export interface ComparePreset {
   id: string;
   label: string;
+  title: string;
   dateA: string;
   dateB: string;
 }
@@ -13,19 +14,22 @@ export interface ComparePreset {
 export const COMPARE_PRESETS: readonly ComparePreset[] = [
   {
     id: "derecho-vs-hen-egg",
-    label: "2024-05-28 vs 2023-06-23 (Derecho vs 2.00 in Hen Egg)",
+    label: "May 28 Derecho",
+    title: "2024-05-28 vs 2023-06-23 (Derecho vs 2.00 in Hen Egg)",
     dateA: "2024-05-28",
     dateB: "2023-06-23",
   },
   {
     id: "spring-2024",
-    label: "2024-05-28 vs 2024-03-15 (Spring 2024 Swaths)",
+    label: "Spring 2024",
+    title: "2024-05-28 vs 2024-03-15 (Spring 2024 Swaths)",
     dateA: "2024-05-28",
     dateB: "2024-03-15",
   },
   {
     id: "skill-vs-dense",
-    label: "2024-12-24 vs 2024-03-21 (Peak Skill vs Dense Reports)",
+    label: "Peak Skill",
+    title: "2024-12-24 vs 2024-03-21 (Peak Skill vs Dense Reports)",
     dateA: "2024-12-24",
     dateB: "2024-03-21",
   },

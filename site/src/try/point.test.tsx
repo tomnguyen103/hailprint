@@ -414,7 +414,7 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
     await act(() => render(h(PointCheck, { index: indexFixture }), host as unknown as HTMLElement));
 
     const text = domText(host);
-    expect(text).toContain("Pin my location");
+    expect(text).toContain("Pin location");
     expect(text).toContain("Clear pin");
     expect(text).toContain("Memorial (77024)");
     expect(text).toContain("Harris County (48201)");
@@ -422,6 +422,12 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
     expect(text).not.toContain("Check live NWS & outage feeds");
     expect(text).toContain("2024-05-28");
     expect(text).toContain("quarter");
+
+    const buttons = findDomNodes(host, (n) => n.tagName === "BUTTON");
+    for (const btn of buttons) {
+      const words = domText(btn).trim().split(/\s+/).filter(Boolean);
+      expect(words.length).toBeLessThanOrEqual(3);
+    }
 
     const headers = findDomNodes(host, (n) => n.tagName === "TH");
     expect(headers).toHaveLength(7);

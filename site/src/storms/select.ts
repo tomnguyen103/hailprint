@@ -41,25 +41,25 @@ export interface CaseStudy {
 export const CASE_STUDIES: readonly CaseStudy[] = [
   {
     storm_date: "2024-05-28",
-    title: "2024-05-28 · Derecho & hail",
+    title: "2024-05-28 Derecho",
     summary: "Northwest Harris & Cypress corridor",
     defaultTab: "map",
   },
   {
     storm_date: "2024-12-24",
-    title: "2024-12-24 · Christmas Eve hail",
+    title: "2024-12-24 Christmas",
     summary: "Single-storm verification case study",
     defaultTab: "score",
   },
   {
     storm_date: "2023-06-23",
-    title: "2023-06-23 · North metro hail",
+    title: "2023-06-23 Hail",
     summary: "Montgomery County & The Woodlands",
     defaultTab: "map",
   },
   {
     storm_date: "2024-03-15",
-    title: "2024-03-15 · Spring severe hail",
+    title: "2024-03-15 Spring",
     summary: "Metro hail swath and radar comparison",
     defaultTab: "map",
   },

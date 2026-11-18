@@ -345,7 +345,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                     aria-pressed={filterMode === "all"}
                     onClick={() => setFilterMode("all")}
                   >
-                    All <span class="mono">{rows.length}</span> storm dates
+                    All <span class="mono">{rows.length}</span> dates
                   </button>
                   <button
                     type="button"
@@ -353,7 +353,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                     aria-pressed={filterMode === "active"}
                     onClick={() => setFilterMode("active")}
                   >
-                    Activity near pin only (<span class="mono">{activeCount}</span>)
+                    Near pin <span class="mono">{`(${activeCount})`}</span>
                   </button>
                   <button
                     type="button"
@@ -369,7 +369,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                       setTimeout(() => URL.revokeObjectURL(url), 1000);
                     }}
                   >
-                    Download {rows.length}-storm point history CSV
+                    Download CSV
                   </button>
                 </div>
                 <span class="point-preview-note">
@@ -502,7 +502,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
           aria-busy={geoStatus === "locating"}
           onClick={() => void locateUser()}
         >
-          {geoStatus === "locating" ? "Locate\u2026" : "Pin my location"}
+          {geoStatus === "locating" ? "Locate\u2026" : "Pin location"}
         </button>
         {hasPin ? (
           <button type="button" class="button" onClick={onClearPin}>

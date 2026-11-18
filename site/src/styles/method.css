@@ -4,16 +4,20 @@
   max-width: 680px;
 }
 
+.reading.prose {
+  font-size: 16px;
+}
+
 .reading-title {
   margin: 0 0 24px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .reading h2 {
   margin: 32px 0 12px;
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-size: 1.25rem;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .reading p,

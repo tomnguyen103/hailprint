@@ -14,12 +14,14 @@ export function TableView({
   onClass,
   receipt,
   file,
+  summary,
 }: {
   rows: PooledRow[];
   classMm: number;
   onClass: (mm: number) => void;
   receipt: Receipt;
   file: string;
+  summary?: string;
 }) {
   const [peekMm, setPeekMm] = useState<number | null>(null);
   const peekRow = peekMm !== null ? (rows.find((r) => r.threshold_mm === peekMm) ?? null) : null;
@@ -72,9 +74,9 @@ export function TableView({
           </tbody>
         </table>
       </div>
-      <p class="pane-note">
-        <ReceiptChip receipt={receipt} file={file} />
-      </p>
+      <div class="pane-note">
+        <ReceiptChip receipt={receipt} file={file} summary={summary} />
+      </div>
       <ThresholdDrawer
         row={peekRow}
         scoredCount={peekRow?.report_count ?? 0}

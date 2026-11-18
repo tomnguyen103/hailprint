@@ -319,4 +319,29 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
     expect(match).not.toBeNull();
     expect(match![1]).toContain("min-height: 40px");
   });
+
+  it("renders concise file label on trigger and shows summary inside opened .receipt-pop (US-06.1)", async () => {
+    const host = makeFakeElement("div");
+    await act(() =>
+      render(
+        h(ReceiptChip, {
+          receipt,
+          file: "pairs.json",
+          summary: "pooled over 25 storm dates",
+        } as unknown as Parameters<typeof ReceiptChip>[0]),
+        host as unknown as HTMLElement,
+      ),
+    );
+    const chipBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && n["class"] === "chip mono")[0]!;
+    expect(chipBtn).toBeDefined();
+    expect(chipBtn.childNodes.map((c) => c.data ?? "").join("").trim()).toBe("pairs.json");
+
+    await act(() => {
+      (chipBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    const pop = findDomNodes(host, (n) => n["class"] === "receipt-pop")[0]!;
+    expect(pop).toBeDefined();
+    const summaryEl = findDomNodes(pop, (n) => n["class"] === "receipt-summary")[0];
+    expect(summaryEl).toBeDefined();
+  });
 });

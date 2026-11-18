@@ -225,4 +225,32 @@ describe("Stamp copy feedback & UI polish contracts (US-16.1, US-16.2, US-16.3)"
     // Live map frame uses tabIndex={-1}
     expect(liveMapTsx).toContain("tabIndex={-1}");
   });
+
+  it("enforces zero --serif fallbacks, flat MapLibre controls, 40px native inputs, and <=3-word RulerLegend & Compare preset buttons (US-05.1, US-06.2, US-07.2)", async () => {
+    const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+    const liveCss = read("../styles/live.css");
+    const methodCss = read("../styles/method.css");
+    const mapCss = read("../styles/map.css");
+
+    expect(liveCss).not.toContain("--serif");
+    expect(methodCss).not.toContain("--serif");
+    expect(mapCss).toMatch(/\.map-frame\s+\.maplibregl-ctrl-group\s*\{[^}]*border:\s*0/);
+    expect(mapCss).toMatch(/\.layer-row\s+input\s*\{[^}]*width:\s*40px/);
+    expect(mapCss).toMatch(/\.layer-row\s+input\s*\{[^}]*height:\s*40px/);
+
+    const { COMPARE_PRESETS } = await import("../try/compare-data");
+    for (const preset of COMPARE_PRESETS) {
+      expect(preset.label.trim().split(/\s+/).length).toBeLessThanOrEqual(3);
+    }
+
+    const { RulerLegend } = await import("./map/ruler-legend");
+    const legendHost = makeFakeElement("div");
+    await act(() => render(h(RulerLegend, { hidden: new Set<number>(), onToggle: () => {} }), legendHost as unknown as HTMLElement));
+    const buttons = findDomNodes(legendHost, (n) => n.tagName === "BUTTON");
+    expect(buttons.length).toBe(7);
+    for (const btn of buttons) {
+      const words = domText(btn).trim().split(/\s+/).filter(Boolean);
+      expect(words.length).toBeLessThanOrEqual(3);
+    }
+  });
 });

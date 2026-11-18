@@ -60,7 +60,7 @@ export function Method({ page }: { page: MethodPage }) {
         <PageList page={page} onNavigate={close} />
       </ScopeDrawer>
       <div class="workspace-main">
-        <article class="reading">
+        <article class="reading prose">
           <h1 class="reading-title">{content.title}</h1>
           <Blocks blocks={content.blocks} index={index} />
         </article>

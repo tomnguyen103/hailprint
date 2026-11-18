@@ -169,6 +169,20 @@
   font-family: var(--sans);
 }
 
+.class-pick-item,
+.report-cell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.class-object,
+.report-loc {
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+}
+
 .class-pick {
   display: inline-flex;
   align-items: center;
@@ -391,6 +405,14 @@
 
   .stamp-date-button {
     display: inline-flex;
+    min-height: 44px;
+  }
+
+  .class-pick,
+  .zip-search,
+  .file-list a,
+  .data-county-bar select {
+    min-height: 44px;
   }
 
   .stamp-bar {

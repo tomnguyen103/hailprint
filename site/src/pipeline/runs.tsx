@@ -58,9 +58,9 @@ export function Runs({ runs }: { runs: PipelineRun[] }) {
         <h2>
           Run <span class="mono">{run.run_time}</span>
         </h2>
-        <p class="pane-note">
+        <div class="pane-note">
           <span class="mono">{run.file_count}</span> files, version <span class="mono">{run.package_version}</span>
-        </p>
+        </div>
         <ul class="date-list">
           {run.storm_dates.map((date) => (
             <li key={date}>

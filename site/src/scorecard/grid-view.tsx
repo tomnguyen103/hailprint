@@ -11,12 +11,14 @@ export function GridView({
   onClass,
   receipt,
   file,
+  summary,
 }: {
   rows: PooledRow[];
   classMm: number;
   onClass: (mm: number) => void;
   receipt: Receipt;
   file: string;
+  summary?: string;
 }) {
   const row = rows.find((r) => r.threshold_mm === classMm) ?? rows[0];
   return (
@@ -29,9 +31,9 @@ export function GridView({
       {row ? (
         <>
           <ContingencyGrid row={row} />
-          <p class="pane-note">
-            <ReceiptChip receipt={receipt} file={file} />
-          </p>
+          <div class="pane-note">
+            <ReceiptChip receipt={receipt} file={file} summary={summary} />
+          </div>
         </>
       ) : null}
     </>

@@ -21,7 +21,7 @@
 
 .live-title-row h1 {
   margin: 0;
-  font: 600 32px/1.15 var(--serif);
+  font: 600 24px/1.25 var(--sans);
   color: var(--ink);
 }
 
@@ -218,7 +218,11 @@
   }
 
   .live-title-row h1 {
-    font-size: 24px;
+    font-size: 22px;
+  }
+
+  .live-newest a {
+    min-height: 44px;
   }
 
   .live-stats {

@@ -42,7 +42,7 @@ export function clampPopoverPosition(
  * A mono chip after a published number. It opens a small dialog with the receipt of
  * the file that holds the number. Escape or a click outside closes it; focus returns.
  */
-export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string }) {
+export function ReceiptChip({ receipt, file, summary }: { receipt: Receipt; file: string; summary?: string }) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number; maxHeight: number }>({
@@ -120,6 +120,7 @@ export function ReceiptChip({ receipt, file }: { receipt: Receipt; file: string 
           aria-label={`Receipt for ${file}`}
           style={{ top: `${pos.top}px`, left: `${pos.left}px`, maxHeight: `${pos.maxHeight}px` }}
         >
+          {summary ? <p class="receipt-summary">{summary}</p> : null}
           <ReceiptList receipt={receipt} file={file} />
         </div>
       ) : null}

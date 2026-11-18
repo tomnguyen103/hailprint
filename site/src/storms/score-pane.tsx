@@ -60,11 +60,11 @@ export function ScorePane({
       <section>
         <h2>Per-class table</h2>
         <RadiusSlider value={activeRadiusKm} max={maxRadiusKm} onChange={(next) => setRadiusKm(next, maxRadiusKm)} />
-        <p class="pane-note">
+        <div class="pane-note">
           Radius <span class="mono">{activeRadiusKm} km</span> &middot; <span class="mono">{scored}</span> scored reports &middot;{" "}
           <span class="mono">{pairs.data.reports.length - scored}</span> near crop edge &middot;{" "}
           <ReceiptChip receipt={receipt} file={FILE} />
-        </p>
+        </div>
         <div class="table-scroll">
           <table class="table">
             <thead>

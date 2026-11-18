@@ -342,6 +342,9 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const host = makeFakeElement("div");
     await act(() => render(h(Scorecard, { index, view: "table" }), host as unknown as HTMLElement));
 
+    expect(findDomNodes(host, (n) => classOf(n).includes("view-header"))).toHaveLength(1);
+    expect(findDomNodes(host, (n) => classOf(n).includes("view-body"))).toHaveLength(1);
+
     const tables = findDomNodes(host, (n) => n.tagName === "TABLE");
     expect(tables.length).toBeGreaterThanOrEqual(1);
     const primaryHeaders = findDomNodes(tables[0]!, (n) => n.tagName === "TH");
@@ -350,6 +353,9 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     // Click first class pick button to open PeekDrawer with ContingencyGrid and secondary metrics
     expect(findDomNodes(host, (n) => hasClass(n, "cgrid"))).toHaveLength(0);
     const classBtn = findDomNodes(tables[0]!, (n) => n.tagName === "BUTTON" && classOf(n).includes("class-pick"))[0]!;
+    expect(domText(classBtn).trim().split(/\s+/).filter(Boolean).length).toBeLessThanOrEqual(3);
+    const chipBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && classOf(n).includes("chip"))[0]!;
+    expect(domText(chipBtn).trim()).toBe("pairs.json");
     await act(() => {
       (classBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
     });

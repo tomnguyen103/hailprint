@@ -73,7 +73,9 @@
 }
 
 .power-fill legend {
-  padding: 0 4px;
+  padding: 0 6px;
+  border-radius: var(--radius);
+  background: var(--sheet);
   color: var(--ink-muted);
   font-size: 0.85rem;
 }
@@ -159,17 +161,72 @@
 .layer-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-height: 40px;
+  margin-left: -10px;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .layer-row input {
+  position: relative;
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.layer-row input::before {
+  content: "";
   width: 18px;
   height: 18px;
-  margin: 0;
-  accent-color: var(--accent);
+  border: 1.5px solid var(--border-input);
+  background: var(--surface);
+  transition: background-color var(--motion), border-color var(--motion);
+}
+
+.layer-row input[type="checkbox"]::before {
+  border-radius: var(--radius);
+}
+
+.layer-row input[type="radio"]::before {
+  border-radius: 50%;
+}
+
+.layer-row input:checked::before {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+
+.layer-row input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 9px;
+  border-right: 2px solid var(--on-primary);
+  border-bottom: 2px solid var(--on-primary);
+  transform: translateY(-1px) rotate(45deg);
+}
+
+.layer-row input[type="radio"]:checked::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--on-primary);
+}
+
+.layer-row input:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .layer-row:has(input:disabled) {
@@ -258,8 +315,8 @@
 .ruler-legend {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px;
+  gap: 0;
+  padding: 4px 6px;
   border: 1px solid var(--rule);
   border-radius: var(--radius-pane);
   background: var(--sheet);
@@ -393,15 +450,16 @@
 
 .map-frame .maplibregl-ctrl-group {
   background: var(--sheet);
-  border: 1px solid var(--rule);
-  box-shadow: none;
+  border: 0;
+  box-shadow: var(--shadow);
 }
 
 .map-frame .maplibregl-ctrl-group button + button {
   border-top-color: var(--rule);
 }
 
-.map-frame .maplibregl-ctrl-group button {
+.map-frame .maplibregl-ctrl-group button,
+.map-frame .maplibregl-ctrl-attrib-button {
   width: 40px;
   height: 40px;
 }
@@ -509,9 +567,28 @@
     top: calc(min(50dvh, 420px) - 12px);
   }
 
+  .legend-item,
+  .county-row,
+  .layer-row {
+    min-height: 44px;
+  }
+
   .legend-item {
-    min-height: 40px;
     font-size: 0.75rem;
+  }
+
+  .layer-row input,
+  .map-frame .maplibregl-ctrl-group button,
+  .map-frame .maplibregl-ctrl-attrib-button {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (forced-colors: active) {
+  .layer-row input:checked::before {
+    border-color: Highlight;
+    background: Highlight;
   }
 }
 

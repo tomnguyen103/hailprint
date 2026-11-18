@@ -85,7 +85,7 @@ function ParcelsTable({
       <div class="pane-grid">
         <section>
           <h2>Parcels by size class</h2>
-          <p class="pane-note">HCAD parcels, no address or owner data</p>
+          <div class="pane-note">HCAD parcels, no address or owner data</div>
           <div class="table-scroll">
             <table class="table">
               <thead>
@@ -103,23 +103,27 @@ function ParcelsTable({
                 {RULER.map((m) => {
                   // A class the file omits has no parcel; the table keeps all seven rows.
                   const count = classes.find((c) => c.threshold_mm === m.threshold_mm)?.parcel_count ?? 0;
+                  const obj = objectName(m.threshold_mm);
+                  const inches = formatInches(m.threshold_in);
                   return (
                     <tr key={m.threshold_mm}>
                       <td>
-                        <button
-                          type="button"
-                          class="class-pick"
-                          aria-pressed={m.threshold_mm === selected}
-                          onClick={() => setSelected(m.threshold_mm)}
-                        >
-                          <span
-                            class="ruler-mark"
-                            style={{ width: diameterPx(m.threshold_in), height: diameterPx(m.threshold_in) }}
-                          />
-                          <span>
-                            &ge; {formatInches(m.threshold_in)}, {objectName(m.threshold_mm)}
-                          </span>
-                        </button>
+                        <div class="class-pick-item">
+                          <button
+                            type="button"
+                            class="class-pick"
+                            aria-pressed={m.threshold_mm === selected}
+                            aria-label={`${obj}, >= ${inches}`}
+                            onClick={() => setSelected(m.threshold_mm)}
+                          >
+                            <span
+                              class="ruler-mark"
+                              style={{ width: diameterPx(m.threshold_in), height: diameterPx(m.threshold_in) }}
+                            />
+                            <span>&ge; {inches}</span>
+                          </button>
+                          <span class="class-object">{obj}</span>
+                        </div>
                       </td>
                       <td class="num">{formatCount(count)}</td>
                       <td>
@@ -133,7 +137,7 @@ function ParcelsTable({
           </div>
         </section>
         <section>
-          <h2>ZIP codes at &ge; {formatInches(mark.threshold_in)}</h2>
+          <h2>ZIPs &ge; {formatInches(mark.threshold_in)}</h2>
           {rawRows.length === 0 ? (
             <EmptyState sentence={`No parcel at ${formatInches(mark.threshold_in)} on this storm date.`} />
           ) : (

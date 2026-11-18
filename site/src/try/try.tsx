@@ -79,22 +79,23 @@ export function useScopeRows(index: StormsIndex, scope: string, radius: number) 
     receipt,
     maxRadiusKm,
     activeRadius,
-    file: scope === ALL_SCOPE ? `pairs.json, pooled over ${storms.length} storm dates` : "pairs.json",
+    file: "pairs.json",
+    summary: scope === ALL_SCOPE ? `pooled over ${storms.length} storm dates` : undefined,
   };
 }
 
 export function TryIt({ index, tool }: { index: StormsIndex; tool: TryTool }) {
   return (
     <>
-      <PageHeader title="Try it" />
-
-
-      <SubTabs
-        label="Try it tools"
-        tabs={TRY_TOOLS.map((t) => ({ id: t, label: TOOL_LABELS[t], href: href({ area: "try", tool: t }) }))}
-        selected={tool}
-      />
-      <section class="pane" role="tabpanel" id={`panel-${tool}`} aria-labelledby={`tab-${tool}`}>
+      <header class="view-header">
+        <PageHeader title="Try it" />
+        <SubTabs
+          label="Try it tools"
+          tabs={TRY_TOOLS.map((t) => ({ id: t, label: TOOL_LABELS[t], href: href({ area: "try", tool: t }) }))}
+          selected={tool}
+        />
+      </header>
+      <section class="pane view-body" role="tabpanel" id={`panel-${tool}`} aria-labelledby={`tab-${tool}`}>
         <h2 class="visually-hidden">{TOOL_LABELS[tool]}</h2>
         {tool === "tune" ? <Tune index={index} /> : null}
         {tool === "point" ? <PointCheck index={index} /> : null}

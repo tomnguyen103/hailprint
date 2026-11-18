@@ -69,7 +69,7 @@
   min-width: 0;
 }
 
-.mobile-nav-trigger {
+.icon-button.mobile-nav-trigger {
   display: none;
 }
 
@@ -454,6 +454,11 @@
   margin: 0;
 }
 
+.view-meta {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
 /* States */
 
 .state {
@@ -778,7 +783,7 @@
     padding: 0 12px;
   }
 
-  .mobile-nav-trigger {
+  .icon-button.mobile-nav-trigger {
     display: grid;
   }
 
@@ -884,7 +889,7 @@
 }
 
 @media (forced-colors: active) {
-  .route-link[aria-current="page"] {
+  .route-sidebar a[aria-current="page"] {
     border-left: 2px solid Highlight;
   }
 
