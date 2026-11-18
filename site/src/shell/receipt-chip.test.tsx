@@ -203,7 +203,7 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
       matchMedia: (query: string) => ({
         media: query,
         get matches() {
-          return query.includes("767px") ? isMobileViewport : false;
+          return query.includes("width < 768px") ? isMobileViewport : false;
         },
         addEventListener: () => {},
         removeEventListener: () => {},
@@ -359,7 +359,7 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
   it("docks mobile .scope sheet flush at bottom: 0 in scope.css (US-01.2)", () => {
     const cssPath = fileURLToPath(new URL("../styles/scope.css", import.meta.url));
     const css = readFileSync(cssPath, "utf8");
-    const mobileBlock = css.slice(css.indexOf("@media (max-width: 767px)"));
+    const mobileBlock = css.slice(css.indexOf("@media (width < 768px)"));
     expect(mobileBlock).toContain("bottom: 0;");
     expect(mobileBlock).not.toContain("bottom: 60px");
   });

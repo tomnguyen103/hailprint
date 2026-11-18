@@ -418,7 +418,7 @@
 
 /* Below 768 px the stamp opens the scope sheet. */
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   .stamp-date-text {
     display: none;
   }

@@ -211,7 +211,7 @@
   }
 }
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   .live-page {
     padding: 0;
     gap: 20px;

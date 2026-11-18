@@ -170,7 +170,7 @@
   }
 }
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   :root {
     --gutter: 16px;
   }

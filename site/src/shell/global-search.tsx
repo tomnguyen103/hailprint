@@ -121,7 +121,7 @@ export function GlobalSearch({ storms = EMPTY_STORMS }: { storms?: readonly Stor
   };
 
   const onInputKeyDown = (event: KeyboardEvent) => {
-    if (event.isComposing) return;
+    if (event.isComposing || event.keyCode === 229) return;
     if (results.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();

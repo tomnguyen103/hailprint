@@ -688,7 +688,6 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
       return "blob:test";
     };
     URL.revokeObjectURL = () => {};
-    const origCreateElement = document.createElement;
     vi.stubGlobal("document", {
       createElement: (tag: string) => {
         const el = makeFakeElement(tag);
@@ -728,7 +727,6 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
     } finally {
       URL.createObjectURL = origCreateObjectURL;
       URL.revokeObjectURL = origRevokeObjectURL;
-      void origCreateElement;
     }
   });
 });

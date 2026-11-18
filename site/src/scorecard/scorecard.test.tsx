@@ -440,7 +440,7 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(inspectorMatch).not.toBeNull();
     expect(inspectorMatch![1]).not.toContain("box-shadow");
     expect(mapCss).not.toMatch(/@media\s*\(max-width:\s*1279px\)\s*\{[^}]*\.inspector[^}]*box-shadow/);
-    const mobileInspectorMatch = mapCss.match(/@media\s*\(max-width:\s*767px\)\s*\{\s*\.inspector\s*\{([^}]*)\}/);
+    const mobileInspectorMatch = mapCss.match(/@media\s*\(width\s*<\s*768px\)\s*\{\s*\.inspector\s*\{([^}]*)\}/);
     expect(mobileInspectorMatch).not.toBeNull();
     expect(mobileInspectorMatch![1]).toContain("box-shadow: var(--shadow)");
     const stateMatch = shellCss.match(/\/\* States \*\/\s*\.state\s*\{([^}]*)\}/);

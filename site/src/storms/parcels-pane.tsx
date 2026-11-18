@@ -25,7 +25,7 @@ export function ParcelsPane({ storm, index, runTime }: { storm: Storm; index?: S
       />
     );
   }
-  return <ParcelsTable stormDate={storm.storm_date} path={path} index={index} runTime={runTime ?? index?.run_time} />;
+  return <ParcelsTable stormDate={storm.storm_date} path={path} index={index} runTime={runTime} />;
 }
 
 function ParcelsTable({

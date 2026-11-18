@@ -42,10 +42,9 @@ function cacheForGuard(guard: (value: unknown) => unknown): Map<string, Promise<
   return byUrl;
 }
 
-/** Clear all cached storm JSON responses (used on retry, run_time advance, and in tests). */
+/** Clear all cached storm JSON responses (used on retry and in tests); the run_time scope stays. */
 export function clearFetchCache(): void {
   responseCache = new WeakMap();
-  cacheScope = null;
 }
 
 /** Invalidate cached storm JSON responses whenever the active publish `run_time` scope changes. */

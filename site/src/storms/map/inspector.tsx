@@ -474,12 +474,12 @@ export function Inspector(props: InspectorProps) {
   };
   const [isMobile, setIsMobile] = useState<boolean>(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function"
-      ? window.matchMedia("(max-width: 767px)").matches
+      ? window.matchMedia("(width < 768px)").matches
       : false,
   );
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
-    const mql = window.matchMedia("(max-width: 767px)");
+    const mql = window.matchMedia("(width < 768px)");
     setIsMobile(mql.matches);
     const onChange = (event: { matches: boolean }) => setIsMobile(event.matches);
     mql.addEventListener?.("change", onChange);
@@ -496,7 +496,7 @@ export function Inspector(props: InspectorProps) {
   useEffect(() => {
     const mobile =
       typeof window !== "undefined" && typeof window.matchMedia === "function"
-        ? window.matchMedia("(max-width: 767px)").matches
+        ? window.matchMedia("(width < 768px)").matches
         : false;
     if (!mobile) panel.current?.focus();
     const onKey = (event: KeyboardEvent) => {

@@ -554,7 +554,7 @@
   }
 }
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   .inspector {
     position: fixed;
     inset: var(--bar-height) 0 0 0;

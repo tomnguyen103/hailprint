@@ -166,13 +166,13 @@ export function Compare({ index }: { index: StormsIndex }) {
                   setDateB(preset.dateB);
                 }}
               >
-                {preset.label}
+                {preset.label}{" "}
+                <span class="mono">
+                  {preset.dateA} vs {preset.dateB}
+                </span>
               </button>
             );
           })}
-          <span class="compare-presets-pair mono">
-            {dateA} vs {dateB}
-          </span>
         </div>
       ) : null}
       <div class="try-controls">
