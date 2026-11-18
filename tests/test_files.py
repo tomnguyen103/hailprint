@@ -276,3 +276,17 @@ def test_lock_heartbeat_stops_after_an_exception(tmp_path, monkeypatch):
 
     assert not path.exists()
     assert not [t for t in threading.enumerate() if t.name == "lock-heartbeat"]
+
+
+def test_lock_leaves_a_lock_another_run_replaced(tmp_path, monkeypatch):
+    path = tmp_path / "publish.lock"
+    monkeypatch.setattr(files, "HEARTBEAT_S", 0.05)
+
+    with files.lock(path):
+        path.write_text("99999999", encoding="utf-8")
+        _age(path, 500)
+        aged = path.stat().st_mtime
+        time.sleep(0.3)
+        assert path.stat().st_mtime == aged
+
+    assert path.read_text(encoding="utf-8") == "99999999"

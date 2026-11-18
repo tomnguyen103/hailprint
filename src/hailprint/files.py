@@ -148,6 +148,14 @@ def _evict_stale_lock(path: Path) -> bool:
     return True
 
 
+def _owns_lock(path: Path) -> bool:
+    """Return True when the lock file holds this run's pid."""
+    try:
+        return path.read_text(encoding="utf-8") == str(os.getpid())
+    except OSError:
+        return False
+
+
 @contextmanager
 def lock(path: Path) -> Iterator[None]:
     """Hold one run lock; a second run stops instead of a silent last-write-wins merge.
@@ -176,6 +184,8 @@ def lock(path: Path) -> Iterator[None]:
     def beat() -> None:
         # utime changes the mtime only, so a crash never leaves a half-written pid
         while not stop.wait(HEARTBEAT_S):
+            if not _owns_lock(path):
+                return
             try:
                 os.utime(path)
             except OSError:
@@ -191,7 +201,11 @@ def lock(path: Path) -> Iterator[None]:
         stop.set()
         if heartbeat.is_alive():
             heartbeat.join()
-        path.unlink(missing_ok=True)
+        if _owns_lock(path):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass  # cleanup must not mask the run error; the stale rule evicts it
 
 
 def write_bytes_atomic(data: bytes, path: Path) -> Path:
