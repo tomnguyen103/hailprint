@@ -1,11 +1,17 @@
 ---
 theme: corporate-standard-v1
 design-source: standard
-archetype: Workspace + Geo-verification Workbench
+archetype:
+  live: monitoring
+  storms: analytics
+  scorecard: analytics
+  try: analytics
+  method: editor
+  pipeline: monitoring
 shell-shape: three-pane
 density: comfortable
 stitch-project: 6567773575427554988
-stitch-design-system: assets/7416417704467347452
+stitch-design-system: 7416417704467347452
 ---
 
 # Hailprint design system
@@ -17,8 +23,8 @@ Hailprint follows Corporate Standard v1 (`app-ui-shell/references/default-theme.
 ## Type
 
 - Family: `IBM Plex Sans` for UI and reading prose. `IBM Plex Mono` for dates, IDs, coordinates, and numeric tables.
-- Weights: `400` body, `500` labels and controls, `600` headings. No `700` or above. No serif faces.
-- Scale: `12px` section labels and metadata, `13px` dense table cells, `14px` app body and controls (`16px` body on `/method/*` reading pages), `16px` pane titles, `20px` page headings, `24px` stat values.
+- Weights: `400` body, `500` labels and controls, `600` headings and `strong`. No `700` or above. No serif faces.
+- Scale: `12px` section labels and metadata, `13px` dense table cells, `14px` app body and controls (`16px` body on `/method/*` reading pages), `16px` pane and section titles, `20px` page headings, `24px` stat values.
 - Numbers in tables and stats use `tabular-nums`. Numeric columns align right.
 
 ## Corporate Standard v1 palette
@@ -46,8 +52,6 @@ Hailprint follows Corporate Standard v1 (`app-ui-shell/references/default-theme.
 | `--sidebar-active-bg` | `#EFF4FF` | `#1F242F` | active sidebar row tint |
 | `--sidebar-active-text` | `#1E3A8A` | `#C7D7FE` | active sidebar row text |
 | `--sidebar-active-edge` | `#1E3A8A` | `#A4BCFD` | 2 px active left bar |
-
-Legacy MapLibre aliases map cleanly: `--paper: var(--bg)`, `--paper-raised: var(--surface)`, `--sheet: var(--surface)`, `--sheet-muted: var(--surface-muted)`, `--rule: var(--border)`, `--ink: var(--text)`, `--ink-muted: var(--text-muted)`, `--accent: var(--primary)`, `--on-accent: var(--on-primary)`.
 
 ## Hail ramp (data only)
 
@@ -86,14 +90,14 @@ Cool hues stay distinct from the hail ramp: green for power (`--out-1`..`--out-5
 ## Shape and density
 
 - Radius: `4px` (`--radius: 4px`) on buttons, inputs, cards, panes, menus, and dialogs; full radius on status dots only.
-- Depth: `1px` `--border` edges; zero resting card shadows. Overlay shadow `0 4px 12px rgb(16 24 40 / 0.08)` applies to menus, popovers, and dialogs only.
+- Depth: `1px` `--border` edges; zero resting card or docked-pane shadows. Overlay shadow `0 4px 12px rgb(16 24 40 / 0.08)` applies to menus, popovers, dialogs, and mobile drawers only.
 - Spacing: `4px` base, `8px` grid, `24px` comfortable page padding.
 - Focus: `2px` `--primary` outline with `2px` offset on `:focus-visible`.
 
 ## Shell
 
-- Top bar (`56px`, `--bar-height`): left mobile menu trigger (`<768px`) + Hailprint mark + area title; center `360–480px` `Ctrl+K` global search trigger opening a `560–640px` search dialog; right 3-state Light / Dark / System theme icon menu (`menuitemradio`) + source link.
-- Left route sidebar (`256px` expanded / `56px` collapsed rail on `>=768px`, `Ctrl/Cmd+B` shortcut persisted in `localStorage["hailprint-sidebar"]`; `288px` slide-over drawer below `768px`): lists Live, Storms, Scorecard, Try it, Method, and Pipeline.
+- Top bar (`56px`, `--bar-height`): far-left single hamburger toggle (`>=40px` desktop, `>=44px` `<768px`, toggles desktop sidebar <-> rail and `<768px` modal drawer; never a second bottom-left collapse button) + Hailprint mark + area title; center `360–480px` (`240–420px` at `768–1023px`) `Ctrl+K` / `/` global search trigger opening a `560–640px` modal search dialog (full-screen `<768px`) with focus trap, grouped results, and recent searches; right 3-state Light / Dark / System theme icon menu (`menuitemradio`, hover+focus `"Theme"` tooltip, 1-frame no-transition swap) + source link.
+- Left route sidebar (`256px` expanded / `56px` icon rail on `>=768px`, `Ctrl/Cmd+B` persisted in `localStorage["hailprint-sidebar"]`; `288px` off-canvas modal drawer below `768px`): lists Live, Storms, Scorecard, Try it, Method, and Pipeline.
 - Sub-tabs: underline style only (`2px` `--primary` active bottom edge on a `1px` `--border` line).
 - Footer: renders inside `<main>` with the caveat line.
 

@@ -1,14 +1,13 @@
 # Design Direction — Hailprint
 
 ## Project
-- **Product**: Hailprint — Houston Metro hail swath & community impact verification workbench.
-- **Standard**: `corporate-standard-v1` (`app-ui-shell/references/default-theme.md`).
-- **Archetype**: Workspace + Geo-verification Workbench (`three-pane` default on map/storm workspaces; `table-first` on Scorecard, Try Tune/Run, Pipeline; `split-document` on Method reading pages).
-- **Primary users**: Weather researchers, insurers/risk analysts, and Harris County residents inspecting MRMS MESH swaths against SPC preliminary hail reports and impact feeds.
-- **Density**: `comfortable` (`56px` sticky single-row top bar, `256px` / `56px` collapsible left route sidebar, `4px` corner radius, crisp hairline dividers `#E4E7EC` / `#333741`).
+- **Purpose line**: Weather researchers, insurers, and Harris County residents verify MRMS MESH hail swaths against SPC preliminary hail reports and county impact feeds in a public web workbench.
+- **Archetype**: `{ live: monitoring, storms: analytics, scorecard: analytics, try: analytics, method: editor, pipeline: monitoring }` (`app-ui-shell/references/archetypes.md`).
+- **Shell shape**: `three-pane` default on map/storm workspaces (`table-first` on Scorecard, Try Tune/Run, Pipeline; `canvas` on Live and Compare; `split-document` on Method reading pages).
+- **Density**: `comfortable` (`56px` sticky single-row top bar, `256px` / `56px` collapsible left route sidebar, `4px` radius, `1px` hairlines `#E4E7EC` / `#333741`).
 
 ## References
-- Shipped precedent inside Hailprint: [site/src/storms/workspace.tsx](../../site/src/storms/workspace.tsx), [site/src/scorecard/scorecard.tsx](../../site/src/scorecard/scorecard.tsx), [site/src/method/method.tsx](../../site/src/method/method.tsx).
+- Shipped precedent inside Hailprint (`opened` via local preview): [site/src/storms/workspace.tsx](../../site/src/storms/workspace.tsx), [site/src/scorecard/scorecard.tsx](../../site/src/scorecard/scorecard.tsx), [site/src/method/method.tsx](../../site/src/method/method.tsx).
 - `designmd`: `not opened: search_design_kits returned [] for enterprise query; governed directly by Corporate Standard v1`.
 - Structural standard: `app-ui-shell` (`default-theme.md`, `ui-routing.md`, `search.md`, `theme-control.md`, `archetypes.md`).
 
@@ -16,9 +15,9 @@
 - **One question per route**: Headline states the single question; zero `<p>` subtitles beneath headings.
 - **Group ceiling**: `<=3` visible component groups inside `<main>`.
 - **Primary CTA ceiling**: `<=1` primary button (`--primary` `#1E3A8A` fill) per route.
-- **Row field ceiling**: `<=4` fields per table/list row; secondary 2x2 contingency counts and file provenance live in on-demand `PeekDrawer` or `ReceiptChip` popovers.
+- **Row field ceiling**: `<=4` primary fields per table/list row; secondary 2x2 contingency counts and file provenance live in on-demand `PeekDrawer` or `ReceiptChip` popovers.
 - **Above-the-fold prose**: `<120` words at `1280px` outside table/list cells (`16px` measure `<=680px` on `/method/*` reading pages).
-- **State completeness**: Every data region renders explicit loading skeleton/indicator, populated content, clean empty finding, and retryable error state.
+- **State completeness**: Every data region renders loading skeleton/indicator, populated content, centered empty finding with recovery action, and retryable error state.
 
 ## Copy
 - **Standard**: ASD-STE100 — active voice, present or imperative tense, zero `-ing` verbs in UI prose/buttons.
@@ -27,13 +26,14 @@
 
 ## Motion budget
 - Only fast state transitions (`120–160 ms` cubic-bezier `[0.2, 0, 0, 1]`) on sidebar collapse, drawer open/close, and search dialog.
+- Theme swap disables CSS transitions for one frame (`data-theme-swap`) so light/dark changes never flash.
 - Honor `prefers-reduced-motion: reduce` globally by collapsing durations to `0 ms`.
-- Zero bounce/spring easing, zero continuous idle pulses or floating animations.
 
 ## Avoid
-- Ban `Source Serif 4` and all decorative serifs (`IBM Plex Sans` + `IBM Plex Mono` only).
+- Ban `Source Serif 4` and all decorative serifs (`IBM Plex Sans` + `IBM Plex Mono` only); ban font weights `>=700`.
 - Ban warm parchment/sepia chrome or custom OKLCH background overrides that depart from `#FFFFFF` / `#0C111D`.
-- Ban eyebrows, numbered step pills (`01`/`02`), glow halos, left accent stripes on cards (`4px border-left`), resting shadows on cards/panes, nested bordered boxes (`maplibregl-ctrl-group` border inside bordered `.map-frame`, or bordered cards inside `.stamp` / `.live-stats`), and muted `<p>` subtitles right beneath headings.
+- Ban a second bottom-left sidebar collapse button; ONE top-left hamburger button in the top bar toggles desktop rail (`>=768px`) and mobile drawer (`<768px`).
+- Ban eyebrows, numbered step pills (`01`/`02`), glow halos, `4px` left accent stripes on cards, resting shadows on cards/docked inspector panes, nested bordered boxes, and muted `<p>` subtitles right beneath headings.
 - Ban `<40px` interactive targets on desktop (`<44px` on `<768px`) including checkboxes, radios, chips, and icon buttons.
-- Ban buttons exceeding `3` words (e.g., `"1.25 in half dollar"`, `"pairs.json, pooled over..."`, `"2024-05-28 vs 2023-06-23 (...)"`).
+- Ban buttons exceeding `3` words and headings exceeding `5` words.
 - Ban unapproved external hosts in `vercel.json` CSP or browser direct calls replacing `site/data/live/`.
