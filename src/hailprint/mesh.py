@@ -24,6 +24,8 @@ UNITS_SOURCE = "NSSL MRMS GRIB2 table; the GRIB2 file carries no unit string"
 MAX_DECODE_BYTES = 64 * 1024 * 1024
 MAX_GRID_DIM = 20_000
 MAX_GRID_CELLS = 50_000_000
+_MAX_FAIL_KEYS = 5
+_MAX_DETAIL_CHARS = 160
 
 
 def key_for(storm_date: date) -> str:
@@ -84,7 +86,7 @@ def list_keys(client, product: str, day: date) -> list[str]:
 def download_many(keys: list[str], raw_dir: Path, client=None, workers: int = 8) -> list[Path]:
     """Fetch every key into raw_dir in a bounded pool; skip files present by name.
 
-    Every failed key is collected, and one RuntimeError names them all after the pool drains.
+    Collect failed keys and raise one RuntimeError naming the count, keys, and root cause.
     """
     paths = [local_path(k, raw_dir) for k in keys]
     # a dict: a repeated key downloads once
@@ -96,9 +98,20 @@ def download_many(keys: list[str], raw_dir: Path, client=None, workers: int = 8)
         p.parent.mkdir(parents=True, exist_ok=True)
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {k: pool.submit(client.download_file, BUCKET, k, str(p)) for k, p in todo.items()}
-    failed = [k for k, f in futures.items() if f.exception() is not None]
-    if failed:
-        raise RuntimeError(f"missing MESH file(s): {', '.join(failed)}")
+    failures = [(k, exc) for k, f in futures.items() if (exc := f.exception()) is not None]
+    if failures:
+        first_exc = failures[0][1]
+        shown = ", ".join(k for k, _ in failures[:_MAX_FAIL_KEYS])
+        extra = (
+            f", +{len(failures) - _MAX_FAIL_KEYS} more" if len(failures) > _MAX_FAIL_KEYS else ""
+        )
+        detail = str(first_exc)
+        if len(detail) > _MAX_DETAIL_CHARS:
+            detail = f"{detail[: _MAX_DETAIL_CHARS - 3]}..."
+        cause = f"{type(first_exc).__name__}: {detail}" if detail else type(first_exc).__name__
+        raise RuntimeError(
+            f"missing MESH file(s) ({len(failures)} failed): {shown}{extra} ({cause})"
+        ) from first_exc
     return paths
 
 

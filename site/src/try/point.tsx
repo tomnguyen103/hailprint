@@ -1,5 +1,5 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { useEffect, useId, useMemo, useRef, useState } from "preact/hooks";
+import { useEffect, useId, useMemo, useState } from "preact/hooks";
 import { METRO_BBOX, contains, fetchCounties, harrisFeature } from "../county";
 import { DataError, PHENOMENA, type StormsIndex } from "../data/types";
 import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../format";
@@ -16,7 +16,7 @@ import { useLoad } from "../state/load";
 import { METRO_PRESETS, setPinCounties, usePin } from "../state/pin";
 import { useSwathsAll } from "../state/swaths-all";
 import { useTheme } from "../state/theme";
-import type { MapHandle } from "../storms/map/create-map";
+import { useMap } from "../storms/map/use-map";
 import "../styles/map.css";
 import { pointCsvOf } from "./csv";
 import {
@@ -133,11 +133,15 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const [previewDate, setPreviewDate] = useState<string>(() => index.storms[0]?.storm_date ?? "");
   const [filterMode, setFilterMode] = useState<"all" | "active">("all");
 
-  const container = useRef<HTMLDivElement>(null);
-  const handle = useRef<MapHandle | null>(null);
-  const [ready, setReady] = useState(false);
-  const [mapError, setMapError] = useState<DataError | null>(null);
-  const [attempt, setAttempt] = useState(0);
+  const { container, handle, ready, error: mapError, retry: retryMap } = useMap(theme, {
+    onReady: (next) => {
+      next.map.on("click", (event) => {
+        const { lng, lat } = event.lngLat;
+        if (!contains(METRO_BBOX, [lng, lat])) return;
+        setPin([lng, lat], "map");
+      });
+    },
+  });
   const hintId = useId();
   const latId = useId();
   const lonId = useId();
@@ -153,39 +157,6 @@ export function PointCheck({ index }: { index: StormsIndex }) {
       setInvalid(false);
     }
   }, [pin?.lngLat[0], pin?.lngLat[1]]);
-
-  useEffect(() => {
-    const node = container.current;
-    if (!node) return;
-    let live = true;
-    let created: MapHandle | null = null;
-    setMapError(null);
-    import("../storms/map/create-map")
-      .then(async ({ createMap }) => {
-        const next = await createMap(node, theme);
-        if (!live) {
-          next.destroy();
-          return;
-        }
-        created = next;
-        handle.current = next;
-        next.map.on("click", (event) => {
-          const { lng, lat } = event.lngLat;
-          if (!contains(METRO_BBOX, [lng, lat])) return;
-          setPin([lng, lat], "map");
-        });
-        setReady(true);
-      })
-      .catch((error: unknown) => {
-        if (live) setMapError(new DataError("map", String(error)));
-      });
-    return () => {
-      live = false;
-      created?.destroy();
-      handle.current = null;
-      setReady(false);
-    };
-  }, [attempt]);
 
   const swathData = swaths.status === "ready" ? swaths.data : null;
   const reportsData = reportsAll.status === "ready" ? reportsAll.data : null;
@@ -217,10 +188,6 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     handle.current.setPoint(activePoint);
     if (activePoint) handle.current.flyTo(activePoint, POINT_ZOOM);
   }, [ready, activePoint]);
-
-  useEffect(() => {
-    if (ready) handle.current?.setTheme(theme);
-  }, [ready, theme]);
 
   const pinnedFips = useMemo(
     () => (activePoint !== null ? countyAt(activePoint, outlines) : null),
@@ -583,7 +550,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
         />
         {mapError ? (
           <div class="map-overlay">
-            <ErrorState error={mapError} onRetry={() => setAttempt((n) => n + 1)} />
+            <ErrorState error={mapError} onRetry={retryMap} />
           </div>
         ) : null}
       </div>
