@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { h, render } from "preact";
+import { act } from "preact/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { read, resolve } from "./theme";
 
 describe("resolve", () => {
@@ -28,5 +30,78 @@ describe("read", () => {
   it("returns the stored selection", () => {
     expect(read({ getItem: () => "dark" })).toBe("dark");
     expect(read({ getItem: () => "nope" })).toBe("system");
+  });
+});
+
+describe("state/theme preference store (US-03.5, US-04.1)", () => {
+  afterEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+  });
+
+  it("exports readThemePreference, setThemePreference, and updates live on matchMedia changes only in system mode", async () => {
+    let mediaMatches = false;
+    const mediaListeners: Array<(e: { matches: boolean }) => void> = [];
+    const store = new Map<string, string>();
+    const root = { dataset: {} as Record<string, string>, style: { colorScheme: "" } };
+
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+    });
+    vi.stubGlobal("document", {
+      documentElement: root,
+      createElement: () => ({}),
+      createElementNS: () => ({}),
+      createTextNode: () => ({}),
+    });
+    vi.stubGlobal("window", {
+      matchMedia: () => ({
+        get matches() {
+          return mediaMatches;
+        },
+        addEventListener: (_: string, fn: (e: { matches: boolean }) => void) => {
+          mediaListeners.push(fn);
+        },
+      }),
+    });
+
+    const mod = await import("./state/theme");
+    expect(typeof (mod as Record<string, unknown>)["readThemePreference"]).toBe("function");
+    expect(typeof (mod as Record<string, unknown>)["setThemePreference"]).toBe("function");
+
+    const readPref = (mod as unknown as { readThemePreference: () => string }).readThemePreference;
+    const setPref = (mod as unknown as { setThemePreference: (v: "light" | "dark" | "system") => void }).setThemePreference;
+    expect(readPref()).toBe("system");
+
+    setPref("dark");
+    expect(store.get("theme")).toBe("dark");
+    expect(root.dataset["theme"]).toBe("dark");
+    expect(root.style.colorScheme).toBe("dark");
+
+    // In explicit dark mode, OS scheme flip to light must not overwrite data-theme
+    mediaMatches = false;
+    mediaListeners.forEach((fn) => fn({ matches: false }));
+    expect(root.dataset["theme"]).toBe("dark");
+
+    // Returning to system mode follows OS scheme live
+    setPref("system");
+    expect(store.get("theme")).toBe("system");
+    expect(root.dataset["theme"]).toBe("light");
+    mediaMatches = true;
+    mediaListeners.forEach((fn) => fn({ matches: true }));
+    expect(root.dataset["theme"]).toBe("dark");
+
+    let latest: ReturnType<typeof mod.useTheme> | null = null;
+    function Probe() {
+      latest = mod.useTheme();
+      return null;
+    }
+    const host = { nodeType: 1, childNodes: [], firstChild: null, appendChild() {}, insertBefore() {}, removeChild() {} } as unknown as HTMLElement;
+    await act(() => render(h(Probe, null), host));
+    expect(latest!.pref).toBe("system");
+    expect(latest!.resolved).toBe("dark");
   });
 });

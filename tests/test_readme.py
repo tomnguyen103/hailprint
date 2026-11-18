@@ -63,6 +63,7 @@ def test_vercel_json_serves_security_headers():
     csp = headers.get("Content-Security-Policy", "")
     assert "frame-ancestors 'none'" in csp
     assert "object-src 'none'" in csp
+    assert "script-src 'self' blob:;" in csp
     assert "https://*.supabase.co" in csp
     assert "blob:" in csp
     assert "img-src 'self' data: blob: https://protomaps.github.io;" in csp
@@ -76,6 +77,19 @@ def test_vercel_json_serves_security_headers():
         "https://api.ioda.inetintel.cc.gatech.edu",
     ):
         assert retired not in csp, retired
+
+
+def test_corporate_chassis_csp_fonts_and_design_frontmatter():
+    index_html = (paths.ROOT / "site" / "index.html").read_text(encoding="utf-8")
+    pkg = json.loads((paths.ROOT / "site" / "package.json").read_text(encoding="utf-8"))
+    deps = pkg.get("dependencies", {})
+    assert "@fontsource-variable/source-serif-4" not in deps
+    assert "theme: corporate-standard-v1" in DESIGN
+    assert "stitch-project: 6567773575427554988" in DESIGN
+    assert '<script src="/theme-init.js"></script>' in index_html
+    assert (paths.ROOT / "site" / "public" / "theme-init.js").exists()
+    assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", index_html)
+    assert "script-src 'self' blob:" in SITE_README
 
 
 def test_getting_started_names_every_cli_command_and_stays_clean():

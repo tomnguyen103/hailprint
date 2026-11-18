@@ -198,9 +198,10 @@ describe("Stamp copy feedback & UI polish contracts (US-16.1, US-16.2, US-16.3)"
     const pipelineCss = read("../styles/pipeline.css");
     const liveMapTsx = read("./map/live-map.tsx");
 
-    // Bottom bar active item has 2px top indicator and weight 600
-    expect(shellCss).toContain('.bottom-bar a[aria-current="page"]::before');
-    expect(shellCss).toContain("font-weight: 600");
+    // Route sidebar active item has 2px left edge indicator and weight 500/600; bottom bar is removed
+    expect(shellCss).not.toContain(".bottom-bar");
+    expect(shellCss).toContain('.route-sidebar a[aria-current="page"]');
+    expect(shellCss).toContain("--sidebar-active-edge");
     // Sub-tabs min-height 40px and forced-colors
     expect(shellCss).toContain("min-height: 40px");
     expect(shellCss).toContain("forced-colors: active");

@@ -110,6 +110,49 @@ export function SunIcon(p: Props) {
   );
 }
 
+export function MonitorIcon(p: Props) {
+  return (
+    <Svg {...p}>
+      <rect x="3" y="4.5" width="18" height="12" rx="1.5" />
+      <path d="M8.5 20h7M12 16.5V20" />
+    </Svg>
+  );
+}
+
+export function CheckIcon(p: Props) {
+  return (
+    <Svg {...p}>
+      <path d="m5 12.5 4.5 4.5L19 7.5" />
+    </Svg>
+  );
+}
+
+export function SearchIcon(p: Props) {
+  return (
+    <Svg {...p}>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4.5 4.5" />
+    </Svg>
+  );
+}
+
+export function MenuIcon(p: Props) {
+  return (
+    <Svg {...p}>
+      <path d="M4 6.5h16M4 12h16M4 17.5h16" />
+    </Svg>
+  );
+}
+
+export function SidebarToggleIcon(p: Props) {
+  return (
+    <Svg {...p}>
+      <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
+      <path d="M9.5 4.5v15" />
+    </Svg>
+  );
+}
+
 export function CodeIcon(p: Props) {
   return (
     <Svg {...p}>

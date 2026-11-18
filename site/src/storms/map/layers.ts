@@ -181,8 +181,14 @@ export function oklchToHex(value: string): string {
 }
 
 /** A design token's current value, read from the document so the theme drives it. */
-export function token(name: string): string {
-  return oklchToHex(getComputedStyle(document.documentElement).getPropertyValue(name).trim());
+export function token(name: string, depth = 0): string {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  const varMatch = /^var\(\s*(--[^,\s)]+)\s*(?:,\s*([^)]+))?\)$/.exec(raw);
+  if (varMatch && depth < 4) {
+    const resolved = token(varMatch[1]!, depth + 1);
+    return resolved || (varMatch[2] ? oklchToHex(varMatch[2].trim()) : "");
+  }
+  return oklchToHex(raw);
 }
 
 export function fillLayerId(thresholdMm: number): string {

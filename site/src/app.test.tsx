@@ -640,6 +640,42 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     const topBarTree = TopBar({ active: "live" });
     const topBarNodes = walk(topBarTree);
     expect(topBarNodes.filter((n) => n.type === ThemeToggle)).toHaveLength(1);
+
+    // Real Layout renders TopBar, RouteSidebar, and puts <Footer /> inside <main> so .shell keeps <= 2 resting children
+    const { Layout: RealLayout } = await vi.importActual<typeof import("./shell/layout")>("./shell/layout");
+    const layoutHost = makeEl("div");
+    vi.stubGlobal("document", {
+      activeElement: null,
+      createElement: (tag: string) => makeEl(tag),
+      createElementNS: (_ns: string, tag: string) => makeEl(tag),
+      createTextNode: (text: string) => makeEl("#text", text),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    });
+    vi.stubGlobal("window", {
+      matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
+      location: { pathname: "/live" },
+    });
+    try {
+      await act(() =>
+        render(
+          h(RealLayout, { active: "live", children: h("div", { id: "probe" }) }),
+          layoutHost as unknown as HTMLElement,
+        ),
+      );
+      const shellNode = layoutHost.childNodes.find((n) => n["class"] === "shell");
+      expect(shellNode).toBeDefined();
+      const shellChildren = shellNode!.childNodes;
+      expect(shellChildren.some((n) => n.tagName === "FOOTER")).toBe(false);
+      const mainEl = shellChildren.find((n) => n.tagName === "MAIN");
+      expect(mainEl).toBeDefined();
+      const hasFooterInsideMain = (node: FakeDomNode): boolean =>
+        node.tagName === "FOOTER" || node.childNodes.some(hasFooterInsideMain);
+      expect(hasFooterInsideMain(mainEl!)).toBe(true);
+    } finally {
+      await act(() => render(null, layoutHost as unknown as HTMLElement));
+      vi.unstubAllGlobals();
+    }
   });
 });
 
