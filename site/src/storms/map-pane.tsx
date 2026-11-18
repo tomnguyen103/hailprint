@@ -30,6 +30,7 @@ const PIN_ZOOM = 11;
 
 interface Props {
   storm: Storm;
+  runTime?: string;
   reports: Load<ReportsFile> & { retry: () => void };
   /** The power file load; the workspace owns it because its Harris peak sets the default step. */
   power: Load<PowerFile | null>;
@@ -49,11 +50,12 @@ export function isPickForStorm(pick: DatedPick | null, stormDate: string): pick 
   return pick !== null && pick.date === stormDate;
 }
 
-export function MapPane({ storm, reports, power, internet, step, onStep, fips, onCounty }: Props) {
-  const swath = useLoad(storm.files.swath, () => fetchJson(storm.files.swath, guardSwath));
+export function MapPane({ storm, runTime, reports, power, internet, step, onStep, fips, onCounty }: Props) {
+  const keyOf = (file: string) => (runTime ? `${runTime}:${file}` : file);
+  const swath = useLoad(keyOf(storm.files.swath), () => fetchJson(storm.files.swath, guardSwath));
   const metro = useLoad("counties", fetchCounties);
   const warningsFile = storm.files.warnings;
-  const warnings = useLoad<WarningsFile | null>(warningsFile ?? "warnings:none", () =>
+  const warnings = useLoad<WarningsFile | null>(warningsFile === null ? "warnings:none" : keyOf(warningsFile), () =>
     warningsFile === null ? Promise.resolve(null) : fetchJson(warningsFile, guardWarnings),
   );
   const { resolved: theme } = useTheme();

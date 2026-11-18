@@ -18,10 +18,12 @@ function readDesktopNav(): boolean {
 /** Corporate Standard v1 shell: skip link, 56px top bar with single hamburger toggle, collapsible route sidebar, main with footer inside. */
 export function Layout({
   active,
+  routePath,
   storms,
   children,
 }: {
   active: Area | null;
+  routePath?: string;
   storms?: readonly Storm[];
   children: ComponentChildren;
 }) {
@@ -44,7 +46,7 @@ export function Layout({
 
   useEffect(() => {
     setMobileNavOpen(false);
-  }, [active]);
+  }, [active, routePath]);
 
   const onToggleNav = useCallback(() => {
     if (isDesktop) toggle();

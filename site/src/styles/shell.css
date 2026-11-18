@@ -62,6 +62,10 @@
   transition: background-color var(--motion), border-color var(--motion);
 }
 
+.top-bar:has(.search-backdrop) {
+  z-index: 60;
+}
+
 .top-bar-left {
   display: flex;
   align-items: center;
@@ -209,7 +213,7 @@
   font: 400 14px/1.4 var(--font-sans);
 }
 
-.search-input:focus {
+.search-input:focus:not(:focus-visible) {
   outline: none;
 }
 
@@ -795,7 +799,7 @@
 
 /* Mobile (<768px): 288px off-canvas drawer, icon search trigger, 44px hit targets */
 
-@media (max-width: 767px) {
+@media (width < 768px) {
   .shell,
   .shell[data-sidebar-collapsed="true"] {
     grid-template-columns: minmax(0, 1fr);

@@ -631,5 +631,105 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
     expect(getPinState().pin?.label).toBe("Cypress (77433)");
     expect(domText(host)).toContain("Cypress (77433)");
   });
+
+  it("exports only visibleRows to CSV when filtered to Near pin", async () => {
+    const quietSwath: SwathFile = {
+      type: "FeatureCollection",
+      receipt: { ...receipt, storm_date: "2024-05-16" },
+      features: [],
+    };
+    const quietReports: ReportsFile = {
+      type: "FeatureCollection",
+      receipt: { ...receipt, storm_date: "2024-05-16" },
+      features: [],
+    };
+    const quietWarnings: WarningsFile = {
+      type: "FeatureCollection",
+      receipt: { ...receipt, storm_date: "2024-05-16" },
+      features: [],
+    };
+    const quietStorm: Storm = {
+      ...stormRow,
+      storm_date: "2024-05-16",
+      files: {
+        swath: "storms/2024-05-16/swath.geojson",
+        reports: "storms/2024-05-16/reports.geojson",
+        pairs: "storms/2024-05-16/pairs.json",
+        zip_counts: null,
+        power: null,
+        internet: null,
+        warnings: "storms/2024-05-16/warnings.geojson",
+      },
+    };
+    const twoStormIndex: StormsIndex = {
+      ...indexFixture,
+      storms: [stormRow, quietStorm],
+    };
+
+    setFetch(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/counties.geojson")) return new Response(JSON.stringify(countiesFixture), { status: 200 });
+      if (url.endsWith("2024-05-16/swath.geojson")) return new Response(JSON.stringify(quietSwath), { status: 200 });
+      if (url.endsWith("2024-05-16/reports.geojson")) return new Response(JSON.stringify(quietReports), { status: 200 });
+      if (url.endsWith("2024-05-16/warnings.geojson")) return new Response(JSON.stringify(quietWarnings), { status: 200 });
+      if (url.endsWith("swath.geojson")) return new Response(JSON.stringify(swathFixture), { status: 200 });
+      if (url.endsWith("reports.geojson")) return new Response(JSON.stringify(reportsFixture), { status: 200 });
+      if (url.endsWith("warnings.geojson")) return new Response(JSON.stringify(warningsFixture), { status: 200 });
+      if (url.endsWith("power.json")) return new Response(JSON.stringify(powerFixture), { status: 200 });
+      if (url.endsWith("internet.json")) return new Response(JSON.stringify(internetFixture), { status: 200 });
+      return new Response("not found", { status: 404 });
+    });
+
+    const blobs: Blob[] = [];
+    const origCreateObjectURL = URL.createObjectURL;
+    const origRevokeObjectURL = URL.revokeObjectURL;
+    URL.createObjectURL = (blob: Blob) => {
+      blobs.push(blob);
+      return "blob:test";
+    };
+    URL.revokeObjectURL = () => {};
+    const origCreateElement = document.createElement;
+    vi.stubGlobal("document", {
+      createElement: (tag: string) => {
+        const el = makeFakeElement(tag);
+        el["click"] = () => {};
+        return el;
+      },
+      createElementNS: (_ns: string, tag: string) => makeFakeElement(tag),
+      createTextNode: (text: string) => makeFakeElement("#text", text),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    });
+
+    try {
+      setPresetPin("memorial");
+      const host = makeFakeElement("div");
+      await act(() => render(h(PointCheck, { index: twoStormIndex }), host as unknown as HTMLElement));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(50)));
+      await act(() => render(h(PointCheck, { index: twoStormIndex }), host as unknown as HTMLElement));
+
+      const nearPinBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && domText(n).includes("Near pin"))[0]!;
+      await act(() => {
+        (nearPinBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+      });
+
+      const downloadBtn = findDomNodes(
+        host,
+        (n) => n.tagName === "BUTTON" && domText(n).trim() === "Download CSV",
+      )[0]!;
+      await act(() => {
+        (downloadBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+      });
+
+      expect(blobs).toHaveLength(1);
+      const csvText = await blobs[0]!.text();
+      expect(csvText).toContain("2024-05-28");
+      expect(csvText).not.toContain("2024-05-16");
+    } finally {
+      URL.createObjectURL = origCreateObjectURL;
+      URL.revokeObjectURL = origRevokeObjectURL;
+      void origCreateElement;
+    }
+  });
 });
 

@@ -15,7 +15,7 @@ import { crossStormZipLedger, zipRows } from "./select";
 const FILE = "zip-counts.json";
 
 /** Render the storm parcel exposure summary, threshold selector, and filterable ZIP table. */
-export function ParcelsPane({ storm, index }: { storm: Storm; index?: StormsIndex }) {
+export function ParcelsPane({ storm, index, runTime }: { storm: Storm; index?: StormsIndex; runTime?: string }) {
   const path = storm.files.zip_counts;
   if (path === null) {
     return (
@@ -25,19 +25,22 @@ export function ParcelsPane({ storm, index }: { storm: Storm; index?: StormsInde
       />
     );
   }
-  return <ParcelsTable stormDate={storm.storm_date} path={path} index={index} />;
+  return <ParcelsTable stormDate={storm.storm_date} path={path} index={index} runTime={runTime ?? index?.run_time} />;
 }
 
 function ParcelsTable({
   stormDate,
   path,
   index,
+  runTime,
 }: {
   stormDate: string;
   path: string;
   index?: StormsIndex;
+  runTime?: string;
 }) {
-  const zip = useLoad(path, () => fetchJson(path, guardZipCounts));
+  const zipKey = runTime ? `${runTime}:${path}` : path;
+  const zip = useLoad(zipKey, () => fetchJson(path, guardZipCounts));
   const [selected, setSelected] = useState(RULER[0]!.threshold_mm);
   const [query, setQuery] = useState("");
   const [pickedZip, setPickedZip] = useState<string | null>(null);

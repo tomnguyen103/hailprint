@@ -170,6 +170,9 @@ export function Compare({ index }: { index: StormsIndex }) {
               </button>
             );
           })}
+          <span class="compare-presets-pair mono">
+            {dateA} vs {dateB}
+          </span>
         </div>
       ) : null}
       <div class="try-controls">

@@ -47,6 +47,7 @@ export function FileItem({ name, path, receipt }: { name: string; path: string |
 
 interface Props {
   storm: Storm;
+  runTime?: string;
   /** Optional reports file load from the workspace; fetched internally when omitted. */
   reports?: Load<ReportsFile> & { retry: () => void };
   /** The power file load from the workspace, which also feeds the map. */
@@ -58,22 +59,23 @@ interface Props {
 }
 
 /** Render the per-file provenance and data receipt pane for a storm date. */
-export function DataPane({ storm, reports: reportsProp, power, internet, fips, onCounty }: Props) {
+export function DataPane({ storm, runTime, reports: reportsProp, power, internet, fips, onCounty }: Props) {
   const [localFips, setLocalFips] = useState(fips);
   const activeFips = onCounty ? fips : localFips;
   const handleCounty = onCounty ?? setLocalFips;
-  const swath = useLoad<SwathFile>(`data:${storm.files.swath}`, () => fetchJson(storm.files.swath, guardSwath));
-  const pairs = useLoad(`data:${storm.files.pairs}`, () => fetchJson(storm.files.pairs, guardPairs));
+  const keyOf = (file: string) => (runTime ? `data:${runTime}:${file}` : `data:${file}`);
+  const swath = useLoad<SwathFile>(keyOf(storm.files.swath), () => fetchJson(storm.files.swath, guardSwath));
+  const pairs = useLoad(keyOf(storm.files.pairs), () => fetchJson(storm.files.pairs, guardPairs));
   const warningsFile = storm.files.warnings;
-  const warnings = useLoad<WarningsFile | null>(`data:${warningsFile ?? "warnings:none"}`, () =>
+  const warnings = useLoad<WarningsFile | null>(warningsFile === null ? "data:warnings:none" : keyOf(warningsFile), () =>
     warningsFile === null ? Promise.resolve(null) : fetchJson(warningsFile, guardWarnings),
   );
   const zipFile = storm.files.zip_counts;
-  const zipCounts = useLoad<ZipCounts | null>(`data:${zipFile ?? "zips:none"}`, () =>
+  const zipCounts = useLoad<ZipCounts | null>(zipFile === null ? "data:zips:none" : keyOf(zipFile), () =>
     zipFile === null ? Promise.resolve(null) : fetchJson(zipFile, guardZipCounts),
   );
   const internalReports = useLoad<ReportsFile | null>(
-    reportsProp ? "data:reports:external" : `data:${storm.files.reports}`,
+    reportsProp ? "data:reports:external" : keyOf(storm.files.reports),
     () => (reportsProp ? Promise.resolve(null) : fetchJson(storm.files.reports, guardReports)),
   );
   const reports = reportsProp ?? internalReports;

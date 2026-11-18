@@ -340,4 +340,40 @@ describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)"
 
     await act(() => render(null, host as unknown as HTMLElement));
   });
+
+  it("closes the mobile drawer when routePath changes within the same area", async () => {
+    desktopMatches = false;
+    const host = makeFakeElement("div");
+    await act(() =>
+      render(
+        h(Layout, {
+          active: "storms",
+          routePath: "/storms/2024-05-28/map",
+          children: h("div", null, "Body"),
+        }),
+        host as unknown as HTMLElement,
+      ),
+    );
+
+    const header = findDomNodes(host, (n) => n.tagName === "HEADER")[0]!;
+    const hamburger = findDomNodes(header, (n) => n.tagName === "BUTTON" && n["aria-controls"] === "route-sidebar")[0]!;
+    await act(() => {
+      (hamburger["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    expect(findDomNodes(host, (n) => n.tagName === "ASIDE")[0]!["data-mobile-open"]).toBe(true);
+
+    await act(() =>
+      render(
+        h(Layout, {
+          active: "storms",
+          routePath: "/storms/2024-05-16/map",
+          children: h("div", null, "Body"),
+        }),
+        host as unknown as HTMLElement,
+      ),
+    );
+    expect(findDomNodes(host, (n) => n.tagName === "ASIDE")[0]!["data-mobile-open"]).toBe(false);
+
+    await act(() => render(null, host as unknown as HTMLElement));
+  });
 });

@@ -51,7 +51,7 @@ export function clearFetchCache(): void {
 /** Invalidate cached storm JSON responses whenever the active publish `run_time` scope changes. */
 export function setFetchCacheScope(scope: string): void {
   if (!scope) return;
-  if (cacheScope !== null && cacheScope !== scope) {
+  if (cacheScope !== scope) {
     responseCache = new WeakMap();
   }
   cacheScope = scope;

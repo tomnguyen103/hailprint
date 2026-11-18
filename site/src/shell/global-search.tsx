@@ -121,6 +121,7 @@ export function GlobalSearch({ storms = EMPTY_STORMS }: { storms?: readonly Stor
   };
 
   const onInputKeyDown = (event: KeyboardEvent) => {
+    if (event.isComposing) return;
     if (results.length === 0) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -137,6 +138,11 @@ export function GlobalSearch({ storms = EMPTY_STORMS }: { storms?: readonly Stor
 
   const activeItem = results[activeIdx];
   const activeOptionId = activeItem ? `${listboxId}-${activeItem.id}` : undefined;
+
+  useEffect(() => {
+    if (!open || !activeOptionId) return;
+    document.getElementById?.(activeOptionId)?.scrollIntoView?.({ block: "nearest" });
+  }, [open, activeOptionId]);
 
   return (
     <div class="global-search">

@@ -18,6 +18,7 @@ interface FakeDomNode {
   namespaceURI: string;
   style: Record<string, unknown>;
   focus: () => void;
+  appendChild: (child: FakeDomNode) => FakeDomNode;
   contains: (target: unknown) => boolean;
   querySelectorAll: (selector?: string) => FakeDomNode[];
   [key: string]: unknown;
@@ -96,7 +97,15 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
       if (target === el) return true;
       return el.childNodes.some((c) => typeof c.contains === "function" && c.contains(target));
     },
-    closest(): FakeDomNode | null {
+    closest(selector?: string): FakeDomNode | null {
+      if (!selector) return null;
+      const roles = Array.from(selector.matchAll(/\[role="([^"]+)"\]/g), (m) => m[1]);
+      if (roles.length === 0) return null;
+      let cur: FakeDomNode | null = el;
+      while (cur) {
+        if (typeof cur["role"] === "string" && roles.includes(cur["role"])) return cur;
+        cur = cur.parentNode;
+      }
       return null;
     },
     querySelectorAll(): FakeDomNode[] {
@@ -353,5 +362,34 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
     const mobileBlock = css.slice(css.indexOf("@media (max-width: 767px)"));
     expect(mobileBlock).toContain("bottom: 0;");
     expect(mobileBlock).not.toContain("bottom: 60px");
+  });
+
+  it("yields Escape when focus is inside another dialog or menu overlay", async () => {
+    const host = makeFakeElement("div");
+    await act(() =>
+      render(h(ReceiptChip, { receipt, file: "pairs.json" }), host as unknown as HTMLElement),
+    );
+    const chipBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && n["class"] === "chip mono")[0]!;
+    await act(() => {
+      (chipBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    expect(getActiveReceiptChipId()).not.toBeNull();
+
+    // Move focus into a separate role="menu" element outside the chip and popover
+    const externalMenu = makeFakeElement("div");
+    externalMenu["role"] = "menu";
+    const menuItem = makeFakeElement("button", "Dark");
+    externalMenu.appendChild(menuItem);
+    menuItem.focus();
+
+    let stoppedAndPrevented = false;
+    await act(() => {
+      stoppedAndPrevented = dispatchDocumentKey("Escape");
+    });
+    expect(stoppedAndPrevented).toBe(false);
+    expect(getActiveReceiptChipId()).not.toBeNull();
+    expect(activeEl).toBe(menuItem);
+
+    await act(() => render(null, host as unknown as HTMLElement));
   });
 });

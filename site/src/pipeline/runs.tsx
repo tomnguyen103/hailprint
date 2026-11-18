@@ -12,7 +12,7 @@ export function Runs({ runs }: { runs: PipelineRun[] }) {
     return (
       <EmptyState
         sentence="No publish runs in log."
-        link={{ href: href({ area: "try", tool: "run" }), label: "Open CLI commands" }}
+        link={{ href: href({ area: "method", page: "data" }), label: "Read data method" }}
       />
     );
   }

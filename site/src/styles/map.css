@@ -463,6 +463,14 @@
   height: 40px;
 }
 
+.map-frame .maplibregl-ctrl-attrib.maplibregl-compact {
+  min-height: 40px;
+}
+
+.map-frame .maplibregl-ctrl-attrib.maplibregl-compact-show {
+  padding-right: 44px;
+}
+
 /* MapLibre ships black SVG icons; the dark tokens invert them */
 .map-frame .maplibregl-ctrl button .maplibregl-ctrl-icon {
   filter: var(--ctrl-icon-filter);
@@ -582,6 +590,16 @@
   .map-frame .maplibregl-ctrl-attrib-button {
     width: 44px;
     height: 44px;
+  }
+}
+
+@media (width < 768px) {
+  .map-frame .maplibregl-ctrl-attrib.maplibregl-compact {
+    min-height: 44px;
+  }
+
+  .map-frame .maplibregl-ctrl-attrib.maplibregl-compact-show {
+    padding-right: 48px;
   }
 }
 

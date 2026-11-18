@@ -495,4 +495,33 @@ describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)"
 
     await act(() => render(null, host as unknown as HTMLElement));
   });
+
+  it("ignores Enter during IME composition without selecting or closing the search dialog", async () => {
+    const host = makeFakeElement("div");
+    await act(() => render(h(GlobalSearch, { storms: navMock.storms }), host as unknown as HTMLElement));
+
+    await act(() => {
+      dispatchKey({ key: "k", ctrlKey: true });
+    });
+    const dialog = findDomNodes(host, (n) => n["role"] === "dialog")[0]!;
+    const input = findDomNodes(dialog, (n) => n.tagName === "INPUT")[0]!;
+    let prevented = false;
+
+    await act(() => {
+      (input["on_keydown"] as (e: { type: string; key: string; isComposing: boolean; preventDefault(): void }) => void)({
+        type: "keydown",
+        key: "Enter",
+        isComposing: true,
+        preventDefault() {
+          prevented = true;
+        },
+      });
+    });
+
+    expect(prevented).toBe(false);
+    expect(navMock.go).not.toHaveBeenCalled();
+    expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(1);
+
+    await act(() => render(null, host as unknown as HTMLElement));
+  });
 });

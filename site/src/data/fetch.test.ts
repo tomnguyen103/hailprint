@@ -323,31 +323,38 @@ it("caches immutable storm JSON per (guard, url), evicts rejections, and respect
   expect(await fetchJson("storms/2024-05-28/pairs.json", guardB)).toBe("b:2");
   expect(calls).toBe(2);
 
-  // Empty scope is ignored and initial cold-load scope stamp preserves entries already cached during load
+  // Empty scope is ignored and keeps cached entries intact
   setFetchCacheScope("");
-  setFetchCacheScope("2026-11-18T12:00:00Z");
   expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(1);
   expect(calls).toBe(2);
 
-  // Identical scope keeps cache intact
+  // Adopting a non-null scope after unscoped reads evicts pre-scope cached entries
   setFetchCacheScope("2026-11-18T12:00:00Z");
-  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(1);
-  expect(calls).toBe(2);
-
-  // Advancing run_time scope invalidates cache
-  setFetchCacheScope("2026-11-18T13:00:00Z");
   expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(3);
   expect(calls).toBe(3);
 
-  // clearFetchCache() forces a fresh network fetch
-  clearFetchCache();
+  // Identical scope keeps cache intact
+  setFetchCacheScope("2026-11-18T12:00:00Z");
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(3);
+  expect(calls).toBe(3);
+
+  // Advancing run_time scope invalidates cache
+  setFetchCacheScope("2026-11-18T13:00:00Z");
   expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(4);
   expect(calls).toBe(4);
 
-  // Mutable top-level storms.json is never cached
-  expect(await fetchJson("storms.json", guardA)).toBe(5);
-  expect(await fetchJson("storms.json", guardA)).toBe(6);
+  // clearFetchCache() resets cacheScope to null; any entry cached while unscoped is evicted once a scope is adopted
+  clearFetchCache();
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(5);
+  expect(calls).toBe(5);
+  setFetchCacheScope("2026-11-18T14:00:00Z");
+  expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(6);
   expect(calls).toBe(6);
+
+  // Mutable top-level storms.json is never cached
+  expect(await fetchJson("storms.json", guardA)).toBe(7);
+  expect(await fetchJson("storms.json", guardA)).toBe(8);
+  expect(calls).toBe(8);
 
   // Failed storm fetch is evicted immediately so retry fetches fresh
   clearFetchCache();

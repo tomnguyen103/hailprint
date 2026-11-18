@@ -43,11 +43,14 @@ export function trapDrawerTab(event: KeyboardEvent, root: HTMLElement | null, op
   }
 }
 
+const modalStack: RefObject<HTMLElement>[] = [];
+
 /** Move focus into `root` when `activeModal` becomes true, trap Tab at document level, and restore focus to the opener on close. */
 export function useModalFocusTrap(activeModal: boolean, rootRef: RefObject<HTMLElement>): void {
   const opener = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!activeModal) return;
+    modalStack.push(rootRef);
     const prev = document.activeElement;
     opener.current = prev && typeof (prev as HTMLElement).focus === "function" ? (prev as HTMLElement) : null;
     const root = rootRef.current;
@@ -55,10 +58,13 @@ export function useModalFocusTrap(activeModal: boolean, rootRef: RefObject<HTMLE
     if (first) first.focus();
     else root?.focus?.();
     const onKey = (event: KeyboardEvent) => {
+      if (modalStack[modalStack.length - 1] !== rootRef) return;
       trapDrawerTab(event, rootRef.current, true);
     };
     document.addEventListener("keydown", onKey);
     return () => {
+      const idx = modalStack.lastIndexOf(rootRef);
+      if (idx >= 0) modalStack.splice(idx, 1);
       document.removeEventListener("keydown", onKey);
       opener.current?.focus?.();
     };

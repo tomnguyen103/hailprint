@@ -65,7 +65,7 @@ export function App() {
       : <EmptyState sentence={`No storm date ${route.date} in catalog.`} link={{ href: href({ area: "storms", date: newest.storm_date }), label: newest.storm_date }} />;
   }
   return (
-    <Layout active={active} storms={storms}>
+    <Layout active={active} routePath={path} storms={storms}>
       <AreaBoundary resetKey={path}>{body}</AreaBoundary>
     </Layout>
   );

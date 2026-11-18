@@ -75,12 +75,22 @@ export function Workspace({ index, storm, tab }: Props) {
   let pane;
   if (tab === "map") {
     pane = (
-      <MapPane storm={storm} reports={reports} power={power} internet={internet} step={step} onStep={setStep} fips={fips} onCounty={setFips} />
+      <MapPane
+        storm={storm}
+        runTime={index.run_time}
+        reports={reports}
+        power={power}
+        internet={internet}
+        step={step}
+        onStep={setStep}
+        fips={fips}
+        onCounty={setFips}
+      />
     );
   }
-  else if (tab === "parcels") pane = <ParcelsPane storm={storm} index={index} />;
-  else if (tab === "score") pane = <ScorePane storm={storm} radiusKm={index.radius_km_default} reports={reports} />;
-  else pane = <DataPane storm={storm} reports={reports} power={power} internet={internet} fips={fips} onCounty={setFips} />;
+  else if (tab === "parcels") pane = <ParcelsPane storm={storm} index={index} runTime={index.run_time} />;
+  else if (tab === "score") pane = <ScorePane storm={storm} runTime={index.run_time} radiusKm={index.radius_km_default} reports={reports} />;
+  else pane = <DataPane storm={storm} runTime={index.run_time} reports={reports} power={power} internet={internet} fips={fips} onCounty={setFips} />;
 
   return (
     <div class="workspace">

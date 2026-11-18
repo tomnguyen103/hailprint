@@ -407,4 +407,58 @@ describe("ScopeDrawer focus lifecycle and ARIA (US-13.1, US-13.2, US-13.3)", () 
       render(null, wsHost as unknown as HTMLElement);
     });
   });
+
+  it("traps Tab in only the topmost stacked modal", async () => {
+    const host = makeFakeElement("div");
+    await act(() =>
+      render(
+        h(
+          "div",
+          null,
+          h(ScopeDrawer, {
+            id: "bottom-scope",
+            label: "Bottom modal",
+            title: "Bottom modal",
+            open: true,
+            onClose: () => {},
+            children: h("a", { href: "/bottom" }, "Bottom link"),
+          }),
+          h(ScopeDrawer, {
+            id: "top-scope",
+            label: "Top modal",
+            title: "Top modal",
+            open: true,
+            onClose: () => {},
+            children: h("a", { href: "/top" }, "Top link"),
+          }),
+        ),
+        host as unknown as HTMLElement,
+      ),
+    );
+
+    const dialogs = findDomNodes(host, (n) => n["role"] === "dialog" && n["aria-modal"] === "true");
+    expect(dialogs).toHaveLength(2);
+    const topDialog = dialogs[1]!;
+    const topFocusables = topDialog.querySelectorAll();
+    const topFirst = topFocusables[0]!;
+    const topLast = topFocusables[topFocusables.length - 1]!;
+
+    // Focus the last element of the topmost modal and press Tab -> wraps inside topmost modal only
+    topLast.focus();
+    let prevented = false;
+    for (const fn of docKeyListeners) {
+      fn({
+        key: "Tab",
+        shiftKey: false,
+        preventDefault() {
+          prevented = true;
+        },
+      });
+    }
+    expect(prevented).toBe(true);
+    expect(activeEl).toBe(topFirst);
+    expect(topDialog.contains(activeEl)).toBe(true);
+
+    await act(() => render(null, host as unknown as HTMLElement));
+  });
 });

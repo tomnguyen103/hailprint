@@ -359,7 +359,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                     type="button"
                     class="button button-small"
                     onClick={() => {
-                      const csv = pointCsvOf(rows, activePoint, radiusKm);
+                      const csv = pointCsvOf(visibleRows, activePoint, radiusKm);
                       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
                       const url = URL.createObjectURL(blob);
                       const a = document.createElement("a");

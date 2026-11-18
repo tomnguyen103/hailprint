@@ -81,6 +81,14 @@ export function ReceiptChip({ receipt, file, summary }: { receipt: Receipt; file
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       if (event.key === "Escape") {
+        const active = document.activeElement as HTMLElement | null;
+        const insideSelf =
+          active !== null &&
+          (Boolean(chip.current?.contains(active)) || Boolean(pop.current?.contains(active)));
+        const otherOverlay = active?.closest?.('[role="dialog"], [role="menu"]') ?? null;
+        if (!insideSelf && otherOverlay !== null && !otherOverlay.contains(chip.current)) {
+          return;
+        }
         event.preventDefault();
         event.stopImmediatePropagation?.();
         event.stopPropagation?.();
