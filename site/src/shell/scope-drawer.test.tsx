@@ -459,6 +459,59 @@ describe("ScopeDrawer focus lifecycle and ARIA (US-13.1, US-13.2, US-13.3)", () 
     expect(activeEl).toBe(topFirst);
     expect(topDialog.contains(activeEl)).toBe(true);
 
+    // Tab from the first top control that is not the last: no wrap, no lower-modal focus
+    const bottomDialog = dialogs[0]!;
+    const lowerFocused: FakeDomNode[] = [];
+    for (const el of bottomDialog.querySelectorAll()) {
+      const orig = el.focus;
+      el.focus = () => {
+        lowerFocused.push(el);
+        orig();
+      };
+    }
+    expect(topFocusables.length).toBeGreaterThan(1);
+    topFirst.focus();
+    let preventedMid = false;
+    for (const fn of docKeyListeners) {
+      fn({ key: "Tab", shiftKey: false, preventDefault() { preventedMid = true; } });
+    }
+    expect(preventedMid).toBe(false);
+    topLast.focus();
+    for (const fn of docKeyListeners) {
+      fn({ key: "Tab", shiftKey: false, preventDefault() {} });
+    }
+    expect(lowerFocused).toHaveLength(0);
+
     await act(() => render(null, host as unknown as HTMLElement));
+  });
+
+  it("closing a lower modal moves no focus; closing the top modal restores its opener", async () => {
+    const host = makeFakeElement("div");
+    const view = (bottomOpen: boolean, topOpen: boolean) =>
+      h(
+        "div",
+        null,
+        h(ScopeDrawer, {
+          id: "b-scope", label: "B", title: "B", open: bottomOpen, onClose: () => {},
+          children: h("a", { href: "/b" }, "B link"),
+        }),
+        h(ScopeDrawer, {
+          id: "t-scope", label: "T", title: "T", open: topOpen, onClose: () => {},
+          children: h("a", { href: "/t" }, "T link"),
+        }),
+      );
+    const trigger = makeFakeElement("button", "Open");
+    trigger.focus();
+    await act(() => render(view(true, true), host as unknown as HTMLElement));
+    const [bottomDialog, topDialog] = findDomNodes(host, (n) => n["role"] === "dialog" && n["aria-modal"] === "true");
+    // The top modal opened while focus sat on the bottom modal's first control, so that control is its opener.
+    const bottomFirst = bottomDialog!.querySelectorAll()[0]!;
+    const topFirst = topDialog!.querySelectorAll()[0]!;
+    expect(activeEl).toBe(topFirst);
+    await act(() => render(view(false, true), host as unknown as HTMLElement));
+    expect(activeEl).toBe(topFirst);
+    expect(activeEl).not.toBe(trigger);
+    await act(() => render(null, host as unknown as HTMLElement));
+    expect(activeEl).toBe(bottomFirst);
   });
 });

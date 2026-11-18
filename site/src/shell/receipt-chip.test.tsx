@@ -136,7 +136,10 @@ function findDomNodes(root: FakeDomNode, match: (n: FakeDomNode) => boolean, out
   return out;
 }
 
-function dispatchDocumentKey(key: string, shiftKey = false): boolean {
+function dispatchDocumentKey(
+  key: string,
+  shiftKey = false,
+): { defaultPrevented: boolean; propagationStopped: boolean } {
   let defaultPrevented = false;
   let propagationStopped = false;
   const event = {
@@ -155,7 +158,7 @@ function dispatchDocumentKey(key: string, shiftKey = false): boolean {
   for (const fn of [...docKeyListeners]) {
     fn(event);
   }
-  return defaultPrevented && propagationStopped;
+  return { defaultPrevented, propagationStopped };
 }
 
 const receipt: Receipt = {
@@ -248,11 +251,12 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
     expect(findDomNodes(host, (n) => n["class"] === "receipt-pop")).toHaveLength(1);
 
     // First Escape: closes popover, calls preventDefault + stopPropagation, leaves inspector open
-    let stoppedAndPrevented = false;
+    let result = { defaultPrevented: false, propagationStopped: false };
     await act(() => {
-      stoppedAndPrevented = dispatchDocumentKey("Escape");
+      result = dispatchDocumentKey("Escape");
     });
-    expect(stoppedAndPrevented).toBe(true);
+    expect(result.defaultPrevented).toBe(true);
+    expect(result.propagationStopped).toBe(true);
     expect(getActiveReceiptChipId()).toBeNull();
     expect(inspectorClosed).toBe(0);
 
@@ -382,11 +386,12 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
     externalMenu.appendChild(menuItem);
     menuItem.focus();
 
-    let stoppedAndPrevented = false;
+    let result = { defaultPrevented: false, propagationStopped: false };
     await act(() => {
-      stoppedAndPrevented = dispatchDocumentKey("Escape");
+      result = dispatchDocumentKey("Escape");
     });
-    expect(stoppedAndPrevented).toBe(false);
+    expect(result.defaultPrevented).toBe(false);
+    expect(result.propagationStopped).toBe(false);
     expect(getActiveReceiptChipId()).not.toBeNull();
     expect(activeEl).toBe(menuItem);
 

@@ -64,9 +64,10 @@ export function useModalFocusTrap(activeModal: boolean, rootRef: RefObject<HTMLE
     document.addEventListener("keydown", onKey);
     return () => {
       const idx = modalStack.lastIndexOf(rootRef);
+      const wasTop = idx === modalStack.length - 1;
       if (idx >= 0) modalStack.splice(idx, 1);
       document.removeEventListener("keydown", onKey);
-      opener.current?.focus?.();
+      if (wasTop) opener.current?.focus?.();
     };
   }, [activeModal, rootRef]);
 }

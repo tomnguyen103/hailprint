@@ -714,13 +714,14 @@ describe("PointCheck workbench (US-04.1, US-04.2, US-04.4)", () => {
 
       const downloadBtn = findDomNodes(
         host,
-        (n) => n.tagName === "BUTTON" && domText(n).trim() === "Download CSV",
+        (n) => n.tagName === "BUTTON" && domText(n).trim().startsWith("Download CSV"),
       )[0]!;
       await act(() => {
         (downloadBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
       });
 
       expect(blobs).toHaveLength(1);
+      expect(domText(downloadBtn)).toContain("(1)");
       const csvText = await blobs[0]!.text();
       expect(csvText).toContain("2024-05-28");
       expect(csvText).not.toContain("2024-05-16");

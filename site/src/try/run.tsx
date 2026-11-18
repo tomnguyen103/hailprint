@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { fetchJson } from "../data/fetch";
+import { fetchJson, setFetchCacheScope } from "../data/fetch";
 import { guardPairs, guardPower } from "../data/guard";
 import type { Pairs, PowerFile, Storm, StormsIndex } from "../data/types";
 import { pool, scoredCount } from "../pool";
@@ -56,9 +56,11 @@ export function Run({ index }: { index: StormsIndex }) {
   const storm = index.storms.find((s) => s.storm_date === date);
   const pairs = useAllFiles<Pairs>(storm ? [storm.files.pairs] : [], guardPairs, index.run_time);
   const powerPath = storm?.files.power ?? null;
-  const powerLoad = useLoad<PowerFile | null>(powerPath ? `run:${powerPath}` : "run:power:none", () =>
-    powerPath === null ? Promise.resolve(null) : fetchJson(powerPath, guardPower),
-  );
+  const powerLoad = useLoad<PowerFile | null>(powerPath ? `run:${index.run_time}:${powerPath}` : "run:power:none", () => {
+    if (powerPath === null) return Promise.resolve(null);
+    setFetchCacheScope(index.run_time);
+    return fetchJson(powerPath, guardPower);
+  });
   const powerSource = powerLoad.status === "ready" && powerLoad.data !== null ? powerLoad.data.source : null;
   const [copied, setCopied] = useState<number | null>(null);
   const [fallback, setFallback] = useState(false);
