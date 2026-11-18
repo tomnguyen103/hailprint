@@ -4,14 +4,12 @@ import "../styles/live.css";
 import type { LiveFile } from "../data/types";
 import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../format";
 import { ODIN_LABEL } from "../impact/power";
-import { go, href } from "../router";
+import { href } from "../router";
 import { RULER } from "../ruler";
 import { Link } from "../shell/link";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type LiveData, useLive } from "../state/live";
-import { setPresetPin } from "../state/pin";
 import { LiveMap } from "../storms/map/live-map";
-import { CASE_STUDIES, type CaseStudy } from "../storms/select";
 import { ageMinutes, freshness } from "./freshness";
 
 const LIVE_FILE = "live/now.json";
@@ -34,18 +32,17 @@ function formatAge(iso: string, now: Date): string {
 /** Render the 24-hour Harris County live monitoring view content. */
 export function LiveViewContent({
   data,
-  newest,
-  caseStudies = CASE_STUDIES,
+  newest = null,
   now = new Date(),
 }: {
   data: LiveData;
-  newest: string | null;
-  caseStudies?: readonly CaseStudy[];
+  newest?: string | null;
   now?: Date;
 }) {
   const { now: live } = data;
   const state = freshness(live.run_time, now);
   const runAge = formatAge(live.run_time, now);
+  const isQuiet = live.mesh.class_count === 0 && live.reports.count === 0;
 
   const max24Value = live.mesh.max_mesh_mm !== null ? formatInches(live.mesh.max_mesh_mm / 25.4) : "0.00 in";
   const max24Note =
@@ -69,7 +66,6 @@ export function LiveViewContent({
   const reportsNote = live.reports.max_size_in !== null ? `max ${formatInches(live.reports.max_size_in)}` : "50 km buffer";
   const powerValue = live.power === null ? "\u2014" : formatCount(live.power.customers_out);
   const powerNote = live.power === null ? "unavailable" : ODIN_LABEL;
-  const isQuietSky = newest !== null && live.mesh.class_count === 0 && live.reports.count === 0 && caseStudies.length > 0;
 
   return (
     <div class="live-page">
@@ -84,7 +80,7 @@ export function LiveViewContent({
         </div>
         <div class="live-status-row">
           <p class="live-status">{statusSentence(live)}</p>
-          {newest !== null ? (
+          {isQuiet && newest !== null ? (
             <p class="live-newest">
               Newest storm date:{" "}
               <Link class="mono" href={href({ area: "storms", date: newest, tab: "map" })}>
@@ -97,29 +93,6 @@ export function LiveViewContent({
           Window {live.window.start} to {live.window.end}
         </p>
       </header>
-
-      {isQuietSky ? (
-        <section class="quiet-sky-banner" aria-label="Archive case studies">
-          <p class="quiet-sky-copy">
-            Quiet 24-hour window. Select a flagship archive storm to inspect high-density radar swaths.
-          </p>
-          <div class="quiet-sky-actions">
-            {caseStudies.map((cs) => (
-              <button
-                key={cs.storm_date}
-                type="button"
-                class="button button-small case-study-pill"
-                onClick={() => {
-                  if (cs.presetPin !== null) setPresetPin(cs.presetPin);
-                  go(href({ area: "storms", date: cs.storm_date, tab: cs.defaultTab }));
-                }}
-              >
-                <span class="mono">{cs.title}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ) : null}
 
       {data.notes.length > 0 ? (
         <ul class="live-notes" aria-label="Layer warnings">
@@ -217,16 +190,10 @@ export function LiveViewContent({
 }
 
 /** The `/live` page: loads `live/now.json` and its three layer files, and renders the monitoring view. */
-export function LiveView({
-  newest,
-  caseStudies = CASE_STUDIES,
-}: {
-  newest: string | null;
-  caseStudies?: readonly CaseStudy[];
-}) {
+export function LiveView({ newest = null }: { newest?: string | null }) {
   const live = useLive();
   if (live.status === "error") return <ErrorState error={live.error} onRetry={live.retry} />;
   if (live.status === "loading") return live.showLoading ? <LoadingState file={LIVE_FILE} /> : null;
-  return <LiveViewContent data={live.data} newest={newest} caseStudies={caseStudies} now={live.now} />;
+  return <LiveViewContent data={live.data} newest={newest} now={live.now} />;
 }
 

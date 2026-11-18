@@ -14,6 +14,7 @@ const stub = vi.hoisted(() => ({
   shown: [] as { error: { message: string }; inLayout: boolean }[],
   storms: [{ storm_date: "2024-05-28" }] as Record<string, unknown>[],
   index: null as Record<string, unknown> | null,
+  liveProps: [] as { newest?: string | null }[],
   // The Layout stub provides it, the ErrorState stub reads it: true when the error state renders under the layout.
   layoutContext: undefined as unknown as Context<boolean>,
   armed: true,
@@ -60,6 +61,17 @@ vi.mock("./state/live", () => ({
     return { status: "loading", showLoading: false, retry() {} };
   },
 }));
+vi.mock("./storms/map/live-map", () => ({ LiveMap: () => null }));
+vi.mock("./live/live-view", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./live/live-view")>();
+  return {
+    ...actual,
+    LiveView: (props: { newest?: string | null }) => {
+      stub.liveProps.push(props);
+      return actual.LiveView(props);
+    },
+  };
+});
 vi.mock("./storms/workspace", () => ({ Workspace: () => null }));
 vi.mock("./method/method", () => ({
   Method: () => {
@@ -75,7 +87,10 @@ vi.mock("./pipeline/pipeline", () => ({
   },
 }));
 vi.mock("./scorecard/scorecard", () => ({ Scorecard: () => null }));
-vi.mock("./try/try", () => ({ TryIt: () => null }));
+vi.mock("./try/try", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./try/try")>();
+  return { ...actual, TryIt: () => null };
+});
 
 describe("App", () => {
   let host: HTMLElement;
@@ -93,6 +108,7 @@ describe("App", () => {
     stub.shown.length = 0;
     stub.storms = [{ storm_date: "2024-05-28" }];
     stub.index = null;
+    stub.liveProps.length = 0;
     stub.armed = true;
     stub.current = { path: "/method/data", route: { kind: "method", page: "data" } };
   });
@@ -161,7 +177,7 @@ describe("App", () => {
     expect(stub.replaced).toEqual(["/live"]);
   });
 
-  it("renders the live view when storms.json fails, and marks Live as the active area", async () => {
+  it("renders the live view with newest=null when storms.json fails, and passes newest storm_date when ready (US-01.1, US-01.5)", async () => {
     stub.index = { status: "error", error: { message: "storms.json: HTTP 500" }, showLoading: false, retry() {} };
     stub.current = { path: "/live", route: { kind: "live" } };
 
@@ -170,6 +186,11 @@ describe("App", () => {
     expect(stub.log.at(-1)).toBe("live");
     expect(stub.shown).toEqual([]);
     expect((stub.layouts.at(-1) as unknown as { active: string }).active).toBe("live");
+    expect(stub.liveProps.at(-1)?.newest).toBeNull();
+
+    stub.index = null;
+    await mount();
+    expect(stub.liveProps.at(-1)?.newest).toBe("2024-05-28");
   });
 });
 
@@ -391,6 +412,7 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
       },
     };
     const fileItems: { name: string; receipt: unknown }[] = [];
+    const links: { href?: string; children?: unknown }[] = [];
     function DataProbe() {
       const vnode = DataPane({
         storm,
@@ -404,9 +426,12 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
           node.forEach(walk);
           return;
         }
-        const v = node as VNode<{ name?: string; receipt?: unknown; children?: unknown }>;
+        const v = node as VNode<{ name?: string; receipt?: unknown; href?: string; children?: unknown }>;
         if (v.type === FileItem && v.props.name) {
           fileItems.push({ name: v.props.name, receipt: v.props.receipt });
+        }
+        if (typeof v.props?.href === "string") {
+          links.push({ href: v.props.href, children: v.props.children });
         }
         if (v.props?.children) walk(v.props.children);
       };
@@ -424,24 +449,21 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     const pairsItem = fileItems.filter((item) => item.name === "pairs.json").at(-1);
     expect(reportsItem?.receipt).toEqual(sampleReceipt);
     expect(pairsItem?.receipt).toEqual(sampleReceipt);
+    expect(links.some((l) => l.href === "/try/run" && l.children === "Run")).toBe(true);
     setFetch(null);
 
-    const { eagleiYearsFor, reproduceCommands } = await import("./storms/data-pane");
+    const { eagleiYearsFor, odinWindowDays, odinSyncCommandFor, cliSequence } = await import("./try/cli-commands");
     expect(eagleiYearsFor("2024-12-31")).toEqual(["2024", "2025"]);
-    const cliLines = reproduceCommands(
-      {
-        ...storm,
-        files: {
-          ...storm.files,
-          zip_counts: "storms/2024-05-28/zip-counts.json",
-          warnings: "storms/2024-05-28/warnings.geojson",
-          power: "storms/2024-05-28/power.json",
-          internet: "storms/2024-05-28/internet.json",
-        },
-      },
-      5,
-      "eaglei",
-    );
+    expect(odinWindowDays("2026-04-04")).toEqual(["2026-04-04", "2026-04-05", "2026-04-06"]);
+    expect(odinSyncCommandFor("2026-04-04")).toContain("derived/odin/odin-2026-04-04.parquet");
+    const cliLines = cliSequence({
+      date: storm.storm_date,
+      radius: 5,
+      parcels: true,
+      warnings: true,
+      internet: true,
+      power: "eaglei",
+    });
     expect(cliLines).toContain("uv run hailprint score 2024-05-28 --radius-km 5");
     expect(cliLines).toContain("uv run hailprint warnings 2024-05-28");
     expect(cliLines).toContain("uv run hailprint eaglei 2024");
@@ -449,38 +471,7 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(cliLines).toContain("uv run hailprint internet 2024-05-28");
     expect(cliLines).toContain("uv run hailprint publish 2024-05-28 --with-internet");
 
-    const odinCliLines = reproduceCommands(
-      {
-        ...storm,
-        storm_date: "2026-04-04",
-        files: {
-          ...storm.files,
-          power: "storms/2026-04-04/power.json",
-        },
-      },
-      5,
-      "odin",
-    );
-    expect(odinCliLines).not.toContain("uv run hailprint eaglei 2026");
-    expect(
-      odinCliLines.some((line) => line.includes("derived/odin/odin-2026-04-04.parquet")),
-    ).toBe(true);
-
-    const unknownPowerCli = reproduceCommands(
-      {
-        ...storm,
-        storm_date: "2026-04-04",
-        files: {
-          ...storm.files,
-          power: "storms/2026-04-04/power.json",
-        },
-      },
-      5,
-      null,
-    );
-    expect(unknownPowerCli).not.toContain("uv run hailprint power 2026-04-04");
-
-    const { commandsFor, runPublishedFiles } = await import("./try/run");
+    const { Run, commandsFor } = await import("./try/run");
     const runCmds = commandsFor("2024-05-28", 5, undefined, "eaglei");
     expect(runCmds).toContain("uv run hailprint warnings 2024-05-28");
     expect(runCmds).toContain("uv run hailprint eaglei 2024");
@@ -503,7 +494,122 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
       null,
     );
     expect(unknownPowerRunCmds).not.toContain("uv run hailprint power 2026-04-04");
-    expect(runPublishedFiles(storm)).toHaveLength(7);
+
+    // Mount Run component behaviorally and verify CLI command list and CSV export controls
+    const { resetRadiusKm } = await import("./state/radius");
+    interface FakeDomNode {
+      nodeType: number;
+      tagName: string;
+      data?: string;
+      childNodes: FakeDomNode[];
+      firstChild: FakeDomNode | null;
+      parentNode: FakeDomNode | null;
+      namespaceURI: string;
+      style: Record<string, unknown>;
+      [key: string]: unknown;
+    }
+    const makeEl = (tag: string, text = ""): FakeDomNode => {
+      const el: FakeDomNode = {
+        nodeType: tag === "#text" ? 3 : 1,
+        tagName: tag.toUpperCase(),
+        data: text,
+        childNodes: [],
+        firstChild: null,
+        parentNode: null,
+        namespaceURI: "http://www.w3.org/1999/xhtml",
+        style: {},
+        setAttribute(k: string, v: unknown) {
+          el[k] = v;
+        },
+        removeAttribute(k: string) {
+          delete el[k];
+        },
+        addEventListener(type: string, fn: (e?: unknown) => void) {
+          el[`on_${type}`] = fn.bind(el);
+        },
+        removeEventListener(type: string) {
+          delete el[`on_${type}`];
+        },
+        appendChild(child: FakeDomNode) {
+          el.childNodes.push(child);
+          child.parentNode = el;
+          el.firstChild = el.childNodes[0] ?? null;
+          return child;
+        },
+        insertBefore(child: FakeDomNode, ref: FakeDomNode | null) {
+          const idx = ref ? el.childNodes.indexOf(ref) : -1;
+          if (idx >= 0) el.childNodes.splice(idx, 0, child);
+          else el.childNodes.push(child);
+          child.parentNode = el;
+          el.firstChild = el.childNodes[0] ?? null;
+          return child;
+        },
+        removeChild(child: FakeDomNode) {
+          const idx = el.childNodes.indexOf(child);
+          if (idx >= 0) el.childNodes.splice(idx, 1);
+          child.parentNode = null;
+          el.firstChild = el.childNodes[0] ?? null;
+          return child;
+        },
+      };
+      return el;
+    };
+    const domText = (n: FakeDomNode): string =>
+      n.nodeType === 3 ? String(n.data ?? "") : n.childNodes.map(domText).join("");
+
+    try {
+      clearFileCache();
+      resetRadiusKm();
+      setFetch(async () =>
+        new Response(
+          JSON.stringify({
+            receipt: sampleReceipt,
+            radius_km_default: 5,
+            radius_km_max: 20,
+            edge_margin_m: 1110,
+            classes: [],
+            reports: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+      vi.stubGlobal("document", {
+        createElement: (tag: string) => makeEl(tag),
+        createElementNS: (_ns: string, tag: string) => makeEl(tag),
+        createTextNode: (text: string) => makeEl("#text", text),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      });
+      const runHost = makeEl("div");
+      await act(() =>
+        render(
+          h(Run, {
+            index: {
+              confidence: sampleReceipt.confidence,
+              run_time: sampleReceipt.run_time,
+              package_version: sampleReceipt.package_version,
+              radius_km_default: 5,
+              storms: [storm],
+            },
+          }),
+          runHost as unknown as HTMLElement,
+        ),
+      );
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+      const runText = domText(runHost);
+      expect(runText).toContain("Commands");
+      expect(runText).toContain("uv run hailprint ingest 2024-05-28");
+      expect(runText).toContain("uv run hailprint score 2024-05-28 --radius-km 5");
+      expect(runText).toContain("cd site && npm run dev");
+      expect(runText).toContain("Download table CSV");
+    } finally {
+      setFetch(null);
+      clearFileCache();
+      resetRadiusKm();
+      vi.unstubAllGlobals();
+    }
 
     const { Footer } = await import("./shell/footer");
     const { TopBar } = await import("./shell/top-bar");

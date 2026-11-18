@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pairs, Receipt, StormsIndex } from "../data/types";
 import type { PooledRow } from "../pool";
 import { RULER } from "../ruler";
+import { resetRadiusKm, setRadiusKm } from "../state/radius";
 import { Scorecard } from "./scorecard";
 import { ThresholdCurve } from "./threshold-curve";
 
@@ -112,6 +113,10 @@ function classOf(n: FakeDomNode): string {
   return String(n["class"] ?? n["className"] ?? "");
 }
 
+function hasClass(n: FakeDomNode, cls: string): boolean {
+  return classOf(n).split(/\s+/).includes(cls);
+}
+
 const RECEIPT: Receipt = {
   storm_date: "2024-05-28",
   confidence: "settled",
@@ -120,18 +125,18 @@ const RECEIPT: Receipt = {
   sources: [],
 };
 
-function makePairs(stormDate: string): Pairs {
+function makePairs(stormDate: string, maxRadiusKm = 20): Pairs {
   return {
     receipt: { ...RECEIPT, storm_date: stormDate },
     radius_km_default: 5,
-    radius_km_max: 20,
+    radius_km_max: maxRadiusKm,
     edge_margin_m: 1000,
     classes: RULER.map((r) => ({
       threshold_mm: r.threshold_mm,
       threshold_in: r.threshold_in,
       label: r.object,
       swath_km2: 10,
-      unverifiable_km2: Array.from({ length: 21 }, () => 2),
+      unverifiable_km2: Array.from({ length: maxRadiusKm + 1 }, () => 2),
     })),
     reports: [
       {
@@ -197,6 +202,7 @@ function makeRows(): PooledRow[] {
 
 describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US-12.3)", () => {
   beforeEach(() => {
+    resetRadiusKm();
     vi.stubGlobal("document", {
       createElement: (tag: string) => makeFakeElement(tag),
       createElementNS: (_ns: string, tag: string) => makeFakeElement(tag),
@@ -207,6 +213,7 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
   });
 
   afterEach(() => {
+    resetRadiusKm();
     vi.unstubAllGlobals();
   });
 
@@ -219,12 +226,13 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     await act(() => render(h(Scorecard, { index, view: "table" }), host as unknown as HTMLElement));
 
     const pills = findDomNodes(host, (n) => n.tagName === "BUTTON" && classOf(n).includes("cohort-pill"));
-    const spcPill = pills.find((p) => domText(p).includes("SPC-Daily 2026"));
+    const spcPill = pills.find((p) => domText(p).includes("SPC-Daily"));
     expect(spcPill).toBeDefined();
     expect(domText(spcPill!)).toContain("(0)");
     expect(Boolean(spcPill!["disabled"])).toBe(true);
 
-    const wcmPill = pills.find((p) => domText(p).includes("WCM 2021"));
+    const wcmPill = pills.find((p) => domText(p).includes("WCM 2024"));
+    expect(wcmPill).toBeDefined();
     expect(Boolean(wcmPill!["disabled"])).toBe(false);
   });
 
@@ -245,7 +253,7 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const host2 = makeFakeElement("div");
     await act(() => render(h(Scorecard, { index: mismatchedIndex, view: "table" }), host2 as unknown as HTMLElement));
     const pills = findDomNodes(host2, (n) => n.tagName === "BUTTON" && classOf(n).includes("cohort-pill"));
-    const wcmPill = pills.find((p) => domText(p).includes("WCM 2021"))!;
+    const wcmPill = pills.find((p) => domText(p).includes("WCM 2024"))!;
     await act(() => {
       (wcmPill["on_click"] as (e: { type: string }) => void)({ type: "click" });
     });
@@ -339,13 +347,29 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const primaryHeaders = findDomNodes(tables[0]!, (n) => n.tagName === "TH");
     expect(primaryHeaders).toHaveLength(4);
 
-    // Click first class pick button to open PeekDrawer with secondary metrics
+    // Click first class pick button to open PeekDrawer with ContingencyGrid and secondary metrics
+    expect(findDomNodes(host, (n) => hasClass(n, "cgrid"))).toHaveLength(0);
     const classBtn = findDomNodes(tables[0]!, (n) => n.tagName === "BUTTON" && classOf(n).includes("class-pick"))[0]!;
     await act(() => {
       (classBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
     });
     expect(domText(host)).toContain("Unverifiable km²");
     expect(domText(host)).toContain("Scored reports");
+    const drawer = findDomNodes(host, (n) => hasClass(n, "peek-drawer"))[0]!;
+    expect(drawer).toBeDefined();
+    expect(findDomNodes(drawer, (n) => hasClass(n, "cgrid"))).toHaveLength(1);
+    expect(findDomNodes(host, (n) => classOf(n).includes("sensitivity-section"))).toHaveLength(0);
+
+    const hostCurve = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index, view: "curve" }), hostCurve as unknown as HTMLElement));
+    expect(findDomNodes(hostCurve, (n) => classOf(n).includes("sensitivity-section"))).toHaveLength(1);
+    // Switch curve metric to POD (non-null for 1-report fixture) and verify highlightMm circle renders
+    const podBtn = findDomNodes(hostCurve, (n) => n.tagName === "BUTTON" && domText(n).trim() === "POD")[0]!;
+    await act(() => {
+      (podBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    const highlighted = findDomNodes(hostCurve, (n) => n.tagName === "CIRCLE" && classOf(n) === "highlight");
+    expect(highlighted).toHaveLength(1);
 
     const host2 = makeFakeElement("div");
     await act(() =>
@@ -363,6 +387,29 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     );
     const classifierHeaders = findDomNodes(host2, (n) => n.tagName === "TH");
     expect(classifierHeaders).toHaveLength(4);
+  });
+
+  it("clamps active radius to cohort minimum radius_km_max without crashing when shared radius exceeds it", async () => {
+    const index = makeIndex(["wcm", "spc-daily"]);
+    mockPairsState.status = "ready";
+    mockPairsState.data = [makePairs("2024-05-10", 20), makePairs("2024-05-11", 10)];
+    setRadiusKm(18);
+
+    const host = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index, view: "table" }), host as unknown as HTMLElement));
+
+    expect(findDomNodes(host, (n) => classOf(n).includes("state-error"))).toHaveLength(0);
+    expect(findDomNodes(host, (n) => n.tagName === "TABLE")).toHaveLength(1);
+    const slider = findDomNodes(host, (n) => n.tagName === "INPUT" && n["type"] === "range")[0]!;
+    expect(slider["max"]).toBe(10);
+    expect(slider["value"]).toBe(10);
+    const output = findDomNodes(host, (n) => n.tagName === "OUTPUT")[0]!;
+    expect(domText(output)).toBe("10 km");
+
+    const hostCurve = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index, view: "curve" }), hostCurve as unknown as HTMLElement));
+    expect(findDomNodes(hostCurve, (n) => classOf(n).includes("state-error"))).toHaveLength(0);
+    expect(domText(hostCurve)).toContain("R = 10 km");
   });
 });
 

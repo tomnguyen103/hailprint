@@ -113,7 +113,8 @@ In `site/src/impact/`, `fill-spec.ts` holds `FillSpec` and `binOf`, the one fill
 `series.ts` holds the pure series math. `timeline-chart.tsx` draws the chart, `timeline-tables.tsx` draws the number tables, and `timeline.tsx` joins them.
 `site/src/data/constants.ts` holds the constants of the data layer (`METRO_FIPS`, `HARRIS_FIPS`, `DATE`, `STEP_MINUTES`, `STEPS`). `site/src/data/` imports nothing above itself.
 `site/src/geometry.ts` holds `containsPoint`, the point-in-polygon test, with no MapLibre import.
-The warnings layer sits under `site/src/storms/map/`, and the layers control sits in `site/src/storms/map-pane.tsx`.
+The warnings layer sits under `site/src/storms/map/`, and the layers control sits in `site/src/storms/layers-control.tsx`.
+The browser reads `site/data/live/now.json` on `/live` and never fetches NWS, ODIN, or IODA origins directly (`vercel.json` CSP `connect-src` restricts to `'self'`, Supabase, and Protomaps).
 `design.md` at the repo root is the locked design system: the tokens, the archetype of each area, and the layout rules.
 Read it before a UI change.
 

@@ -14,9 +14,10 @@ it("matches /live and /live/, and gives not-found below it", () => {
   expect(href({ area: "live" })).toBe("/live");
 });
 
-it("puts Live first in the areas", () => {
+it("puts Live first in the areas and labels every area", () => {
   expect(AREAS[0]).toBe("live");
   expect(AREA_LABELS.live).toBe("Live");
+  expect(Object.keys(AREA_LABELS)).toEqual([...AREAS]);
   expect(AREAS).toHaveLength(6);
 });
 

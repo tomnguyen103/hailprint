@@ -52,7 +52,6 @@ describe("LiveViewContent", () => {
     const data = loadFixture("hail");
     const tree = LiveViewContent({
       data,
-      newest: "2024-05-28",
       now: new Date("2024-05-29T12:20:00Z"),
     });
     const text = textOf(tree);
@@ -95,7 +94,7 @@ describe("LiveViewContent", () => {
     expect(text).toContain("odin-real-time-outages-county");
   });
 
-  it("renders the quiet sentence, newest storm link, and em-dash unavailable stats when quiet and optional fields are null (US-03.2, US-04.3)", () => {
+  it("renders the quiet sentence, newest storm link, and em-dash unavailable stats when quiet and optional fields are null (US-01.1, US-01.5)", () => {
     const base = loadFixture("quiet");
     const data: LiveData = {
       ...base,
@@ -129,7 +128,7 @@ describe("LiveViewContent", () => {
       newest: null,
       now: new Date("2026-11-03T14:15:00Z"),
     });
-    expect(findAll(withoutNewest, (v) => typeof v.props["href"] === "string")).toHaveLength(0);
+    expect(findAll(withoutNewest, (v) => v.type === "a" && typeof v.props["href"] === "string")).toHaveLength(0);
   });
 
   it("shows layer notes and source failure messages without hiding the page (US-03.3)", () => {
@@ -145,7 +144,6 @@ describe("LiveViewContent", () => {
     };
     const tree = LiveViewContent({
       data,
-      newest: "2026-08-28",
       now: new Date("2026-11-03T14:15:00Z"),
     });
     const text = textOf(tree);
@@ -158,7 +156,6 @@ describe("LiveViewContent", () => {
     const data = loadFixture("quiet");
     const agingTree = LiveViewContent({
       data,
-      newest: "2026-08-28",
       now: new Date("2026-11-03T14:44:57Z"),
     });
     const agingChip = findAll(agingTree, (v) => v.props["data-freshness"] !== undefined)[0]!;
@@ -168,7 +165,6 @@ describe("LiveViewContent", () => {
 
     const staleTree = LiveViewContent({
       data,
-      newest: "2026-08-28",
       now: new Date("2026-11-03T15:39:57Z"),
     });
     const staleChip = findAll(staleTree, (v) => v.props["data-freshness"] !== undefined)[0]!;
@@ -187,7 +183,6 @@ describe("LiveViewContent", () => {
       const text = textOf(
         LiveViewContent({
           data: loadFixture(kind),
-          newest: "2024-05-28",
           now: new Date("2026-11-03T14:15:00Z"),
         }),
       ).toLowerCase();
@@ -197,16 +192,17 @@ describe("LiveViewContent", () => {
     }
   });
 
-  it("renders the quiet-sky case study banner with 4 preset buttons when 24h hail and report counts are zero (AUD-22)", () => {
+  it("omits archive case study controls and links newest storm only when quiet (US-01.1, US-01.5)", () => {
     const quietTree = LiveViewContent({
       data: loadFixture("quiet"),
       newest: "2026-08-28",
       now: new Date("2026-11-03T14:15:00Z"),
     });
-    const banners = findAll(quietTree, (v) => v.props["class"] === "quiet-sky-banner");
-    expect(banners).toHaveLength(1);
-    const pills = findAll(quietTree, (v) => String(v.props["class"] ?? "").includes("case-study-pill"));
-    expect(pills).toHaveLength(4);
+    expect(findAll(quietTree, (v) => v.props["class"] === "quiet-sky-banner")).toHaveLength(0);
+    expect(findAll(quietTree, (v) => String(v.props["class"] ?? "").includes("case-study-pill"))).toHaveLength(0);
+    const quietLinks = findAll(quietTree, (v) => v.type === "a" && typeof v.props["href"] === "string");
+    expect(quietLinks).toHaveLength(1);
+    expect(quietLinks[0]!.props["href"]).toBe("/storms/2026-08-28/map");
 
     const hailTree = LiveViewContent({
       data: loadFixture("hail"),
@@ -214,6 +210,8 @@ describe("LiveViewContent", () => {
       now: new Date("2026-11-03T14:15:00Z"),
     });
     expect(findAll(hailTree, (v) => v.props["class"] === "quiet-sky-banner")).toHaveLength(0);
+    expect(findAll(hailTree, (v) => String(v.props["class"] ?? "").includes("case-study-pill"))).toHaveLength(0);
+    expect(findAll(hailTree, (v) => v.type === "a" && typeof v.props["href"] === "string")).toHaveLength(0);
   });
 });
 

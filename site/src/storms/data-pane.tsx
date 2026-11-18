@@ -1,3 +1,4 @@
+import { useState } from "preact/hooks";
 import { DATA_BASE, fetchJson } from "../data/fetch";
 import { guardPairs, guardReports, guardSwath, guardWarnings, guardZipCounts } from "../data/guard";
 import type {
@@ -11,86 +12,14 @@ import type {
   ZipCounts,
 } from "../data/types";
 import { InternetTable, PowerTable, TimelineTables } from "../impact/timeline-tables";
+import { href } from "../router";
+import { Link } from "../shell/link";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ReceiptList } from "../shell/receipt-list";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type Load, useLoad } from "../state/load";
-import { LAST_STEP, stepTime } from "../time/step";
 
 const FILE = "pairs.json";
-
-/** Distinct calendar years touched by the 48-hour impact window (192 steps of 15 min from 12:00 UTC on `stormDate`). */
-export function eagleiYearsFor(stormDate: string): string[] {
-  const start = stepTime(stormDate, 0);
-  if (Number.isNaN(start.getTime())) return [stormDate.slice(0, 4)];
-  const last = stepTime(stormDate, LAST_STEP);
-  return [...new Set([String(start.getUTCFullYear()), String(last.getUTCFullYear())])].sort();
-}
-
-/** Distinct UTC calendar days touched by the 48-hour impact window (`D`, `D+1`, `D+2`). */
-export function odinWindowDays(stormDate: string): string[] {
-  const start = stepTime(stormDate, 0);
-  if (Number.isNaN(start.getTime())) return [stormDate];
-  const last = stepTime(stormDate, LAST_STEP);
-  const startDayMs = Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
-  const lastDayMs = Date.UTC(last.getUTCFullYear(), last.getUTCMonth(), last.getUTCDate());
-  const days: string[] = [];
-  for (let ms = startDayMs; ms <= lastDayMs; ms += 86_400_000) {
-    days.push(new Date(ms).toISOString().slice(0, 10));
-  }
-  return days;
-}
-
-/** CLI command to pull the historical ODIN day files of a storm date's impact window from the state bucket. */
-export function odinSyncCommandFor(stormDate: string): string {
-  const keys = odinWindowDays(stormDate)
-    .map((day) => `'derived/odin/odin-${day}.parquet'`)
-    .join(", ");
-  return `uv run python -c "from hailprint import cloud, paths; c = cloud.Config.from_env(); cloud.sync_down(cloud.s3_client(c), c.state_bucket, (${keys},), paths.ROOT / 'data')"`;
-}
-
-/** Build the shared CLI command sequence for a storm date's resolved published files and power source. */
-export function cliSequence(o: {
-  date: string;
-  radius: number;
-  parcels: boolean;
-  warnings: boolean;
-  internet: boolean;
-  power: PowerFile["source"] | null;
-}): string[] {
-  const powerCommands =
-    o.power === "odin"
-      ? [odinSyncCommandFor(o.date), `uv run hailprint power ${o.date}`]
-      : o.power === "eaglei"
-        ? [`uv run hailprint eaglei ${eagleiYearsFor(o.date).join(" ")}`, `uv run hailprint power ${o.date}`]
-        : [];
-  return [
-    `uv run hailprint ingest ${o.date}`,
-    ...(o.parcels ? [`uv run hailprint parcels ${o.date}`] : []),
-    `uv run hailprint score ${o.date} --radius-km ${o.radius}`,
-    ...(o.warnings ? [`uv run hailprint warnings ${o.date}`] : []),
-    ...powerCommands,
-    ...(o.internet ? [`uv run hailprint internet ${o.date}`] : []),
-    `uv run hailprint publish ${o.date}${o.internet ? " --with-internet" : ""}`,
-  ];
-}
-
-/** Full CLI sequence to reproduce every published file for `storm`. */
-export function reproduceCommands(
-  storm: Storm,
-  radiusKm = 5,
-  powerSource: PowerFile["source"] | null = null,
-): string[] {
-  const effectiveSource = storm.files.power ? powerSource : null;
-  return cliSequence({
-    date: storm.storm_date,
-    radius: radiusKm,
-    parcels: Boolean(storm.files.zip_counts),
-    warnings: Boolean(storm.files.warnings),
-    internet: Boolean(storm.files.internet),
-    power: effectiveSource,
-  });
-}
 
 /** One published file: a download link, with its receipt chip when the file carries a receipt, or "none". */
 export function FileItem({ name, path, receipt }: { name: string; path: string | null; receipt: Receipt | null }) {
@@ -125,10 +54,14 @@ interface Props {
   /** The internet file load from the workspace, which also feeds the map. */
   internet: Load<InternetFile | null> & { retry: () => void };
   fips: string;
+  onCounty?: (fips: string) => void;
 }
 
 /** Render the per-file provenance and data receipt pane for a storm date. */
-export function DataPane({ storm, reports: reportsProp, power, internet, fips }: Props) {
+export function DataPane({ storm, reports: reportsProp, power, internet, fips, onCounty }: Props) {
+  const [localFips, setLocalFips] = useState(fips);
+  const activeFips = onCounty ? fips : localFips;
+  const handleCounty = onCounty ?? setLocalFips;
   const swath = useLoad<SwathFile>(`data:${storm.files.swath}`, () => fetchJson(storm.files.swath, guardSwath));
   const pairs = useLoad(`data:${storm.files.pairs}`, () => fetchJson(storm.files.pairs, guardPairs));
   const warningsFile = storm.files.warnings;
@@ -149,6 +82,7 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
   const zipReceipt = zipCounts.status === "ready" && zipCounts.data !== null ? zipCounts.data.receipt : null;
   const powerData = power.status === "ready" ? power.data : null;
   const internetData = internet.status === "ready" ? internet.data : null;
+  const counties = powerData?.counties ?? internetData?.counties ?? [];
   const files: [string, string | null, Receipt | null][] = [
     ["swath.geojson", storm.files.swath, swathReceipt],
     ["reports.geojson", storm.files.reports, reports.status === "ready" && reports.data ? reports.data.receipt : null],
@@ -169,16 +103,10 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
             </li>
           ))}
         </ul>
-        <h2>Reproduce</h2>
-        <pre class="code-block">
-          <code>
-            {reproduceCommands(
-              storm,
-              pairs.status === "ready" ? pairs.data.radius_km_default : 5,
-              powerData?.source ?? null,
-            ).join("\n")}
-          </code>
-        </pre>
+        <p class="pane-note">
+          CLI commands and CSV export live in{" "}
+          <Link href={href({ area: "try", tool: "run" })}>Run</Link>.
+        </p>
       </section>
       <section>
         <h2>Receipt</h2>
@@ -206,10 +134,26 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
           warnings={warnings.status === "ready" ? warnings.data : null}
           reports={reports.status === "ready" ? reports.data : null}
         />
+        {counties.length > 0 ? (
+          <div class="data-county-bar">
+            <label for="data-county-select">County</label>
+            <select
+              id="data-county-select"
+              value={activeFips}
+              onChange={(e) => handleCounty((e.currentTarget as HTMLSelectElement).value)}
+            >
+              {counties.map((c) => (
+                <option key={c.fips} value={c.fips}>
+                  {c.name} ({c.fips})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         {power.status === "error" ? <ErrorState error={power.error} onRetry={power.retry} /> : null}
-        {powerData === null ? null : <PowerTable date={storm.storm_date} power={powerData} fips={fips} />}
+        {powerData === null ? null : <PowerTable date={storm.storm_date} power={powerData} fips={activeFips} />}
         {internet.status === "error" ? <ErrorState error={internet.error} onRetry={internet.retry} /> : null}
-        {internetData === null ? null : <InternetTable date={storm.storm_date} internet={internetData} fips={fips} />}
+        {internetData === null ? null : <InternetTable date={storm.storm_date} internet={internetData} fips={activeFips} />}
       </section>
     </div>
   );

@@ -2,16 +2,16 @@ import type { FeatureCollection, MultiPolygon } from "geojson";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "preact/hooks";
 import { fetchCounties, harrisFeature } from "../county";
 import { guardReports, guardSwath } from "../data/guard";
-import { DataError, type ReportsFile, type StormsIndex, type SwathFile } from "../data/types";
+import type { ReportsFile, StormsIndex, SwathFile } from "../data/types";
 import { formatCount, formatMetric } from "../format";
 import { RULER } from "../ruler";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type Load, useLoad } from "../state/load";
 import { useAllFiles } from "../state/pairs-all";
 import { useTheme } from "../state/theme";
-import type { MapHandle } from "../storms/map/create-map";
 import type { Theme } from "../storms/map/layers";
 import { RulerLegend } from "../storms/map/ruler-legend";
+import { useMap } from "../storms/map/use-map";
 import "../styles/map.css";
 import { ScopeSelect } from "./try";
 import { COMPARE_PRESETS, compareDelta, defaultComparePair } from "./compare-data";
@@ -28,47 +28,6 @@ function formatSignedFloat(value: number | null, digits: number, unit = ""): str
   if (value === null) return "\u2014";
   const sign = value > 0 ? "+" : "";
   return `${sign}${value.toFixed(digits)}${unit}`;
-}
-
-/** One MapLibre map in a container: created on mount, fitted to the county once, destroyed on unmount. */
-function useMap(theme: Theme, navigation = true) {
-  const container = useRef<HTMLDivElement>(null);
-  const handle = useRef<MapHandle | null>(null);
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<DataError | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    const node = container.current;
-    if (!node) return;
-    let live = true;
-    let created: MapHandle | null = null;
-    setError(null);
-    import("../storms/map/create-map")
-      .then(async ({ createMap }) => {
-        const next = await createMap(node, theme, { navigation });
-        if (!live) {
-          next.destroy();
-          return;
-        }
-        created = next;
-        handle.current = next;
-        next.fit(null);
-        setReady(true);
-      })
-      .catch((cause: unknown) => {
-        if (live) setError(new DataError("map", String(cause)));
-      });
-    return () => {
-      live = false;
-      created?.destroy();
-      handle.current = null;
-      setReady(false);
-    };
-  }, [attempt]);
-  useEffect(() => {
-    if (ready) handle.current?.setTheme(theme);
-  }, [ready, theme]);
-  return { container, handle, ready, error, retry: () => setAttempt((n) => n + 1) };
 }
 
 /** One side of the compare: the date's swath and optional reports through the shared file cache, drawn on its own map. */
@@ -92,7 +51,7 @@ function useSide(
   const reports = showReports && reportsLoad.status === "ready" ? (reportsLoad.data[0] ?? null) : null;
   const outlines = metro.status === "ready" ? metro.data : null;
   const countyData = useMemo(() => (outlines !== null ? harrisFeature(outlines) : null), [outlines]);
-  const map = useMap(theme, navigation);
+  const map = useMap(theme, { navigation, onReady: (next) => next.fit(null) });
   useEffect(() => {
     if (map.ready) map.handle.current?.setData(swath, reports, countyData);
   }, [map.ready, swath, reports, countyData]);

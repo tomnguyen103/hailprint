@@ -28,6 +28,7 @@ In local development, `uv run hailprint publish` at the repo root writes `site/d
 storm date under `site/data/storms/<date>/`, served at `/data/`.
 If `storms.json` is missing, `fetchJson` returns an HTTP 404 error and the storm routes render an error state; when `storms.json` is valid and contains no storms, the site shows "No storm date is published yet."
 The same command writes `site/data/pipeline.json`: the run log, the archive coverage, and the source list for `/pipeline`.
+`uv run hailprint live` writes `site/data/live/now.json`, `swath.geojson`, `reports.geojson`, and `warnings.geojson` for `/live`; the browser never calls NWS, ODIN, or IODA directly.
 A storm date folder also holds `warnings.geojson` where `hailprint warnings` ran, `power.json` where `hailprint power` ran, and `internet.json` where `hailprint internet` ran and `publish` used `--with-internet`.
 `uv run python site/scripts/pool_golden.py` writes `site/data/pooled-golden.json`, the pooled table at
 every whole radius; `src/pool.test.ts` checks the browser pool against it and skips without the file.
@@ -43,8 +44,7 @@ Rerun `scripts/basemap.sh` after a change to the metro bbox, and on a new host, 
 ## Vercel
 
 The root `vercel.json` sets the fields: install `cd site && npm ci`, build
-`cd site && npm run build`, output `site/dist`, and a rewrite of every path without a dot to
-`/index.html`. Because published data lives in the public Supabase Storage bucket (`VITE_DATA_BASE`), the Vercel build holds code only and git deployments are enabled for `main` (`git.deploymentEnabled.main: true` in `vercel.json`).
+`cd site && npm run build`, output `site/dist`, a `Content-Security-Policy` (`script-src` allows `'unsafe-inline'` for the inline head boot script; `connect-src 'self' https://*.supabase.co https://*.protomaps.com https://protomaps.github.io`), and a rewrite of every path without a dot to `/index.html`. Because published data lives in the public Supabase Storage bucket (`VITE_DATA_BASE`), the Vercel build holds code only and git deployments are enabled for `main` (`git.deploymentEnabled.main: true` in `vercel.json`).
 Cloud schedules and bucket setup live in [docs/operations.md](../docs/operations.md).
 
 ## Dev harness

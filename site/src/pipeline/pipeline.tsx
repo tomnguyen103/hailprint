@@ -16,11 +16,15 @@ const FILE = "pipeline.json";
 
 // shortcut: the Pipeline services dot reads presence in the published file, upgrade to a freshness rule when a cron runs
 export function services(file: PipelineFile) {
-  const has = (key: "source" | "product", word: string) => file.sources.some((s) => s[key].toLowerCase().includes(word));
+  const has = (key: "source" | "product", word: string) =>
+    file.sources.some((s) => s[key].toLowerCase().split(/[^a-z0-9]+/).includes(word));
   return [
-    { name: "MESH archive", ok: file.archive !== null },
-    { name: "SPC reports", ok: has("product", "hail") },
+    { name: "MESH archive", ok: file.archive !== null || has("source", "mrms") },
+    { name: "SPC reports", ok: has("product", "hail") || has("source", "spc") },
     { name: "HCAD parcels", ok: has("source", "hcad") },
+    { name: "IEM warnings", ok: has("source", "iem") },
+    { name: "EAGLE-I/ODIN", ok: has("source", "eaglei") || has("source", "odin") },
+    { name: "IODA", ok: has("source", "ioda") },
   ];
 }
 
@@ -55,12 +59,14 @@ export function Pipeline({ view }: { view: PipelineView }) {
         </button>
       </div>
       <ScopeDrawer id="pipeline-scope" label="Services" title="Services" open={servicesOpen} onClose={close} as="aside">
+        <p class="service-publish pane-note">
+          Last publish <span class="mono">{age}</span>
+        </p>
         <ul class="service-list">
           {services(data).map((s) => (
             <li key={s.name} class="service">
               <span class="dot" data-state={s.ok ? "ok" : "missing"} role="img" aria-label={s.ok ? "present" : "missing"} />
               <span>{s.name}</span>
-              <span class="service-age mono">{age}</span>
             </li>
           ))}
         </ul>

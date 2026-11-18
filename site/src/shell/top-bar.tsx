@@ -1,4 +1,4 @@
-import { NAV_LABELS, PRIMARY_AREAS, type Area, href } from "../router";
+import { AREA_LABELS, PRIMARY_AREAS, type Area, href } from "../router";
 import { AREA_ICONS, CodeIcon } from "./icons";
 import { Link } from "./link";
 import { ThemeToggle } from "./theme-toggle";
@@ -18,7 +18,7 @@ export function TopBar({ active }: { active: Area | null }) {
       <nav class="area-nav" aria-label="Areas">
         {PRIMARY_AREAS.map((area) => (
           <Link key={area} href={areaHref(area)} aria-current={active === area ? "page" : undefined}>
-            {NAV_LABELS[area]}
+            {AREA_LABELS[area]}
           </Link>
         ))}
       </nav>
@@ -48,7 +48,7 @@ export function BottomBar({ active }: { active: Area | null }) {
         return (
           <Link key={area} href={areaHref(area)} aria-current={active === area ? "page" : undefined}>
             <Icon size={22} />
-            <span>{NAV_LABELS[area]}</span>
+            <span>{AREA_LABELS[area]}</span>
           </Link>
         );
       })}

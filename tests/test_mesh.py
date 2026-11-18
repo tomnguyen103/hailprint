@@ -142,6 +142,44 @@ def test_download_many_transport_error_names_the_key(tmp_path):
         mesh.download_many([key], tmp_path, client=Dropping())
 
 
+def test_download_many_includes_failed_count_and_root_exception_detail(tmp_path):
+    class PartialClient:
+        def download_file(self, Bucket, Key, Filename):
+            if Key.endswith("130000.grib2.gz") or Key.endswith("140000.grib2.gz"):
+                raise ConnectionResetError("upstream reset")
+            open(Filename, "wb").write(b"ok")
+
+    keys = [_key("20240529", "120000"), _key("20240529", "130000"), _key("20240529", "140000")]
+    with pytest.raises(RuntimeError) as exc:
+        mesh.download_many(keys, tmp_path, client=PartialClient(), workers=2)
+
+    msg = str(exc.value)
+    assert "2 failed" in msg
+    assert keys[1] in msg and keys[2] in msg
+    assert keys[0] not in msg
+    assert "ConnectionResetError" in msg
+    assert "upstream reset" in msg
+    assert isinstance(exc.value.__cause__, ConnectionResetError)
+    assert mesh.local_path(keys[0], tmp_path).exists()
+    assert not mesh.local_path(keys[1], tmp_path).exists()
+    assert not mesh.local_path(keys[2], tmp_path).exists()
+
+
+def test_download_many_truncates_oversized_exception_message(tmp_path):
+    class VerboseErrorClient:
+        def download_file(self, Bucket, Key, Filename):
+            raise OSError("x" * 1000)
+
+    key = _key("20240529", "120000")
+    with pytest.raises(RuntimeError) as exc:
+        mesh.download_many([key], tmp_path, client=VerboseErrorClient())
+
+    msg = str(exc.value)
+    assert "1 failed" in msg
+    assert "OSError" in msg
+    assert len(msg) < 500
+
+
 def test_daily_max_masks_sentinels_and_reads_the_one_12z_file(tmp_path, monkeypatch):
     local = mesh.local_path(KEY_12Z, tmp_path)
     local.parent.mkdir(parents=True)
