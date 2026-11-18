@@ -2,6 +2,7 @@
 import { useSyncExternalStore } from "preact/compat";
 
 const DEFAULT_RADIUS_KM = 5;
+// shortcut: DEFAULT_MAX_RADIUS_KM stands in for radius_km_max until the first pairs.json arrives, upgrade when storms.json carries it
 export const DEFAULT_MAX_RADIUS_KM = 20;
 
 let customRadius: number | null = null;

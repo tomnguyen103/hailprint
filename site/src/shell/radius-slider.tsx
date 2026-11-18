@@ -1,8 +1,5 @@
 import { useId } from "preact/hooks";
-import { DEFAULT_MAX_RADIUS_KM, clampRadiusKm } from "../state/radius";
-
-// shortcut: DEFAULT_MAX_RADIUS_KM stands in for radius_km_max until the first pairs.json arrives, upgrade when storms.json carries it
-export const RADIUS_MAX_FALLBACK = DEFAULT_MAX_RADIUS_KM;
+import { clampRadiusKm } from "../state/radius";
 
 /** The scoring radius in whole km, a native range from `min` (default 0) to `max`. Home and End are native. */
 export function RadiusSlider({

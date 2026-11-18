@@ -105,7 +105,7 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips, o
         </ul>
         <p class="pane-note">
           CLI commands and CSV export live in{" "}
-          <Link href={href({ area: "try", tool: "run" })}>Run &amp; export</Link>.
+          <Link href={href({ area: "try", tool: "run" })}>Run</Link>.
         </p>
       </section>
       <section>

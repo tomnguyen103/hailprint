@@ -449,7 +449,7 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     const pairsItem = fileItems.filter((item) => item.name === "pairs.json").at(-1);
     expect(reportsItem?.receipt).toEqual(sampleReceipt);
     expect(pairsItem?.receipt).toEqual(sampleReceipt);
-    expect(links.some((l) => l.href === "/try/run" && l.children === "Run & export")).toBe(true);
+    expect(links.some((l) => l.href === "/try/run" && l.children === "Run")).toBe(true);
     setFetch(null);
 
     const { eagleiYearsFor, odinWindowDays, odinSyncCommandFor, cliSequence } = await import("./try/cli-commands");

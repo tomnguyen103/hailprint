@@ -7,13 +7,13 @@ import { ODIN_LABEL, percentText } from "../impact/power";
 import { href } from "../router";
 import { objectName } from "../ruler";
 import { Link } from "../shell/link";
-import { RADIUS_MAX_FALLBACK, RadiusSlider } from "../shell/radius-slider";
+import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { countyAt } from "../state/county";
 import { useInternetAll, usePowerAll, useReportsAll, useWarningsAll } from "../state/impact-all";
 import { useLoad } from "../state/load";
-import { METRO_PRESETS, setPinCounties, usePin } from "../state/pin";
+import { MAX_PIN_RADIUS_KM, METRO_PRESETS, MIN_PIN_RADIUS_KM, setPinCounties, usePin } from "../state/pin";
 import { useSwathsAll } from "../state/swaths-all";
 import { useTheme } from "../state/theme";
 import { useMap } from "../storms/map/use-map";
@@ -509,7 +509,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
             Clear pin
           </button>
         ) : null}
-        <RadiusSlider value={radiusKm} min={1} max={RADIUS_MAX_FALLBACK} onChange={setPinRadiusKm} />
+        <RadiusSlider value={radiusKm} min={MIN_PIN_RADIUS_KM} max={MAX_PIN_RADIUS_KM} onChange={setPinRadiusKm} />
         <div class="point-presets" role="group" aria-label="Houston Metro benchmark presets">
           {METRO_PRESETS.map((preset) => {
             const isSelected =
