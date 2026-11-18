@@ -84,7 +84,7 @@
   height: 8px;
   margin-right: 8px;
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--primary);
   vertical-align: middle;
 }
 

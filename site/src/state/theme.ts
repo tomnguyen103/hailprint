@@ -1,8 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { apply, read, resolve, store, type Resolved, type Selection } from "../theme";
 
-export type ThemePreference = Selection;
-
 // One store for the page: one preference, one listener set, one matchMedia listener.
 const media =
   typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -22,21 +20,11 @@ media?.addEventListener("change", (event) => {
   if (pref === "system") notify();
 });
 
-/** Read the stored theme preference (`"light" | "dark" | "system"`). */
-export function readThemePreference(): ThemePreference {
-  return read();
-}
-
 /** Store the preference, stamp the resolved theme on the root, and notify every subscriber. */
 export function setTheme(next: Selection): void {
   store(next);
   pref = next;
   notify();
-}
-
-/** Alias for `setTheme` matching the Corporate Standard v1 theme contract. */
-export function setThemePreference(next: ThemePreference): void {
-  setTheme(next);
 }
 
 /** The stored preference, the resolved theme, and the setter. Every caller sees one value. */

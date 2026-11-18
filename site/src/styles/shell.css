@@ -104,6 +104,7 @@
 }
 
 .icon-button {
+  flex: none;
   display: grid;
   place-items: center;
   width: 40px;
@@ -787,7 +788,8 @@
 
 @media (min-width: 768px) and (max-width: 1023px) {
   .top-bar {
-    grid-template-columns: minmax(0, 1fr) minmax(240px, 420px) auto;
+    grid-template-columns: auto minmax(200px, 360px) auto;
+    justify-content: space-between;
   }
 }
 

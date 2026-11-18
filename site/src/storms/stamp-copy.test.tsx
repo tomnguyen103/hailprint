@@ -212,15 +212,15 @@ describe("Stamp copy feedback & UI polish contracts (US-16.1, US-16.2, US-16.3)"
     expect(liveCss).toContain(":nth-child(3n)");
     expect(liveCss).toContain(":nth-child(n + 4)");
 
-    // .pane h2 uses design.md pane-heading face (--sans) and 18px / 600
+    // .pane h2 uses design.md pane-heading face (--font-sans) and 16px / 600
     const paneH2 = stormsCss.match(/\.pane h2\s*\{([^}]*)\}/)?.[1] ?? "";
-    expect(paneH2).toContain("var(--sans)");
+    expect(paneH2).toContain("var(--font-sans)");
     expect(paneH2).toContain("600");
 
-    // .share-bar uses chrome token (--accent), not a hail token
+    // .share-bar uses chrome token (--primary), not a hail token
     const shareBar = pipelineCss.match(/\.share-bar\s*\{([^}]*)\}/)?.[1] ?? "";
     expect(shareBar).not.toContain("--hail-");
-    expect(shareBar).toContain("var(--accent)");
+    expect(shareBar).toContain("var(--primary)");
 
     // Live map frame uses tabIndex={-1}
     expect(liveMapTsx).toContain("tabIndex={-1}");

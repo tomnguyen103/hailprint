@@ -101,7 +101,7 @@ export function ReportClassifierTable({
         ))}
       </div>
       <div class="table-scroll">
-        <table class="table report-classifier-table">
+        <table class="table">
           <thead>
             <tr>
               <th scope="col">Report</th>

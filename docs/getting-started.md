@@ -76,6 +76,6 @@ Tests that need downloaded data skip when the data is absent. The markers live i
 
 ## Next
 
-- [operations.md](operations.md) covers the nightly run, the cron entry, and the deploy.
+- [operations.md](operations.md) covers Trigger.dev schedules, Supabase Storage buckets, and environment variables.
 - [site/README.md](../site/README.md) covers the site routes, the basemap, and the dev harness.
 - [GLOSSARY.md](../GLOSSARY.md) defines the domain terms.

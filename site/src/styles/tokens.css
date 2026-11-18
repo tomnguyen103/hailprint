@@ -23,17 +23,7 @@
   --sidebar-active-text: #1e3a8a;
   --sidebar-active-edge: #1e3a8a;
 
-  /* MapLibre and component aliases */
-  --paper: var(--bg);
-  --paper-raised: var(--surface);
-  --sheet: var(--surface);
-  --sheet-muted: var(--surface-muted);
-  --rule: var(--border);
-  --ink: var(--text);
-  --ink-muted: var(--text-muted);
-  --accent: var(--primary);
-  --accent-amber: var(--warning);
-  --on-accent: var(--on-primary);
+  /* Map and domain surfaces */
   --report: #b42318;
   --note-bg: #fef3c7;
   --note-ink: #78350f;
@@ -73,12 +63,8 @@
 
   --font-sans: "IBM Plex Sans Variable", "IBM Plex Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
-  --sans: var(--font-sans);
-  --mono: var(--font-mono);
 
   --radius: 4px;
-  --radius-pane: var(--radius);
-  --radius-control: var(--radius);
   --gutter: 24px;
   --bar-height: 56px;
   --sidebar-width: 256px;

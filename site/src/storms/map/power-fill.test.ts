@@ -187,7 +187,7 @@ describe("the power layers and swath contours", () => {
     expect(swathOutline.paint["line-color"]).toEqual([
       "case",
       ...RULER.flatMap((m, i) => [["==", ["get", "threshold_mm"], m.threshold_mm], `light--hail-${i + 1}`]),
-      "light--rule",
+      "light--border",
     ]);
   });
 

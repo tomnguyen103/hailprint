@@ -39,7 +39,7 @@ describe("state/theme preference store (US-03.5, US-04.1)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("exports readThemePreference, setThemePreference, and updates live on matchMedia changes only in system mode", async () => {
+  it("persists setTheme and updates live on matchMedia changes only in system mode", async () => {
     let mediaMatches = false;
     const mediaListeners: Array<(e: { matches: boolean }) => void> = [];
     const store = new Map<string, string>();
@@ -69,14 +69,9 @@ describe("state/theme preference store (US-03.5, US-04.1)", () => {
     });
 
     const mod = await import("./state/theme");
-    expect(typeof (mod as Record<string, unknown>)["readThemePreference"]).toBe("function");
-    expect(typeof (mod as Record<string, unknown>)["setThemePreference"]).toBe("function");
+    expect(read()).toBe("system");
 
-    const readPref = (mod as unknown as { readThemePreference: () => string }).readThemePreference;
-    const setPref = (mod as unknown as { setThemePreference: (v: "light" | "dark" | "system") => void }).setThemePreference;
-    expect(readPref()).toBe("system");
-
-    setPref("dark");
+    mod.setTheme("dark");
     expect(store.get("theme")).toBe("dark");
     expect(root.dataset["theme"]).toBe("dark");
     expect(root.style.colorScheme).toBe("dark");
@@ -87,7 +82,7 @@ describe("state/theme preference store (US-03.5, US-04.1)", () => {
     expect(root.dataset["theme"]).toBe("dark");
 
     // Returning to system mode follows OS scheme live
-    setPref("system");
+    mod.setTheme("system");
     expect(store.get("theme")).toBe("system");
     expect(root.dataset["theme"]).toBe("light");
     mediaMatches = true;

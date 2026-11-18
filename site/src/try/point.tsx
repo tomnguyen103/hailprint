@@ -94,7 +94,7 @@ function renderInternetCell(row: StormPinRow): string {
 
 function renderCellError(label: string, err: DataError, onRetry: () => void) {
   return (
-    <span class="point-cell-error">
+    <span>
       {label} off ({err.message}){" "}
       <button type="button" class="button button-small" onClick={onRetry}>
         Retry
@@ -281,7 +281,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     } else {
       const firstCropStatus = rows[0]?.cropStatus ?? "inside";
       resultsSection = (
-        <section class="point-results point-analysis" aria-label="Pinned location archive analysis">
+        <section class="point-results" aria-label="Pinned location archive analysis">
           {countyError !== null ? (
             <ErrorState error={countyError.error} onRetry={countyError.retry} />
           ) : impactLoading ? (

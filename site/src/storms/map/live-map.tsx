@@ -66,7 +66,7 @@ export function LiveMap({ swath, reports, warnings }: Props) {
   };
 
   return (
-    <div class="map-stage live-map-stage">
+    <div class="map-stage">
       <div
         ref={container}
         class="map-frame"

@@ -184,14 +184,14 @@ describe("createMap", () => {
     expect(spriteUrl("dark")).toBe("https://protomaps.github.io/basemaps-assets/sprites/v4/dark");
 
     const tokenValues: Record<string, string> = {
-      "--paper": "#f7f6f2",
-      "--sheet": "#ffffff",
-      "--sheet-muted": "#efede6",
-      "--rule": "#e2dfd5",
+      "--bg": "#f7f6f2",
+      "--surface": "#ffffff",
+      "--surface-muted": "#efede6",
+      "--border": "#e2dfd5",
       "--water": "#e4eae8",
       "--road-major": "#cfcbc0",
-      "--ink": "#1f1e1b",
-      "--ink-muted": "#4a4840",
+      "--text": "#1f1e1b",
+      "--text-muted": "#4a4840",
       "--report": "#1f5a7a",
       "--warn-sv": "#8a5300",
       "--warn-to": "#a3175f",
@@ -437,7 +437,6 @@ describe("createMap", () => {
       "--text": "lab(8.26392% -.742577 -7.89793)",
       "--text-muted": "lab(32.6442% -1.114 -8.02775)",
       "--surface": "lab(99.0615% -.261664 -1.48883)",
-      "--rule": "lab(85.4572% -.922233 -5.55018)",
       "--border": "lab(85.4572% -.922233 -5.55018)",
       "--report": "lab(40.1143% 59.6761 45.0277)",
       "--warn-sv": "lab(40.4802% 21.5733 60.3275)",

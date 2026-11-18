@@ -177,7 +177,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
               </span>
             </div>
             <div class="table-scroll">
-              <table class="table sensitivity-matrix">
+              <table class="table">
                 <thead>
                   <tr>
                     <th scope="col">Radius</th>

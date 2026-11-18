@@ -224,7 +224,7 @@ export function swathOutlineColor(): LineColor {
   const expr = [
     "case",
     ...RULER.flatMap((mark, i) => [["==", ["get", "threshold_mm"], mark.threshold_mm], token(`--hail-${i + 1}`)]),
-    token("--rule"),
+    token("--border"),
   ];
   return expr as unknown as LineColor;
 }
