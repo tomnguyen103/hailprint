@@ -25,7 +25,7 @@ export const COMPARE_PRESETS: readonly ComparePreset[] = [
   },
   {
     id: "skill-vs-dense",
-    label: "2024-12-24 vs 2024-03-21 (0.50 Peak HSS vs 10-Report Swath)",
+    label: "2024-12-24 vs 2024-03-21 (Peak Skill vs Dense Reports)",
     dateA: "2024-12-24",
     dateB: "2024-03-21",
   },

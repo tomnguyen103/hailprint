@@ -1,3 +1,4 @@
+import { useState } from "preact/hooks";
 import { DATA_BASE, fetchJson } from "../data/fetch";
 import { guardPairs, guardReports, guardSwath, guardWarnings, guardZipCounts } from "../data/guard";
 import type {
@@ -11,6 +12,8 @@ import type {
   ZipCounts,
 } from "../data/types";
 import { InternetTable, PowerTable, TimelineTables } from "../impact/timeline-tables";
+import { href } from "../router";
+import { Link } from "../shell/link";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ReceiptList } from "../shell/receipt-list";
 import { ErrorState, LoadingState } from "../shell/states";
@@ -75,23 +78,6 @@ export function cliSequence(o: {
   ];
 }
 
-/** Full CLI sequence to reproduce every published file for `storm`. */
-export function reproduceCommands(
-  storm: Storm,
-  radiusKm = 5,
-  powerSource: PowerFile["source"] | null = null,
-): string[] {
-  const effectiveSource = storm.files.power ? powerSource : null;
-  return cliSequence({
-    date: storm.storm_date,
-    radius: radiusKm,
-    parcels: Boolean(storm.files.zip_counts),
-    warnings: Boolean(storm.files.warnings),
-    internet: Boolean(storm.files.internet),
-    power: effectiveSource,
-  });
-}
-
 /** One published file: a download link, with its receipt chip when the file carries a receipt, or "none". */
 export function FileItem({ name, path, receipt }: { name: string; path: string | null; receipt: Receipt | null }) {
   if (path === null) {
@@ -125,10 +111,14 @@ interface Props {
   /** The internet file load from the workspace, which also feeds the map. */
   internet: Load<InternetFile | null> & { retry: () => void };
   fips: string;
+  onCounty?: (fips: string) => void;
 }
 
 /** Render the per-file provenance and data receipt pane for a storm date. */
-export function DataPane({ storm, reports: reportsProp, power, internet, fips }: Props) {
+export function DataPane({ storm, reports: reportsProp, power, internet, fips, onCounty }: Props) {
+  const [localFips, setLocalFips] = useState(fips);
+  const activeFips = onCounty ? fips : localFips;
+  const handleCounty = onCounty ?? setLocalFips;
   const swath = useLoad<SwathFile>(`data:${storm.files.swath}`, () => fetchJson(storm.files.swath, guardSwath));
   const pairs = useLoad(`data:${storm.files.pairs}`, () => fetchJson(storm.files.pairs, guardPairs));
   const warningsFile = storm.files.warnings;
@@ -149,6 +139,7 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
   const zipReceipt = zipCounts.status === "ready" && zipCounts.data !== null ? zipCounts.data.receipt : null;
   const powerData = power.status === "ready" ? power.data : null;
   const internetData = internet.status === "ready" ? internet.data : null;
+  const counties = powerData?.counties ?? internetData?.counties ?? [];
   const files: [string, string | null, Receipt | null][] = [
     ["swath.geojson", storm.files.swath, swathReceipt],
     ["reports.geojson", storm.files.reports, reports.status === "ready" && reports.data ? reports.data.receipt : null],
@@ -169,16 +160,10 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
             </li>
           ))}
         </ul>
-        <h2>Reproduce</h2>
-        <pre class="code-block">
-          <code>
-            {reproduceCommands(
-              storm,
-              pairs.status === "ready" ? pairs.data.radius_km_default : 5,
-              powerData?.source ?? null,
-            ).join("\n")}
-          </code>
-        </pre>
+        <p class="pane-note">
+          CLI commands and CSV export live in{" "}
+          <Link href={href({ area: "try", tool: "run" })}>Run &amp; export</Link>.
+        </p>
       </section>
       <section>
         <h2>Receipt</h2>
@@ -206,10 +191,26 @@ export function DataPane({ storm, reports: reportsProp, power, internet, fips }:
           warnings={warnings.status === "ready" ? warnings.data : null}
           reports={reports.status === "ready" ? reports.data : null}
         />
+        {counties.length > 0 ? (
+          <div class="data-county-bar">
+            <label for="data-county-select">County</label>
+            <select
+              id="data-county-select"
+              value={activeFips}
+              onChange={(e) => handleCounty((e.currentTarget as HTMLSelectElement).value)}
+            >
+              {counties.map((c) => (
+                <option key={c.fips} value={c.fips}>
+                  {c.name} ({c.fips})
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
         {power.status === "error" ? <ErrorState error={power.error} onRetry={power.retry} /> : null}
-        {powerData === null ? null : <PowerTable date={storm.storm_date} power={powerData} fips={fips} />}
+        {powerData === null ? null : <PowerTable date={storm.storm_date} power={powerData} fips={activeFips} />}
         {internet.status === "error" ? <ErrorState error={internet.error} onRetry={internet.retry} /> : null}
-        {internetData === null ? null : <InternetTable date={storm.storm_date} internet={internetData} fips={fips} />}
+        {internetData === null ? null : <InternetTable date={storm.storm_date} internet={internetData} fips={activeFips} />}
       </section>
     </div>
   );

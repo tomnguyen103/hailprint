@@ -16,10 +16,9 @@
   padding: 6px 8px;
 }
 
-.service-age {
-  grid-column: 2;
-  color: var(--ink-muted);
-  font-size: 0.8rem;
+.service-publish {
+  margin: 0 0 8px;
+  padding: 0 8px;
 }
 
 /* shortcut: the dot reads presence in the published file, upgrade to a freshness rule when a cron runs */

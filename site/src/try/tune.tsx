@@ -1,7 +1,5 @@
 import { useId, useState } from "preact/hooks";
-import { fetchJson } from "../data/fetch";
-import { guardReports } from "../data/guard";
-import type { ReportsFile, StormsIndex } from "../data/types";
+import type { StormsIndex } from "../data/types";
 import { METRICS, METRIC_LABELS, type MetricKey } from "../format";
 import { RULER, diameterPx } from "../ruler";
 import { MetricText } from "../scorecard/metric-text";
@@ -10,9 +8,7 @@ import { ContingencyGrid } from "../shell/contingency-grid";
 import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
-import { useLoad } from "../state/load";
 import { useRadiusKm } from "../state/radius";
-import { ReportClassifierTable } from "../storms/report-classifier-table";
 import { ALL_SCOPE, ScopeSelect, useScopeRows } from "./try";
 
 const DEFAULT_CLASS = 1; // quarter, 1.00 in
@@ -24,11 +20,6 @@ export function Tune({ index }: { index: StormsIndex }) {
   const [classIdx, setClassIdx] = useState(DEFAULT_CLASS);
   const [metric, setMetric] = useState<MetricKey>("hss");
   const { load, table, receipt, maxRadiusKm, activeRadius, file } = useScopeRows(index, scope, radius);
-  const selectedStorm = scope === ALL_SCOPE ? undefined : index.storms.find((s) => s.storm_date === scope);
-  const reportsLoad = useLoad<ReportsFile | null>(
-    selectedStorm ? `tune:${selectedStorm.files.reports}` : "tune:reports:none",
-    () => (selectedStorm ? fetchJson(selectedStorm.files.reports, guardReports) : Promise.resolve(null)),
-  );
   const sliderId = useId();
   const mark = RULER[classIdx] ?? RULER[DEFAULT_CLASS]!;
   const inches = `${mark.threshold_in.toFixed(2)} in`;
@@ -39,8 +30,6 @@ export function Tune({ index }: { index: StormsIndex }) {
   else if ("error" in table) body = <ErrorState error={table.error} onRetry={load.retry} />;
   else {
     const row = table.rows.find((r) => r.threshold_mm === mark.threshold_mm);
-    const singlePairs = scope !== ALL_SCOPE && load.status === "ready" ? (load.data[0] ?? null) : null;
-    const reportsGeo = reportsLoad.status === "ready" ? reportsLoad.data : null;
     body =
       row === undefined || receipt === null ? null : (
         <>
@@ -64,16 +53,6 @@ export function Tune({ index }: { index: StormsIndex }) {
               <ThresholdCurve rows={table.rows} metric={metric} onMetric={setMetric} highlightMm={mark.threshold_mm} />
             </section>
           </div>
-          {singlePairs !== null ? (
-            <ReportClassifierTable
-              stormDate={scope}
-              pairs={singlePairs}
-              reportsGeo={reportsGeo}
-              radiusKm={activeRadius}
-              thresholdMm={mark.threshold_mm}
-              thresholdIn={mark.threshold_in}
-            />
-          ) : null}
         </>
       );
   }

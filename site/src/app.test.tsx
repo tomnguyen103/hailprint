@@ -14,6 +14,7 @@ const stub = vi.hoisted(() => ({
   shown: [] as { error: { message: string }; inLayout: boolean }[],
   storms: [{ storm_date: "2024-05-28" }] as Record<string, unknown>[],
   index: null as Record<string, unknown> | null,
+  liveProps: [] as { newest?: string | null }[],
   // The Layout stub provides it, the ErrorState stub reads it: true when the error state renders under the layout.
   layoutContext: undefined as unknown as Context<boolean>,
   armed: true,
@@ -60,6 +61,17 @@ vi.mock("./state/live", () => ({
     return { status: "loading", showLoading: false, retry() {} };
   },
 }));
+vi.mock("./storms/map/live-map", () => ({ LiveMap: () => null }));
+vi.mock("./live/live-view", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./live/live-view")>();
+  return {
+    ...actual,
+    LiveView: (props: { newest?: string | null }) => {
+      stub.liveProps.push(props);
+      return actual.LiveView(props);
+    },
+  };
+});
 vi.mock("./storms/workspace", () => ({ Workspace: () => null }));
 vi.mock("./method/method", () => ({
   Method: () => {
@@ -93,6 +105,7 @@ describe("App", () => {
     stub.shown.length = 0;
     stub.storms = [{ storm_date: "2024-05-28" }];
     stub.index = null;
+    stub.liveProps.length = 0;
     stub.armed = true;
     stub.current = { path: "/method/data", route: { kind: "method", page: "data" } };
   });
@@ -161,7 +174,7 @@ describe("App", () => {
     expect(stub.replaced).toEqual(["/live"]);
   });
 
-  it("renders the live view when storms.json fails, and marks Live as the active area", async () => {
+  it("renders the live view with newest=null when storms.json fails, and passes newest storm_date when ready (US-01.1, US-01.5)", async () => {
     stub.index = { status: "error", error: { message: "storms.json: HTTP 500" }, showLoading: false, retry() {} };
     stub.current = { path: "/live", route: { kind: "live" } };
 
@@ -170,6 +183,11 @@ describe("App", () => {
     expect(stub.log.at(-1)).toBe("live");
     expect(stub.shown).toEqual([]);
     expect((stub.layouts.at(-1) as unknown as { active: string }).active).toBe("live");
+    expect(stub.liveProps.at(-1)?.newest).toBeNull();
+
+    stub.index = null;
+    await mount();
+    expect(stub.liveProps.at(-1)?.newest).toBe("2024-05-28");
   });
 });
 
@@ -426,22 +444,25 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(pairsItem?.receipt).toEqual(sampleReceipt);
     setFetch(null);
 
-    const { eagleiYearsFor, reproduceCommands } = await import("./storms/data-pane");
+    const dataPaneMod = await import("./storms/data-pane");
+    expect(Object.keys(dataPaneMod).sort()).toEqual([
+      "DataPane",
+      "FileItem",
+      "cliSequence",
+      "eagleiYearsFor",
+      "odinSyncCommandFor",
+      "odinWindowDays",
+    ]);
+    const { eagleiYearsFor, cliSequence } = dataPaneMod;
     expect(eagleiYearsFor("2024-12-31")).toEqual(["2024", "2025"]);
-    const cliLines = reproduceCommands(
-      {
-        ...storm,
-        files: {
-          ...storm.files,
-          zip_counts: "storms/2024-05-28/zip-counts.json",
-          warnings: "storms/2024-05-28/warnings.geojson",
-          power: "storms/2024-05-28/power.json",
-          internet: "storms/2024-05-28/internet.json",
-        },
-      },
-      5,
-      "eaglei",
-    );
+    const cliLines = cliSequence({
+      date: storm.storm_date,
+      radius: 5,
+      parcels: true,
+      warnings: true,
+      internet: true,
+      power: "eaglei",
+    });
     expect(cliLines).toContain("uv run hailprint score 2024-05-28 --radius-km 5");
     expect(cliLines).toContain("uv run hailprint warnings 2024-05-28");
     expect(cliLines).toContain("uv run hailprint eaglei 2024");
@@ -449,38 +470,9 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(cliLines).toContain("uv run hailprint internet 2024-05-28");
     expect(cliLines).toContain("uv run hailprint publish 2024-05-28 --with-internet");
 
-    const odinCliLines = reproduceCommands(
-      {
-        ...storm,
-        storm_date: "2026-04-04",
-        files: {
-          ...storm.files,
-          power: "storms/2026-04-04/power.json",
-        },
-      },
-      5,
-      "odin",
-    );
-    expect(odinCliLines).not.toContain("uv run hailprint eaglei 2026");
-    expect(
-      odinCliLines.some((line) => line.includes("derived/odin/odin-2026-04-04.parquet")),
-    ).toBe(true);
-
-    const unknownPowerCli = reproduceCommands(
-      {
-        ...storm,
-        storm_date: "2026-04-04",
-        files: {
-          ...storm.files,
-          power: "storms/2026-04-04/power.json",
-        },
-      },
-      5,
-      null,
-    );
-    expect(unknownPowerCli).not.toContain("uv run hailprint power 2026-04-04");
-
-    const { commandsFor, runPublishedFiles } = await import("./try/run");
+    const runMod = await import("./try/run");
+    expect(Object.keys(runMod).sort()).toEqual(["Run", "commandsFor"]);
+    const { commandsFor } = runMod;
     const runCmds = commandsFor("2024-05-28", 5, undefined, "eaglei");
     expect(runCmds).toContain("uv run hailprint warnings 2024-05-28");
     expect(runCmds).toContain("uv run hailprint eaglei 2024");
@@ -503,7 +495,6 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
       null,
     );
     expect(unknownPowerRunCmds).not.toContain("uv run hailprint power 2026-04-04");
-    expect(runPublishedFiles(storm)).toHaveLength(7);
 
     const { Footer } = await import("./shell/footer");
     const { TopBar } = await import("./shell/top-bar");

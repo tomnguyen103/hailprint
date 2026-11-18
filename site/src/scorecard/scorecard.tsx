@@ -1,6 +1,6 @@
 import { useMemo, useState } from "preact/hooks";
 import "../styles/scorecard.css";
-import { DataError, type StormsIndex } from "../data/types";
+import { DataError, type Storm, type StormsIndex } from "../data/types";
 import { formatInches, type MetricKey } from "../format";
 import {
   SENSITIVITY_RADII_KM,
@@ -32,6 +32,16 @@ export const VIEW_LABELS: Record<ScorecardView, string> = {
 const FILE = "pairs.json";
 const SENTENCE = "The scorecard pools the contingency table across every storm date.";
 
+/** Format a cohort pill label with its dynamic year span derived from `storms`. */
+function cohortLabel(base: string, storms: readonly Storm[]): string {
+  if (storms.length === 0) return `${base} (0)`;
+  const years = storms.map((s) => s.storm_date.slice(0, 4)).sort();
+  const min = years[0]!;
+  const max = years[years.length - 1]!;
+  const span = min === max ? min : `${min}\u2013${max}`;
+  return `${base} ${span} (${storms.length})`;
+}
+
 export function Scorecard({ index, view }: { index: StormsIndex; view: ScorecardView }) {
   const pairs = usePairsAll(index);
   const [cohort, setCohort] = useState<CohortId>("all");
@@ -44,8 +54,8 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
     () => [...new Set(index.storms.map((s) => s.storm_date.slice(0, 4)))].sort((a, b) => b.localeCompare(a)),
     [index.storms],
   );
-  const wcmCount = useMemo(() => index.storms.filter((s) => s.report_source === "wcm").length, [index.storms]);
-  const dailyCount = useMemo(() => index.storms.filter((s) => s.report_source === "spc-daily").length, [index.storms]);
+  const wcmStorms = useMemo(() => index.storms.filter((s) => s.report_source === "wcm"), [index.storms]);
+  const dailyStorms = useMemo(() => index.storms.filter((s) => s.report_source === "spc-daily"), [index.storms]);
 
   const filtered = useMemo(
     () => (rawData === null ? null : filterCohort(index.storms, rawData, cohort)),
@@ -62,8 +72,8 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
 
   const cohortOptions: { id: CohortId; label: string; count: number }[] = [
     { id: "all", label: `All (${index.storms.length})`, count: index.storms.length },
-    { id: "wcm", label: `WCM 2021–2025 (${wcmCount})`, count: wcmCount },
-    { id: "spc-daily", label: `SPC-Daily 2026 (${dailyCount})`, count: dailyCount },
+    { id: "wcm", label: cohortLabel("WCM", wcmStorms), count: wcmStorms.length },
+    { id: "spc-daily", label: cohortLabel("SPC-Daily", dailyStorms), count: dailyStorms.length },
     ...years.map((y) => {
       const count = index.storms.filter((s) => s.storm_date.startsWith(y)).length;
       return {
@@ -91,7 +101,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
   } else {
     body = (
       <>
-        <ThresholdCurve rows={table.rows} metric={metric} onMetric={setMetric} />
+        <ThresholdCurve rows={table.rows} metric={metric} onMetric={setMetric} highlightMm={classMm} />
         <p class="pane-note">
           <ReceiptChip receipt={receipt} file={file} />
         </p>
@@ -141,7 +151,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
       <section class="pane" role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
         <h2 class="visually-hidden">{VIEW_LABELS[view]}</h2>
         {body}
-        {matrix.length > 0 && receipt !== null ? (
+        {view === "curve" && matrix.length > 0 && receipt !== null ? (
           <section class="sensitivity-section" aria-label="Radius by threshold HSS sensitivity matrix">
             <h2>Radius × threshold HSS sensitivity matrix</h2>
             <p class="pane-note">

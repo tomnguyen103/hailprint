@@ -39,8 +39,16 @@ uv run hailprint candidates --missing       # candidate days with a 12Z file and
 uv run hailprint parcels 2024-05-28         # parcel count per size class; needs `ingest` for that date and the HCAD gdb
 uv run hailprint score --radius-km 5        # scores every swath file against the SPC daily CSVs
 uv run hailprint warnings 2024-05-28        # NWS warning polygons for one or more storm dates; `--missing` fills the gaps
+uv run hailprint eaglei 2025                # EAGLE-I year CSV streamed once, metro rows kept; one manual run per new year
+uv run hailprint power --missing            # customers out per metro county and step for each swath date with a closed window
+uv run hailprint odin                       # one ODIN snapshot into the UTC day file
 uv run hailprint internet 2024-05-17        # IODA county reachability for one or more storm dates from 2022-03 to 2024-05; `--missing` fills the gaps
 uv run hailprint publish                    # writes site/data/ (ZIP counts only where `parcels` ran); `--with-internet` adds internet.json
+uv run hailprint live                       # live files under site/data/live/ (24 h MESH, SPC, HGX warnings, ODIN), now.json last
+uv run hailprint cloud nightly              # syncs Supabase S3 state/public down, runs nightly pipeline, syncs changed files up
+uv run hailprint cloud odin                 # syncs today's ODIN day file down, runs `odin`, syncs that file up
+uv run hailprint cloud backfill             # syncs state/public down, runs warnings/eaglei/power/internet/publish, syncs up
+uv run hailprint cloud live                 # syncs public live/ down, runs `live`, syncs changed live/ keys up with now.json last
 ```
 
 A first run for one storm date:

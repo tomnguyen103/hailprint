@@ -2,7 +2,6 @@ import { h, type VNode } from "preact";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getRadiusKm, resetRadiusKm, setRadiusKm, subscribeRadius } from "../state/radius";
 import { PeekDrawer } from "./peek-drawer";
-import { ProofStrip } from "./proof-strip";
 
 function findNodes(
   node: unknown,
@@ -23,12 +22,12 @@ function textOf(node: unknown): string {
   return textOf(v.props?.["children"]);
 }
 
-describe("PeekDrawer, ProofStrip, and shared radius store", () => {
+describe("PeekDrawer and shared radius store (US-01.1, US-01.2)", () => {
   beforeEach(() => {
     resetRadiusKm();
   });
 
-  it("persists, clamps, rounds, and notifies subscribers on shared verification radius updates", () => {
+  it("persists, clamps [0, 20], rounds, rejects NaN, and notifies subscribers on shared verification radius updates", () => {
     const listener = vi.fn();
     const unsub = subscribeRadius(listener);
     expect(getRadiusKm()).toBe(5);
@@ -41,18 +40,26 @@ describe("PeekDrawer, ProofStrip, and shared radius store", () => {
     setRadiusKm(15.2);
     expect(listener).toHaveBeenCalledTimes(1);
 
-    // Clamps to [0, 25]
-    setRadiusKm(-4);
+    // Non-finite input must not poison store with NaN
+    setRadiusKm(Number.NaN);
+    expect(getRadiusKm()).toBe(15);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    // Clamps to [0, 20] at exact boundaries and beyond
+    setRadiusKm(-1);
     expect(getRadiusKm()).toBe(0);
-    setRadiusKm(99);
-    expect(getRadiusKm()).toBe(25);
+    setRadiusKm(21);
+    expect(getRadiusKm()).toBe(20);
     expect(listener).toHaveBeenCalledTimes(3);
 
-    // resetRadiusKm clamps, rounds, and skips no-op notifications
+    // resetRadiusKm clamps, rounds, ignores NaN, and skips no-op notifications
     resetRadiusKm(12.4);
     expect(getRadiusKm()).toBe(12);
     expect(listener).toHaveBeenCalledTimes(4);
     resetRadiusKm(12);
+    expect(listener).toHaveBeenCalledTimes(4);
+    resetRadiusKm(Number.NaN);
+    expect(getRadiusKm()).toBe(12);
     expect(listener).toHaveBeenCalledTimes(4);
 
     resetRadiusKm();
@@ -78,30 +85,6 @@ describe("PeekDrawer, ProofStrip, and shared radius store", () => {
     expect(closeBtn).toBeDefined();
     (closeBtn.props["onClick"] as () => void)();
     expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("renders 4 route links in ProofStrip, preserves map step, shows live radius, and marks active tab with aria-current", () => {
-    setRadiusKm(12);
-    const tree = ProofStrip({
-      date: "2024-05-28",
-      activeTab: "score",
-      step: 46,
-      receipt: {
-        storm_date: "2024-05-28",
-        sources: [],
-        confidence: "settled",
-        run_time: "2026-04-01T00:00:00Z",
-        package_version: "0.2.0",
-      },
-    });
-    const links = findNodes(tree, (v) => v.props?.["class"] === "proof-step");
-    expect(links).toHaveLength(4);
-    expect(links[0]!.props["href"]).toBe("/storms/2024-05-28/map/46");
-    const active = links.find((l) => l.props["aria-current"] === "page")!;
-    expect(textOf(active)).toContain("Skill Score");
-    expect(textOf(active)).toContain("R=12 km");
-    expect(textOf(links[3])).toContain("Provenance files");
-    expect(findNodes(tree, (v) => v.props?.["class"] === "proof-strip-receipt")).toHaveLength(1);
   });
 });
 

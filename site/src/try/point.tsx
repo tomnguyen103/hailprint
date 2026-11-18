@@ -4,8 +4,6 @@ import { METRO_BBOX, contains, fetchCounties, harrisFeature } from "../county";
 import { DataError, PHENOMENA, type StormsIndex } from "../data/types";
 import { BELOW_FIRST_CLASS, formatCount, formatInches } from "../format";
 import { ODIN_LABEL, percentText } from "../impact/power";
-import { type LiveStatusResult, fetchLiveStatus } from "../live/live-check";
-import { LiveStatusList } from "../live/live-status-list";
 import { href } from "../router";
 import { objectName } from "../ruler";
 import { Link } from "../shell/link";
@@ -31,11 +29,6 @@ import { POINT_HINT, parsePoint } from "./point-form";
 
 const SWATH_FILE = "swath.geojson";
 const POINT_ZOOM = 11;
-
-type LiveCheckState =
-  | { key: string; status: "idle" }
-  | { key: string; status: "loading" }
-  | { key: string; status: "ready"; data: LiveStatusResult };
 
 function cropBadgeText(cropStatus: StormPinRow["cropStatus"], radiusKm: number): string {
   if (cropStatus === "outside-crop") {
@@ -139,11 +132,9 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   const [invalid, setInvalid] = useState(false);
   const [previewDate, setPreviewDate] = useState<string>(() => index.storms[0]?.storm_date ?? "");
   const [filterMode, setFilterMode] = useState<"all" | "active">("all");
-  const [liveState, setLiveState] = useState<LiveCheckState>({ key: "", status: "idle" });
 
   const container = useRef<HTMLDivElement>(null);
   const handle = useRef<MapHandle | null>(null);
-  const liveEpochRef = useRef(0);
   const [ready, setReady] = useState(false);
   const [mapError, setMapError] = useState<DataError | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -244,10 +235,6 @@ export function PointCheck({ index }: { index: StormsIndex }) {
     return feat?.properties?.["name"] ? `${String(feat.properties["name"])} County` : `County ${pinnedFips}`;
   }, [pinnedFips, outlines]);
 
-  const liveKey = activePoint !== null ? `${activePoint[0]},${activePoint[1]},${pinnedFips ?? ""}` : "";
-  const currentLive: LiveCheckState =
-    liveState.key === liveKey ? liveState : { key: liveKey, status: "idle" };
-
   const check = (event: Event) => {
     event.preventDefault();
     const next = parsePoint(latText, lonText);
@@ -257,30 +244,10 @@ export function PointCheck({ index }: { index: StormsIndex }) {
   };
 
   const onClearPin = () => {
-    liveEpochRef.current += 1;
     clearPin();
     setLatText("");
     setLonText("");
     setInvalid(false);
-    setLiveState({ key: "", status: "idle" });
-  };
-
-  const runLiveCheck = () => {
-    if (!activePoint || metro.status !== "ready") return;
-    const reqKey = liveKey;
-    const myEpoch = ++liveEpochRef.current;
-    setLiveState({ key: reqKey, status: "loading" });
-    void fetchLiveStatus(activePoint, pinnedFips)
-      .then((data) => {
-        if (liveEpochRef.current === myEpoch) {
-          setLiveState({ key: reqKey, status: "ready", data });
-        }
-      })
-      .catch(() => {
-        if (liveEpochRef.current === myEpoch) {
-          setLiveState({ key: reqKey, status: "idle" });
-        }
-      });
   };
 
   const distances = useMemo((): StormPointDistances[] => {
@@ -401,28 +368,6 @@ export function PointCheck({ index }: { index: StormsIndex }) {
                     </>
                   ) : null}
                 </span>
-              </div>
-
-              <div class="point-live-bar">
-                <div class="point-live-head">
-                  <button
-                    type="button"
-                    class="button button-small"
-                    disabled={currentLive.status === "loading" || metro.status !== "ready"}
-                    onClick={runLiveCheck}
-                  >
-                    {currentLive.status === "loading"
-                      ? "Fetch live feeds\u2026"
-                      : "Check live NWS & outage feeds"}
-                  </button>
-                </div>
-                {currentLive.status === "ready" ? (
-                  <LiveStatusList
-                    data={currentLive.data}
-                    onRetry={runLiveCheck}
-                    className="receipt-list point-live-grid"
-                  />
-                ) : null}
               </div>
 
               <div class="point-table-toolbar">
@@ -597,7 +542,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
             Clear pin
           </button>
         ) : null}
-        <RadiusSlider value={radiusKm} max={RADIUS_MAX_FALLBACK} onChange={setPinRadiusKm} />
+        <RadiusSlider value={radiusKm} min={1} max={RADIUS_MAX_FALLBACK} onChange={setPinRadiusKm} />
         <div class="point-presets" role="group" aria-label="Houston Metro benchmark presets">
           {METRO_PRESETS.map((preset) => {
             const isSelected =

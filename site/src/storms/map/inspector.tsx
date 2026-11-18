@@ -15,8 +15,6 @@ import { pointInMultiPolygon } from "../../geometry";
 import { dropOf } from "../../impact/internet";
 import { ODIN_LABEL, percentText, shareOut } from "../../impact/power";
 import { internetSeriesTrough, powerSeriesPeak } from "../../impact/series";
-import { type LiveStatusResult, fetchLiveStatus } from "../../live/live-check";
-import { LiveStatusList } from "../../live/live-status-list";
 import { href } from "../../router";
 import { objectName } from "../../ruler";
 import { Link } from "../../shell/link";
@@ -318,18 +316,12 @@ export function InspectorView({
   pinnedLngLat,
   panelRef,
   isModalSheet = false,
-  liveStatus = "idle",
-  liveData = null,
-  onLiveCheck,
   copiedNote = false,
   onCopyNote,
 }: InspectorProps & {
   pinnedLngLat?: [number, number] | null;
   panelRef?: { current: HTMLDivElement | null };
   isModalSheet?: boolean;
-  liveStatus?: "idle" | "loading" | "ready";
-  liveData?: LiveStatusResult | null;
-  onLiveCheck?: () => void;
   copiedNote?: boolean;
   onCopyNote?: () => void;
 }) {
@@ -463,33 +455,12 @@ export function InspectorView({
       {internet === null ? null : (
         <InternetSection file={internet} step={step} fips={fips} onStep={onStep} />
       )}
-      {inMetro && onLiveCheck !== undefined ? (
-        <section class="inspector-county" aria-labelledby="inspector-live-title">
-          <h3 id="inspector-live-title">Live status check</h3>
-          <button
-            type="button"
-            class="button button-small"
-            disabled={liveStatus === "loading"}
-            onClick={onLiveCheck}
-          >
-            {liveStatus === "loading" ? "Fetch live feeds\u2026" : "Check live NWS & outage feeds"}
-          </button>
-          {liveStatus === "ready" && liveData !== null
-            ? LiveStatusList({ data: liveData, onRetry: onLiveCheck })
-            : null}
-        </section>
-      ) : null}
     </div>
   );
 }
 
-type InspectorLiveState =
-  | { key: string; status: "idle" }
-  | { key: string; status: "loading" }
-  | { key: string; status: "ready"; data: LiveStatusResult };
-
 /** The point inspector. Escape and Close call `onClose`; the caller returns focus. */
-/** Render the map point inspector drawer with radar, report, warning, impact, and live status sections. */
+/** Render the map point inspector drawer with radar, report, warning, and impact sections. */
 export function Inspector(props: InspectorProps) {
   const panel = useRef<HTMLDivElement>(null);
   const { pin } = usePin();
@@ -501,7 +472,6 @@ export function Inspector(props: InspectorProps) {
     setCopiedNote(true);
     copyTimerRef.current = setTimeout(() => setCopiedNote(false), 2000);
   };
-  const [liveState, setLiveState] = useState<InspectorLiveState>({ key: "", status: "idle" });
   const [isMobile, setIsMobile] = useState<boolean>(() =>
     typeof window !== "undefined" && typeof window.matchMedia === "function"
       ? window.matchMedia("(max-width: 767px)").matches
@@ -522,28 +492,6 @@ export function Inspector(props: InspectorProps) {
     header?.setAttribute("inert", "");
     return () => header?.removeAttribute("inert");
   }, [isMobile]);
-  const liveEpochRef = useRef(0);
-  const liveFips = props.pick.countyFips !== undefined ? props.pick.countyFips : props.fips;
-  const liveKey = `${props.pick.lngLat[0]},${props.pick.lngLat[1]},${liveFips ?? ""}`;
-  const currentLive: InspectorLiveState =
-    liveState.key === liveKey ? liveState : { key: liveKey, status: "idle" };
-
-  const runLiveCheck = () => {
-    const reqKey = liveKey;
-    const myEpoch = ++liveEpochRef.current;
-    setLiveState({ key: reqKey, status: "loading" });
-    void fetchLiveStatus(props.pick.lngLat, liveFips)
-      .then((data) => {
-        if (liveEpochRef.current === myEpoch) {
-          setLiveState({ key: reqKey, status: "ready", data });
-        }
-      })
-      .catch(() => {
-        if (liveEpochRef.current === myEpoch) {
-          setLiveState({ key: reqKey, status: "idle" });
-        }
-      });
-  };
 
   useEffect(() => {
     const mobile =
@@ -565,9 +513,6 @@ export function Inspector(props: InspectorProps) {
       pinnedLngLat={pin?.lngLat ?? null}
       panelRef={panel}
       isModalSheet={isMobile}
-      liveStatus={currentLive.status}
-      liveData={currentLive.status === "ready" ? currentLive.data : null}
-      onLiveCheck={runLiveCheck}
       copiedNote={copiedNote}
       onCopyNote={markCopied}
     />

@@ -18,57 +18,56 @@ export function difference(guess: number, actual: Metric): string {
   return `${delta < 0 && text !== "0.00" ? "-" : "+"}${text}`;
 }
 
+function GuessResult({ index, guess, classMm }: { index: StormsIndex; guess: number; classMm: number }) {
+  const pairs = usePairsAll(index);
+  const data = pairs.status === "ready" ? pairs.data : null;
+  const table = useMemo(() => (data === null ? null : pooledRows(data, index.radius_km_default)), [data, index.radius_km_default]);
+  const receipt = useMemo(() => (data === null ? null : pooledReceipt(data, index)), [data, index]);
+
+  if (pairs.status === "error") return <ErrorState error={pairs.error} onRetry={pairs.retry} />;
+  if (pairs.status === "loading" || table === null) return pairs.showLoading ? <LoadingState file={FILE} /> : null;
+  if ("error" in table) return <ErrorState error={table.error} onRetry={pairs.retry} />;
+
+  const actual = table.rows.find((r) => r.threshold_mm === classMm)?.hss ?? null;
+  return (
+    <>
+      <dl class="guess-row">
+        <div>
+          <dt>Your guess</dt>
+          <dd class="mono">{guess.toFixed(2)}</dd>
+        </div>
+        <div>
+          <dt>Actual HSS</dt>
+          <dd class="mono">
+            <MetricText value={actual} />
+          </dd>
+        </div>
+        <div>
+          <dt>Difference</dt>
+          <dd class="mono">{difference(guess, actual)}</dd>
+        </div>
+      </dl>
+      {receipt ? (
+        <p class="pane-note">
+          Pooled at <span class="mono">{index.radius_km_default} km</span>:{" "}
+          <ReceiptChip receipt={receipt} file={`${FILE}, pooled over ${index.storms.length} storm dates`} />
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 /** Guess the pooled HSS of one size class, then reveal the Scorecard value at the default radius. */
 export function GuessReveal({ index }: { index: StormsIndex }) {
-  const pairs = usePairsAll(index);
   const [guess, setGuess] = useState(0.5);
   const [revealed, setRevealed] = useState(false);
   const [classMm, setClassMm] = useState(RULER[0]!.threshold_mm);
   const id = useId();
-  const data = pairs.status === "ready" ? pairs.data : null;
-  const table = useMemo(() => (data === null ? null : pooledRows(data, index.radius_km_default)), [data, index.radius_km_default]);
-  const receipt = useMemo(() => (data === null ? null : pooledReceipt(data, index)), [data, index]);
 
   const pick = (mm: number) => {
     setClassMm(mm);
     setRevealed(false);
   };
-
-  let result = null;
-  if (revealed) {
-    if (pairs.status === "error") result = <ErrorState error={pairs.error} onRetry={pairs.retry} />;
-    else if (pairs.status === "loading" || table === null) result = pairs.showLoading ? <LoadingState file={FILE} /> : null;
-    else if ("error" in table) result = <ErrorState error={table.error} onRetry={pairs.retry} />;
-    else {
-      const actual = table.rows.find((r) => r.threshold_mm === classMm)?.hss ?? null;
-      result = (
-        <>
-          <dl class="guess-row">
-            <div>
-              <dt>Your guess</dt>
-              <dd class="mono">{guess.toFixed(2)}</dd>
-            </div>
-            <div>
-              <dt>Actual HSS</dt>
-              <dd class="mono">
-                <MetricText value={actual} />
-              </dd>
-            </div>
-            <div>
-              <dt>Difference</dt>
-              <dd class="mono">{difference(guess, actual)}</dd>
-            </div>
-          </dl>
-          {receipt ? (
-            <p class="pane-note">
-              Pooled at <span class="mono">{index.radius_km_default} km</span>:{" "}
-              <ReceiptChip receipt={receipt} file={`${FILE}, pooled over ${index.storms.length} storm dates`} />
-            </p>
-          ) : null}
-        </>
-      );
-    }
-  }
 
   return (
     <div class="guess">
@@ -97,7 +96,7 @@ export function GuessReveal({ index }: { index: StormsIndex }) {
       <button type="button" class="button button-small" aria-expanded={revealed} onClick={() => setRevealed((v) => !v)}>
         {revealed ? "Hide" : "Reveal"}
       </button>
-      {result}
+      {revealed ? <GuessResult index={index} guess={guess} classMm={classMm} /> : null}
     </div>
   );
 }

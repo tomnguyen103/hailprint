@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { DATA_BASE, fetchJson } from "../data/fetch";
+import { fetchJson } from "../data/fetch";
 import { guardPairs, guardPower } from "../data/guard";
 import type { Pairs, PowerFile, Storm, StormsIndex } from "../data/types";
-import { formatInches, formatMetric } from "../format";
 import { pool, scoredCount } from "../pool";
 import { rescore } from "../rescore";
-import { objectName } from "../ruler";
 import { RADIUS_MAX_FALLBACK, RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
@@ -41,20 +39,6 @@ export function commandsFor(
       power: effectiveSource,
     }),
     "cd site && npm run dev",
-  ];
-}
-
-/** Return the ordered `[filename, path]` pairs for a storm date's published files. */
-export function runPublishedFiles(storm: Storm | undefined): [string, string | null][] {
-  if (!storm) return [];
-  return [
-    ["swath.geojson", storm.files.swath],
-    ["reports.geojson", storm.files.reports],
-    ["warnings.geojson", storm.files.warnings],
-    ["power.json", storm.files.power],
-    ["internet.json", storm.files.internet],
-    ["pairs.json", storm.files.pairs],
-    ["zip-counts.json", storm.files.zip_counts],
   ];
 }
 
@@ -115,9 +99,6 @@ export function Run({ index }: { index: StormsIndex }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const files = runPublishedFiles(storm);
-  const previewRows = pairsDoc ? rescore(pairsDoc, activeRadius) : [];
-
   return (
     <>
       <div class="try-controls">
@@ -150,64 +131,16 @@ export function Run({ index }: { index: StormsIndex }) {
           </span>
         </section>
         <section>
-          <h2>Published files</h2>
-          <ul class="file-list">
-            {files.map(([name, path]) =>
-              path ? (
-                <li key={name}>
-                  <a class="mono" href={DATA_BASE + path} download>
-                    {name}
-                  </a>
-                </li>
-              ) : null,
-            )}
-          </ul>
-          <h2>Table</h2>
+          <h2>Score CSV export</h2>
           {pairs.status === "error" ? <ErrorState error={pairs.error} onRetry={pairs.retry} /> : null}
           {pairs.status === "loading" && pairs.showLoading ? <LoadingState file={PAIRS_FILE} /> : null}
           {pairsDoc ? (
-            <>
-              <div class="table-scroll">
-                <table class="table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Size class</th>
-                      <th scope="col" class="num">
-                        CSI
-                      </th>
-                      <th scope="col" class="num">
-                        HSS
-                      </th>
-                      <th scope="col" class="num">
-                        {"Unverifiable km\u00b2"}
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {previewRows.map((row) => (
-                      <tr key={row.threshold_mm}>
-                        <th scope="row">
-                          <span class="mono">
-                            {"\u2265 "}
-                            {formatInches(row.threshold_in)}
-                          </span>{" "}
-                          <span class="muted">({objectName(row.threshold_mm)})</span>
-                        </th>
-                        <td class="num mono">{formatMetric(row.csi)}</td>
-                        <td class="num mono">{formatMetric(row.hss)}</td>
-                        <td class="num mono">{row.unverifiable_km2.toFixed(1)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p class="csv-row">
-                <button type="button" class="button" onClick={() => downloadCsv(pairsDoc, activeRadius)}>
-                  Download table CSV
-                </button>
-                <ReceiptChip receipt={pairsDoc.receipt} file={PAIRS_FILE} />
-              </p>
-            </>
+            <p class="csv-row">
+              <button type="button" class="button" onClick={() => downloadCsv(pairsDoc, activeRadius)}>
+                Download table CSV
+              </button>
+              <ReceiptChip receipt={pairsDoc.receipt} file={PAIRS_FILE} />
+            </p>
           ) : null}
         </section>
       </div>

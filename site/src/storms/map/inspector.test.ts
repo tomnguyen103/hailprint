@@ -73,7 +73,7 @@ describe("InspectorView out-of-metro guard", () => {
     expect(getPinState().pin).toBeNull();
   });
 
-  it("renders 5 km report count, nearby warnings within 5 km, and live status check section when inMetro is true (CR-05.2)", () => {
+  it("renders 5 km report count and nearby warnings within 5 km when inMetro is true (CR-05.2)", () => {
     const reports: ReportsFile = {
       type: "FeatureCollection",
       receipt,
@@ -137,7 +137,6 @@ describe("InspectorView out-of-metro guard", () => {
       ],
     };
 
-    let liveChecked = 0;
     const tree = InspectorView({
       pick: {
         lngLat: [-95.3698, 29.7604],
@@ -156,31 +155,12 @@ describe("InspectorView out-of-metro guard", () => {
       fips: "48201",
       onCounty: () => {},
       onClose: () => {},
-      liveStatus: "ready",
-      liveData: {
-        checkedAtUtc: "2024-05-29T00:00:00Z",
-        point: [-95.3698, 29.7604],
-        fips: "48201",
-        alerts: { status: "ready", alerts: [] },
-        power: { status: "ready", fips: "48201", customersOut: 140, utilities: ["CenterPoint"], note: "CenterPoint customers only" },
-        internet: { status: "error", message: "ioda: HTTP 503" },
-      },
-      onLiveCheck: () => {
-        liveChecked += 1;
-      },
     });
 
     const text = textOf(tree);
     expect(text).toContain("within 5 km");
     expect(text).toContain("Within 5 km");
-    expect(text).toContain("Live status check");
-    expect(text).toContain("0 active alerts at pinned point");
-    expect(text).toContain("ioda: HTTP 503");
-
-    const retryButtons = findAll(tree, (v) => v.type === "button" && textOf(v).includes("Retry"));
-    expect(retryButtons).toHaveLength(1);
-    (retryButtons[0]!.props["onClick"] as () => void)();
-    expect(liveChecked).toBe(1);
+    expect(text).not.toContain("Live status check");
 
     const copyButtons = findAll(tree, (v) => v.type === "button" && textOf(v).includes("Copy field note"));
     expect(copyButtons).toHaveLength(1);

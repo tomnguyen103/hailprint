@@ -112,6 +112,10 @@ function classOf(n: FakeDomNode): string {
   return String(n["class"] ?? n["className"] ?? "");
 }
 
+function hasClass(n: FakeDomNode, cls: string): boolean {
+  return classOf(n).split(/\s+/).includes(cls);
+}
+
 const RECEIPT: Receipt = {
   storm_date: "2024-05-28",
   confidence: "settled",
@@ -219,12 +223,13 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     await act(() => render(h(Scorecard, { index, view: "table" }), host as unknown as HTMLElement));
 
     const pills = findDomNodes(host, (n) => n.tagName === "BUTTON" && classOf(n).includes("cohort-pill"));
-    const spcPill = pills.find((p) => domText(p).includes("SPC-Daily 2026"));
+    const spcPill = pills.find((p) => domText(p).includes("SPC-Daily"));
     expect(spcPill).toBeDefined();
     expect(domText(spcPill!)).toContain("(0)");
     expect(Boolean(spcPill!["disabled"])).toBe(true);
 
-    const wcmPill = pills.find((p) => domText(p).includes("WCM 2021"));
+    const wcmPill = pills.find((p) => domText(p).includes("WCM 2024"));
+    expect(wcmPill).toBeDefined();
     expect(Boolean(wcmPill!["disabled"])).toBe(false);
   });
 
@@ -245,7 +250,7 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const host2 = makeFakeElement("div");
     await act(() => render(h(Scorecard, { index: mismatchedIndex, view: "table" }), host2 as unknown as HTMLElement));
     const pills = findDomNodes(host2, (n) => n.tagName === "BUTTON" && classOf(n).includes("cohort-pill"));
-    const wcmPill = pills.find((p) => domText(p).includes("WCM 2021"))!;
+    const wcmPill = pills.find((p) => domText(p).includes("WCM 2024"))!;
     await act(() => {
       (wcmPill["on_click"] as (e: { type: string }) => void)({ type: "click" });
     });
@@ -339,13 +344,29 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const primaryHeaders = findDomNodes(tables[0]!, (n) => n.tagName === "TH");
     expect(primaryHeaders).toHaveLength(4);
 
-    // Click first class pick button to open PeekDrawer with secondary metrics
+    // Click first class pick button to open PeekDrawer with ContingencyGrid and secondary metrics
+    expect(findDomNodes(host, (n) => hasClass(n, "cgrid"))).toHaveLength(0);
     const classBtn = findDomNodes(tables[0]!, (n) => n.tagName === "BUTTON" && classOf(n).includes("class-pick"))[0]!;
     await act(() => {
       (classBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
     });
     expect(domText(host)).toContain("Unverifiable km²");
     expect(domText(host)).toContain("Scored reports");
+    const drawer = findDomNodes(host, (n) => hasClass(n, "peek-drawer"))[0]!;
+    expect(drawer).toBeDefined();
+    expect(findDomNodes(drawer, (n) => hasClass(n, "cgrid"))).toHaveLength(1);
+    expect(findDomNodes(host, (n) => classOf(n).includes("sensitivity-section"))).toHaveLength(0);
+
+    const hostCurve = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index, view: "curve" }), hostCurve as unknown as HTMLElement));
+    expect(findDomNodes(hostCurve, (n) => classOf(n).includes("sensitivity-section"))).toHaveLength(1);
+    // Switch curve metric to POD (non-null for 1-report fixture) and verify highlightMm circle renders
+    const podBtn = findDomNodes(hostCurve, (n) => n.tagName === "BUTTON" && domText(n).trim() === "POD")[0]!;
+    await act(() => {
+      (podBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
+    });
+    const highlighted = findDomNodes(hostCurve, (n) => n.tagName === "CIRCLE" && classOf(n) === "highlight");
+    expect(highlighted).toHaveLength(1);
 
     const host2 = makeFakeElement("div");
     await act(() =>

@@ -5,10 +5,15 @@ import re
 
 from hailprint import mesh, paths
 from hailprint.__main__ import build_parser
+from hailprint.swath import FORBIDDEN_WORD
+from tests.test_wording import PHRASES, phrase_pattern
 
 README = (paths.ROOT / "README.md").read_text(encoding="utf-8")
 GLOSSARY = (paths.ROOT / "GLOSSARY.md").read_text(encoding="utf-8")
 DESIGN = (paths.ROOT / "design.md").read_text(encoding="utf-8")
+GETTING_STARTED = (paths.ROOT / "docs" / "getting-started.md").read_text(encoding="utf-8")
+SITE_README = (paths.ROOT / "site" / "README.md").read_text(encoding="utf-8")
+CLAUDE_MD = (paths.ROOT / "CLAUDE.md").read_text(encoding="utf-8")
 VERCEL = json.loads((paths.ROOT / "vercel.json").read_text(encoding="utf-8"))
 
 
@@ -63,10 +68,39 @@ def test_vercel_json_serves_security_headers():
     assert "img-src 'self' data: blob: https://protomaps.github.io;" in csp
     assert (
         "connect-src 'self' https://*.supabase.co "
-        "https://*.protomaps.com https://protomaps.github.io "
-        "https://api.weather.gov https://ornl.opendatasoft.com "
-        "https://api.ioda.inetintel.cc.gatech.edu;"
+        "https://*.protomaps.com https://protomaps.github.io;"
     ) in csp
+    for retired in (
+        "https://api.weather.gov",
+        "https://ornl.opendatasoft.com",
+        "https://api.ioda.inetintel.cc.gatech.edu",
+    ):
+        assert retired not in csp, retired
+
+
+def test_getting_started_names_every_cli_command_and_stays_clean():
+    match = re.search(r"\{([a-z,]+)\}", build_parser().format_help())
+    assert match is not None
+    for name in match.group(1).split(","):
+        assert f"hailprint {name}" in GETTING_STARTED, name
+    for doc_name, text in (
+        ("docs/getting-started.md", GETTING_STARTED),
+        ("site/README.md", SITE_README),
+    ):
+        assert FORBIDDEN_WORD not in text.lower(), doc_name
+        for phrase in PHRASES:
+            assert phrase_pattern(phrase).search(text) is None, (doc_name, phrase)
+
+
+def test_docs_and_cleanup_contracts_match_shipped_code():
+    assert "live/now.json" in SITE_README
+    assert "hailprint live" in SITE_README
+    assert "site/src/storms/layers-control.tsx" in CLAUDE_MD
+    assert "live-check" not in GLOSSARY
+    assert "Live status check" not in GLOSSARY
+    assert not (paths.ROOT / "audit_review.md").exists()
+    assert not (paths.ROOT / "site" / "src" / "shell" / "proof-strip.tsx").exists()
+    assert not (paths.ROOT / "site" / "src" / "live" / "live-check.ts").exists()
 
 
 def test_basemap_pmtiles_exists_and_has_valid_magic_header():
