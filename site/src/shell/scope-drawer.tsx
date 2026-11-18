@@ -21,7 +21,7 @@ function isElementVisible(el: HTMLElement): boolean {
 }
 
 function focusableItems(root: HTMLElement | null): HTMLElement[] {
-  if (!root) return [];
+  if (!root || typeof root.querySelectorAll !== "function") return [];
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
     (el) => (el.closest?.("details:not([open])") === null || el.tagName === "SUMMARY") && isElementVisible(el),
   );

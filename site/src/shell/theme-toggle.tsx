@@ -81,9 +81,8 @@ export function ThemeToggle() {
       <button
         ref={triggerRef}
         type="button"
-        class="icon-button"
+        class="icon-button theme-trigger"
         aria-label="Theme"
-        title="Theme"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-controls={open ? menuId : undefined}
@@ -91,6 +90,9 @@ export function ThemeToggle() {
       >
         <SelectionIcon mode={pref} />
       </button>
+      <span class="theme-tooltip" aria-hidden="true">
+        Theme
+      </span>
       {open ? (
         <div id={menuId} class="theme-menu" role="menu" aria-label="Theme">
           {OPTIONS.map((opt, idx) => {

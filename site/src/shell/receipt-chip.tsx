@@ -106,7 +106,7 @@ export function ReceiptChip({ receipt, file, summary }: { receipt: Receipt; file
         class="chip mono"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-controls={id}
+        aria-controls={open ? id : undefined}
         onClick={() => openReceiptChip(open ? null : id)}
       >
         {file}

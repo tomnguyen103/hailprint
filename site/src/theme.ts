@@ -50,8 +50,18 @@ export function store(selection: Selection, storage: Setter | null = localStorag
   }
 }
 
-/** Stamp the resolved theme on the root element, as the head script does before paint. */
+/** Stamp the resolved theme on the root element, suppressing transitions for one frame to avoid flash. */
 export function apply(resolved: Resolved, root: HTMLElement = document.documentElement): void {
+  root.setAttribute?.("data-theme-swap", "");
+  void root.offsetHeight;
   root.dataset["theme"] = resolved;
   root.style.colorScheme = resolved;
+  const cleanup = () => {
+    root.removeAttribute?.("data-theme-swap");
+  };
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(cleanup);
+  } else {
+    cleanup();
+  }
 }

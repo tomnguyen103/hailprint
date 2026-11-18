@@ -217,13 +217,13 @@
     top: auto;
     left: 0;
     right: 0;
-    bottom: 60px;
+    bottom: 0;
     width: auto;
     max-height: 70dvh;
     border-right: 0;
     border-top: 1px solid var(--rule);
     border-radius: var(--radius-pane) var(--radius-pane) 0 0;
-    /* Closed: the whole sheet, head included, sits below the 60px bottom bar. */
-    transform: translateY(calc(100% + 60px));
+    /* Closed: sits below the bottom edge of the viewport. */
+    transform: translateY(100%);
   }
 }

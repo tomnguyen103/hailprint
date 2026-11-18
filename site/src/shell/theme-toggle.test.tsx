@@ -165,6 +165,9 @@ describe("ThemeToggle 3-state icon menu (US-04.1, US-04.3)", () => {
     expect(trigger).toBeDefined();
     expect(trigger["aria-label"]).toBe("Theme");
     expect(trigger["aria-expanded"]).toBe(false);
+    const tooltip = findDomNodes(host, (n) => n["class"] === "theme-tooltip")[0]!;
+    expect(tooltip).toBeDefined();
+    expect(domText(tooltip).trim()).toBe("Theme");
     expect(findDomNodes(host, (n) => n["role"] === "menu")).toHaveLength(0);
 
     await act(() => {

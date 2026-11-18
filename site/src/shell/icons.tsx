@@ -144,15 +144,6 @@ export function MenuIcon(p: Props) {
   );
 }
 
-export function SidebarToggleIcon(p: Props) {
-  return (
-    <Svg {...p}>
-      <rect x="3.5" y="4.5" width="17" height="15" rx="1.5" />
-      <path d="M9.5 4.5v15" />
-    </Svg>
-  );
-}
-
 export function CodeIcon(p: Props) {
   return (
     <Svg {...p}>

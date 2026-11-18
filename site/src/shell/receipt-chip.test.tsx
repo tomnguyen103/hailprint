@@ -335,13 +335,23 @@ describe("ReceiptChip Escape layering & Inspector mobile modal (US-14.1, US-14.2
     const chipBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && n["class"] === "chip mono")[0]!;
     expect(chipBtn).toBeDefined();
     expect(chipBtn.childNodes.map((c) => c.data ?? "").join("").trim()).toBe("pairs.json");
+    expect(chipBtn["aria-controls"]).toBeUndefined();
 
     await act(() => {
       (chipBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
     });
     const pop = findDomNodes(host, (n) => n["class"] === "receipt-pop")[0]!;
     expect(pop).toBeDefined();
+    expect(chipBtn["aria-controls"]).toBe(pop["id"]);
     const summaryEl = findDomNodes(pop, (n) => n["class"] === "receipt-summary")[0];
     expect(summaryEl).toBeDefined();
+  });
+
+  it("docks mobile .scope sheet flush at bottom: 0 in scope.css (US-01.2)", () => {
+    const cssPath = fileURLToPath(new URL("../styles/scope.css", import.meta.url));
+    const css = readFileSync(cssPath, "utf8");
+    const mobileBlock = css.slice(css.indexOf("@media (max-width: 767px)"));
+    expect(mobileBlock).toContain("bottom: 0;");
+    expect(mobileBlock).not.toContain("bottom: 60px");
   });
 });

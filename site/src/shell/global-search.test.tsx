@@ -63,6 +63,9 @@ interface FakeDomNode {
   namespaceURI: string;
   style: Record<string, unknown>;
   focus: () => void;
+  contains: (target: unknown) => boolean;
+  querySelectorAll: (selector?: string) => FakeDomNode[];
+  closest: () => FakeDomNode | null;
   [key: string]: unknown;
 }
 
@@ -127,6 +130,31 @@ function makeFakeElement(tag: string, text = ""): FakeDomNode {
       el.firstChild = el.childNodes[0] ?? null;
       return child;
     },
+    contains(target: unknown): boolean {
+      if (target === el) return true;
+      return el.childNodes.some((c) => c.contains(target));
+    },
+    closest() {
+      return null;
+    },
+    querySelectorAll() {
+      const out: FakeDomNode[] = [];
+      const walk = (n: FakeDomNode) => {
+        for (const c of n.childNodes) {
+          if (
+            c.tagName === "BUTTON" ||
+            (c.tagName === "A" && c["href"] !== undefined) ||
+            c.tagName === "INPUT" ||
+            c.tagName === "SUMMARY"
+          ) {
+            if (!c["disabled"]) out.push(c);
+          }
+          walk(c);
+        }
+      };
+      walk(el);
+      return out;
+    },
     focus() {
       activeEl = el;
     },
@@ -145,11 +173,21 @@ function domText(node: FakeDomNode): string {
   return node.childNodes.map(domText).join("");
 }
 
-describe("GlobalSearch Ctrl+K dialog (US-04.1, US-04.2, US-04.3)", () => {
+describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)", () => {
+  const storage = new Map<string, string>();
+
   beforeEach(() => {
     navMock.go.mockClear();
     activeEl = null;
     docListeners.clear();
+    storage.clear();
+
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => storage.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        storage.set(k, v);
+      },
+    });
 
     vi.stubGlobal("document", {
       get activeElement() {
@@ -176,12 +214,13 @@ describe("GlobalSearch Ctrl+K dialog (US-04.1, US-04.2, US-04.3)", () => {
     vi.unstubAllGlobals();
   });
 
-  it("opens on Ctrl+K, indexes storms/counties/tools/method/pipeline, supports Arrow+Enter navigation, Escape close, and No matches", async () => {
+  it("opens on Ctrl+K, keeps single combobox on input, groups results, traps Tab, records recent searches, and handles Escape/No matches", async () => {
     const host = makeFakeElement("div");
     await act(() => render(h(GlobalSearch, null), host as unknown as HTMLElement));
 
-    const trigger = findDomNodes(host, (n) => n.tagName === "BUTTON" && n["role"] === "combobox")[0]!;
+    const trigger = findDomNodes(host, (n) => n.tagName === "BUTTON" && n["aria-haspopup"] === "dialog")[0]!;
     expect(trigger).toBeDefined();
+    expect(trigger["role"]).toBeUndefined();
     expect(trigger["aria-expanded"]).toBe(false);
     expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(0);
 
@@ -194,8 +233,35 @@ describe("GlobalSearch Ctrl+K dialog (US-04.1, US-04.2, US-04.3)", () => {
 
     const dialog = findDomNodes(host, (n) => n["role"] === "dialog")[0]!;
     expect(dialog).toBeDefined();
+    const comboboxes = findDomNodes(host, (n) => n["role"] === "combobox");
+    expect(comboboxes).toHaveLength(1);
     const input = findDomNodes(dialog, (n) => n.tagName === "INPUT")[0]!;
+    expect(comboboxes[0]).toBe(input);
     expect(activeEl).toBe(input);
+
+    // Results grouped under role="group"
+    const groups = findDomNodes(dialog, (n) => n["role"] === "group");
+    expect(groups.length).toBeGreaterThan(0);
+
+    // Tab focus trap wraps from last focusable back to first inside dialog
+    const focusables = dialog.querySelectorAll();
+    const last = focusables[focusables.length - 1]!;
+    last.focus();
+    let tabPrevented = false;
+    await act(() => {
+      for (const fn of docListeners.get("keydown") ?? []) {
+        fn({
+          key: "Tab",
+          shiftKey: false,
+          defaultPrevented: false,
+          preventDefault() {
+            tabPrevented = true;
+          },
+        });
+      }
+    });
+    expect(tabPrevented).toBe(true);
+    expect(activeEl).toBe(focusables[0]);
 
     // Query storm date / case tag
     await act(() => {
@@ -225,7 +291,7 @@ describe("GlobalSearch Ctrl+K dialog (US-04.1, US-04.2, US-04.3)", () => {
     });
     expect(domText(dialog)).toContain("No matches");
 
-    // Query Batch / Point check tool and press ArrowDown + Enter
+    // Query Batch tool and press Enter -> navigates and records recent search
     await act(() => {
       (input["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
         type: "input",
@@ -243,13 +309,18 @@ describe("GlobalSearch Ctrl+K dialog (US-04.1, US-04.2, US-04.3)", () => {
     });
     expect(navMock.go).toHaveBeenCalledWith("/try/run");
     expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(0);
+    expect(JSON.parse(storage.get("hailprint-recent-searches") ?? "[]")).toEqual(["tool-run"]);
 
-    // Open via trigger click, then close via Escape and confirm focus returns to trigger
+    // Open via trigger click -> shows Recent group first, then Escape restores focus to trigger
     trigger.focus();
     await act(() => {
       (trigger["on_click"] as (e: { type: string }) => void)({ type: "click" });
     });
-    expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(1);
+    const reopened = findDomNodes(host, (n) => n["role"] === "dialog")[0]!;
+    const firstGroup = findDomNodes(reopened, (n) => n["role"] === "group")[0]!;
+    expect(domText(firstGroup)).toContain("Recent");
+    expect(domText(firstGroup)).toContain("Batch");
+
     await act(() => {
       for (const fn of docListeners.get("keydown") ?? []) {
         fn({ key: "Escape", preventDefault() {}, stopPropagation() {} });
@@ -257,5 +328,76 @@ describe("GlobalSearch Ctrl+K dialog (US-04.1, US-04.2, US-04.3)", () => {
     });
     expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(0);
     expect(activeEl).toBe(trigger);
+
+    await act(() => render(null, host as unknown as HTMLElement));
+  });
+
+  it("opens on / shortcut outside editable targets, ignores / inside inputs, caps recent searches at 5, and recovers from corrupt storage", async () => {
+    storage.set("hailprint-recent-searches", "{corrupt-json");
+    const host = makeFakeElement("div");
+    await act(() => render(h(GlobalSearch, null), host as unknown as HTMLElement));
+
+    // '/' inside an input does NOT open search
+    const inputTarget = makeFakeElement("input");
+    await act(() => {
+      for (const fn of docListeners.get("keydown") ?? []) {
+        fn({ key: "/", ctrlKey: false, metaKey: false, altKey: false, target: inputTarget, preventDefault() {} });
+      }
+    });
+    expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(0);
+
+    // '/' on a non-editable target opens search cleanly even with corrupt localStorage
+    const bodyTarget = makeFakeElement("div");
+    let prevented = false;
+    await act(() => {
+      for (const fn of docListeners.get("keydown") ?? []) {
+        fn({
+          key: "/",
+          ctrlKey: false,
+          metaKey: false,
+          altKey: false,
+          target: bodyTarget,
+          preventDefault() {
+            prevented = true;
+          },
+        });
+      }
+    });
+    expect(prevented).toBe(true);
+    expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(1);
+
+    // Preload 5 items and select a 6th distinct item -> capped at 5 most recent
+    storage.set(
+      "hailprint-recent-searches",
+      JSON.stringify(["live", "storm-2024-05-28", "tool-point", "tool-compare", "tool-tune"]),
+    );
+    await act(() => render(null, host as unknown as HTMLElement));
+    await act(() => render(h(GlobalSearch, null), host as unknown as HTMLElement));
+
+    await act(() => {
+      for (const fn of docListeners.get("keydown") ?? []) {
+        fn({ key: "/", ctrlKey: false, metaKey: false, altKey: false, target: bodyTarget, preventDefault() {} });
+      }
+    });
+    const dialog = findDomNodes(host, (n) => n["role"] === "dialog")[0]!;
+    const input = findDomNodes(dialog, (n) => n.tagName === "INPUT")[0]!;
+    await act(() => {
+      (input["on_input"] as (e: { type: string; currentTarget: { value: string } }) => void)({
+        type: "input",
+        currentTarget: { value: "Batch" },
+      });
+    });
+    await act(() => {
+      (input["on_keydown"] as (e: { type: string; key: string; preventDefault(): void }) => void)({
+        type: "keydown",
+        key: "Enter",
+        preventDefault() {},
+      });
+    });
+    const stored = JSON.parse(storage.get("hailprint-recent-searches") ?? "[]") as string[];
+    expect(stored).toEqual(["tool-run", "live", "storm-2024-05-28", "tool-point", "tool-compare"]);
+    expect(stored).toHaveLength(5);
+
+    await act(() => render(null, host as unknown as HTMLElement));
   });
 });

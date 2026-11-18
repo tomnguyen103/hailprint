@@ -10,6 +10,10 @@ import {
 import { useIndex } from "../state/index";
 import { CASE_STUDIES, landingStorm } from "../storms/select";
 import { SearchIcon } from "./icons";
+import { useModalFocusTrap } from "./scope-drawer";
+
+export const RECENT_KEY = "hailprint-recent-searches";
+const MAX_RECENT = 5;
 
 export interface GlobalSearchItem {
   id: string;
@@ -18,6 +22,81 @@ export interface GlobalSearchItem {
   subtitle: string;
   route: string;
   keywords: string;
+}
+
+interface SearchGroup {
+  key: string;
+  label: string;
+  items: GlobalSearchItem[];
+}
+
+function readRecentIds(): string[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(RECENT_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const item of parsed) {
+      if (typeof item === "string" && item.length > 0 && !seen.has(item)) {
+        seen.add(item);
+        out.push(item);
+        if (out.length >= MAX_RECENT) break;
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+function writeRecentIds(ids: string[]): void {
+  try {
+    globalThis.localStorage?.setItem(RECENT_KEY, JSON.stringify(ids.slice(0, MAX_RECENT)));
+  } catch {
+    // Ignore blocked storage in restricted browser contexts.
+  }
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  if (!target || typeof target !== "object") return false;
+  const el = target as {
+    tagName?: string;
+    isContentEditable?: boolean;
+    getAttribute?: (name: string) => string | null;
+  };
+  const tag = (el.tagName ?? "").toUpperCase();
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  if (el.isContentEditable) return true;
+  const ce = el.getAttribute?.("contenteditable");
+  return ce === "" || ce === "true" || ce === "plaintext-only";
+}
+
+const GROUP_LABELS: Record<GlobalSearchItem["group"], string> = {
+  Live: "Live",
+  Storm: "Storms",
+  Tool: "Tools",
+  County: "Counties",
+  Method: "Method",
+  Pipeline: "Pipeline",
+};
+
+function groupItems(list: GlobalSearchItem[]): SearchGroup[] {
+  const byGroup = new Map<GlobalSearchItem["group"], GlobalSearchItem[]>();
+  for (const item of list) {
+    let bucket = byGroup.get(item.group);
+    if (!bucket) {
+      bucket = [];
+      byGroup.set(item.group, bucket);
+    }
+    bucket.push(item);
+  }
+  const out: SearchGroup[] = [];
+  for (const [group, items] of byGroup) {
+    out.push({ key: group.toLowerCase(), label: GROUP_LABELS[group], items });
+  }
+  return out;
 }
 
 const METRO_COUNTIES: readonly [string, string][] = [
@@ -62,16 +141,22 @@ const TRY_SEARCH_ITEMS: readonly { id: string; title: string; subtitle: string; 
   },
 ];
 
-/** Center top-bar Ctrl+K search trigger and modal command palette. */
+/** Center top-bar Ctrl+K and / search trigger and modal command palette. */
 export function GlobalSearch() {
   const index = useIndex();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
+  const [recentIds, setRecentIds] = useState<string[]>(readRecentIds);
+  const openRef = useRef(open);
+  openRef.current = open;
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogId = useId();
   const listboxId = useId();
+
+  useModalFocusTrap(open, dialogRef);
 
   const items = useMemo<GlobalSearchItem[]>(() => {
     const storms = index.status === "ready" ? index.data.storms : [];
@@ -141,10 +226,28 @@ export function GlobalSearch() {
     return [liveItem, ...stormItems, ...toolItems, ...countyItems, ...methodItems, ...pipelineItems];
   }, [index]);
 
-  const results = useMemo(() => {
+  const { groups, results } = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return items.slice(0, 12);
-    return items
+    if (!q) {
+      const byId = new Map(items.map((item) => [item.id, item]));
+      const recentItems: GlobalSearchItem[] = [];
+      const seen = new Set<string>();
+      for (const id of recentIds) {
+        const match = byId.get(id);
+        if (match && !seen.has(match.id)) {
+          seen.add(match.id);
+          recentItems.push(match);
+        }
+      }
+      const rest = items.filter((item) => !seen.has(item.id)).slice(0, 12);
+      const nextGroups: SearchGroup[] = [];
+      if (recentItems.length > 0) {
+        nextGroups.push({ key: "recent", label: "Recent", items: recentItems });
+      }
+      nextGroups.push(...groupItems(rest));
+      return { groups: nextGroups, results: nextGroups.flatMap((g) => g.items) };
+    }
+    const matched = items
       .filter(
         (item) =>
           item.title.toLowerCase().includes(q) ||
@@ -153,7 +256,11 @@ export function GlobalSearch() {
           item.keywords.toLowerCase().includes(q),
       )
       .slice(0, 20);
-  }, [items, query]);
+    const nextGroups = groupItems(matched);
+    return { groups: nextGroups, results: nextGroups.flatMap((g) => g.items) };
+  }, [items, query, recentIds]);
+
+  const indexById = useMemo(() => new Map(results.map((item, idx) => [item.id, idx])), [results]);
 
   useEffect(() => {
     setActiveIdx(0);
@@ -161,9 +268,20 @@ export function GlobalSearch() {
 
   useEffect(() => {
     const onGlobalKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setOpen((prev) => !prev);
+      } else if (
+        !openRef.current &&
+        event.key === "/" &&
+        !event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !isEditableTarget(event.target)
+      ) {
+        event.preventDefault();
+        setOpen(true);
       }
     };
     document.addEventListener("keydown", onGlobalKey);
@@ -193,6 +311,11 @@ export function GlobalSearch() {
   };
 
   const selectItem = (item: GlobalSearchItem) => {
+    setRecentIds((prev) => {
+      const next = [item.id, ...prev.filter((id) => id !== item.id)].slice(0, MAX_RECENT);
+      writeRecentIds(next);
+      return next;
+    });
     setOpen(false);
     setQuery("");
     go(item.route);
@@ -222,7 +345,6 @@ export function GlobalSearch() {
         ref={triggerRef}
         type="button"
         class="search-trigger"
-        role="combobox"
         aria-label="Search"
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -238,6 +360,7 @@ export function GlobalSearch() {
       {open ? (
         <div class="search-backdrop" onMouseDown={close}>
           <div
+            ref={dialogRef}
             id={dialogId}
             class="search-dialog"
             role="dialog"
@@ -267,29 +390,40 @@ export function GlobalSearch() {
               </button>
             </div>
             <div id={listboxId} class="search-results" role="listbox" aria-label="Search results">
-              {results.length === 0 ? (
+              {groups.length === 0 ? (
                 <div class="search-empty">No matches</div>
               ) : (
-                results.map((item, idx) => {
-                  const selected = idx === activeIdx;
+                groups.map((group) => {
+                  const groupHeadingId = `${listboxId}-group-${group.key}`;
                   return (
-                    <a
-                      key={item.id}
-                      id={`${listboxId}-${item.id}`}
-                      href={item.route}
-                      role="option"
-                      class="search-option"
-                      aria-selected={selected}
-                      onMouseEnter={() => setActiveIdx(idx)}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        selectItem(item);
-                      }}
-                    >
-                      <span class="search-option-group">{item.group}</span>
-                      <span class="search-option-title">{item.title}</span>
-                      <span class="search-option-sub mono">{item.subtitle}</span>
-                    </a>
+                    <div key={group.key} class="search-group" role="group" aria-labelledby={groupHeadingId}>
+                      <div id={groupHeadingId} class="search-group-heading" role="presentation">
+                        {group.label}
+                      </div>
+                      {group.items.map((item) => {
+                        const idx = indexById.get(item.id) ?? 0;
+                        const selected = idx === activeIdx;
+                        return (
+                          <a
+                            key={item.id}
+                            id={`${listboxId}-${item.id}`}
+                            href={item.route}
+                            role="option"
+                            class="search-option"
+                            aria-selected={selected}
+                            onMouseEnter={() => setActiveIdx(idx)}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              selectItem(item);
+                            }}
+                          >
+                            <span class="search-option-group">{item.group}</span>
+                            <span class="search-option-title">{item.title}</span>
+                            <span class="search-option-sub mono">{item.subtitle}</span>
+                          </a>
+                        );
+                      })}
+                    </div>
                   );
                 })
               )}

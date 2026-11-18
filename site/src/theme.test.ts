@@ -1,7 +1,7 @@
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { read, resolve } from "./theme";
+import { apply, read, resolve } from "./theme";
 
 describe("resolve", () => {
   it("follows the system scheme when nothing is stored", () => {
@@ -103,5 +103,30 @@ describe("state/theme preference store (US-03.5, US-04.1)", () => {
     await act(() => render(h(Probe, null), host));
     expect(latest!.pref).toBe("system");
     expect(latest!.resolved).toBe("dark");
+  });
+
+  it("suppresses transitions for one frame via data-theme-swap during apply() (US-01.1)", () => {
+    const attrs = new Map<string, string>();
+    const callbacks: Array<() => void> = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: () => void) => {
+      callbacks.push(cb);
+      return 1;
+    });
+    const fakeRoot = {
+      dataset: {} as Record<string, string>,
+      style: { colorScheme: "" },
+      offsetHeight: 0,
+      setAttribute: (k: string, v: string) => attrs.set(k, v),
+      removeAttribute: (k: string) => attrs.delete(k),
+    } as unknown as HTMLElement;
+
+    apply("dark", fakeRoot);
+    expect(fakeRoot.dataset["theme"]).toBe("dark");
+    expect(fakeRoot.style.colorScheme).toBe("dark");
+    expect(attrs.has("data-theme-swap")).toBe(true);
+    expect(callbacks).toHaveLength(1);
+
+    callbacks[0]!();
+    expect(attrs.has("data-theme-swap")).toBe(false);
   });
 });

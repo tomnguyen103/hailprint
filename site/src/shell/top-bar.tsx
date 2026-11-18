@@ -8,22 +8,32 @@ const SOURCE_URL = "https://github.com/tomnguyen103/hailprint";
 
 interface Props {
   active: Area | null;
-  mobileNavOpen?: boolean;
-  onToggleMobileNav?: () => void;
+  isDesktop?: boolean;
+  navExpanded?: boolean;
+  onToggleNav?: () => void;
 }
 
-/** 56 px single-row sticky top bar: brand + area title, center Ctrl+K search, right theme menu + source link. */
-export function TopBar({ active, mobileNavOpen = false, onToggleMobileNav }: Props) {
+/** 56 px single-row sticky top bar: single hamburger toggle + brand + area title, center Ctrl+K search, right theme menu + source link. */
+export function TopBar({ active, isDesktop = true, navExpanded = true, onToggleNav }: Props) {
+  const navLabel = isDesktop
+    ? navExpanded
+      ? "Collapse navigation"
+      : "Expand navigation"
+    : navExpanded
+      ? "Close navigation"
+      : "Open navigation";
+
   return (
     <header class="top-bar">
       <div class="top-bar-left">
         <button
           type="button"
-          class="icon-button mobile-nav-trigger"
-          aria-label={mobileNavOpen ? "Close navigation" : "Open navigation"}
-          aria-expanded={mobileNavOpen}
+          class="icon-button sidebar-toggle"
+          aria-label={navLabel}
+          aria-expanded={navExpanded}
           aria-controls="route-sidebar"
-          onClick={onToggleMobileNav}
+          title="Toggle navigation (Ctrl+B)"
+          onClick={onToggleNav}
         >
           <MenuIcon size={20} />
         </button>
