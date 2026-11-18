@@ -44,7 +44,7 @@ Rerun `scripts/basemap.sh` after a change to the metro bbox, and on a new host, 
 ## Vercel
 
 The root `vercel.json` sets the fields: install `cd site && npm ci`, build
-`cd site && npm run build`, output `site/dist`, a strict `Content-Security-Policy` (`connect-src 'self' https://*.supabase.co https://*.protomaps.com https://protomaps.github.io`), and a rewrite of every path without a dot to `/index.html`. Because published data lives in the public Supabase Storage bucket (`VITE_DATA_BASE`), the Vercel build holds code only and git deployments are enabled for `main` (`git.deploymentEnabled.main: true` in `vercel.json`).
+`cd site && npm run build`, output `site/dist`, a `Content-Security-Policy` (`script-src` allows `'unsafe-inline'` for the inline head boot script; `connect-src 'self' https://*.supabase.co https://*.protomaps.com https://protomaps.github.io`), and a rewrite of every path without a dot to `/index.html`. Because published data lives in the public Supabase Storage bucket (`VITE_DATA_BASE`), the Vercel build holds code only and git deployments are enabled for `main` (`git.deploymentEnabled.main: true` in `vercel.json`).
 Cloud schedules and bucket setup live in [docs/operations.md](../docs/operations.md).
 
 ## Dev harness
