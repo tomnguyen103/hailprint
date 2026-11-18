@@ -86,7 +86,8 @@ def list_keys(client, product: str, day: date) -> list[str]:
 def download_many(keys: list[str], raw_dir: Path, client=None, workers: int = 8) -> list[Path]:
     """Fetch every key into raw_dir in a bounded pool; skip files present by name.
 
-    Collect failed keys and raise one RuntimeError naming the count, keys, and root cause.
+    Raise RuntimeError on failures; name the failed count, up to _MAX_FAIL_KEYS
+    failed keys, and the first root cause.
     """
     paths = [local_path(k, raw_dir) for k in keys]
     # a dict: a repeated key downloads once

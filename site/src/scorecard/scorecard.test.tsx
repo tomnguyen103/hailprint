@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Pairs, Receipt, StormsIndex } from "../data/types";
 import type { PooledRow } from "../pool";
 import { RULER } from "../ruler";
+import { resetRadiusKm, setRadiusKm } from "../state/radius";
 import { Scorecard } from "./scorecard";
 import { ThresholdCurve } from "./threshold-curve";
 
@@ -124,18 +125,18 @@ const RECEIPT: Receipt = {
   sources: [],
 };
 
-function makePairs(stormDate: string): Pairs {
+function makePairs(stormDate: string, maxRadiusKm = 20): Pairs {
   return {
     receipt: { ...RECEIPT, storm_date: stormDate },
     radius_km_default: 5,
-    radius_km_max: 20,
+    radius_km_max: maxRadiusKm,
     edge_margin_m: 1000,
     classes: RULER.map((r) => ({
       threshold_mm: r.threshold_mm,
       threshold_in: r.threshold_in,
       label: r.object,
       swath_km2: 10,
-      unverifiable_km2: Array.from({ length: 21 }, () => 2),
+      unverifiable_km2: Array.from({ length: maxRadiusKm + 1 }, () => 2),
     })),
     reports: [
       {
@@ -201,6 +202,7 @@ function makeRows(): PooledRow[] {
 
 describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US-12.3)", () => {
   beforeEach(() => {
+    resetRadiusKm();
     vi.stubGlobal("document", {
       createElement: (tag: string) => makeFakeElement(tag),
       createElementNS: (_ns: string, tag: string) => makeFakeElement(tag),
@@ -211,6 +213,7 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
   });
 
   afterEach(() => {
+    resetRadiusKm();
     vi.unstubAllGlobals();
   });
 
@@ -384,6 +387,29 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     );
     const classifierHeaders = findDomNodes(host2, (n) => n.tagName === "TH");
     expect(classifierHeaders).toHaveLength(4);
+  });
+
+  it("clamps active radius to cohort minimum radius_km_max without crashing when shared radius exceeds it", async () => {
+    const index = makeIndex(["wcm", "spc-daily"]);
+    mockPairsState.status = "ready";
+    mockPairsState.data = [makePairs("2024-05-10", 20), makePairs("2024-05-11", 10)];
+    setRadiusKm(18);
+
+    const host = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index, view: "table" }), host as unknown as HTMLElement));
+
+    expect(findDomNodes(host, (n) => classOf(n).includes("state-error"))).toHaveLength(0);
+    expect(findDomNodes(host, (n) => n.tagName === "TABLE")).toHaveLength(1);
+    const slider = findDomNodes(host, (n) => n.tagName === "INPUT" && n["type"] === "range")[0]!;
+    expect(slider["max"]).toBe(10);
+    expect(slider["value"]).toBe(10);
+    const output = findDomNodes(host, (n) => n.tagName === "OUTPUT")[0]!;
+    expect(domText(output)).toBe("10 km");
+
+    const hostCurve = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index, view: "curve" }), hostCurve as unknown as HTMLElement));
+    expect(findDomNodes(hostCurve, (n) => classOf(n).includes("state-error"))).toHaveLength(0);
+    expect(domText(hostCurve)).toContain("R = 10 km");
   });
 });
 

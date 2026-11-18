@@ -25,7 +25,6 @@ export const PIPELINE_VIEWS = ["runs", "archive", "sources"] as const;
 export type PipelineView = (typeof PIPELINE_VIEWS)[number];
 
 export const AREA_LABELS: Record<Area, string> = { live: "Live", storms: "Storms", scorecard: "Scorecard", try: "Try it", method: "Method", pipeline: "Pipeline" };
-export const NAV_LABELS: Record<Area, string> = { live: "Live", storms: "Storms", scorecard: "Scorecard", try: "Try it", method: "Method", pipeline: "Pipeline" };
 export const TAB_LABELS: Record<Tab, string> = { map: "Map", parcels: "Parcels", score: "Score", data: "Data" };
 export const METHOD_LABELS: Record<MethodPage, string> = {
   data: "Data", "storm-date": "Storm date", "size-classes": "Size classes", scoring: "Scoring", limits: "Limits", impacts: "Impacts",

@@ -1,7 +1,8 @@
 import { useId } from "preact/hooks";
+import { DEFAULT_MAX_RADIUS_KM, clampRadiusKm } from "../state/radius";
 
-// shortcut: 20 km stands in for radius_km_max until the first pairs.json arrives, upgrade when storms.json carries it
-export const RADIUS_MAX_FALLBACK = 20;
+// shortcut: DEFAULT_MAX_RADIUS_KM stands in for radius_km_max until the first pairs.json arrives, upgrade when storms.json carries it
+export const RADIUS_MAX_FALLBACK = DEFAULT_MAX_RADIUS_KM;
 
 /** The scoring radius in whole km, a native range from `min` (default 0) to `max`. Home and End are native. */
 export function RadiusSlider({
@@ -28,8 +29,8 @@ export function RadiusSlider({
         value={value}
         aria-valuetext={`${value} km`}
         onInput={(event) => {
-          const next = Number(event.currentTarget.value);
-          if (Number.isFinite(next)) onChange(Math.max(min, Math.min(max, Math.round(next))));
+          const clamped = clampRadiusKm(Number(event.currentTarget.value), max);
+          if (clamped !== null) onChange(Math.min(max, Math.max(min, clamped)));
         }}
       />
       <output for={id} class="mono">

@@ -87,7 +87,10 @@ vi.mock("./pipeline/pipeline", () => ({
   },
 }));
 vi.mock("./scorecard/scorecard", () => ({ Scorecard: () => null }));
-vi.mock("./try/try", () => ({ TryIt: () => null }));
+vi.mock("./try/try", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./try/try")>();
+  return { ...actual, TryIt: () => null };
+});
 
 describe("App", () => {
   let host: HTMLElement;
@@ -409,6 +412,7 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
       },
     };
     const fileItems: { name: string; receipt: unknown }[] = [];
+    const links: { href?: string; children?: unknown }[] = [];
     function DataProbe() {
       const vnode = DataPane({
         storm,
@@ -422,9 +426,12 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
           node.forEach(walk);
           return;
         }
-        const v = node as VNode<{ name?: string; receipt?: unknown; children?: unknown }>;
+        const v = node as VNode<{ name?: string; receipt?: unknown; href?: string; children?: unknown }>;
         if (v.type === FileItem && v.props.name) {
           fileItems.push({ name: v.props.name, receipt: v.props.receipt });
+        }
+        if (typeof v.props?.href === "string") {
+          links.push({ href: v.props.href, children: v.props.children });
         }
         if (v.props?.children) walk(v.props.children);
       };
@@ -442,19 +449,13 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     const pairsItem = fileItems.filter((item) => item.name === "pairs.json").at(-1);
     expect(reportsItem?.receipt).toEqual(sampleReceipt);
     expect(pairsItem?.receipt).toEqual(sampleReceipt);
+    expect(links.some((l) => l.href === "/try/run" && l.children === "Run & export")).toBe(true);
     setFetch(null);
 
-    const dataPaneMod = await import("./storms/data-pane");
-    expect(Object.keys(dataPaneMod).sort()).toEqual([
-      "DataPane",
-      "FileItem",
-      "cliSequence",
-      "eagleiYearsFor",
-      "odinSyncCommandFor",
-      "odinWindowDays",
-    ]);
-    const { eagleiYearsFor, cliSequence } = dataPaneMod;
+    const { eagleiYearsFor, odinWindowDays, odinSyncCommandFor, cliSequence } = await import("./try/cli-commands");
     expect(eagleiYearsFor("2024-12-31")).toEqual(["2024", "2025"]);
+    expect(odinWindowDays("2026-04-04")).toEqual(["2026-04-04", "2026-04-05", "2026-04-06"]);
+    expect(odinSyncCommandFor("2026-04-04")).toContain("derived/odin/odin-2026-04-04.parquet");
     const cliLines = cliSequence({
       date: storm.storm_date,
       radius: 5,
@@ -470,9 +471,7 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(cliLines).toContain("uv run hailprint internet 2024-05-28");
     expect(cliLines).toContain("uv run hailprint publish 2024-05-28 --with-internet");
 
-    const runMod = await import("./try/run");
-    expect(Object.keys(runMod).sort()).toEqual(["Run", "commandsFor"]);
-    const { commandsFor } = runMod;
+    const { Run, commandsFor } = await import("./try/run");
     const runCmds = commandsFor("2024-05-28", 5, undefined, "eaglei");
     expect(runCmds).toContain("uv run hailprint warnings 2024-05-28");
     expect(runCmds).toContain("uv run hailprint eaglei 2024");
@@ -495,6 +494,122 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
       null,
     );
     expect(unknownPowerRunCmds).not.toContain("uv run hailprint power 2026-04-04");
+
+    // Mount Run component behaviorally and verify CLI command list and CSV export controls
+    const { resetRadiusKm } = await import("./state/radius");
+    interface FakeDomNode {
+      nodeType: number;
+      tagName: string;
+      data?: string;
+      childNodes: FakeDomNode[];
+      firstChild: FakeDomNode | null;
+      parentNode: FakeDomNode | null;
+      namespaceURI: string;
+      style: Record<string, unknown>;
+      [key: string]: unknown;
+    }
+    const makeEl = (tag: string, text = ""): FakeDomNode => {
+      const el: FakeDomNode = {
+        nodeType: tag === "#text" ? 3 : 1,
+        tagName: tag.toUpperCase(),
+        data: text,
+        childNodes: [],
+        firstChild: null,
+        parentNode: null,
+        namespaceURI: "http://www.w3.org/1999/xhtml",
+        style: {},
+        setAttribute(k: string, v: unknown) {
+          el[k] = v;
+        },
+        removeAttribute(k: string) {
+          delete el[k];
+        },
+        addEventListener(type: string, fn: (e?: unknown) => void) {
+          el[`on_${type}`] = fn.bind(el);
+        },
+        removeEventListener(type: string) {
+          delete el[`on_${type}`];
+        },
+        appendChild(child: FakeDomNode) {
+          el.childNodes.push(child);
+          child.parentNode = el;
+          el.firstChild = el.childNodes[0] ?? null;
+          return child;
+        },
+        insertBefore(child: FakeDomNode, ref: FakeDomNode | null) {
+          const idx = ref ? el.childNodes.indexOf(ref) : -1;
+          if (idx >= 0) el.childNodes.splice(idx, 0, child);
+          else el.childNodes.push(child);
+          child.parentNode = el;
+          el.firstChild = el.childNodes[0] ?? null;
+          return child;
+        },
+        removeChild(child: FakeDomNode) {
+          const idx = el.childNodes.indexOf(child);
+          if (idx >= 0) el.childNodes.splice(idx, 1);
+          child.parentNode = null;
+          el.firstChild = el.childNodes[0] ?? null;
+          return child;
+        },
+      };
+      return el;
+    };
+    const domText = (n: FakeDomNode): string =>
+      n.nodeType === 3 ? String(n.data ?? "") : n.childNodes.map(domText).join("");
+
+    try {
+      clearFileCache();
+      resetRadiusKm();
+      setFetch(async () =>
+        new Response(
+          JSON.stringify({
+            receipt: sampleReceipt,
+            radius_km_default: 5,
+            radius_km_max: 20,
+            edge_margin_m: 1110,
+            classes: [],
+            reports: [],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+      vi.stubGlobal("document", {
+        createElement: (tag: string) => makeEl(tag),
+        createElementNS: (_ns: string, tag: string) => makeEl(tag),
+        createTextNode: (text: string) => makeEl("#text", text),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      });
+      const runHost = makeEl("div");
+      await act(() =>
+        render(
+          h(Run, {
+            index: {
+              confidence: sampleReceipt.confidence,
+              run_time: sampleReceipt.run_time,
+              package_version: sampleReceipt.package_version,
+              radius_km_default: 5,
+              storms: [storm],
+            },
+          }),
+          runHost as unknown as HTMLElement,
+        ),
+      );
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+      const runText = domText(runHost);
+      expect(runText).toContain("Commands");
+      expect(runText).toContain("uv run hailprint ingest 2024-05-28");
+      expect(runText).toContain("uv run hailprint score 2024-05-28 --radius-km 5");
+      expect(runText).toContain("cd site && npm run dev");
+      expect(runText).toContain("Download table CSV");
+    } finally {
+      setFetch(null);
+      clearFileCache();
+      resetRadiusKm();
+      vi.unstubAllGlobals();
+    }
 
     const { Footer } = await import("./shell/footer");
     const { TopBar } = await import("./shell/top-bar");

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setFetch } from "../data/fetch";
 import type { Pairs, Receipt, ReportsFile, Storm } from "../data/types";
 import { RULER } from "../ruler";
-import { resetRadiusKm } from "../state/radius";
+import { resetRadiusKm, setRadiusKm } from "../state/radius";
 import { ScorePane } from "./score-pane";
 
 interface FakeDomNode {
@@ -194,6 +194,7 @@ describe("ScorePane row PeekDrawer with ContingencyGrid (US-01.1, US-05.1)", () 
     await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
 
     expect(findDomNodes(host, (n) => hasClass(n, "peek-drawer"))).toHaveLength(0);
+    expect(findDomNodes(host, (n) => hasClass(n, "cgrid"))).toHaveLength(0);
     const classBtn = findDomNodes(host, (n) => n.tagName === "BUTTON" && hasClass(n, "class-pick"))[1]!;
     expect(classBtn).toBeDefined();
 
@@ -205,6 +206,8 @@ describe("ScorePane row PeekDrawer with ContingencyGrid (US-01.1, US-05.1)", () 
     expect(drawers).toHaveLength(1);
     const drawer = drawers[0]!;
     expect(findDomNodes(drawer, (n) => hasClass(n, "cgrid"))).toHaveLength(1);
+    const receiptList = findDomNodes(drawer, (n) => n.tagName === "DL" && hasClass(n, "receipt-list"))[0]!;
+    expect(receiptList.childNodes.some((child) => child.tagName === "DIV")).toBe(false);
     expect(domText(drawer)).toContain("Scored reports");
     expect(domText(drawer)).toContain("Unverifiable km²");
 
@@ -213,5 +216,37 @@ describe("ScorePane row PeekDrawer with ContingencyGrid (US-01.1, US-05.1)", () 
       (closeBtn["on_click"] as (e: { type: string }) => void)({ type: "click" });
     });
     expect(findDomNodes(host, (n) => hasClass(n, "peek-drawer"))).toHaveLength(0);
+  });
+
+  it("clamps shared radius above radius_km_max without throwing in ScorePane", async () => {
+    const tightPairs: Pairs = {
+      ...pairs,
+      radius_km_max: 10,
+      classes: pairs.classes.map((c) => ({ ...c, unverifiable_km2: Array.from({ length: 11 }, () => 3) })),
+    };
+    setFetch(async () =>
+      new Response(JSON.stringify(tightPairs), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    setRadiusKm(18);
+
+    const host = makeFakeElement("div");
+    await act(() =>
+      render(
+        h(ScorePane, {
+          storm,
+          reports: { status: "ready", data: reports },
+        }),
+        host as unknown as HTMLElement,
+      ),
+    );
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+
+    expect(findDomNodes(host, (n) => hasClass(n, "state-error"))).toHaveLength(0);
+    const slider = findDomNodes(host, (n) => n.tagName === "INPUT" && n["type"] === "range")[0]!;
+    expect(slider["max"]).toBe(10);
+    expect(slider["value"]).toBe(10);
   });
 });

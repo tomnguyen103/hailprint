@@ -1,11 +1,10 @@
 import { useState } from "preact/hooks";
 import type { Receipt } from "../data/types";
-import { METRIC_LABELS, METRICS, formatInches } from "../format";
+import { METRIC_LABELS } from "../format";
 import type { PooledRow } from "../pool";
-import { RULER, objectName } from "../ruler";
-import { ContingencyGrid } from "../shell/contingency-grid";
-import { PeekDrawer } from "../shell/peek-drawer";
+import { RULER } from "../ruler";
 import { ReceiptChip } from "../shell/receipt-chip";
+import { ThresholdDrawer } from "../shell/threshold-drawer";
 import { ClassPick } from "./class-pick";
 import { MetricText } from "./metric-text";
 
@@ -76,43 +75,15 @@ export function TableView({
       <p class="pane-note">
         <ReceiptChip receipt={receipt} file={file} />
       </p>
-      <PeekDrawer
-        open={peekRow !== null}
-        title={
-          peekRow
-            ? (() => {
-                const obj = objectName(peekRow.threshold_mm);
-                return `Pooled >= ${formatInches(peekRow.threshold_in)}${obj ? ` (${obj})` : ""}`;
-              })()
-            : "Pooled threshold detail"
-        }
+      <ThresholdDrawer
+        row={peekRow}
+        scoredCount={peekRow?.report_count ?? 0}
+        titlePrefix="Pooled"
         subtitle={peekRow ? `${peekRow.report_count} scored reports` : undefined}
         receipt={receipt}
         file={file}
         onClose={() => setPeekMm(null)}
-      >
-        {peekRow ? (
-          <>
-            <ContingencyGrid row={peekRow} />
-            <dl class="receipt-list">
-              <dt>Scored reports</dt>
-              <dd class="mono">{peekRow.report_count}</dd>
-              {METRICS.map((m) => (
-                <div key={m}>
-                  <dt>{METRIC_LABELS[m]}</dt>
-                  <dd class="mono">
-                    <MetricText value={peekRow[m]} />
-                  </dd>
-                </div>
-              ))}
-              <dt>Swath km²</dt>
-              <dd class="mono">{peekRow.swath_km2.toFixed(1)}</dd>
-              <dt>Unverifiable km²</dt>
-              <dd class="mono">{peekRow.unverifiable_km2.toFixed(1)}</dd>
-            </dl>
-          </>
-        ) : null}
-      </PeekDrawer>
+      />
     </>
   );
 }

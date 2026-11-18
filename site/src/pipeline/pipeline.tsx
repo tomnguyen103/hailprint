@@ -16,7 +16,8 @@ const FILE = "pipeline.json";
 
 // shortcut: the Pipeline services dot reads presence in the published file, upgrade to a freshness rule when a cron runs
 export function services(file: PipelineFile) {
-  const has = (key: "source" | "product", word: string) => file.sources.some((s) => s[key].toLowerCase().includes(word));
+  const has = (key: "source" | "product", word: string) =>
+    file.sources.some((s) => s[key].toLowerCase().split(/[^a-z0-9]+/).includes(word));
   return [
     { name: "MESH archive", ok: file.archive !== null || has("source", "mrms") },
     { name: "SPC reports", ok: has("product", "hail") || has("source", "spc") },

@@ -4,13 +4,13 @@ import { guardPairs, guardPower } from "../data/guard";
 import type { Pairs, PowerFile, Storm, StormsIndex } from "../data/types";
 import { pool, scoredCount } from "../pool";
 import { rescore } from "../rescore";
-import { RADIUS_MAX_FALLBACK, RadiusSlider } from "../shell/radius-slider";
+import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { ErrorState, LoadingState } from "../shell/states";
 import { useLoad } from "../state/load";
 import { useAllFiles } from "../state/pairs-all";
-import { useRadiusKm } from "../state/radius";
-import { cliSequence } from "../storms/data-pane";
+import { DEFAULT_MAX_RADIUS_KM, clampRadiusKm, useRadiusKm } from "../state/radius";
+import { cliSequence } from "./cli-commands";
 import { csvOf } from "./csv";
 import { ScopeSelect, newestFirst } from "./try";
 
@@ -68,8 +68,8 @@ export function Run({ index }: { index: StormsIndex }) {
   const pairsDoc = pairs.status === "ready" && pairs.data[0] ? pairs.data[0] : null;
   const defaultRadius = pairsDoc ? pairsDoc.radius_km_default : index.radius_km_default;
   const [radiusKm, setRadiusKm] = useRadiusKm(defaultRadius);
-  const maxRadius = pairsDoc ? pairsDoc.radius_km_max : RADIUS_MAX_FALLBACK;
-  const activeRadius = Math.max(0, Math.min(maxRadius, Math.round(radiusKm)));
+  const maxRadius = pairsDoc ? pairsDoc.radius_km_max : DEFAULT_MAX_RADIUS_KM;
+  const activeRadius = clampRadiusKm(radiusKm, maxRadius) ?? 0;
 
   const copy = async (i: number, text: string) => {
     const node = codes.current[i];
@@ -103,7 +103,7 @@ export function Run({ index }: { index: StormsIndex }) {
     <>
       <div class="try-controls">
         <ScopeSelect storms={index.storms} value={date} onChange={setDate} label="Storm date" />
-        <RadiusSlider value={activeRadius} max={maxRadius} onChange={setRadiusKm} />
+        <RadiusSlider value={activeRadius} max={maxRadius} onChange={(next) => setRadiusKm(next, maxRadius)} />
       </div>
       <div class="pane-grid">
         <section>

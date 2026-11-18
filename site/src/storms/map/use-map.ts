@@ -37,9 +37,19 @@ export function useMap(theme: Theme, options?: UseMapOptions) {
           next.destroy();
           return;
         }
+        try {
+          onReadyRef.current?.(next);
+        } catch (cause) {
+          handle.current = null;
+          try {
+            next.destroy();
+          } catch {
+            // Preserve the original onReady error.
+          }
+          throw cause;
+        }
         created = next;
         handle.current = next;
-        onReadyRef.current?.(next);
         setReady(true);
       })
       .catch((cause: unknown) => {

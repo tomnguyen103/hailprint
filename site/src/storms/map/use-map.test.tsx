@@ -257,4 +257,36 @@ describe("useMap shared MapLibre lifecycle hook (US-02.1, US-02.3, US-02.4)", ()
     expect(latest!.error).toBeNull();
     expect(latest!.ready).toBe(false);
   });
+
+  it("destroys next and keeps handle.current === null when onReady throws synchronously", async () => {
+    const stub = makeStubHandle();
+    createMapMock.mockResolvedValueOnce(stub);
+
+    let latest: ReturnType<typeof useMap> | null = null;
+    function Probe({ theme }: { theme: Theme }) {
+      const state = useMap(theme, {
+        onReady: () => {
+          throw new Error("onReady boom");
+        },
+      });
+      latest = state;
+      return h("div", { ref: state.container });
+    }
+
+    const host = makeFakeElement("div");
+    await act(() => render(h(Probe, { theme: "light" }), host as unknown as HTMLElement));
+    await flush();
+
+    expect(stub.destroy).toHaveBeenCalledTimes(1);
+    expect(latest!.handle.current).toBeNull();
+    expect(latest!.ready).toBe(false);
+    expect(latest!.error).toBeInstanceOf(DataError);
+    expect(latest!.error?.file).toBe("map");
+    expect(latest!.error?.reason).toContain("onReady boom");
+
+    await act(() => render(null, host as unknown as HTMLElement));
+    await flush();
+    expect(stub.destroy).toHaveBeenCalledTimes(1);
+    expect(latest!.handle.current).toBeNull();
+  });
 });

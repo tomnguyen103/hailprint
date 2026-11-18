@@ -2,7 +2,7 @@
 import { useSyncExternalStore } from "preact/compat";
 
 const DEFAULT_RADIUS_KM = 5;
-const MAX_RADIUS_KM = 20;
+export const DEFAULT_MAX_RADIUS_KM = 20;
 
 let customRadius: number | null = null;
 const listeners = new Set<() => void>();
@@ -16,14 +16,16 @@ function getSnapshot(): number | null {
   return customRadius;
 }
 
-function clampRadiusKm(value: number): number | null {
-  if (!Number.isFinite(value)) return null;
-  return Math.max(0, Math.min(MAX_RADIUS_KM, Math.round(value)));
+/** Clamp and round a radius in km to [0, max], or return null for non-finite inputs. */
+export function clampRadiusKm(value: number, max: number = DEFAULT_MAX_RADIUS_KM): number | null {
+  if (!Number.isFinite(value) || !Number.isFinite(max)) return null;
+  const upper = Math.max(0, Math.floor(max));
+  return Math.max(0, Math.min(upper, Math.round(value)));
 }
 
-/** Set the shared verification radius in km, clamped and rounded to [0, 20]. */
-export function setRadiusKm(next: number): void {
-  const clamped = clampRadiusKm(next);
+/** Set the shared verification radius in km, clamped and rounded to [0, max]. */
+export function setRadiusKm(next: number, max: number = DEFAULT_MAX_RADIUS_KM): void {
+  const clamped = clampRadiusKm(next, max);
   if (clamped === null || customRadius === clamped) return;
   customRadius = clamped;
   for (const listener of listeners) listener();
@@ -45,7 +47,7 @@ export function subscribeRadius(listener: () => void): () => void {
 }
 
 /** Subscribe a component to the shared verification radius with a caller-provided default fallback. */
-export function useRadiusKm(fallback: number = DEFAULT_RADIUS_KM): [number, (next: number) => void] {
+export function useRadiusKm(fallback: number = DEFAULT_RADIUS_KM): [number, (next: number, max?: number) => void] {
   const radius = useSyncExternalStore(subscribeRadius, getSnapshot);
   return [radius ?? fallback, setRadiusKm];
 }

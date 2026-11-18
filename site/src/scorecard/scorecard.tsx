@@ -12,12 +12,12 @@ import {
 } from "../pool";
 import { SCORECARD_VIEWS, href, type ScorecardView } from "../router";
 import { RULER } from "../ruler";
-import { RADIUS_MAX_FALLBACK, RadiusSlider } from "../shell/radius-slider";
+import { RadiusSlider } from "../shell/radius-slider";
 import { ReceiptChip } from "../shell/receipt-chip";
 import { EmptyState, ErrorState, LoadingState, PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { usePairsAll } from "../state/pairs-all";
-import { useRadiusKm } from "../state/radius";
+import { DEFAULT_MAX_RADIUS_KM, clampRadiusKm, useRadiusKm } from "../state/radius";
 import { GridView } from "./grid-view";
 import { MetricText } from "./metric-text";
 import { TableView } from "./table-view";
@@ -63,8 +63,14 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
   );
   const data = filtered?.pairs ?? null;
   const activeStormCount = filtered?.storms.length ?? index.storms.length;
+  const maxRadiusKm =
+    data !== null && data.length > 0 ? Math.min(...data.map((f) => f.radius_km_max)) : DEFAULT_MAX_RADIUS_KM;
+  const activeRadius = clampRadiusKm(radius, maxRadiusKm) ?? 0;
 
-  const table = useMemo(() => (data === null || data.length === 0 ? null : pooledRows(data, radius)), [data, radius]);
+  const table = useMemo(
+    () => (data === null || data.length === 0 ? null : pooledRows(data, activeRadius)),
+    [data, activeRadius],
+  );
   const scored = table !== null && !("error" in table) ? table.scored : null;
   const matrix = useMemo(() => (data === null || data.length === 0 ? [] : sensitivityMatrix(data)), [data]);
   const receipt = useMemo(() => (data === null ? null : pooledReceipt(data, index)), [data, index]);
@@ -141,7 +147,11 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
             ))}
           </div>
         </div>
-        <RadiusSlider value={radius} max={rawData?.[0]?.radius_km_max ?? RADIUS_MAX_FALLBACK} onChange={setRadius} />
+        <RadiusSlider
+          value={activeRadius}
+          max={maxRadiusKm}
+          onChange={(next) => setRadius(next, maxRadiusKm)}
+        />
       </div>
       <SubTabs
         label="Scorecard views"
@@ -156,7 +166,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
             <h2>Radius × threshold HSS sensitivity matrix</h2>
             <p class="pane-note">
               Active:{" "}
-              <span class="mono">R = {radius} km</span>, <span class="mono">&ge; {classMm} mm</span>.
+              <span class="mono">R = {activeRadius} km</span>, <span class="mono">&ge; {classMm} mm</span>.
             </p>
             <div class="table-scroll">
               <table class="table sensitivity-matrix">
@@ -174,12 +184,12 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
                   {matrix.map((rowCells, idx) => {
                     const rKm = SENSITIVITY_RADII_KM[idx]!;
                     return (
-                      <tr key={rKm} data-active={rKm === radius}>
+                      <tr key={rKm} data-active={rKm === activeRadius}>
                         <th scope="row" class="mono">
                           {rKm} km
                         </th>
                         {rowCells.map((cell) => {
-                          const selected = cell.radiusKm === radius && cell.thresholdMm === classMm;
+                          const selected = cell.radiusKm === activeRadius && cell.thresholdMm === classMm;
                           return (
                             <td key={cell.thresholdMm} class="num">
                               <button
@@ -188,7 +198,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
                                 aria-pressed={selected}
                                 title={`R=${cell.radiusKm} km, >= ${cell.thresholdMm} mm: a=${cell.hits}, b=${cell.false_alarms}, c=${cell.misses}, d=${cell.correct_negatives}`}
                                 onClick={() => {
-                                  setRadius(cell.radiusKm);
+                                  setRadius(cell.radiusKm, maxRadiusKm);
                                   setClassMm(cell.thresholdMm);
                                 }}
                               >

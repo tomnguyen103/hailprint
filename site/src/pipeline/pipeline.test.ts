@@ -37,3 +37,11 @@ it("reads SPC from the product and other services from source", () => {
   expect(state({ ...empty, sources: [row("odin", "outages")] })["EAGLE-I/ODIN"]).toBe(true);
   expect(state({ ...empty, sources: [row("ioda", "ping-slash24")] }).IODA).toBe(true);
 });
+
+it("does not match partial substrings inside unrelated source or product words", () => {
+  expect(state({ ...empty, sources: [row("geocoding", "addresses")] })["EAGLE-I/ODIN"]).toBe(false);
+  expect(state({ ...empty, sources: [row("siemens", "grid")] })["IEM warnings"]).toBe(false);
+  expect(state({ ...empty, sources: [row("iodata", "metrics")] }).IODA).toBe(false);
+  expect(state({ ...empty, sources: [row("radar", "hailstone")] })["SPC reports"]).toBe(false);
+  expect(state({ ...empty, sources: [row("hcad2", "parcels")] })["HCAD parcels"]).toBe(false);
+});
