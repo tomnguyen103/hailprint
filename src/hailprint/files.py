@@ -3,6 +3,7 @@
 import ctypes
 import io
 import os
+import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -14,6 +15,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 STALE_LOCK_S = 3600.0
+HEARTBEAT_S = 60.0
 SOURCE = "noaa-mrms-pds"
 PRODUCT = "MESH_Max_1440min_00.50"
 CONFIDENCE = (
@@ -150,8 +152,9 @@ def _evict_stale_lock(path: Path) -> bool:
 def lock(path: Path) -> Iterator[None]:
     """Hold one run lock; a second run stops instead of a silent last-write-wins merge.
 
-    The lock file holds the pid of the run. A stale lock from a dead pid is evicted once;
-    an active lock raises RuntimeError and leaves the file in place.
+    The lock file holds the pid of the run, and a heartbeat thread refreshes its mtime every
+    HEARTBEAT_S. A lock from a dead pid, or one no run refreshes for STALE_LOCK_S, is evicted
+    once; an active lock raises RuntimeError and leaves the file in place.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -168,11 +171,26 @@ def lock(path: Path) -> Iterator[None]:
             raise RuntimeError(
                 f"{path} exists: another run holds it, or delete it after a crash"
             ) from None
+    stop = threading.Event()
+
+    def beat() -> None:
+        # utime changes the mtime only, so a crash never leaves a half-written pid
+        while not stop.wait(HEARTBEAT_S):
+            try:
+                os.utime(path)
+            except OSError:
+                pass
+
+    heartbeat = threading.Thread(target=beat, name="lock-heartbeat", daemon=True)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(str(os.getpid()))
+        heartbeat.start()
         yield
     finally:
+        stop.set()
+        if heartbeat.is_alive():
+            heartbeat.join()
         path.unlink(missing_ok=True)
 
 
