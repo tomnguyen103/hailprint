@@ -1,5 +1,5 @@
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { fetchCounties, harrisFeature } from "../../county";
 import { type ReportsFile, type SwathFile, type WarningsFile } from "../../data/types";
 import { RULER } from "../../ruler";
@@ -42,12 +42,13 @@ export function LiveMap({ swath, reports, warnings }: Props) {
     if (ready) handle.current?.setWarnings(warnings);
   }, [ready, warnings]);
 
+  const swathRef = useRef(swath);
+  swathRef.current = swath;
   const swathRunTime = swath?.receipt.run_time ?? null;
   useEffect(() => {
     if (!ready || !handle.current) return;
-    handle.current.fit(swath ? boundsOf(swath) : null);
-    // Re-fit only when the map becomes ready or the swath valid time changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const current = swathRef.current;
+    handle.current.fit(current ? boundsOf(current) : null);
   }, [ready, swathRunTime]);
 
   useEffect(() => {

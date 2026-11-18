@@ -40,4 +40,54 @@ describe("useLoad", () => {
     expect(forB.some((entry) => entry.data === "data of A")).toBe(false);
     expect(forB.at(-1)).toEqual({ key: "B", status: "ready", data: "data of B" });
   });
+
+  it("settles synchronously when wait === 0 and clears pending settle timer on unmount (US-03.2)", async () => {
+    const clearSpy = vi.fn((id: number) => clearTimeout(id));
+    const setSpy = vi.fn((fn: () => void, ms: number) => setTimeout(fn, ms));
+    vi.stubGlobal("window", {
+      setTimeout: setSpy,
+      clearTimeout: clearSpy,
+    });
+
+    const seen: Seen[] = [];
+    let resolveDelayed!: (v: string) => void;
+    function Probe({ name, start }: { name: string; start: () => Promise<string> }) {
+      const load = useLoad(name, start);
+      seen.push({ key: name, status: load.status, data: load.data });
+      return null;
+    }
+    const host = { firstChild: null, childNodes: [], namespaceURI: "http://www.w3.org/1999/xhtml" } as unknown as HTMLElement;
+
+    // Immediate promise settles via microtask only without scheduling a 0ms setTimeout
+    await act(() => {
+      render(h(Probe, { name: "fast", start: () => Promise.resolve("instant") }), host);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(seen.at(-1)).toEqual({ key: "fast", status: "ready", data: "instant" });
+    expect(setSpy.mock.calls.some(([, ms]) => ms === 0)).toBe(false);
+
+    // Delayed promise that triggers showLoading (>300ms), settles, then unmounts before 500ms keep timer fires
+    await act(async () => {
+      render(
+        h(Probe, {
+          name: "slow",
+          start: () =>
+            new Promise<string>((resolve) => {
+              resolveDelayed = resolve;
+            }),
+        }),
+        host,
+      );
+    });
+    await act(async () => void (await vi.advanceTimersByTimeAsync(350)));
+    await act(async () => {
+      resolveDelayed("late");
+    });
+    const clearsBeforeUnmount = clearSpy.mock.calls.length;
+    await act(() => render(null, host));
+    // Cleanup cleared both show timer and pending settle timer
+    expect(clearSpy.mock.calls.length).toBeGreaterThanOrEqual(clearsBeforeUnmount + 2);
+  });
 });

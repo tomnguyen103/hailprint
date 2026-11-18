@@ -239,13 +239,23 @@ export function makeHandle(
       powerShown = true;
     }
     geojson(POWER_SOURCE)?.setData(layer.counties);
-    clearCountyTags();
-    countyMarkers = layer.tags.map((tag) => {
-      const element = document.createElement("div");
-      element.className = "county-tag";
-      element.textContent = tag.text;
-      return new Marker({ element }).setLngLat(tag.lngLat).addTo(map);
-    });
+    for (let i = 0; i < layer.tags.length; i++) {
+      const tag = layer.tags[i]!;
+      const existing = countyMarkers[i];
+      if (existing) {
+        const element = existing.getElement();
+        if (element.textContent !== tag.text) element.textContent = tag.text;
+        existing.setLngLat(tag.lngLat);
+      } else {
+        const element = document.createElement("div");
+        element.className = "county-tag";
+        element.textContent = tag.text;
+        countyMarkers.push(new Marker({ element }).setLngLat(tag.lngLat).addTo(map));
+      }
+    }
+    while (countyMarkers.length > layer.tags.length) {
+      countyMarkers.pop()!.remove();
+    }
   };
 
   const applySwath = () => {
@@ -315,13 +325,26 @@ export function makeHandle(
           ? activeWarnings(file, date, step)
           : (file?.features ?? []);
       geojson(WARNINGS_SOURCE)?.setData({ type: "FeatureCollection", features: active });
-      for (const tag of tags) tag.remove();
-      tags = warningTags(active).map((tag) => {
-        const element = document.createElement("div");
-        element.className = `warning-tag warning-tag-${tag.text.toLowerCase()}`;
-        element.textContent = tag.text;
-        return new Marker({ element }).setLngLat(tag.lngLat).addTo(map);
-      });
+      const nextTags = warningTags(active);
+      for (let i = 0; i < nextTags.length; i++) {
+        const tag = nextTags[i]!;
+        const nextClass = `warning-tag warning-tag-${tag.text.toLowerCase()}`;
+        const existing = tags[i];
+        if (existing) {
+          const element = existing.getElement();
+          if (element.className !== nextClass) element.className = nextClass;
+          if (element.textContent !== tag.text) element.textContent = tag.text;
+          existing.setLngLat(tag.lngLat);
+        } else {
+          const element = document.createElement("div");
+          element.className = nextClass;
+          element.textContent = tag.text;
+          tags.push(new Marker({ element }).setLngLat(tag.lngLat).addTo(map));
+        }
+      }
+      while (tags.length > nextTags.length) {
+        tags.pop()!.remove();
+      }
       syncTags();
     },
     setCounties(next) {

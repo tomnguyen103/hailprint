@@ -1,12 +1,11 @@
 // History-API router. Pure: no Preact import, window touched only inside navigate/replace.
 // Routes carry zero query strings; href() is the one place that builds a path.
 
-import { DATE } from "./data/constants";
+import { isValidCalendarDate } from "./data/constants";
 import { isStep, parseStep } from "./time/step";
 
 export const AREAS = ["live", "storms", "scorecard", "try", "method", "pipeline"] as const;
 export type Area = (typeof AREAS)[number];
-export const PRIMARY_AREAS = ["live", "storms", "scorecard", "method", "try"] as const;
 
 export const TABS = ["map", "parcels", "score", "data"] as const;
 export type Tab = (typeof TABS)[number];
@@ -87,7 +86,7 @@ export function match(path: string): Route {
   }
   if (date === undefined) return { kind: "redirect-latest" };
   const [stepPart, ...more] = rest;
-  if (!DATE.test(date) || more.length > 0) return { kind: "not-found" };
+  if (!isValidCalendarDate(date) || more.length > 0) return { kind: "not-found" };
   if (tab !== undefined && !isTab(tab)) return { kind: "not-found" };
   if (stepPart !== undefined && tab !== "map") return { kind: "not-found" };
   return {

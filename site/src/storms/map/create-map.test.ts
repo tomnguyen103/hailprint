@@ -39,12 +39,38 @@ const stub = vi.hoisted(() => {
       return this.listeners.get(type)?.size ?? 0;
     }
   }
-  return { FakeMap, hasBasemap: false };
+  class FakeMarker {
+    static instances: FakeMarker[] = [];
+    static addToCalls = 0;
+    static removeCalls = 0;
+    lngLat: number[] = [];
+    readonly element: { className: string; textContent: string; hidden: boolean };
+    constructor(opts: { element: { className: string; textContent: string; hidden: boolean } }) {
+      this.element = opts.element;
+      FakeMarker.instances.push(this);
+    }
+    setLngLat(lngLat: number[]) {
+      this.lngLat = lngLat;
+      return this;
+    }
+    addTo() {
+      FakeMarker.addToCalls += 1;
+      return this;
+    }
+    remove() {
+      FakeMarker.removeCalls += 1;
+      return this;
+    }
+    getElement() {
+      return this.element;
+    }
+  }
+  return { FakeMap, FakeMarker, hasBasemap: false };
 });
 
 vi.mock("maplibre-gl", () => ({
   Map: stub.FakeMap,
-  Marker: class {},
+  Marker: stub.FakeMarker,
   NavigationControl: class {},
   addProtocol() {},
   setWorkerUrl() {},
@@ -498,5 +524,104 @@ describe("createMap", () => {
     expect(oklchToHex("lab(-20% 50 0)")).toBe("#000000");
     expect(oklchToHex("lab(100% 50 -50)")).toBe("#ffffff");
     expect(oklchToHex("lab(120% 50 0)")).toBe("#ffffff");
+  });
+
+  it("reuses county and warning Marker instances in place across slider steps without DOM churn (M5, US-03.1)", async () => {
+    stub.FakeMarker.instances.length = 0;
+    stub.FakeMarker.addToCalls = 0;
+    stub.FakeMarker.removeCalls = 0;
+    vi.stubGlobal("document", {
+      documentElement: {},
+      createElement: () => ({ className: "", textContent: "", hidden: false }),
+    });
+    vi.stubGlobal("getComputedStyle", () => ({
+      getPropertyValue: () => "#5f6b7a",
+    }));
+
+    const mapStub = {
+      isStyleLoaded: () => true,
+      getZoom: () => 10,
+      on() {},
+      getSource: () => ({ setData() {} }),
+      setLayoutProperty() {},
+      setPaintProperty() {},
+      hasImage: () => false,
+      addImage() {},
+      removeImage() {},
+      getStyle: () => ({ layers: [] }),
+      removeLayer() {},
+      addLayer() {},
+      remove() {},
+    };
+    const { makeHandle } = await import("./create-map");
+    const handle = makeHandle(mapStub as never, false, "light");
+
+    const outlines = {
+      type: "FeatureCollection" as const,
+      features: [
+        {
+          type: "Feature" as const,
+          properties: { fips: "48201", name: "Harris" },
+          geometry: {
+            type: "MultiPolygon" as const,
+            coordinates: [[[[-95.8, 29.5], [-95.0, 29.5], [-95.0, 30.1], [-95.8, 30.1], [-95.8, 29.5]]]],
+          },
+        },
+      ],
+    };
+    const receipt = {
+      storm_date: "2024-05-28",
+      sources: [],
+      confidence: "radar-estimated hail size",
+      run_time: "2026-10-26T23:02:33Z",
+      package_version: "0.1.0",
+    };
+    const power = {
+      receipt,
+      window: { start: "2024-05-28T12:00:00Z", step_minutes: 15 as const, steps: 192 as const },
+      source: "eaglei" as const,
+      utilities: null,
+      counties: [
+        { fips: "48201", name: "Harris", customers: 1000, out: Array.from({ length: 192 }, (_, i) => (i === 60 ? 100 : 250)) },
+      ],
+    };
+    const warnings = {
+      type: "FeatureCollection" as const,
+      receipt,
+      features: [
+        {
+          type: "Feature" as const,
+          properties: {
+            phenomena: "SV" as const,
+            significance: "W" as const,
+            event_label: "Severe Thunderstorm Warning",
+            eventid: 1,
+            polygon_begin: "2024-05-28T12:00:00Z",
+            polygon_end: "2024-05-30T12:00:00Z",
+            product_id: "p1",
+          },
+          geometry: {
+            type: "MultiPolygon" as const,
+            coordinates: [[[[-95.6, 29.6], [-95.2, 29.6], [-95.2, 29.9], [-95.6, 29.9], [-95.6, 29.6]]]],
+          },
+        },
+      ],
+    };
+
+    handle.setCounties(outlines);
+    handle.setFill("power", power, 60);
+    handle.setWarnings(warnings, "2024-05-28", 60);
+    expect(stub.FakeMarker.instances).toHaveLength(2);
+    expect(stub.FakeMarker.addToCalls).toBe(2);
+    expect(stub.FakeMarker.removeCalls).toBe(0);
+    expect(stub.FakeMarker.instances[0]!.element.textContent).toBe("Harris 10.0%");
+
+    // Scrubbing to step 61 updates marker text in place with zero addTo() or remove() churn
+    handle.setFill("power", power, 61);
+    handle.setWarnings(warnings, "2024-05-28", 61);
+    expect(stub.FakeMarker.instances).toHaveLength(2);
+    expect(stub.FakeMarker.addToCalls).toBe(2);
+    expect(stub.FakeMarker.removeCalls).toBe(0);
+    expect(stub.FakeMarker.instances[0]!.element.textContent).toBe("Harris 25.0%");
   });
 });

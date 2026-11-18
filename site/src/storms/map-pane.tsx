@@ -211,6 +211,29 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
     metro,
     storm.storm_date,
   );
+  const jumps = useMemo(
+    () =>
+      eventJumpChips({
+        date: storm.storm_date,
+        warnings: warningsData,
+        reports: reportsData,
+        power: powerData,
+        internet: internetData,
+        fips,
+      }),
+    [storm.storm_date, warningsData, reportsData, powerData, internetData, fips],
+  );
+  const resolvedPick = useMemo(
+    () =>
+      activePick === null
+        ? null
+        : outlines !== null
+          ? activePick.countyFips !== undefined
+            ? activePick
+            : { ...activePick, countyFips: countyAt(activePick.lngLat, outlines) }
+          : { ...activePick, countyFips: null },
+    [activePick, outlines],
+  );
   return (
     <div class="map-pane" data-inspector={activePick !== null}>
       <div class="map-main">
@@ -277,18 +300,7 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
         <TimeSlider
           date={storm.storm_date}
           step={step}
-          jumps={useMemo(
-            () =>
-              eventJumpChips({
-                date: storm.storm_date,
-                warnings: warningsData,
-                reports: reportsData,
-                power: powerData,
-                internet: internetData,
-                fips,
-              }),
-            [storm.storm_date, warningsData, reportsData, powerData, internetData, fips],
-          )}
+          jumps={jumps}
           onStep={onStep}
         />
         <Timeline
@@ -304,15 +316,9 @@ export function MapPane({ storm, reports, power, internet, step, onStep, fips, o
           onStep={onStep}
         />
       </div>
-      {activePick !== null && receipt !== null ? (
+      {resolvedPick !== null && receipt !== null ? (
         <Inspector
-          pick={
-            outlines !== null
-              ? activePick.countyFips !== undefined
-                ? activePick
-                : { ...activePick, countyFips: countyAt(activePick.lngLat, outlines) }
-              : { ...activePick, countyFips: null }
-          }
+          pick={resolvedPick}
           receipt={receipt}
           swath={swathData}
           reports={reportsData}

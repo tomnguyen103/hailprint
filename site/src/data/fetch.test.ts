@@ -4,12 +4,14 @@ import {
   FETCH_TIMEOUT_MS,
   MAX_IN_FLIGHT,
   STALE,
+  clearFetchCache,
   fetchJson,
   fetchUrlJson,
   latest,
   normalizeBase,
   resolveDataBase,
   setFetch,
+  setFetchCacheScope,
 } from "./fetch";
 import { DataError } from "./types";
 
@@ -293,5 +295,57 @@ it("frees slots when 6 hung requests time out so queued requests start after eac
   } finally {
     vi.useRealTimers();
   }
+});
+
+it("caches immutable storm JSON across calls and concurrent requests, evicts rejections, and respects scope/fresh (US-03.1, US-03.4, US-03.5)", async () => {
+  let calls = 0;
+  setFetch(async () => {
+    calls += 1;
+    return response(200, JSON.stringify({ seq: calls }));
+  });
+
+  // Concurrent calls share one in-flight request
+  const [a, b] = await Promise.all([
+    fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq),
+    fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq),
+  ]);
+  expect(a).toBe(1);
+  expect(b).toBe(1);
+  expect(calls).toBe(1);
+
+  // Subsequent tab-switch read reuses cache
+  expect(await fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq)).toBe(1);
+  expect(calls).toBe(1);
+
+  // Explicit fresh bypasses cache
+  expect(await fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq, DATA_BASE, { fresh: true })).toBe(2);
+  expect(calls).toBe(2);
+
+  // run_time scope change invalidates cache
+  setFetchCacheScope("2026-11-18T12:00:00Z");
+  expect(await fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq)).toBe(3);
+  expect(calls).toBe(3);
+  setFetchCacheScope("2026-11-18T12:00:00Z");
+  expect(await fetchJson("storms/2024-05-28/pairs.json", (v) => (v as { seq: number }).seq)).toBe(3);
+  expect(calls).toBe(3);
+
+  // Mutable top-level storms.json is never cached
+  expect(await fetchJson("storms.json", (v) => (v as { seq: number }).seq)).toBe(4);
+  expect(await fetchJson("storms.json", (v) => (v as { seq: number }).seq)).toBe(5);
+  expect(calls).toBe(5);
+
+  // Failed storm fetch is evicted immediately so retry fetches fresh
+  clearFetchCache();
+  let failOnce = true;
+  setFetch(async () => {
+    calls += 1;
+    if (failOnce) {
+      failOnce = false;
+      return response(503, "down");
+    }
+    return response(200, JSON.stringify({ ok: true }));
+  });
+  await expect(fetchJson("storms/2024-05-28/swath.geojson", (v) => v)).rejects.toThrow(/HTTP 503/);
+  await expect(fetchJson("storms/2024-05-28/swath.geojson", (v) => v)).resolves.toEqual({ ok: true });
 });
 

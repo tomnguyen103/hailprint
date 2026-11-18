@@ -2,7 +2,7 @@
 // and the first missing or mistyped key, so the error state can name the problem.
 // Each guard checks every key the site reads from that file, and nothing more.
 import type { FeatureCollection, MultiPolygon } from "geojson";
-import { DATE, METRO_FIPS, STEP_MINUTES, STEPS } from "./constants";
+import { METRO_FIPS, STEP_MINUTES, STEPS, isValidCalendarDate } from "./constants";
 import type {
   InternetFile,
   LiveFile,
@@ -71,8 +71,12 @@ function count(file: string, value: unknown, path: string): void {
   if (!Number.isInteger(n) || n < 0) throw new DataError(file, `${path} is not a count`);
 }
 
-function filePath(file: string, value: unknown, path: string, pattern: RegExp): void {
-  if (!pattern.test(str(file, value, path))) throw new DataError(file, `${path} is not a published file path`);
+function filePath(file: string, value: unknown, path: string, pattern: RegExp, stormDate?: string): void {
+  const text = str(file, value, path);
+  if (!pattern.test(text)) throw new DataError(file, `${path} is not a published file path`);
+  if (stormDate !== undefined && !text.startsWith(`storms/${stormDate}/`)) {
+    throw new DataError(file, `${path} does not match storm_date ${stormDate}`);
+  }
 }
 
 /** The receipt every published file carries; the receipt list renders each key. */
@@ -94,13 +98,24 @@ export function guardIndex(value: unknown): StormsIndex {
   str(file, root["confidence"], "confidence");
   runTime(file, root["run_time"], "run_time");
   str(file, root["package_version"], "package_version");
-  num(file, root["radius_km_default"], "radius_km_default");
+  count(file, root["radius_km_default"], "radius_km_default");
+  const seenDates = new Set<string>();
+  let prevDate: string | null = null;
   list(file, root["storms"], "storms").forEach((item, i) => {
     const at = `storms[${i}]`;
     const storm = rec(file, item, at);
-    if (!DATE.test(str(file, storm["storm_date"], `${at}.storm_date`))) {
+    const stormDate = str(file, storm["storm_date"], `${at}.storm_date`);
+    if (!isValidCalendarDate(stormDate)) {
       throw new DataError(file, `${at}.storm_date is not a date`);
     }
+    if (seenDates.has(stormDate)) {
+      throw new DataError(file, `${at}.storm_date duplicates ${stormDate}`);
+    }
+    if (prevDate !== null && stormDate > prevDate) {
+      throw new DataError(file, `${at}.storm_date is out of order (${stormDate} after ${prevDate})`);
+    }
+    seenDates.add(stormDate);
+    prevDate = stormDate;
     for (const key of ["scored_reports", "excluded_reports"]) num(file, storm[key], `${at}.${key}`);
     numOrNull(file, storm["report_count"], `${at}.report_count`);
     if (
@@ -128,19 +143,19 @@ export function guardIndex(value: unknown): StormsIndex {
       }
     });
     const files = rec(file, storm["files"], `${at}.files`);
-    for (const key of ["swath", "reports"]) filePath(file, files[key], `${at}.files.${key}`, GEOJSON_PATH);
-    filePath(file, files["pairs"], `${at}.files.pairs`, JSON_PATH);
+    for (const key of ["swath", "reports"]) filePath(file, files[key], `${at}.files.${key}`, GEOJSON_PATH, stormDate);
+    filePath(file, files["pairs"], `${at}.files.pairs`, JSON_PATH, stormDate);
     // The impact keys have no default: a missing key is undefined, and filePath throws on it.
     for (const [key, pattern] of IMPACT_FILES) {
-      if (files[key] !== null) filePath(file, files[key], `${at}.files.${key}`, pattern);
+      if (files[key] !== null) filePath(file, files[key], `${at}.files.${key}`, pattern, stormDate);
     }
-    if (files["zip_counts"] !== null) filePath(file, files["zip_counts"], `${at}.files.zip_counts`, JSON_PATH);
+    if (files["zip_counts"] !== null) filePath(file, files["zip_counts"], `${at}.files.zip_counts`, JSON_PATH, stormDate);
   });
   return value as StormsIndex;
 }
 
 function date(file: string, value: unknown, path: string): void {
-  if (!DATE.test(str(file, value, path))) throw new DataError(file, `${path} is not a date`);
+  if (!isValidCalendarDate(str(file, value, path))) throw new DataError(file, `${path} is not a date`);
 }
 
 function dates(file: string, value: unknown, path: string): void {
@@ -187,8 +202,13 @@ export function guardPairs(value: unknown): Pairs {
   const file = "pairs.json";
   const root = rec(file, value, "pairs");
   guardReceipt(file, root["receipt"]);
-  num(file, root["radius_km_default"], "radius_km_default");
-  num(file, root["radius_km_max"], "radius_km_max");
+  count(file, root["radius_km_default"], "radius_km_default");
+  count(file, root["radius_km_max"], "radius_km_max");
+  const radiusDefault = root["radius_km_default"] as number;
+  const radiusMax = root["radius_km_max"] as number;
+  if (radiusDefault > radiusMax) {
+    throw new DataError(file, `radius_km_default (${radiusDefault}) exceeds radius_km_max (${radiusMax})`);
+  }
   num(file, root["edge_margin_m"], "edge_margin_m");
   const classes = list(file, root["classes"], "classes");
   classes.forEach((item, i) => {
@@ -196,9 +216,14 @@ export function guardPairs(value: unknown): Pairs {
     const cls = rec(file, item, at);
     for (const key of ["threshold_mm", "threshold_in", "swath_km2"]) num(file, cls[key], `${at}.${key}`);
     str(file, cls["label"], `${at}.label`);
-    list(file, cls["unverifiable_km2"], `${at}.unverifiable_km2`).forEach((v, j) =>
-      num(file, v, `${at}.unverifiable_km2[${j}]`),
-    );
+    const unverifiable = list(file, cls["unverifiable_km2"], `${at}.unverifiable_km2`);
+    if (unverifiable.length !== radiusMax + 1) {
+      throw new DataError(
+        file,
+        `${at}.unverifiable_km2 has ${unverifiable.length} entries, expected ${radiusMax + 1}`,
+      );
+    }
+    unverifiable.forEach((v, j) => num(file, v, `${at}.unverifiable_km2[${j}]`));
   });
   list(file, root["reports"], "reports").forEach((item, i) => {
     const at = `reports[${i}]`;
@@ -246,13 +271,15 @@ function guardCollection(file: string, value: unknown): Rec[] {
 
 export function guardReports(value: unknown): ReportsFile {
   const file = "reports.geojson";
-  guardReceipt(file, rec(file, value, "collection")["receipt"]);
-  guardCollection(file, value).forEach((props, i) => {
+  const root = rec(file, value, "collection");
+  guardReceipt(file, root["receipt"]);
+  const propsList = guardCollection(file, value);
+  const features = list(file, root["features"], "features");
+  propsList.forEach((props, i) => {
     const at = `features[${i}]`;
     for (const key of ["time", "location", "county"]) str(file, props[key], `${at}.properties.${key}`);
     if (props["state"] !== undefined) str(file, props["state"], `${at}.properties.state`);
     for (const key of ["id", "size_in"]) num(file, props[key], `${at}.properties.${key}`);
-    const features = list(file, rec(file, value, "collection")["features"], "features");
     const geom = rec(file, rec(file, features[i], at)["geometry"], `${at}.geometry`);
     if (geom["type"] !== "Point") {
       throw new DataError(file, `${at}.geometry.type is not Point`);
