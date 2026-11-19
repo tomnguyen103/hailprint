@@ -296,10 +296,20 @@ def test_lock_heartbeat_continues_after_a_failed_ownership_read(tmp_path, monkey
     path = tmp_path / "publish.lock"
     aside = tmp_path / "aside.lock"
     monkeypatch.setattr(files, "HEARTBEAT_S", 0.05)
+    failed_read = threading.Event()
+    real_owner = files._lock_owner
+
+    def spy_owner(p):
+        owner = real_owner(p)
+        if owner is None:
+            failed_read.set()
+        return owner
+
+    monkeypatch.setattr(files, "_lock_owner", spy_owner)
 
     with files.lock(path):
         os.replace(path, aside)
-        time.sleep(0.3)
+        assert failed_read.wait(5)
         os.replace(aside, path)
         _age(path, files.STALE_LOCK_S + 100)
         assert _wait_until(lambda: time.time() - path.stat().st_mtime < files.STALE_LOCK_S)
