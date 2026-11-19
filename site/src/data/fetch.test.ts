@@ -373,15 +373,22 @@ it("caches immutable storm JSON per (guard, url), evicts rejections, and respect
 });
 
 it("evicts an unscoped entry when a scope is adopted after clearFetchCache()", async () => {
+  // a fresh module instance starts with a null scope; the earlier tests leave a scope set
+  vi.resetModules();
+  const fresh = await import("./fetch");
   let calls = 0;
-  setFetch(async () => {
+  fresh.setFetch(async () => {
     calls += 1;
     return response(200, JSON.stringify({ seq: calls }));
   });
   const guard = (v: unknown) => (v as { seq: number }).seq;
-  clearFetchCache();
-  expect(await fetchJson("storms/2024-05-28/swath.geojson", guard)).toBe(1);
-  setFetchCacheScope("2026-11-18T15:00:00Z");
-  expect(await fetchJson("storms/2024-05-28/swath.geojson", guard)).toBe(2);
-  expect(calls).toBe(2);
+  try {
+    fresh.clearFetchCache();
+    expect(await fresh.fetchJson("storms/2024-05-28/swath.geojson", guard)).toBe(1);
+    fresh.setFetchCacheScope("2026-11-18T15:00:00Z");
+    expect(await fresh.fetchJson("storms/2024-05-28/swath.geojson", guard)).toBe(2);
+    expect(calls).toBe(2);
+  } finally {
+    fresh.setFetch(null);
+  }
 });
