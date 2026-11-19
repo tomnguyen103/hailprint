@@ -148,12 +148,17 @@ def _evict_stale_lock(path: Path) -> bool:
     return True
 
 
+def _lock_owner(path: Path) -> str | None:
+    """Return the text of the lock file, or None when the read fails."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
 def _owns_lock(path: Path) -> bool:
     """Return True when the lock file holds this run's pid."""
-    try:
-        return path.read_text(encoding="utf-8") == str(os.getpid())
-    except OSError:
-        return False
+    return _lock_owner(path) == str(os.getpid())
 
 
 @contextmanager
@@ -184,7 +189,10 @@ def lock(path: Path) -> Iterator[None]:
     def beat() -> None:
         # utime changes the mtime only, so a crash never leaves a half-written pid
         while not stop.wait(HEARTBEAT_S):
-            if not _owns_lock(path):
+            owner = _lock_owner(path)
+            if owner is None:  # an eviction check can remove the path for a moment; retry
+                continue
+            if owner != str(os.getpid()):
                 return
             try:
                 os.utime(path)

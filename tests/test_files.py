@@ -290,3 +290,18 @@ def test_lock_leaves_a_lock_another_run_replaced(tmp_path, monkeypatch):
         assert path.stat().st_mtime == aged
 
     assert path.read_text(encoding="utf-8") == "99999999"
+
+
+def test_lock_heartbeat_continues_after_a_failed_ownership_read(tmp_path, monkeypatch):
+    path = tmp_path / "publish.lock"
+    aside = tmp_path / "aside.lock"
+    monkeypatch.setattr(files, "HEARTBEAT_S", 0.05)
+
+    with files.lock(path):
+        os.replace(path, aside)
+        time.sleep(0.3)
+        os.replace(aside, path)
+        _age(path, files.STALE_LOCK_S + 100)
+        assert _wait_until(lambda: time.time() - path.stat().st_mtime < files.STALE_LOCK_S)
+
+    assert not path.exists()
