@@ -790,7 +790,7 @@
 
 /* Tablet (768–1023px): keep top-bar hamburger + centered search + tools without overflow */
 
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (768px <= width < 1024px) {
   .top-bar {
     grid-template-columns: auto minmax(200px, 360px) auto;
     justify-content: space-between;

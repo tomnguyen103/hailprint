@@ -94,6 +94,19 @@ Cool hues stay distinct from the hail ramp: green for power (`--out-1`..`--out-5
 - Spacing: `4px` base, `8px` grid, `24px` comfortable page padding.
 - Focus: `2px` `--primary` outline with `2px` offset on `:focus-visible`.
 
+## Do's and Don'ts
+
+- Do use `--radius` (`4px`) on buttons, inputs, cards, panes, menus, and dialogs.
+- Do reserve full radius for status dots.
+- Do separate surfaces with a `1px` `--border` edge.
+- Do apply the overlay shadow to menus, popovers, dialogs, and mobile drawers only.
+- Do keep the comfortable density: `4px` base, `8px` grid, `24px` page padding.
+- Do take every color from a token in this file.
+- Don't add a resting shadow to a card or a docked pane.
+- Don't write `swath.FORBIDDEN_WORD` in any output.
+- Do write `radar-estimated hail size` in every caption and caveat.
+- Don't claim hail caused a power or internet outage.
+
 ## Shell
 
 - Top bar (`56px`, `--bar-height`): far-left single hamburger toggle (`>=40px` desktop, `>=44px` `<768px`, toggles desktop sidebar <-> rail and `<768px` modal drawer; never a second bottom-left collapse button) + Hailprint mark + area title; center `360–480px` (`200–360px` at `768–1023px`) `Ctrl+K` / `/` global search trigger opening a `560–640px` modal search dialog (full-screen `<768px`) with focus trap, grouped results, and recent searches; right 3-state Light / Dark / System theme icon menu (`menuitemradio`, hover+focus `"Theme"` tooltip, 1-frame no-transition swap) + source link.

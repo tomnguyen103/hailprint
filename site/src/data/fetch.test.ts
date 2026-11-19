@@ -343,7 +343,7 @@ it("caches immutable storm JSON per (guard, url), evicts rejections, and respect
   expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(4);
   expect(calls).toBe(4);
 
-  // clearFetchCache() resets cacheScope to null; any entry cached while unscoped is evicted once a scope is adopted
+  // After clearFetchCache(), the next read and the next scope change each hit the network.
   clearFetchCache();
   expect(await fetchJson("storms/2024-05-28/pairs.json", guardA)).toBe(5);
   expect(calls).toBe(5);
@@ -372,3 +372,16 @@ it("caches immutable storm JSON per (guard, url), evicts rejections, and respect
   await expect(fetchJson("storms/2024-05-28/swath.geojson", identity)).resolves.toEqual({ ok: true });
 });
 
+it("evicts an unscoped entry when a scope is adopted after clearFetchCache()", async () => {
+  let calls = 0;
+  setFetch(async () => {
+    calls += 1;
+    return response(200, JSON.stringify({ seq: calls }));
+  });
+  const guard = (v: unknown) => (v as { seq: number }).seq;
+  clearFetchCache();
+  expect(await fetchJson("storms/2024-05-28/swath.geojson", guard)).toBe(1);
+  setFetchCacheScope("2026-11-18T15:00:00Z");
+  expect(await fetchJson("storms/2024-05-28/swath.geojson", guard)).toBe(2);
+  expect(calls).toBe(2);
+});

@@ -396,6 +396,27 @@ describe("GlobalSearch Ctrl+K and / dialog (US-01.1, US-01.2, US-01.3, US-01.5)"
     await act(() => render(null, host as unknown as HTMLElement));
   });
 
+  it("ignores IME composition keydown (keyCode 229 or isComposing) on the search input", async () => {
+    const host = makeFakeElement("div");
+    await act(() => render(h(GlobalSearch, { storms: navMock.storms }), host as unknown as HTMLElement));
+    await act(() => {
+      dispatchKey({ key: "k", ctrlKey: true });
+    });
+    const dialog = findDomNodes(host, (n) => n["role"] === "dialog")[0]!;
+    const input = findDomNodes(dialog, (n) => n.tagName === "INPUT")[0]!;
+    const keydown = input["on_keydown"] as (e: Record<string, unknown>) => void;
+    const prevented = vi.fn();
+    for (const extra of [{ keyCode: 229 }, { isComposing: true }]) {
+      await act(() => {
+        keydown({ type: "keydown", key: "Enter", preventDefault: prevented, ...extra });
+      });
+    }
+    expect(prevented).not.toHaveBeenCalled();
+    expect(navMock.go).not.toHaveBeenCalled();
+    expect(findDomNodes(host, (n) => n["role"] === "dialog")).toHaveLength(1);
+    await act(() => render(null, host as unknown as HTMLElement));
+  });
+
   it("opens on / shortcut outside editable targets, ignores / inside inputs, caps recent searches at 5, and recovers from corrupt storage", async () => {
     storage.set("hailprint-recent-searches", "{corrupt-json");
     const host = makeFakeElement("div");

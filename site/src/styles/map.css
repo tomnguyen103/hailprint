@@ -486,7 +486,7 @@
   color: var(--text-muted);
 }
 
-@media (min-width: 1280px) {
+@media (width >= 1280px) {
   .map-pane[data-inspector="true"] {
     grid-template-columns: minmax(0, 1fr) 320px;
   }
@@ -498,7 +498,13 @@
   }
 }
 
-@media (max-width: 1023px) {
+@media (width >= 1536px) {
+  .map-pane[data-inspector="true"] {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+}
+
+@media (width < 1024px) {
   .map-overlay {
     height: min(70dvh, 640px);
     bottom: auto;

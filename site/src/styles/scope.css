@@ -117,7 +117,7 @@
 .scope-chip {
   padding: 1px 6px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius);
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 500;
@@ -128,7 +128,7 @@
 .badge {
   min-width: 24px;
   padding: 1px 6px;
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--surface-muted);
   color: var(--text-muted);
   font-family: var(--font-mono);
@@ -147,7 +147,7 @@
 
 /* Horizontal scope bar: 768 to 1279 px */
 
-@media (max-width: 1279px) {
+@media (width < 1280px) {
   .workspace {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;

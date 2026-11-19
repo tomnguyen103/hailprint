@@ -146,7 +146,7 @@
 
 .table th,
 .table td {
-  padding: 8px 12px;
+  padding: 12px;
   border-bottom: 1px solid var(--border);
   text-align: left;
   vertical-align: middle;
@@ -441,7 +441,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (width >= 1024px) {
   .pane-grid {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   }
