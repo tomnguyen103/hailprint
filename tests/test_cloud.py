@@ -1121,9 +1121,13 @@ def _node_strips_types() -> bool:
     node = shutil.which("node")
     if node is None:
         return False
-    out = subprocess.run([node, "--version"], capture_output=True, text=True).stdout
-    major, minor = (int(n) for n in out.strip().lstrip("v").split(".")[:2])
-    return (major, minor) >= (23, 6)  # type stripping is on by default from Node 23.6
+    try:
+        out = subprocess.run([node, "--version"], capture_output=True, text=True, timeout=10)
+        major, minor = (int(n) for n in out.stdout.strip().lstrip("v").split(".")[:2])
+    except (ValueError, OSError, subprocess.TimeoutExpired):
+        return False
+    # type stripping is on by default from Node 22.18 and from Node 23.6
+    return (22, 18) <= (major, minor) < (23, 0) or (major, minor) >= (23, 6)
 
 
 @pytest.mark.skipif(not _node_strips_types(), reason="node with type stripping is absent")
