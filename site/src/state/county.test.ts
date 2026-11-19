@@ -38,4 +38,16 @@ describe("the county under a map click", () => {
   it("returns null while the outlines are not loaded", () => {
     expect(countyAt([-95.5, 29.5], null)).toBeNull();
   });
+
+  it("reads GEOID when fips is absent, and returns null when both are absent", () => {
+    const only = (properties: Record<string, unknown>): FeatureCollection<MultiPolygon> => ({
+      type: "FeatureCollection",
+      features: [{ type: "Feature", properties, geometry: square(-96, 29, -95, 30) }],
+    });
+    expect(countyAt([-95.5, 29.5], only({ GEOID: "48201" }))).toBe("48201");
+    expect(countyAt([-95.5, 29.5], only({ fips: "48157", GEOID: "48201" }))).toBe("48157");
+    expect(countyAt([-95.5, 29.5], only({ name: "x" }))).toBeNull();
+    expect(countyAt([-95.5, 29.5], only({ fips: "", GEOID: "48201" }))).toBe("48201");
+    expect(countyAt([-95.5, 29.5], only({ fips: 48201 }))).toBeNull();
+  });
 });

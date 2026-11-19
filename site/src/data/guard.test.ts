@@ -410,11 +410,17 @@ describe("guardIndex", () => {
 
     const validRow = {
       threshold_mm: 19.05,
+      threshold_in: 0.75,
+      label: "a",
       hits: 2,
       misses: 1,
       false_alarms: 0,
       correct_negatives: 5,
+      pod: 0.5,
+      far: null,
+      csi: 0.4,
       swath_km2: 12.5,
+      unverifiable_km2: 1,
       hss: 0.42,
     };
     expect(guardIndex({ ...index, storms: [{ ...storm, table: [validRow] }] }).storms[0]!.table).toHaveLength(1);
@@ -427,6 +433,28 @@ describe("guardIndex", () => {
     expect(() =>
       guardIndex({ ...index, storms: [{ ...storm, table: [{ ...validRow, hss: "bad" }] }] }),
     ).toThrow(/table\[0\]\.hss/);
+    for (const key of ["pod", "far", "csi", "hss"]) {
+      expect(
+        guardIndex({ ...index, storms: [{ ...storm, table: [{ ...validRow, [key]: null }] }] }).storms[0]!.table,
+      ).toHaveLength(1);
+    }
+    for (const key of ["threshold_in", "label", "pod", "far", "csi", "unverifiable_km2"]) {
+      const { [key]: _drop, ...row } = validRow as Record<string, unknown>;
+      expect(() => guardIndex({ ...index, storms: [{ ...storm, table: [row] }] })).toThrow(
+        new RegExp(String.raw`table\[0\]\.${key}`),
+      );
+    }
+    expect(() =>
+      guardIndex({ ...index, storms: [{ ...storm, table: [{ ...validRow, unverifiable_km2: -1 }] }] }),
+    ).toThrow(/table\[0\]\.unverifiable_km2/);
+    for (const key of ["threshold_mm", "threshold_in"]) {
+      expect(() =>
+        guardIndex({ ...index, storms: [{ ...storm, table: [{ ...validRow, [key]: 0 }] }] }),
+      ).toThrow(new RegExp(String.raw`table\[0\]\.${key}`));
+    }
+    expect(() =>
+      guardIndex({ ...index, storms: [{ ...storm, table: [{ ...validRow, label: "" }] }] }),
+    ).toThrow(/table\[0\]\.label/);
 
     expect(() => guardIndex({ ...index, run_time: "2024-02-31T12:00:00Z" })).toThrow(/run_time is not a run time/);
     expect(() => guardIndex({ ...index, run_time: "2024-05-28T24:00:00Z" })).toThrow(/run_time is not a run time/);

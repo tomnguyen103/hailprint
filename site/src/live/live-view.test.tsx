@@ -44,6 +44,7 @@ function loadFixture(kind: "hail" | "quiet"): LiveData {
     reports: guardReports(read("reports.geojson")),
     warnings: guardWarnings(read("warnings.geojson")),
     notes: [],
+    layerNotes: { swath: null, reports: null, warnings: null },
   };
 }
 
@@ -137,6 +138,7 @@ describe("LiveViewContent", () => {
       ...base,
       warnings: null,
       notes: ["warnings.geojson: receipt is not an object"],
+      layerNotes: { swath: null, reports: null, warnings: "warnings.geojson: receipt is not an object" },
       now: {
         ...base.now,
         sources: base.now.sources.map((s, i) => (i === 4 ? { ...s, ok: false, message: "HTTP 503" } : s)),

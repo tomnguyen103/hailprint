@@ -67,6 +67,12 @@ function nonNegNum(file: string, value: unknown, path: string): number {
   return n;
 }
 
+function posNum(file: string, value: unknown, path: string): number {
+  const n = num(file, value, path);
+  if (n <= 0) throw new DataError(file, `${path} is not above 0`);
+  return n;
+}
+
 function runTime(file: string, value: unknown, path: string): void {
   const text = str(file, value, path);
   if (!RUN_TIME.test(text) || !isValidCalendarDate(text.slice(0, 10))) {
@@ -152,12 +158,15 @@ export function guardIndex(value: unknown): StormsIndex {
     list(file, storm["table"], `${at}.table`).forEach((rowItem, r) => {
       const rowAt = `${at}.table[${r}]`;
       const row = rec(file, rowItem, rowAt);
-      num(file, row["threshold_mm"], `${rowAt}.threshold_mm`);
+      posNum(file, row["threshold_mm"], `${rowAt}.threshold_mm`);
+      posNum(file, row["threshold_in"], `${rowAt}.threshold_in`);
+      nonEmptyStr(file, row["label"], `${rowAt}.label`);
       for (const key of ["hits", "misses", "false_alarms", "correct_negatives"]) {
         count(file, row[key], `${rowAt}.${key}`);
       }
       nonNegNum(file, row["swath_km2"], `${rowAt}.swath_km2`);
-      numOrNull(file, row["hss"], `${rowAt}.hss`);
+      for (const key of ["pod", "far", "csi", "hss"]) numOrNull(file, row[key], `${rowAt}.${key}`);
+      nonNegNum(file, row["unverifiable_km2"], `${rowAt}.unverifiable_km2`);
     });
     const files = rec(file, storm["files"], `${at}.files`);
     for (const key of ["swath", "reports"]) filePath(file, files[key], `${at}.files.${key}`, GEOJSON_PATH, stormDate);

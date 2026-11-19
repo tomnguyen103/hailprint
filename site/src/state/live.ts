@@ -7,12 +7,23 @@ import type { Load } from "./load";
 const LIVE_FILE = "live/now.json";
 export const LIVE_REFRESH_MS = 120_000;
 
+export interface LayerNotes {
+  swath: string | null;
+  reports: string | null;
+  warnings: string | null;
+}
+
+const notesOf = (l: LayerNotes): string[] =>
+  [l.swath, l.reports, l.warnings].filter((n): n is string => n !== null);
+
 export interface LiveData {
   now: LiveFile;
   swath: SwathFile | null;
   reports: ReportsFile | null;
   warnings: WarningsFile | null;
+  /** The notes of the failed layers, derived from `layerNotes`. */
   notes: string[];
+  layerNotes: LayerNotes;
 }
 
 async function loadLayer<T>(
@@ -33,24 +44,37 @@ export async function loadLive(): Promise<LiveData> {
     loadLayer(`live/${now.files.reports}`, guardReports),
     loadLayer(`live/${now.files.warnings}`, guardWarnings),
   ]);
-  const notes = [swath.note, reports.note, warnings.note].filter((n): n is string => n !== null);
-  return { now, swath: swath.data, reports: reports.data, warnings: warnings.data, notes };
+  const layerNotes = { swath: swath.note, reports: reports.note, warnings: warnings.note };
+  return {
+    now,
+    swath: swath.data,
+    reports: reports.data,
+    warnings: warnings.data,
+    notes: notesOf(layerNotes),
+    layerNotes,
+  };
 }
 
-function mergeLive(prev: LiveData, next: LiveData): LiveData {
-  return {
-    now: next.now,
-    swath: next.swath ?? prev.swath,
-    reports: next.reports ?? prev.reports,
-    warnings: next.warnings ?? prev.warnings,
-    notes: next.notes,
+/** A refresh of the same run keeps each layer that failed; a newer run replaces the data. */
+export function mergeLive(prev: LiveData, next: LiveData): LiveData {
+  if (next.now.run_time !== prev.now.run_time) return next;
+  const swath = next.swath ?? prev.swath;
+  const reports = next.reports ?? prev.reports;
+  const warnings = next.warnings ?? prev.warnings;
+  const layerNotes = {
+    swath: swath === null ? next.layerNotes.swath : null,
+    reports: reports === null ? next.layerNotes.reports : null,
+    warnings: warnings === null ? next.layerNotes.warnings : null,
   };
+  return { now: next.now, swath, reports, warnings, notes: notesOf(layerNotes), layerNotes };
 }
 
 /**
  * The live view data (`live/now.json` and the three layer files it names), loaded on mount
  * and refreshed every 2 minutes while the tab is visible or when the tab returns to visible.
- * A failed background refresh keeps the last good data untouched and advances `now`.
+ * A refresh of a newer run replaces the data: a failed layer is null with its note.
+ * A refresh of the same run keeps the last good layer.
+ * A failed `now.json` fetch keeps the current data and advances `now`.
  */
 export function useLive(): Load<LiveData> & { showLoading: boolean; retry: () => void; now: Date } {
   return usePolledLoad<LiveData>(LIVE_FILE, loadLive, LIVE_REFRESH_MS, (d) => d.now.run_time, mergeLive);
