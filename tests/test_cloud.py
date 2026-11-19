@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from hailprint import __main__ as cli
-from hailprint import cloud, paths
+from hailprint import cloud, paths, publish_run
 
 
 class FakeS3:
@@ -685,7 +685,8 @@ def test_run_cloud_uploads_state_and_public_files_after_a_partial_publish_and_re
     assert ("hailprint-public", "storms/2024-05-28/swath.geojson") in s3.objects
 
 
-def test_run_cloud_nightly_uploads_nothing_when_index_fails_before_publish(tmp_path: Path):
+def test_run_cloud_nightly_uploads_no_unchanged_file_when_index_fails(tmp_path: Path):
+    """State syncs up on every exit code; an index failure with no changed file uploads nothing."""
     s3 = FakeS3({("hailprint-public", "storms.json"): b'{"storms":[]}'})
     calls: list[list[str]] = []
     publish_cli = _publish_cli(tmp_path, 0, calls)
@@ -1116,7 +1117,16 @@ def test_sync_down_skips_prior_state_digest_and_fetches_remaining_in_parallel(
     assert len(state.digests) == 3
 
 
-@pytest.mark.skipif(shutil.which("node") is None, reason="node is absent")
+def _node_strips_types() -> bool:
+    node = shutil.which("node")
+    if node is None:
+        return False
+    out = subprocess.run([node, "--version"], capture_output=True, text=True).stdout
+    major, minor = (int(n) for n in out.strip().lstrip("v").split(".")[:2])
+    return (major, minor) >= (23, 6)  # type stripping is on by default from Node 23.6
+
+
+@pytest.mark.skipif(not _node_strips_types(), reason="node with type stripping is absent")
 def test_is_partial_exit_reads_only_the_first_message_line():
     done = subprocess.run(
         [str(shutil.which("node")), "--test", "tests/trigger_common.test.mjs"],
@@ -1132,6 +1142,8 @@ def test_trigger_tasks_report_partial_exit_3_and_hello_checks_env():
     backfill_ts = (paths.ROOT / "trigger" / "backfill.ts").read_text(encoding="utf-8")
     hello_ts = (paths.ROOT / "trigger" / "hello.ts").read_text(encoding="utf-8")
 
+    common_ts = (paths.ROOT / "trigger" / "common.ts").read_text(encoding="utf-8")
+    assert f"export const PARTIAL_EXIT = {publish_run.PARTIAL_EXIT};" in common_ts
     for source in (nightly_ts, backfill_ts):
         assert "partial: false" in source
         assert "partial: true" in source
@@ -1597,12 +1609,21 @@ def test_nightly_returns_partial_when_a_step_fails_and_publish_passes(
     rc = cloud.nightly(_candidate_cli(tmp_path, {step}), tmp_path, env={})
 
     assert rc == 3
-    assert "failed" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert f"{step} " in err
+    assert "failed" in err
+
+
+def test_backfill_returns_0_when_every_step_passes(tmp_path: Path):
+    assert cloud.backfill(_candidate_cli(tmp_path, set()), tmp_path, env={}) == 0
 
 
 @pytest.mark.parametrize("step", ["warnings", "eaglei", "power", "internet"])
-def test_backfill_returns_partial_when_a_step_fails_and_publish_passes(tmp_path: Path, step: str):
+def test_backfill_returns_partial_when_a_step_fails_and_publish_passes(
+    tmp_path: Path, capsys, step: str
+):
     assert cloud.backfill(_candidate_cli(tmp_path, {step}), tmp_path, env={}) == 3
+    assert f"{step} failed; publish goes on" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("task", ["nightly", "backfill"])

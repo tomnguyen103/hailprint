@@ -464,6 +464,12 @@ def _root_paths(root: Path) -> dict[str, Path]:
     return paths.root_paths(root)
 
 
+def _publish(run_cli: Callable[[list[str]], int], env: Mapping[str, str], step_failed: bool) -> int:
+    cmd = ["publish", "--with-internet"] if env.get("PUBLISH_INTERNET") == "1" else ["publish"]
+    # a nonzero publish code wins; a failed step before a clean publish reads as partial
+    return run_cli(cmd) or (publish_run.PARTIAL_EXIT if step_failed else 0)
+
+
 def nightly(
     run_cli: Callable[[list[str]], int],
     root: Path,
@@ -519,12 +525,7 @@ def nightly(
             _log(f"{step} failed; publish goes on")
             step_failed = True
 
-    publish_cmd = (
-        ["publish", "--with-internet"] if env.get("PUBLISH_INTERNET") == "1" else ["publish"]
-    )
-    # a nonzero publish code wins; a failed step before a clean publish reads as partial
-    rc = run_cli(publish_cmd)
-    return rc or (publish_run.PARTIAL_EXIT if step_failed else 0)
+    return _publish(run_cli, env, step_failed)
 
 
 def odin_run(run_cli: Callable[[list[str]], int]) -> int:
@@ -554,12 +555,7 @@ def backfill(
             _log(f"{step} failed; publish goes on")
             step_failed = True
 
-    publish_cmd = (
-        ["publish", "--with-internet"] if env.get("PUBLISH_INTERNET") == "1" else ["publish"]
-    )
-    # a nonzero publish code wins; a failed step before a clean publish reads as partial
-    rc = run_cli(publish_cmd)
-    return rc or (publish_run.PARTIAL_EXIT if step_failed else 0)
+    return _publish(run_cli, env, step_failed)
 
 
 @contextlib.contextmanager
