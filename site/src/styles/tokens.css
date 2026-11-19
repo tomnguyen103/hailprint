@@ -102,7 +102,7 @@
   --note-ink: #fde68a;
   --water: #13233a;
   --road-major: #3b4252;
-  --shadow: 0 4px 12px rgb(0 0 0 / 0.4);
+  --shadow: 0 4px 12px rgb(16 24 40 / 0.08);
   --ctrl-icon-filter: invert(1);
 
   --out-1: #1e3322;
@@ -151,7 +151,7 @@
     --note-ink: #fde68a;
     --water: #13233a;
     --road-major: #3b4252;
-    --shadow: 0 4px 12px rgb(0 0 0 / 0.4);
+    --shadow: 0 4px 12px rgb(16 24 40 / 0.08);
     --ctrl-icon-filter: invert(1);
 
     --out-1: #1e3322;

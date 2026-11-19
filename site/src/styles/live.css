@@ -31,7 +31,7 @@
   gap: 8px;
   padding: 4px 10px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   font: 500 13px/1.2 var(--font-sans);
@@ -188,7 +188,7 @@
   color: var(--report);
 }
 
-@media (min-width: 768px) and (max-width: 1023px) {
+@media (768px <= width < 1024px) {
   .live-stats {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -239,7 +239,7 @@
   }
 }
 
-@media (max-width: 359px) {
+@media (width < 360px) {
   .live-stats {
     grid-template-columns: minmax(0, 1fr);
   }
