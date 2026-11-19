@@ -10,8 +10,10 @@ import { containsPoint } from "../geometry";
  */
 export function countyAt(lngLat: [number, number], outlines: FeatureCollection<MultiPolygon> | null): string | null {
   const hit = outlines?.features.find((outline) => containsPoint(outline.geometry, lngLat));
-  const fips = hit?.properties?.["fips"] ?? hit?.properties?.["GEOID"];
-  return fips === undefined || fips === null ? null : String(fips);
+  const valid = (v: unknown): v is string => typeof v === "string" && /^\d{5}$/.test(v);
+  const fips = hit?.properties?.["fips"];
+  const geoid = hit?.properties?.["GEOID"];
+  return valid(fips) ? fips : valid(geoid) ? geoid : null;
 }
 
 let selectedCounty: string = HARRIS_FIPS;

@@ -47,5 +47,7 @@ describe("the county under a map click", () => {
     expect(countyAt([-95.5, 29.5], only({ GEOID: "48201" }))).toBe("48201");
     expect(countyAt([-95.5, 29.5], only({ fips: "48157", GEOID: "48201" }))).toBe("48157");
     expect(countyAt([-95.5, 29.5], only({ name: "x" }))).toBeNull();
+    expect(countyAt([-95.5, 29.5], only({ fips: "", GEOID: "48201" }))).toBe("48201");
+    expect(countyAt([-95.5, 29.5], only({ fips: 48201 }))).toBeNull();
   });
 });

@@ -67,6 +67,12 @@ function nonNegNum(file: string, value: unknown, path: string): number {
   return n;
 }
 
+function posNum(file: string, value: unknown, path: string): number {
+  const n = num(file, value, path);
+  if (n <= 0) throw new DataError(file, `${path} is not above 0`);
+  return n;
+}
+
 function runTime(file: string, value: unknown, path: string): void {
   const text = str(file, value, path);
   if (!RUN_TIME.test(text) || !isValidCalendarDate(text.slice(0, 10))) {
@@ -152,9 +158,9 @@ export function guardIndex(value: unknown): StormsIndex {
     list(file, storm["table"], `${at}.table`).forEach((rowItem, r) => {
       const rowAt = `${at}.table[${r}]`;
       const row = rec(file, rowItem, rowAt);
-      num(file, row["threshold_mm"], `${rowAt}.threshold_mm`);
-      num(file, row["threshold_in"], `${rowAt}.threshold_in`);
-      str(file, row["label"], `${rowAt}.label`);
+      posNum(file, row["threshold_mm"], `${rowAt}.threshold_mm`);
+      posNum(file, row["threshold_in"], `${rowAt}.threshold_in`);
+      nonEmptyStr(file, row["label"], `${rowAt}.label`);
       for (const key of ["hits", "misses", "false_alarms", "correct_negatives"]) {
         count(file, row[key], `${rowAt}.${key}`);
       }

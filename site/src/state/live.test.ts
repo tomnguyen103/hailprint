@@ -160,12 +160,42 @@ describe("useLive", () => {
     expect(latest?.notes).toEqual(["swath.geojson: HTTP 500"]);
   });
 
+  it("keeps the last good layer when a refresh of the same run fails a layer", async () => {
+    await act(() => render(h(Probe, null), host));
+    await settle();
+
+    answer = (url) =>
+      url.endsWith("swath.geojson")
+        ? jsonResponse(null, 500)
+        : jsonResponse(fixture(url.slice(url.lastIndexOf("/") + 1)));
+
+    await act(async () => void (await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS)));
+    const latest = states.at(-1)?.data;
+    expect(latest?.now.run_time).toBe("2024-05-29T12:14:00Z");
+    expect(latest?.swath?.features).toHaveLength(6);
+    expect(latest?.notes).toEqual([]);
+  });
+
+  it("keeps the swath note when a same-run refresh fails the swath again", async () => {
+    answer = (url) =>
+      url.endsWith("swath.geojson")
+        ? jsonResponse(null, 500)
+        : jsonResponse(fixture(url.slice(url.lastIndexOf("/") + 1)));
+    await act(() => render(h(Probe, null), host));
+    await settle();
+    expect(states.at(-1)?.data?.notes).toEqual(["swath.geojson: HTTP 500"]);
+
+    await act(async () => void (await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS)));
+    const latest = states.at(-1)?.data;
+    expect(latest?.swath).toBeNull();
+    expect(latest?.notes).toEqual(["swath.geojson: HTTP 500"]);
+  });
+
   it("keeps the current data when a refresh has an older run_time", async () => {
     await act(() => render(h(Probe, null), host));
     await settle();
 
     answer = (url) => {
-      if (url.endsWith("swath.geojson")) return jsonResponse(null, 500);
       const name = url.slice(url.lastIndexOf("/") + 1);
       const body = fixture(name);
       if (name === "now.json") body["run_time"] = "2024-05-29T12:10:00Z";
