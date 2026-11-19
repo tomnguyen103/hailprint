@@ -7,9 +7,11 @@
     stored = null;
   }
   var resolved =
-    stored === "light" || stored === "dark"
-      ? stored
-      : typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches
+    stored === "dark"
+      ? "dark"
+      : stored === "system" &&
+          typeof matchMedia === "function" &&
+          matchMedia("(prefers-color-scheme: dark)").matches
         ? "dark"
         : "light";
   var root = document.documentElement;

@@ -16,10 +16,11 @@ function isSelection(value: unknown): value is Selection {
   return typeof value === "string" && (SELECTIONS as readonly string[]).includes(value);
 }
 
-/** The theme to paint: an explicit stored selection wins; anything else follows the system. */
+/** The theme to paint: an explicit stored selection wins; `system` follows the OS; anything else defaults to `light`. */
 export function resolve(stored: unknown, systemDark: boolean): Resolved {
-  if (stored === "light" || stored === "dark") return stored;
-  return systemDark ? "dark" : "light";
+  if (stored === "dark") return "dark";
+  if (stored === "system") return systemDark ? "dark" : "light";
+  return "light";
 }
 
 function localStorageOrNull(): (Getter & Setter) | null {
@@ -30,13 +31,13 @@ function localStorageOrNull(): (Getter & Setter) | null {
   }
 }
 
-/** The stored selection; a missing, unreadable, or unknown value reads as `system`. */
+/** The stored selection; a missing, unreadable, or unknown value reads as `light`. */
 export function read(storage: Getter | null = localStorageOrNull()): Selection {
   try {
     const value = storage?.getItem(KEY);
-    return isSelection(value) ? value : "system";
+    return isSelection(value) ? value : "light";
   } catch {
-    return "system";
+    return "light";
   }
 }
 
