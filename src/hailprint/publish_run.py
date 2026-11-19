@@ -195,7 +195,8 @@ def run(
         try:
             text = candidates.daily_csv(storm_date, candidates.DAILY_DIR, now.date())
         except RuntimeError as exc:
-            print(f"{storm_date}: SPC fetch failed, skipped: {exc!r}", file=sys.stderr)
+            print(f"{storm_date}: SPC fetch failed: {exc!r}", file=sys.stderr)
+            failed.append(storm_date.isoformat())
             continue
         if text is None:
             print(f"{storm_date}: no SPC daily CSV, skipped", file=sys.stderr)

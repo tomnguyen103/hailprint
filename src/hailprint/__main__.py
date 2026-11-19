@@ -349,13 +349,19 @@ def score_days(storm_dates: list[date], radius_km: float) -> int:
             failed = True
             continue
         if text is None:
+            print(f"{storm_date}: skipped: no SPC daily CSV", file=sys.stderr)
             continue
-        day = score.score_day(
-            gpd.read_parquet(swath_path),
-            reports.nearby_reports(storm_date, text),
-            storm_date,
-            radius_km,
-        )
+        try:
+            day = score.score_day(
+                gpd.read_parquet(swath_path),
+                reports.nearby_reports(storm_date, text),
+                storm_date,
+                radius_km,
+            )
+        except runs.UNREADABLE as exc:  # one bad date never stops the others
+            print(f"score {storm_date}: {exc}", file=sys.stderr)
+            failed = True
+            continue
         for name, frame in (("pairs", day.pairs), ("scores", day.table)):
             files.write_atomic(frame, SCORES_DIR / f"{name}-{storm_date}.parquet", meta)
         tables.append(day.table)

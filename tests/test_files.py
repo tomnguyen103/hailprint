@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 
 import geopandas as gpd
 import pandas as pd
@@ -222,3 +224,94 @@ def test_evict_stale_lock_restores_lock_when_racing_process_writes_live_pid(tmp_
             pass
     assert path.read_text(encoding="utf-8") == "424242"
     assert list(path.parent.glob("*.stale.*")) == []
+
+
+def _age(path, seconds):
+    old = time.time() - seconds
+    os.utime(path, (old, old))
+
+
+def _wait_until(predicate, timeout=2.0):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.01)
+    return predicate()
+
+
+def test_lock_heartbeat_refreshes_the_mtime_and_keeps_a_second_run_out(tmp_path, monkeypatch):
+    path = tmp_path / "publish.lock"
+    monkeypatch.setattr(files, "HEARTBEAT_S", 0.05)
+
+    with files.lock(path):
+        _age(path, files.STALE_LOCK_S + 100)
+        assert _wait_until(lambda: time.time() - path.stat().st_mtime < files.STALE_LOCK_S)
+        with pytest.raises(RuntimeError, match="another run"):
+            with files.lock(path):
+                pass
+        assert path.read_text(encoding="utf-8") == str(os.getpid())
+
+    assert not path.exists()
+
+
+def test_lock_without_a_heartbeat_is_evicted_after_the_stale_age(tmp_path):
+    path = tmp_path / "publish.lock"
+    path.write_text(str(os.getpid()), encoding="utf-8")
+    _age(path, files.STALE_LOCK_S + 100)
+
+    with files.lock(path):
+        assert path.read_text(encoding="utf-8") == str(os.getpid())
+
+    assert not path.exists()
+
+
+def test_lock_heartbeat_stops_after_an_exception(tmp_path, monkeypatch):
+    path = tmp_path / "publish.lock"
+    monkeypatch.setattr(files, "HEARTBEAT_S", 0.05)
+
+    with pytest.raises(OSError, match="disk full"):
+        with files.lock(path):
+            raise OSError("disk full")
+
+    assert not path.exists()
+    assert not [t for t in threading.enumerate() if t.name == "lock-heartbeat"]
+
+
+def test_lock_leaves_a_lock_another_run_replaced(tmp_path, monkeypatch):
+    path = tmp_path / "publish.lock"
+    monkeypatch.setattr(files, "HEARTBEAT_S", 0.05)
+
+    with files.lock(path):
+        path.write_text("99999999", encoding="utf-8")
+        _age(path, 500)
+        aged = path.stat().st_mtime
+        time.sleep(0.3)
+        assert path.stat().st_mtime == aged
+
+    assert path.read_text(encoding="utf-8") == "99999999"
+
+
+def test_lock_heartbeat_continues_after_a_failed_ownership_read(tmp_path, monkeypatch):
+    path = tmp_path / "publish.lock"
+    aside = tmp_path / "aside.lock"
+    monkeypatch.setattr(files, "HEARTBEAT_S", 0.05)
+    failed_read = threading.Event()
+    real_owner = files._lock_owner
+
+    def spy_owner(p):
+        owner = real_owner(p)
+        if owner is None:
+            failed_read.set()
+        return owner
+
+    monkeypatch.setattr(files, "_lock_owner", spy_owner)
+
+    with files.lock(path):
+        os.replace(path, aside)
+        assert failed_read.wait(5)
+        os.replace(aside, path)
+        _age(path, files.STALE_LOCK_S + 100)
+        assert _wait_until(lambda: time.time() - path.stat().st_mtime < files.STALE_LOCK_S)
+
+    assert not path.exists()

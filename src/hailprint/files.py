@@ -3,6 +3,7 @@
 import ctypes
 import io
 import os
+import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -14,6 +15,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 STALE_LOCK_S = 3600.0
+HEARTBEAT_S = 60.0
 SOURCE = "noaa-mrms-pds"
 PRODUCT = "MESH_Max_1440min_00.50"
 CONFIDENCE = (
@@ -146,12 +148,26 @@ def _evict_stale_lock(path: Path) -> bool:
     return True
 
 
+def _lock_owner(path: Path) -> str | None:
+    """Return the text of the lock file, or None when the read fails."""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+
+def _owns_lock(path: Path) -> bool:
+    """Return True when the lock file holds this run's pid."""
+    return _lock_owner(path) == str(os.getpid())
+
+
 @contextmanager
 def lock(path: Path) -> Iterator[None]:
     """Hold one run lock; a second run stops instead of a silent last-write-wins merge.
 
-    The lock file holds the pid of the run. A stale lock from a dead pid is evicted once;
-    an active lock raises RuntimeError and leaves the file in place.
+    The lock file holds the pid of the run, and a heartbeat thread refreshes its mtime every
+    HEARTBEAT_S. A lock from a dead pid, or one no run refreshes for STALE_LOCK_S, is evicted
+    once; an active lock raises RuntimeError and leaves the file in place.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
@@ -168,12 +184,36 @@ def lock(path: Path) -> Iterator[None]:
             raise RuntimeError(
                 f"{path} exists: another run holds it, or delete it after a crash"
             ) from None
+    stop = threading.Event()
+
+    def beat() -> None:
+        # utime changes the mtime only, so a crash never leaves a half-written pid
+        while not stop.wait(HEARTBEAT_S):
+            owner = _lock_owner(path)
+            if owner is None:  # an eviction check can remove the path for a moment; retry
+                continue
+            if owner != str(os.getpid()):
+                return
+            try:
+                os.utime(path)
+            except OSError:
+                pass
+
+    heartbeat = threading.Thread(target=beat, name="lock-heartbeat", daemon=True)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(str(os.getpid()))
+        heartbeat.start()
         yield
     finally:
-        path.unlink(missing_ok=True)
+        stop.set()
+        if heartbeat.is_alive():
+            heartbeat.join()
+        if _owns_lock(path):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass  # cleanup must not mask the run error; the stale rule evicts it
 
 
 def write_bytes_atomic(data: bytes, path: Path) -> Path:

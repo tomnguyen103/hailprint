@@ -3,6 +3,7 @@
 import json
 
 import pandas as pd
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 
@@ -31,6 +32,7 @@ def scan(dirs):
     hits = []
     for path in output_files(dirs):
         if path.suffix == ".parquet":
+            cells = pq.read_table(path).to_pandas()
             schema = pq.read_schema(path)
             meta = schema.metadata or {}
             text = " ".join(
@@ -38,6 +40,7 @@ def scan(dirs):
                 + [k.decode(errors="ignore") for k in meta]
                 + [v.decode(errors="ignore") for v in meta.values()]
             )
+            hits += [f"{path}: {FORBIDDEN_WORD} in column {c}" for c in forbidden_cells(cells)]
         else:
             text = path.read_bytes().decode(errors="ignore")
         lowered = text.lower()
@@ -45,6 +48,17 @@ def scan(dirs):
             hits.append(f"{path}: {FORBIDDEN_WORD}")
         hits += [f"{path}: {field}" for field in OWNER_FIELDS if field.lower() in lowered]
     return hits
+
+
+def forbidden_cells(frame):
+    """The columns of the frame with a string cell that holds the forbidden word."""
+    return [
+        str(column)
+        for column in frame.columns
+        if frame[column]
+        .map(lambda cell: isinstance(cell, str) and FORBIDDEN_WORD in cell.lower())
+        .any()
+    ]
 
 
 def missing_keys(root):
@@ -152,3 +166,18 @@ def test_the_scan_flags_a_power_file_without_the_provenance_keys(tmp_path):
     pq.write_table(pq.read_table(bare).replace_schema_metadata({b"source": b"odin"}), bare)
 
     assert missing_keys(root) == [(bare, b"product"), (bare, b"confidence")]
+
+
+def test_forbidden_cells_reports_the_column_of_an_upper_case_hit():
+    frame = pd.DataFrame({"note": ["fine", "Hail DAMAGE"], "count": [1, 2], "other": ["a", None]})
+
+    assert forbidden_cells(frame) == ["note"]
+    assert forbidden_cells(frame.drop(columns="note")) == []
+
+
+def test_the_scan_flags_the_forbidden_word_in_a_parquet_string_cell(tmp_path):
+    pq.write_table(pa.table({"note": ["fine", "Hail DAMAGE"]}), tmp_path / "x.parquet")
+
+    hits = scan([tmp_path])
+
+    assert any("x.parquet" in hit and "column note" in hit for hit in hits)

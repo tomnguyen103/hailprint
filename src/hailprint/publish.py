@@ -171,7 +171,8 @@ def _multipolygon(geometry: shapely.Geometry, decimals: int = COORD_DECIMALS) ->
     rounded = shapely.make_valid(shapely.transform(geometry, lambda xy: np.round(xy, decimals)))
     polygons = [
         orient(polygon, 1.0)
-        for polygon in shapely.get_parts(rounded)
+        for part in shapely.get_parts(rounded)
+        for polygon in shapely.get_parts(part)
         if isinstance(polygon, shapely.Polygon) and not polygon.is_empty
     ]
     return {

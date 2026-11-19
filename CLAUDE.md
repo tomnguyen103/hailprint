@@ -93,7 +93,8 @@ live.py       the live view: newest_key (today or the previous UTC day folder) -
               write validates every file, then writes swath.geojson, reports.geojson, warnings.geojson, and now.json last (schema live.schema.json); a MESH failure writes nothing
 county.py     committed GeoJSON (package data): outline() and bbox() for Harris County; metro() and metro_bbox() for the 8 metro counties (the impact layers only)
 files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling then rename; owns SOURCE/PRODUCT/CONFIDENCE; stamps them as metadata;
-              lock(path): one publish run at a time, pid in site/data/publish.lock; evicts stale locks (dead PID or age > STALE_LOCK_S), otherwise stops with exit 1
+              lock(path): one publish run at a time, pid in site/data/publish.lock; the holder refreshes the lock mtime with a heartbeat every HEARTBEAT_S and removes only a lock that holds its own pid;
+              a lock is evicted on a dead PID or when no run refreshes it for STALE_LOCK_S, otherwise the run stops with exit 1; a hung live run keeps the lock until it exits
 paths.py      resolve_root() reads HAILPRINT_ROOT when set, else the repo root; ROOT, RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR hang from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; retries 408, 429 (honouring numeric Retry-After up to 30 s), and 5xx; closes retried error bodies; sends User-Agent `hailprint/<version> (+https://hailprint.tomnguyen.me)`
 __main__.py   argparse wiring, one function per command (the `ingest`, `score`, `eaglei`, `odin`, and `live` bodies stay here), printing, and the fixed paths under data/, out/, and site/data/; the `--missing` rules, the run loop, and the publish run sit in `runs` and `publish_run`;

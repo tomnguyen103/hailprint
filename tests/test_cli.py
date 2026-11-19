@@ -29,6 +29,7 @@ from hailprint import (
     power,
     publish,
     sbw,
+    score,
     swath,
 )
 
@@ -396,17 +397,44 @@ def test_a_failed_validation_writes_nothing_for_that_date(env, monkeypatch, caps
     assert [e["storm_date"] for e in env.index()["storms"]] == ["2023-06-23"]
 
 
-@pytest.mark.parametrize("outcome", [None, RuntimeError("no route")], ids=["404", "RuntimeError"])
-def test_a_date_whose_spc_csv_cannot_be_fetched_is_skipped_with_a_stderr_line(env, capsys, outcome):
+def test_a_date_with_no_spc_daily_csv_is_skipped_with_a_stderr_line(env, capsys):
     env.add_day(EARLIER)
     env.add_day(LATER)
-    env.served[LATER] = outcome
+    env.served[LATER] = None
 
     assert cli.main(["publish"]) == 0
 
     assert "2024-05-28" in capsys.readouterr().err
     assert not env.storm_dir(LATER).exists()
     assert [e["storm_date"] for e in env.index()["storms"]] == ["2023-06-23"]
+
+
+def test_an_spc_fetch_failure_fails_its_date_and_publishes_the_other(env, capsys):
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    env.served[LATER] = RuntimeError("no route")
+
+    assert cli.main(["publish"]) == 3
+
+    err = capsys.readouterr().err
+    assert "publish failed for: 2024-05-28" in err
+    assert not env.storm_dir(LATER).exists()
+    assert [e["storm_date"] for e in env.index()["storms"]] == ["2023-06-23"]
+
+
+def test_the_run_fails_with_the_dates_when_every_spc_fetch_fails(env, capsys):
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    env.served[EARLIER] = RuntimeError("no route")
+    env.served[LATER] = RuntimeError("no route")
+
+    assert cli.main(["publish"]) == 1
+
+    err = capsys.readouterr().err
+    assert "failed: 2023-06-23, 2024-05-28" in err or "failed: 2024-05-28, 2023-06-23" in err
+    assert not (env.site / "storms.json").exists()
+    assert not env.storm_dir(EARLIER).exists()
+    assert not env.storm_dir(LATER).exists()
 
 
 def test_the_run_fails_when_no_date_published(env, capsys):
@@ -2015,6 +2043,70 @@ def test_score_isolates_single_date_runtime_error_and_scores_remaining_dates(
     assert not (scores_dir / "pairs-2023-06-23.parquet").exists()
     assert (scores_dir / "pairs-2024-05-28.parquet").exists()
     assert (scores_dir / "scores-2024-05-28.parquet").exists()
+
+
+def test_score_skips_a_date_with_no_spc_csv_and_exits_zero(env, tmp_path, monkeypatch, capsys):
+    scores_dir = tmp_path / "scores"
+    monkeypatch.setattr(cli, "SCORES_DIR", scores_dir)
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    env.served[EARLIER] = None
+
+    assert cli.main(["score"]) == 0
+
+    assert "2023-06-23: skipped: no SPC daily CSV" in capsys.readouterr().err
+    assert (scores_dir / "scores-2024-05-28.parquet").exists()
+    assert not (scores_dir / "scores-2023-06-23.parquet").exists()
+
+
+def test_score_fails_only_the_date_whose_scoring_raises_value_error(
+    env, tmp_path, monkeypatch, capsys
+):
+    scores_dir = tmp_path / "scores"
+    monkeypatch.setattr(cli, "SCORES_DIR", scores_dir)
+    env.add_day(EARLIER)
+    env.add_day(LATER)
+    real = score.score_day
+
+    def score_day(swaths, nearby, storm_date, radius_km):
+        if storm_date == EARLIER:
+            raise ValueError("bad swath")
+        return real(swaths, nearby, storm_date, radius_km)
+
+    monkeypatch.setattr(score, "score_day", score_day)
+
+    assert cli.main(["score"]) == 1
+
+    assert "score 2023-06-23: bad swath" in capsys.readouterr().err
+    assert (scores_dir / "scores-2024-05-28.parquet").exists()
+    assert not (scores_dir / "scores-2023-06-23.parquet").exists()
+
+
+def test_score_fails_only_the_date_of_an_unreadable_swath_file(env, tmp_path, monkeypatch, capsys):
+    scores_dir = tmp_path / "scores"
+    monkeypatch.setattr(cli, "SCORES_DIR", scores_dir)
+    broken = env.add_day(EARLIER)
+    env.add_day(LATER)
+    broken.write_bytes(broken.read_bytes()[: broken.stat().st_size // 2])
+
+    assert cli.main(["score"]) == 1
+
+    assert "score 2023-06-23:" in capsys.readouterr().err
+    assert (scores_dir / "scores-2024-05-28.parquet").exists()
+
+
+def test_score_exits_one_when_every_date_fails(env, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "SCORES_DIR", tmp_path / "scores")
+    env.add_day(EARLIER)
+
+    def score_day(*args):
+        raise ValueError("bad swath")
+
+    monkeypatch.setattr(score, "score_day", score_day)
+
+    assert cli.main(["score"]) == 1
+
+    assert "no storm date was scored" in capsys.readouterr().err
 
 
 def test_write_swaths_passes_explicit_source_and_product_metadata(tmp_path, monkeypatch):

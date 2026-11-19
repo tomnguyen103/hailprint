@@ -399,6 +399,46 @@ def test_multipolygon_repairs_bowtie_self_intersection_caused_by_rounding():
     assert rebuilt.is_valid
 
 
+def _oracle_area(geometry: shapely.Geometry, decimals: int) -> float:
+    rounded = shapely.transform(geometry, lambda xy: xy.round(decimals))
+    return shapely.make_valid(rounded).area
+
+
+def test_multipolygon_keeps_polygons_nested_in_a_collection():
+    # make_valid returns GeometryCollection(MultiPolygon, LineString) for the spiked bow-tie
+    spiked = shapely.Polygon([(0, 0), (2, 2), (2, 0), (0, 2), (0, 0), (-1, -1), (0, 0)])
+    assert shapely.make_valid(spiked).geom_type == "GeometryCollection"
+
+    doc = publish._multipolygon(spiked, decimals=4)
+
+    rebuilt = shapely.geometry.shape(doc)
+    assert rebuilt.geom_type == "MultiPolygon"
+    assert len(rebuilt.geoms) == 2
+    assert rebuilt.area == pytest.approx(_oracle_area(spiked, 4))
+    assert all(shapely.Polygon(poly[0]).exterior.is_ccw for poly in doc["coordinates"])
+    swath_doc = publish.swath_doc(_swath_frame(spiked), _receipt())
+    publish.validate(swath_doc, "swath")
+
+
+def test_multipolygon_bowtie_area_equals_the_repaired_area():
+    bowtie = shapely.Polygon([(0, 0), (2, 2), (2, 0), (0, 2)])
+
+    doc = publish._multipolygon(bowtie, decimals=4)
+
+    assert doc["coordinates"]
+    assert shapely.geometry.shape(doc).area == pytest.approx(_oracle_area(bowtie, 4))
+    assert shapely.geometry.shape(doc).area == pytest.approx(2.0)
+
+
+def test_multipolygon_of_a_valid_multipolygon_keeps_every_polygon():
+    multi = shapely.MultiPolygon([shapely.box(0, 0, 1, 1), shapely.box(5, 5, 6, 6)])
+
+    doc = publish._multipolygon(multi, decimals=4)
+
+    assert len(doc["coordinates"]) == 2
+    assert shapely.geometry.shape(doc).area == pytest.approx(2.0)
+
+
 def test_swath_doc_of_one_class_and_of_an_empty_frame_validate():
     one = _fixture_swaths().iloc[:1]
     empty = _fixture_swaths().iloc[:0]
