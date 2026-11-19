@@ -313,7 +313,7 @@ def test_nightly_continues_when_one_ingest_or_addon_layer_fails(tmp_path: Path, 
     rc = cloud.nightly(fake_cli, tmp_path, env={})
     err = capsys.readouterr().err
 
-    assert rc == 0
+    assert rc == 3
     assert ["ingest", "2025-05-01"] in calls
     assert ["publish"] in calls
     assert "ingest 2025-05-02 failed; skipped" in err
@@ -877,7 +877,7 @@ def test_nightly_and_backfill_continue_when_score_or_eaglei_fails(tmp_path: Path
         nightly_calls.append(list(argv))
         return 1 if argv == ["score"] else 0
 
-    assert cloud.nightly(fail_score_cli, tmp_path, env={}) == 0
+    assert cloud.nightly(fail_score_cli, tmp_path, env={}) == 3
     assert ["publish"] in nightly_calls
     assert "score failed; publish goes on" in capsys.readouterr().err
 
@@ -887,7 +887,7 @@ def test_nightly_and_backfill_continue_when_score_or_eaglei_fails(tmp_path: Path
         backfill_calls.append(list(argv))
         return 1 if argv[0] == "eaglei" else 0
 
-    assert cloud.backfill(fail_eaglei_cli, tmp_path, env={}) == 0
+    assert cloud.backfill(fail_eaglei_cli, tmp_path, env={}) == 3
     assert ["publish"] in backfill_calls
     assert "eaglei failed; publish goes on" in capsys.readouterr().err
 
@@ -1554,3 +1554,52 @@ def test_list_objects_and_sync_down_reject_cyclic_continuation_token(tmp_path: P
 
     with pytest.raises(RuntimeError, match="cyclic S3 continuation token"):
         cloud.sync_down(s3, "hailprint-state", ("derived/",), tmp_path / "data")
+
+
+def _candidate_cli(tmp_path: Path, failing: set[str], publish_rc: int = 0):
+    """A fake CLI: one candidate day; steps in `failing` exit 1; publish exits publish_rc."""
+
+    def fake_cli(argv: list[str]) -> int:
+        if argv[:2] == ["candidates", "--missing"]:
+            cand_dir = tmp_path / "data" / "derived" / "index"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            (cand_dir / "candidate-days.csv").write_text(
+                "storm_date,report_count,max_size_in,has_12z,report_source\n"
+                "2025-05-01,9,2.0,True,wcm\n",
+                encoding="utf-8",
+            )
+            return 0
+        if argv[0] == "publish":
+            return publish_rc
+        return 1 if argv[0] in failing else 0
+
+    return fake_cli
+
+
+def test_nightly_returns_0_when_every_step_passes(tmp_path: Path):
+    assert cloud.nightly(_candidate_cli(tmp_path, set()), tmp_path, env={}) == 0
+
+
+@pytest.mark.parametrize("step", ["ingest", "parcels", "score", "warnings", "power", "internet"])
+def test_nightly_returns_partial_when_a_step_fails_and_publish_passes(
+    tmp_path: Path, capsys, step: str
+):
+    (tmp_path / "data" / "raw" / "hcad" / "extracted" / "Parcels.gdb").mkdir(parents=True)
+
+    rc = cloud.nightly(_candidate_cli(tmp_path, {step}), tmp_path, env={})
+
+    assert rc == 3
+    assert "failed" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("step", ["warnings", "eaglei", "power", "internet"])
+def test_backfill_returns_partial_when_a_step_fails_and_publish_passes(tmp_path: Path, step: str):
+    assert cloud.backfill(_candidate_cli(tmp_path, {step}), tmp_path, env={}) == 3
+
+
+@pytest.mark.parametrize("task", ["nightly", "backfill"])
+def test_a_failed_publish_code_wins_over_a_failed_step(tmp_path: Path, task: str):
+    run = cloud.nightly if task == "nightly" else cloud.backfill
+    cli = _candidate_cli(tmp_path, {"score", "warnings"}, publish_rc=1)
+
+    assert run(cli, tmp_path, env={}) == 1
