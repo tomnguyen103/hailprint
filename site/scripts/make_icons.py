@@ -12,8 +12,8 @@ from pathlib import Path
 # shortcut: Pillow comes in through matplotlib, add pillow to the dev group if matplotlib drops it.
 from PIL import Image, ImageDraw
 
-# The colours copy --sheet, --hail-2, --hail-4, and --hail-6 in site/src/styles/tokens.css.
-SHEET = "#fdfcf9"
+# The colours copy --bg, --hail-2, --hail-4, and --hail-6 in site/src/styles/tokens.css.
+SHEET = "#ffffff"
 CANVAS = 64
 TILE_RX = 14
 ROTATE_DEG = -30

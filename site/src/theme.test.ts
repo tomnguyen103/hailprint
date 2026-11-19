@@ -4,32 +4,36 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { apply, read, resolve } from "./theme";
 
 describe("resolve", () => {
-  it("follows the system scheme when nothing is stored", () => {
-    expect(resolve(null, true)).toBe("dark");
+  it("defaults to light when nothing is stored", () => {
+    expect(resolve(null, true)).toBe("light");
     expect(resolve(null, false)).toBe("light");
   });
   it("keeps an explicit selection", () => {
     expect(resolve("light", true)).toBe("light");
     expect(resolve("dark", false)).toBe("dark");
-  });
-  it("treats garbage as system", () => {
-    expect(resolve("banana", false)).toBe("light");
     expect(resolve("system", true)).toBe("dark");
+    expect(resolve("system", false)).toBe("light");
+  });
+  it("treats garbage as light", () => {
+    expect(resolve("banana", true)).toBe("light");
+    expect(resolve("banana", false)).toBe("light");
   });
 });
 
 describe("read", () => {
-  it("returns system when the storage getter throws", () => {
+  it("returns light when the storage getter throws", () => {
     const storage = {
       getItem(): string | null {
         throw new Error("blocked");
       },
     };
-    expect(read(storage)).toBe("system");
+    expect(read(storage)).toBe("light");
   });
-  it("returns the stored selection", () => {
+  it("returns the stored selection or light on invalid values", () => {
     expect(read({ getItem: () => "dark" })).toBe("dark");
-    expect(read({ getItem: () => "nope" })).toBe("system");
+    expect(read({ getItem: () => "system" })).toBe("system");
+    expect(read({ getItem: () => "nope" })).toBe("light");
+    expect(read({ getItem: () => null })).toBe("light");
   });
 });
 
@@ -69,7 +73,7 @@ describe("state/theme preference store (US-03.5, US-04.1)", () => {
     });
 
     const mod = await import("./state/theme");
-    expect(read()).toBe("system");
+    expect(read()).toBe("light");
 
     mod.setTheme("dark");
     expect(store.get("theme")).toBe("dark");
