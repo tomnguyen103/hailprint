@@ -140,7 +140,7 @@ describe("useLive", () => {
     expect(freshness(states.at(-1)!.data!.now.run_time, states.at(-1)!.now)).toBe("stale");
   });
 
-  it("preserves previously loaded layers when a layer fetch fails on a background refresh", async () => {
+  it("replaces the data on refresh: a failed layer is null with its note", async () => {
     await act(() => render(h(Probe, null), host));
     await settle();
     expect(states.at(-1)?.data?.swath?.features).toHaveLength(6);
@@ -156,8 +156,26 @@ describe("useLive", () => {
     await act(async () => void (await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS)));
     const latest = states.at(-1)?.data;
     expect(latest?.now.run_time).toBe("2024-05-29T12:16:00Z");
-    expect(latest?.swath?.features).toHaveLength(6);
+    expect(latest?.swath).toBeNull();
     expect(latest?.notes).toEqual(["swath.geojson: HTTP 500"]);
+  });
+
+  it("keeps the current data when a refresh has an older run_time", async () => {
+    await act(() => render(h(Probe, null), host));
+    await settle();
+
+    answer = (url) => {
+      if (url.endsWith("swath.geojson")) return jsonResponse(null, 500);
+      const name = url.slice(url.lastIndexOf("/") + 1);
+      const body = fixture(name);
+      if (name === "now.json") body["run_time"] = "2024-05-29T12:10:00Z";
+      return jsonResponse(body);
+    };
+
+    await act(async () => void (await vi.advanceTimersByTimeAsync(LIVE_REFRESH_MS)));
+    const latest = states.at(-1)?.data;
+    expect(latest?.now.run_time).toBe("2024-05-29T12:14:00Z");
+    expect(latest?.swath?.features).toHaveLength(6);
   });
 
   it("skips a layer file that fails its guard with one note, and keeps the others", async () => {

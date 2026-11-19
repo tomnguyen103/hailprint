@@ -17,7 +17,6 @@ export function usePolledLoad<T>(
   start: () => Promise<T>,
   refreshMs: number,
   runTimeOf: (data: T) => string,
-  merge?: (prev: T, next: T) => T,
 ): Load<T> & { showLoading: boolean; retry: () => void; now: Date } {
   const initial = useLoad<T>(key, start);
   const [fresh, setFresh] = useState<{ key: string; data: T } | null>(null);
@@ -25,8 +24,8 @@ export function usePolledLoad<T>(
   const runRefresh = useRef(latest<T>());
   const initialRef = useRef<{ key: string; data: T | undefined }>({ key, data: initial.data });
   initialRef.current = { key, data: initial.data };
-  const currentRef = useRef({ key, start, runTimeOf, merge });
-  currentRef.current = { key, start, runTimeOf, merge };
+  const currentRef = useRef({ key, start, runTimeOf });
+  currentRef.current = { key, start, runTimeOf };
 
   useEffect(() => {
     const data = initial.data;
@@ -51,7 +50,7 @@ export function usePolledLoad<T>(
     const isVisible = () => (document.visibilityState ?? "visible") === "visible";
     const refresh = () => {
       if (!live || !isVisible()) return;
-      const { key: curKey, start: curStart, runTimeOf: curRunTimeOf, merge: curMerge } = currentRef.current;
+      const { key: curKey, start: curStart, runTimeOf: curRunTimeOf } = currentRef.current;
       runRefresh
         .current(curStart)
         .then((next) => {
@@ -64,10 +63,7 @@ export function usePolledLoad<T>(
                 initialRef.current.key === curKey ? (initialRef.current.data ?? null) : null;
               const base = prevData ?? initData;
               if (base !== null && curRunTimeOf(next) < curRunTimeOf(base)) return prev;
-              return {
-                key: curKey,
-                data: base !== null && curMerge ? curMerge(base, next) : next,
-              };
+              return { key: curKey, data: next };
             });
           }
         })

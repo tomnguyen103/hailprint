@@ -153,11 +153,14 @@ export function guardIndex(value: unknown): StormsIndex {
       const rowAt = `${at}.table[${r}]`;
       const row = rec(file, rowItem, rowAt);
       num(file, row["threshold_mm"], `${rowAt}.threshold_mm`);
+      num(file, row["threshold_in"], `${rowAt}.threshold_in`);
+      str(file, row["label"], `${rowAt}.label`);
       for (const key of ["hits", "misses", "false_alarms", "correct_negatives"]) {
         count(file, row[key], `${rowAt}.${key}`);
       }
       nonNegNum(file, row["swath_km2"], `${rowAt}.swath_km2`);
-      numOrNull(file, row["hss"], `${rowAt}.hss`);
+      for (const key of ["pod", "far", "csi", "hss"]) numOrNull(file, row[key], `${rowAt}.${key}`);
+      nonNegNum(file, row["unverifiable_km2"], `${rowAt}.unverifiable_km2`);
     });
     const files = rec(file, storm["files"], `${at}.files`);
     for (const key of ["swath", "reports"]) filePath(file, files[key], `${at}.files.${key}`, GEOJSON_PATH, stormDate);
