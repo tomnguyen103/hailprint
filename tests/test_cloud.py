@@ -1,5 +1,6 @@
 import hashlib
 import os
+import shutil
 import subprocess
 import threading
 from datetime import UTC, datetime
@@ -1115,19 +1116,26 @@ def test_sync_down_skips_prior_state_digest_and_fetches_remaining_in_parallel(
     assert len(state.digests) == 3
 
 
-def test_trigger_tasks_handle_partial_exit_3_and_hello_checks_env():
+@pytest.mark.skipif(shutil.which("node") is None, reason="node is absent")
+def test_is_partial_exit_reads_only_the_first_message_line():
+    done = subprocess.run(
+        [str(shutil.which("node")), "--test", "tests/trigger_common.test.mjs"],
+        cwd=paths.ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
+def test_trigger_tasks_report_partial_exit_3_and_hello_checks_env():
     nightly_ts = (paths.ROOT / "trigger" / "nightly.ts").read_text(encoding="utf-8")
     backfill_ts = (paths.ROOT / "trigger" / "backfill.ts").read_text(encoding="utf-8")
-    common_ts = (paths.ROOT / "trigger" / "common.ts").read_text(encoding="utf-8")
     hello_ts = (paths.ROOT / "trigger" / "hello.ts").read_text(encoding="utf-8")
 
-    assert "PARTIAL_EXIT = 3" in common_ts
-    assert "PARTIAL_EXIT" in nightly_ts
-    assert "partial: true" in nightly_ts
-    assert "console.warn" in nightly_ts
-    assert "PARTIAL_EXIT" in backfill_ts
-    assert "partial: true" in backfill_ts
-    assert "console.warn" in backfill_ts
+    for source in (nightly_ts, backfill_ts):
+        assert "partial: false" in source
+        assert "partial: true" in source
+        assert "console.warn" in source
     assert "REQUIRED_ENV" in hello_ts
     assert "envReady" in hello_ts
     assert "versions" in hello_ts
