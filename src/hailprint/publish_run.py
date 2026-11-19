@@ -26,7 +26,9 @@ from hailprint import (
     swath,
 )
 
-PARTIAL_EXIT = 3  # the exit code of a publish that failed some dates and built at least one
+# the exit code of a publish that failed some dates and built at least one;
+# cloud nightly and backfill also return it when a step before a clean publish failed
+PARTIAL_EXIT = 3
 
 
 class Dirs(NamedTuple):

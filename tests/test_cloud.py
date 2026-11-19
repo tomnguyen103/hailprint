@@ -1,5 +1,6 @@
 import hashlib
 import os
+import shutil
 import subprocess
 import threading
 from datetime import UTC, datetime
@@ -9,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from hailprint import __main__ as cli
-from hailprint import cloud, paths
+from hailprint import cloud, paths, publish_run
 
 
 class FakeS3:
@@ -313,7 +314,7 @@ def test_nightly_continues_when_one_ingest_or_addon_layer_fails(tmp_path: Path, 
     rc = cloud.nightly(fake_cli, tmp_path, env={})
     err = capsys.readouterr().err
 
-    assert rc == 0
+    assert rc == 3
     assert ["ingest", "2025-05-01"] in calls
     assert ["publish"] in calls
     assert "ingest 2025-05-02 failed; skipped" in err
@@ -611,12 +612,10 @@ def test_run_cloud_odin_syncs_both_days_across_midnight(tmp_path: Path):
     assert s3.objects.get(("hailprint-state", day2_key)) == b"existing-day2+midnight"
 
 
-def test_run_cloud_nightly_skips_sync_up_when_cli_returns_nonzero_even_with_existing_storms_json(
-    tmp_path: Path,
-):
+def test_run_cloud_nightly_uploads_state_but_no_public_key_when_publish_fails(tmp_path: Path):
     s3 = FakeS3({("hailprint-public", "storms.json"): b'{"storms":[]}'})
 
-    def partial_cli(argv: list[str]) -> int:
+    def failing_publish_cli(argv: list[str]) -> int:
         if argv[:2] == ["candidates", "--missing"]:
             cand_dir = tmp_path / "data" / "derived" / "index"
             cand_dir.mkdir(parents=True, exist_ok=True)
@@ -624,6 +623,11 @@ def test_run_cloud_nightly_skips_sync_up_when_cli_returns_nonzero_even_with_exis
                 "storm_date,report_count,max_size_in,has_12z,report_source\n",
                 encoding="utf-8",
             )
+        if argv == ["score"]:
+            # stands for the swath file that ingest wrote before publish failed
+            swaths = tmp_path / "data" / "derived" / "swaths"
+            swaths.mkdir(parents=True, exist_ok=True)
+            (swaths / "swaths-2024-05-28.parquet").write_bytes(b"swath")
         if argv == ["publish"]:
             storm_dir = tmp_path / "site" / "data" / "storms" / "2024-05-28"
             storm_dir.mkdir(parents=True, exist_ok=True)
@@ -631,10 +635,12 @@ def test_run_cloud_nightly_skips_sync_up_when_cli_returns_nonzero_even_with_exis
             return 1
         return 0
 
-    rc = cloud.run_cloud("nightly", client=s3, root=tmp_path, env=VALID_ENV, run_cli=partial_cli)
+    rc = cloud.run_cloud(
+        "nightly", client=s3, root=tmp_path, env=VALID_ENV, run_cli=failing_publish_cli
+    )
     assert rc == 1
-    assert s3.puts == []
-    assert ("hailprint-public", "storms/2024-05-28/swath.geojson") not in s3.objects
+    assert ("hailprint-state", "derived/swaths/swaths-2024-05-28.parquet") in s3.objects
+    assert [key for bucket, key, _ in s3.puts if bucket == "hailprint-public"] == []
 
 
 def _publish_cli(tmp_path: Path, publish_rc: int, calls: list[list[str]]):
@@ -679,7 +685,8 @@ def test_run_cloud_uploads_state_and_public_files_after_a_partial_publish_and_re
     assert ("hailprint-public", "storms/2024-05-28/swath.geojson") in s3.objects
 
 
-def test_run_cloud_nightly_uploads_nothing_when_index_fails_before_publish(tmp_path: Path):
+def test_run_cloud_nightly_uploads_no_unchanged_file_when_index_fails(tmp_path: Path):
+    """State syncs up on every exit code; an index failure with no changed file uploads nothing."""
     s3 = FakeS3({("hailprint-public", "storms.json"): b'{"storms":[]}'})
     calls: list[list[str]] = []
     publish_cli = _publish_cli(tmp_path, 0, calls)
@@ -872,7 +879,7 @@ def test_nightly_and_backfill_continue_when_score_or_eaglei_fails(tmp_path: Path
         nightly_calls.append(list(argv))
         return 1 if argv == ["score"] else 0
 
-    assert cloud.nightly(fail_score_cli, tmp_path, env={}) == 0
+    assert cloud.nightly(fail_score_cli, tmp_path, env={}) == 3
     assert ["publish"] in nightly_calls
     assert "score failed; publish goes on" in capsys.readouterr().err
 
@@ -882,7 +889,7 @@ def test_nightly_and_backfill_continue_when_score_or_eaglei_fails(tmp_path: Path
         backfill_calls.append(list(argv))
         return 1 if argv[0] == "eaglei" else 0
 
-    assert cloud.backfill(fail_eaglei_cli, tmp_path, env={}) == 0
+    assert cloud.backfill(fail_eaglei_cli, tmp_path, env={}) == 3
     assert ["publish"] in backfill_calls
     assert "eaglei failed; publish goes on" in capsys.readouterr().err
 
@@ -1110,19 +1117,42 @@ def test_sync_down_skips_prior_state_digest_and_fetches_remaining_in_parallel(
     assert len(state.digests) == 3
 
 
-def test_trigger_tasks_handle_partial_exit_3_and_hello_checks_env():
+def _node_strips_types() -> bool:
+    node = shutil.which("node")
+    if node is None:
+        return False
+    try:
+        out = subprocess.run([node, "--version"], capture_output=True, text=True, timeout=10)
+        major, minor = (int(n) for n in out.stdout.strip().lstrip("v").split(".")[:2])
+    except (ValueError, OSError, subprocess.TimeoutExpired):
+        return False
+    # type stripping is on by default from Node 22.18 and from Node 23.6
+    return (22, 18) <= (major, minor) < (23, 0) or (major, minor) >= (23, 6)
+
+
+@pytest.mark.skipif(not _node_strips_types(), reason="node with type stripping is absent")
+def test_is_partial_exit_reads_only_the_first_message_line():
+    done = subprocess.run(
+        [str(shutil.which("node")), "--test", "tests/trigger_common.test.mjs"],
+        cwd=paths.ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
+def test_trigger_tasks_report_partial_exit_3_and_hello_checks_env():
     nightly_ts = (paths.ROOT / "trigger" / "nightly.ts").read_text(encoding="utf-8")
     backfill_ts = (paths.ROOT / "trigger" / "backfill.ts").read_text(encoding="utf-8")
-    common_ts = (paths.ROOT / "trigger" / "common.ts").read_text(encoding="utf-8")
     hello_ts = (paths.ROOT / "trigger" / "hello.ts").read_text(encoding="utf-8")
 
-    assert "PARTIAL_EXIT = 3" in common_ts
-    assert "PARTIAL_EXIT" in nightly_ts
-    assert "partial: true" in nightly_ts
-    assert "console.warn" in nightly_ts
-    assert "PARTIAL_EXIT" in backfill_ts
-    assert "partial: true" in backfill_ts
-    assert "console.warn" in backfill_ts
+    common_ts = (paths.ROOT / "trigger" / "common.ts").read_text(encoding="utf-8")
+    assert f"export const PARTIAL_EXIT = {publish_run.PARTIAL_EXIT};" in common_ts
+    for source in (nightly_ts, backfill_ts):
+        assert "partial: false" in source
+        assert "partial: true" in source
+        assert "console.warn" in source
     assert "REQUIRED_ENV" in hello_ts
     assert "envReady" in hello_ts
     assert "versions" in hello_ts
@@ -1549,3 +1579,63 @@ def test_list_objects_and_sync_down_reject_cyclic_continuation_token(tmp_path: P
 
     with pytest.raises(RuntimeError, match="cyclic S3 continuation token"):
         cloud.sync_down(s3, "hailprint-state", ("derived/",), tmp_path / "data")
+
+
+def _candidate_cli(tmp_path: Path, failing: set[str], publish_rc: int = 0):
+    """A fake CLI: one candidate day; steps in `failing` exit 1; publish exits publish_rc."""
+
+    def fake_cli(argv: list[str]) -> int:
+        if argv[:2] == ["candidates", "--missing"]:
+            cand_dir = tmp_path / "data" / "derived" / "index"
+            cand_dir.mkdir(parents=True, exist_ok=True)
+            (cand_dir / "candidate-days.csv").write_text(
+                "storm_date,report_count,max_size_in,has_12z,report_source\n"
+                "2025-05-01,9,2.0,True,wcm\n",
+                encoding="utf-8",
+            )
+            return 0
+        if argv[0] == "publish":
+            return publish_rc
+        return 1 if argv[0] in failing else 0
+
+    return fake_cli
+
+
+def test_nightly_returns_0_when_every_step_passes(tmp_path: Path):
+    assert cloud.nightly(_candidate_cli(tmp_path, set()), tmp_path, env={}) == 0
+
+
+@pytest.mark.parametrize("step", ["ingest", "parcels", "score", "warnings", "power", "internet"])
+def test_nightly_returns_partial_when_a_step_fails_and_publish_passes(
+    tmp_path: Path, capsys, step: str
+):
+    (tmp_path / "data" / "raw" / "hcad" / "extracted" / "Parcels.gdb").mkdir(parents=True)
+
+    rc = cloud.nightly(_candidate_cli(tmp_path, {step}), tmp_path, env={})
+
+    assert rc == 3
+    lines = {
+        "ingest": "ingest 2025-05-01 failed; skipped",
+        "parcels": "parcels 2025-05-01 failed; rerun by hand",
+    }
+    assert lines.get(step, f"{step} failed; publish goes on") in capsys.readouterr().err
+
+
+def test_backfill_returns_0_when_every_step_passes(tmp_path: Path):
+    assert cloud.backfill(_candidate_cli(tmp_path, set()), tmp_path, env={}) == 0
+
+
+@pytest.mark.parametrize("step", ["warnings", "eaglei", "power", "internet"])
+def test_backfill_returns_partial_when_a_step_fails_and_publish_passes(
+    tmp_path: Path, capsys, step: str
+):
+    assert cloud.backfill(_candidate_cli(tmp_path, {step}), tmp_path, env={}) == 3
+    assert f"{step} failed; publish goes on" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("task", ["nightly", "backfill"])
+def test_a_failed_publish_code_wins_over_a_failed_step(tmp_path: Path, task: str):
+    run = cloud.nightly if task == "nightly" else cloud.backfill
+    cli = _candidate_cli(tmp_path, {"score", "warnings"}, publish_rc=1)
+
+    assert run(cli, tmp_path, env={}) == 1

@@ -10,5 +10,9 @@ export function isPartialExit(err: unknown): boolean {
       return true;
     }
   }
-  return err instanceof Error && /exited with (?:a non-zero )?code 3\b|exit code 3\b/i.test(err.message);
+  // the message embeds script output: only its first line names the exit code
+  return (
+    err instanceof Error &&
+    /exited with (?:a non-zero )?code 3\b|exit code 3\b/i.test(err.message.split("\n", 1)[0])
+  );
 }

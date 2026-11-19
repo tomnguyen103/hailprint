@@ -14,7 +14,7 @@ export const backfillTask = task({
       const result = await python.runScript("./src/hailprint/__main__.py", ["cloud", "backfill"], {
         env: { PYTHONPATH: "src" },
       });
-      return { exitCode: result.exitCode, partial: result.exitCode === PARTIAL_EXIT };
+      return { exitCode: result.exitCode, partial: false };
     } catch (err) {
       if (isPartialExit(err)) {
         console.warn(JSON.stringify({ task: "backfill", exitCode: PARTIAL_EXIT, partial: true }));

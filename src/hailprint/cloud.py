@@ -464,6 +464,12 @@ def _root_paths(root: Path) -> dict[str, Path]:
     return paths.root_paths(root)
 
 
+def _publish(run_cli: Callable[[list[str]], int], env: Mapping[str, str], step_failed: bool) -> int:
+    cmd = ["publish", "--with-internet"] if env.get("PUBLISH_INTERNET") == "1" else ["publish"]
+    # a nonzero publish code wins; a failed step before a clean publish reads as partial
+    return run_cli(cmd) or (publish_run.PARTIAL_EXIT if step_failed else 0)
+
+
 def nightly(
     run_cli: Callable[[list[str]], int],
     root: Path,
@@ -492,6 +498,7 @@ def nightly(
         missing_dates = [
             d.isoformat() for d in candidates.missing_days(ranked, swaths_dir)[:max_ingest]
         ]
+    step_failed = False
     if missing_dates:
         gdb_dir = rp["parcels_gdb"]
         has_gdb = gdb_dir.is_dir()
@@ -500,24 +507,25 @@ def nightly(
         for storm_date in missing_dates:
             if run_cli(["ingest", storm_date]) != 0:
                 _log(f"ingest {storm_date} failed; skipped")
+                step_failed = True
                 continue
             if has_gdb and run_cli(["parcels", storm_date]) != 0:
                 _log(
                     f"parcels {storm_date} failed; "
                     f"rerun by hand: uv run hailprint parcels {storm_date}"
                 )
+                step_failed = True
 
     if run_cli(["score"]) != 0:
         _log("score failed; publish goes on")
+        step_failed = True
 
     for step in ("warnings", "power", "internet"):
         if run_cli([step, "--missing"]) != 0:
             _log(f"{step} failed; publish goes on")
+            step_failed = True
 
-    publish_cmd = (
-        ["publish", "--with-internet"] if env.get("PUBLISH_INTERNET") == "1" else ["publish"]
-    )
-    return run_cli(publish_cmd)
+    return _publish(run_cli, env, step_failed)
 
 
 def odin_run(run_cli: Callable[[list[str]], int]) -> int:
@@ -529,8 +537,10 @@ def backfill(
     root: Path,
     env: Mapping[str, str] = os.environ,
 ) -> int:
+    step_failed = False
     if run_cli(["warnings", "--missing"]) != 0:
         _log("warnings failed; publish goes on")
+        step_failed = True
 
     eaglei_dir = _root_paths(root)["eaglei"]
     missing_years = [
@@ -538,15 +548,14 @@ def backfill(
     ]
     if missing_years and run_cli(["eaglei", *missing_years]) != 0:
         _log("eaglei failed; publish goes on")
+        step_failed = True
 
     for step in ("power", "internet"):
         if run_cli([step, "--missing"]) != 0:
             _log(f"{step} failed; publish goes on")
+            step_failed = True
 
-    publish_cmd = (
-        ["publish", "--with-internet"] if env.get("PUBLISH_INTERNET") == "1" else ["publish"]
-    )
-    return run_cli(publish_cmd)
+    return _publish(run_cli, env, step_failed)
 
 
 @contextlib.contextmanager
@@ -663,13 +672,10 @@ def run_cloud(
         if task == "nightly"
         else backfill(runner, resolved_root, env)
     )
-    # a partial publish still uploads the dates it built, then returns its exit code
-    if rc not in (0, publish_run.PARTIAL_EXIT):
-        return rc
-
     # a long run outlives the session token, so a client of our own is built again for upload
     if client is None:
         s3 = s3_client(config)
+    # state uploads for every exit code: a failed publish keeps the swaths that ingest built
     sync_up(
         s3,
         config.state_bucket,
@@ -678,6 +684,9 @@ def run_cloud(
         state,
         exclude_prefixes=(ODIN_PREFIX,),
     )
+    # public files upload only on a clean or partial publish
+    if rc not in (0, publish_run.PARTIAL_EXIT):
+        return rc
     sync_up(
         s3,
         config.public_bucket,
