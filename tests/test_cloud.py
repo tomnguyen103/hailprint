@@ -1137,6 +1137,7 @@ def test_is_partial_exit_reads_only_the_first_message_line():
         cwd=paths.ROOT,
         capture_output=True,
         text=True,
+        timeout=60,
     )
     assert done.returncode == 0, done.stdout + done.stderr
 
@@ -1613,9 +1614,11 @@ def test_nightly_returns_partial_when_a_step_fails_and_publish_passes(
     rc = cloud.nightly(_candidate_cli(tmp_path, {step}), tmp_path, env={})
 
     assert rc == 3
-    err = capsys.readouterr().err
-    assert f"{step} " in err
-    assert "failed" in err
+    lines = {
+        "ingest": "ingest 2025-05-01 failed; skipped",
+        "parcels": "parcels 2025-05-01 failed; rerun by hand",
+    }
+    assert lines.get(step, f"{step} failed; publish goes on") in capsys.readouterr().err
 
 
 def test_backfill_returns_0_when_every_step_passes(tmp_path: Path):
