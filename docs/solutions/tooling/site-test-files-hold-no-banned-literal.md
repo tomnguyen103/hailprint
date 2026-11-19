@@ -14,11 +14,11 @@ Keeping the literal and adding the test file to an allow-list. The scans have no
 
 ## Root cause
 
-`source_files` in `tests/test_wording.py:16` walks every `.ts`, `.tsx`, `.css`, `.html`, `.json`, `.md`, and `.svg` file under `site/src`, including `*.test.ts` and `*.test.tsx`. `tests/test_outputs_clean.py:80` scans only `.ts`, `.tsx`, and `.css` files for the forbidden word. A negative assertion needs the banned text, so the assertion trips the scan.
+`source_files` in `tests/test_wording.py` walks every `.ts`, `.tsx`, `.css`, `.html`, `.json`, `.md`, and `.svg` file under `site/src`, including `*.test.ts` and `*.test.tsx`. `test_site_source_holds_no_forbidden_word` in `tests/test_outputs_clean.py` scans only `.ts`, `.tsx`, and `.css` files for the forbidden word. A negative assertion needs the banned text, so the assertion trips the scan.
 
 ## Fix
 
 - A site test file builds each banned phrase at run time: `[["internet", "down"], ["caused", "by", "hail"], ["because", "of", "hail"]].map((words) => words.join(" "))` in `site/src/method/content.test.ts`.
-- A site test file imports the forbidden word: `FORBIDDEN_WORD` from `site/src/method/prose.ts:8`, which joins `"dam"` and `"age"`.
+- A site test file imports the forbidden word: `FORBIDDEN_WORD` from `site/src/method/prose.ts`, which joins `"dam"` and `"age"`.
 
 Rule: a site test never spells a banned word or phrase in one literal. Build it from fragments or import the constant. Run `uv run pytest tests/test_wording.py tests/test_outputs_clean.py -q` after any new site test that checks wording.

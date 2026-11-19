@@ -6,7 +6,7 @@ trigger: "window.matchMedia is not a function" or "window is not defined" when a
 
 ## Problem
 
-`site/src/state/theme.ts:5` calls `window.matchMedia` at module load. The store keeps one preference, one listener set, and one media listener for the page, so the call sits at the top level on purpose. A vitest file that imports the store, or any module that imports it, fails under the default node environment.
+`site/src/state/theme.ts` calls `window.matchMedia` at module load. The store keeps one preference, one listener set, and one media listener for the page, so the call sits at the top level on purpose. A vitest file that imports the store, or any module that imports it, fails under the default node environment.
 
 ## What did not work
 

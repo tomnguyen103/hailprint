@@ -15,7 +15,7 @@ This guide covers the Trigger.dev tasks, the Supabase Storage buckets, and the e
   6. Mints a fresh S3 client, uploads changed state files for every exit code (excluding `derived/odin/`) to `HAILPRINT_STATE_BUCKET`, and then, on exit 0 or 3 only, uploads changed per-date files to `HAILPRINT_PUBLIC_BUCKET` before `storms.json` and `pipeline.json` with `Cache-Control: max-age=60` and deletes stale remote public objects last.
 - `hailprint cloud odin` (`trigger/odin.ts`, cron `0 * * * *` UTC on `small-1x`, queue concurrency 1):
   1. Downloads today's UTC ODIN file `derived/odin/odin-<YYYY-MM-DD>.parquet` when present (plus the next UTC day file near midnight).
-  2. Runs `odin` to append the current 15-minute slot snapshot.
+  2. Runs `odin` to add one snapshot to the file under its 15-minute slot. The cron runs hourly, so the file holds one slot per hour. An ODIN-sourced power file is null at the other three steps of each hour.
   3. Uploads only the slot, post-slot, and next-day ODIN keys. Because `nightly` never uploads `derived/odin/`, the two schedules never race.
 - `hailprint cloud backfill` (`trigger/backfill.ts`, on-demand task on `medium-1x`, queue concurrency 1):
   1. Downloads state and public buckets.

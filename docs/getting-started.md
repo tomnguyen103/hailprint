@@ -32,7 +32,7 @@ The HCAD gdb is necessary only for `hailprint parcels`. Without it, `publish` wr
 ## Commands
 
 ```bash
-uv run hailprint ingest 2024-05-28          # swath file and PNG for one or more storm dates
+uv run hailprint ingest 2024-05-28          # swath file for one or more storm dates; add --plot for the PNG
 uv run hailprint index                      # archive index from one S3 bucket listing
 uv run hailprint candidates --top 20        # ranked candidate days; needs `index` first
 uv run hailprint candidates --missing       # candidate days with a 12Z file and no swath file, newest first
@@ -43,20 +43,22 @@ uv run hailprint eaglei 2025                # EAGLE-I year CSV streamed once, me
 uv run hailprint power --missing            # customers out per metro county and step for each swath date with a closed window
 uv run hailprint odin                       # one ODIN snapshot into the UTC day file
 uv run hailprint internet 2024-05-17        # IODA county reachability for one or more storm dates from 2022-03 to 2024-05; `--missing` fills the gaps
-uv run hailprint publish                    # writes site/data/ (ZIP counts only where `parcels` ran); `--with-internet` adds internet.json
+uv run hailprint publish                    # needs `ingest` and `candidates`; writes site/data/ (ZIP counts only where `parcels` ran); `--with-internet` adds internet.json
 uv run hailprint live                       # live files under site/data/live/ (24 h MESH, SPC, HGX warnings, ODIN), now.json last
-uv run hailprint cloud nightly              # syncs Supabase S3 state/public down, runs nightly pipeline, syncs changed files up
+uv run hailprint cloud nightly              # syncs Supabase S3 state/public down, runs nightly pipeline, syncs state up on every exit and public up on publish exit 0 or 3
 uv run hailprint cloud odin                 # syncs today's ODIN day file down, runs `odin`, syncs that file up
-uv run hailprint cloud backfill             # syncs state/public down, runs warnings/eaglei/power/internet/publish, syncs up
+uv run hailprint cloud backfill             # syncs state/public down, runs warnings/eaglei/power/internet/publish, syncs state up on every exit and public up on publish exit 0 or 3
 uv run hailprint cloud live                 # syncs public live/ down, runs `live`, syncs changed live/ keys up with now.json last
 ```
 
 A first run for one storm date:
 
-1. Run `uv run hailprint ingest 2024-05-28`.
-2. Run `uv run hailprint score`.
-3. Run `uv run hailprint publish`.
-4. Run `cd site && npm run dev` and open http://localhost:5173.
+1. Run `uv run hailprint index`.
+2. Run `uv run hailprint candidates --top 20`.
+3. Run `uv run hailprint ingest 2024-05-28`.
+4. Run `uv run hailprint score`. This step is optional: `publish` does not read the score files.
+5. Run `uv run hailprint publish`.
+6. Run `cd site && npm run dev` and open http://localhost:5173.
 
 ## Checks
 

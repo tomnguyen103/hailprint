@@ -8,7 +8,7 @@ trigger: "Command '['/opt/venv/bin/python3', '-m', 'ensurepip', '--upgrade', '--
 
 When `trigger.config.ts` installs Python 3.12 with `uv python install 3.12 --install-dir /opt/python` (from `ghcr.io/astral-sh/uv:0.7.2`) and symlinks only `/usr/local/bin/python3` to `/opt/python/cpython-3.12.../bin/python3.12`, `@trigger.dev/python` later runs `python3 -m venv /opt/venv`. Inside `/opt/venv/pyvenv.cfg`, `venv` records `home = /usr/local/bin`. In `uv 0.7.2` (`cpython-3.12.10+20250409`), `/opt/venv/bin/python3` resolves its standard library relative to `home` (`/usr/local/lib/python3.12`), misses `/opt/python/cpython-3.12.../lib/python3.12`, and fails during `ensurepip` with exit code 1.
 
-## Solution
+## Fix
 
 Copy the full `uv` standalone Python tree (`bin`, `lib`, `include`, `share`) into `/usr/local/` before creating `/usr/local/bin/python3`:
 

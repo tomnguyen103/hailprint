@@ -6,7 +6,7 @@ trigger: a test writes a CRLF .env and the script accepts it, or a test writes a
 
 ## Problem
 
-`scripts/deploy.sh` and `scripts/nightly.sh` source `.env` as shell and refuse a CRLF file first. The first guard matched `\r` through `grep` and through a `case` pattern. On this Windows host, the CRLF test passed the file, and two LF tests failed as CRLF.
+The former `scripts/deploy.sh` and `scripts/nightly.sh` (removed when Trigger.dev replaced the cron scripts, `docs/DECISIONS.md` row 18) sourced `.env` as shell and refused a CRLF file first. The first guard matched `\r` through `grep` and through a `case` pattern. On this Windows host, the CRLF test passed the file, and two LF tests failed as CRLF.
 
 ## What did not work
 
@@ -18,4 +18,4 @@ Git for Windows `grep` strips the CR from each line before the match, so no patt
 
 ## Fix
 
-Count the CR bytes instead of matching a line: `tr -cd '\r' < .env | wc -c` at `scripts/deploy.sh:66` and `scripts/nightly.sh:36`. The test fixture writes `.env` through one helper with `newline="\n"`: `tests/test_scripts.py:89` (removed). A deliberate CRLF fixture uses `write_bytes`.
+Count the CR bytes instead of matching a line: `tr -cd '\r' < .env | wc -c` in both scripts. The test fixture wrote `.env` through one helper with `newline="\n"` in `tests/test_scripts.py`. The scripts and the test are removed; the rule stays for any new shell guard. A deliberate CRLF fixture uses `write_bytes`.

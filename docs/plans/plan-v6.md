@@ -1,10 +1,10 @@
-Draft of 2026-10-27 for owner review. Nothing below is built. Live probes on 2026-10-27
+Draft of 2026-10-27, now shipped: the warnings, power, internet, and live layers are in the code. This file stays as the historical record. Live probes on 2026-10-27
 give the facts in sections 3 and 4; each row names its probe. Where this draft and
 `docs/DECISIONS.md` differ, DECISIONS wins until the owner adopts the rows in section 9.
 
 ---
 title: Hailprint plan v6 (draft for review)
-status: draft for review
+status: shipped; historical record
 supersedes: none (extends docs/plans/plan-v5.md; PRs A to H stand)
 mode: one autonomous run, PRs I to N, after the owner answers section 13
 date: 2026-10-27

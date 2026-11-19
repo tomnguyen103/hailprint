@@ -16,9 +16,9 @@ npm run check    # tsc --noEmit && vitest run && vite build
 
 ## Routes
 
-`/live`, `/storms/<date>/map|parcels|score|data`, `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`,
+`/live`, `/storms/<date>/map|parcels|score|data`, `/storms/<date>/map/<step>` (step 0 to 191), `/scorecard/<table|grid|curve>`, `/try/<tune|point|compare|run>`,
 `/method/<data|storm-date|size-classes|scoring|limits|impacts>`, `/pipeline/<runs|archive|sources>`. `/` redirects to
-`/live`, `/storms` opens the newest storm date with an impact layer (or the newest storm date when none has one), `/scorecard` opens the Table view, `/try` opens the Tune tool, `/method` opens the Data
+`/live`, `/storms` opens the landing storm date from `landingStorm` in `src/storms/select.ts` (the newest date with power and internet files and at least 5 reports; else the newest with power and internet files; else the newest with a power file; else the newest with any impact layer; else the newest storm date), `/storms/<date>` opens the Map tab, `/scorecard` opens the Table view, `/try` opens the Tune tool, `/method` opens the Data
 page, and `/pipeline` opens Runs.
 
 ## Data
@@ -52,4 +52,4 @@ Cloud schedules and bucket setup live in [docs/operations.md](../docs/operations
 In `npm run dev`, `main.tsx` imports `src/dev/harness.tsx` and mounts the scenario bar after `#app`.
 A button stores the scenario in `sessionStorage` and reloads. The harness then installs a fake fetch
 before the first render: index loading, index empty, and one HTTP 500 for the index, the swath, the
-reports, the pairs, or the ZIP counts. The production build drops the module.
+reports, the pairs, or the ZIP counts. Two more scenarios fail only the first request of the newest storm date for `pairs.json` or `swath.geojson`. The production build drops the module.

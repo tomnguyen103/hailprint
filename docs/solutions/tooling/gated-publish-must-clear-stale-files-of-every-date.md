@@ -34,14 +34,14 @@ The first catch was too narrow. A pyarrow type error is a `TypeError`, a text `s
 
 - `runs.UNREADABLE` in `src/hailprint/runs.py` lists `OSError`, `ValueError`, `KeyError`, `TypeError`, `AttributeError`, `pa.ArrowException`, and `shapely.errors.ShapelyError`, and `pyproj.exceptions.ProjError`. A geometry column with invalid WKB raises a `GEOSException`, which is a `ShapelyError`. A `crs` entry that pyproj cannot parse raises a `CRSError`, which is a `ProjError`. `runs.internet_settled` uses the same tuple.
 - The dry run reads the file, reads the source metadata, and runs `publish.layer_doc`, `publish.validate`, and `publish.dumps` inside one `try`. A file that `build_day` would reject now skips only its layer.
-- The dry run covers the schema of the document. A negative ratio fails `validate` and skips the layer, where it first failed the date with exit 1. A code defect in the receipt builder still fails the date, which is the correct stop.
+- The dry run covers the schema of the document. A negative ratio fails `validate` and skips the layer, where it first failed the date. A code defect in the receipt builder still fails the date, which is the correct stop.
 
 ## Third pass (publish layer errors)
 
 The warnings and power layers had no dry run, and the per-date catch and the settle checks were still too narrow.
 
 - `publish_run.impact_layer` serves the warnings, power, and internet layers. It calls `publish.layer_doc`, the same builder that `build_day` calls, so the dry run and the real build cannot differ. A bad warnings or power file skips only its layer, and `publish` exits 0.
-- The per-date catch in `publish_run.run` is `runs.UNREADABLE`. A required file (swath, SPC CSV, ZIP counts) that raises one of these classes fails only its date. The run publishes the other dates and exits 1 at the end. A `ValueError` prints `<ClassName>: <message>` and any other class prints its `repr`, so the line always names the error class.
+- The per-date catch in `publish_run.run` is `runs.UNREADABLE`. A required file (swath, SPC CSV, ZIP counts) that raises one of these classes fails only its date. The run publishes the other dates and exits 3 at the end. It exits 1 when no date builds. A `ValueError` prints `<ClassName>: <message>` and any other class prints its `repr`, so the line always names the error class.
 - `runs.rows` returns the row count of a Parquet file, or None when the read raises a `runs.UNREADABLE` class. `runs.warnings_settled` treats None as not settled, and `runs.needs_power` catches `runs.UNREADABLE`. `warnings --missing` and `power --missing` fetch again for a corrupt file.
 
 Rule: a flag that turns a layer off clears the layer for all dates, in one place, and the run removes the files only after it writes the index. A failed run then leaves the old index and the old files together. An impact layer read never fails a required file. The catch of an impact layer lists every error class that its parsers raise, and a dry run of the builder moves the builder errors inside the same catch. A new gated layer adds a test for both cases next to `test_publish_without_the_flag_removes_the_internet_json_of_a_date_it_does_not_publish` in `tests/test_cli.py`.

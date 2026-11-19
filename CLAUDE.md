@@ -18,7 +18,7 @@ uv run pyright                              # type check src (basic mode); part 
 make test                                   # uv run pytest -q
 uv run pytest tests/test_swath.py -q        # one file
 uv run pytest tests/test_swath.py::test_name -q   # one test
-uv run hailprint ingest 2024-05-28          # swath file + PNG for one or more storm dates
+uv run hailprint ingest 2024-05-28          # swath file for one or more storm dates; add --plot for the PNG
 uv run hailprint index                      # archive index from one S3 bucket listing
 uv run hailprint candidates --top 20        # needs `index` first
 uv run hailprint parcels 2024-05-28         # needs `ingest` for that date and the HCAD gdb
@@ -28,11 +28,11 @@ uv run hailprint eaglei 2025                # EAGLE-I year CSV streamed once, me
 uv run hailprint power --missing            # customers out per metro county and step for each swath date with a closed impact window
 uv run hailprint odin                       # one ODIN snapshot into the day file
 uv run hailprint internet --missing         # IODA ping-slash24 reachability per metro county and step for each swath date with a closed impact window
-uv run hailprint publish                    # needs `ingest`; writes site/data/ (ZIP counts only where `parcels` ran, warnings only where `warnings` ran, power only where `power` ran)
+uv run hailprint publish                    # needs `ingest` and `candidates`; writes site/data/ (ZIP counts only where `parcels` ran, warnings only where `warnings` ran, power only where `power` ran)
 uv run hailprint publish --with-internet    # also writes internet.json where `internet` ran; cloud nightly passes it only when PUBLISH_INTERNET=1
-uv run hailprint cloud nightly              # syncs Supabase S3 state/public down, runs nightly pipeline, syncs changed files up
+uv run hailprint cloud nightly              # syncs Supabase S3 state/public down, runs nightly pipeline, syncs state up on every exit and public up on publish exit 0 or 3; exits 3 when a step failed before a clean publish
 uv run hailprint cloud odin                 # syncs today's ODIN day file down, runs `odin`, syncs that file up
-uv run hailprint cloud backfill             # syncs state/public down, runs warnings/eaglei/power/internet/publish, syncs up
+uv run hailprint cloud backfill             # syncs state/public down, runs warnings/eaglei/power/internet/publish, syncs state up on every exit and public up on publish exit 0 or 3
 uv run hailprint live                       # live files under site/data/live/ (rolling 24 h MESH, SPC, HGX warnings, ODIN), now.json last
 uv run hailprint cloud live                 # syncs public live/ down, runs `live`, syncs changed live/ keys up with now.json last
 make site                                   # cd site && npm ci && npm run check
@@ -68,7 +68,7 @@ sbw.py        IEM storm-based warnings (WFO HGX; SV, TO, FF; significance W) for
 power.py      EAGLE-I year stream (fetch_year, read_eaglei) -> metro rows at data/derived/eaglei/eaglei-<year>.parquet; build() reads those years for a storm date, else the ODIN day files ->
               derive() or derive_odin() -> customers out per metro county and 15-minute step (null where no source row, never 0) at data/derived/power/power-<date>.parquet;
               one file never mixes the two sources; MCC (2022 customers per county) is a constant; share_out() and share_bin() give the share out and its colour bin
-odin.py       one ODIN snapshot (fetch, snapshot) summed per county and utility -> merge() into the UTC day file data/derived/odin/odin-<YYYY-MM-DD>.parquet, keyed by the 15-minute slot (slot_of);
+odin.py       one ODIN snapshot (fetch, snapshot) summed per county and utility -> merge() into the UTC day file data/derived/odin/odin-<YYYY-MM-DD>.parquet, keyed by the 15-minute slot (slot_of); `trigger/odin.ts` runs hourly, so an ODIN-sourced power file holds a value at one step in four;
               a failed fetch writes nothing; ODIN holds CenterPoint customers only in the metro
 internet.py   IODA county signal (ping-slash24, one 10-minute point series per county) for the impact window (impact.py owns the window and the step grid) plus the 7 days before -> build() -> derive(): step value = median of the points in the step,
               baseline = median of the 7 days before the window (null under 504 of 1008 points), ratio = value / baseline, drop = 1 - ratio floored at 0 -> data/derived/internet/internet-<date>.parquet;
@@ -97,7 +97,7 @@ files.py      write_atomic() and write_text_atomic(): <name>.<pid>.tmp sibling t
               a lock is evicted on a dead PID or when no run refreshes it for STALE_LOCK_S, otherwise the run stops with exit 1; a hung live run keeps the lock until it exits
 paths.py      resolve_root() reads HAILPRINT_ROOT when set, else the repo root; ROOT, RAW_DIR, DERIVED_DIR, OUT_DIR, SITE_DATA_DIR hang from it
 net.py        get(url, timeout): urllib GET, 3 tries, backoff 0.5 s then 1 s; retries 408, 429 (honouring numeric Retry-After up to 30 s), and 5xx; closes retried error bodies; sends User-Agent `hailprint/<version> (+https://hailprint.tomnguyen.me)`
-__main__.py   argparse wiring, one function per command (the `ingest`, `score`, `eaglei`, `odin`, and `live` bodies stay here), printing, and the fixed paths under data/, out/, and site/data/; the `--missing` rules, the run loop, and the publish run sit in `runs` and `publish_run`;
+__main__.py   argparse wiring, one function per command (every command body stays here; `cloud` calls `cloud.run_cloud`), printing, and the fixed paths under data/, out/, and site/data/; the `--missing` rules, the run loop, and the publish run sit in `runs` and `publish_run`;
               `power --missing` also replaces an ODIN-sourced power file when EAGLE-I now covers its window (docs/DECISIONS.md row 12)
 ```
 
@@ -169,7 +169,7 @@ Conventions that span modules:
 
 ## Documents
 
-- `docs/plans/plan-vN.md` plans, newest first (v6 draft, v5 plan of record, v4 week-1 plan); `docs/DECISIONS.md` adopted
+- `docs/plans/plan-vN.md` plans, newest first (v6 shipped, v5 plan of record, v4 week-1 plan); `docs/DECISIONS.md` adopted
   answers and standing constraints.
 - `docs/reports/week-NN.md` per-week evidence reports; `docs/plans/kickoff.md` the week-1 prompt.
 - `docs/solutions/<category>/` learn-loop entries. Read before debugging; the Parquet metadata,

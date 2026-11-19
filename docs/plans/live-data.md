@@ -1,6 +1,6 @@
 # Plan: live data on the site (Trigger.dev + Supabase Storage)
 
-Status: draft for review, 2026-10-28. No code changes until the owner approves this plan.
+Status: shipped. The live view is in the code (`hailprint live`, `hailprint cloud live`, and `docs/DECISIONS.md` row 20). This file stays as the historical record.
 
 ## 1. Goal
 

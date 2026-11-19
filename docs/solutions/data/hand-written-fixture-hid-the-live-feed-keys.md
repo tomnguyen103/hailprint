@@ -18,8 +18,8 @@ The fixture and the parser shared one author and one assumption. A fixture that 
 
 ## Fix
 
-- `sbw.FEED_KEY` maps each output column to its feed key (`src/hailprint/sbw.py:34`). The published columns keep the names without the prefix.
-- The fixture now holds the live key names and the live extra keys. A regression test reads the prefixed names (`tests/test_sbw.py:111`).
-- The opt-in live test O14 (`HAILPRINT_NETWORK=1`) compares the filtered raw feed with the parsed row count (`tests/test_sbw.py:179`). Run it before the first merge of any new feed reader.
+- `sbw.FEED_KEY` maps each output column to its feed key (`src/hailprint/sbw.py`). The published columns keep the names without the prefix.
+- The fixture now holds the live key names and the live extra keys. A regression test reads the prefixed names (`test_parse_reads_the_utc_prefixed_polygon_times_of_the_live_feed` in `tests/test_sbw.py`).
+- The opt-in live test O14 (`HAILPRINT_NETWORK=1`) compares the filtered raw feed with the parsed row count (`test_the_live_feed_count_after_the_filter_equals_the_parquet_row_count` in `tests/test_sbw.py`). Run it before the first merge of any new feed reader.
 
 Rule: a parser for an external feed gets one fixture cut from a real response and one live contract test, before the first PR opens.

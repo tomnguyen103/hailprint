@@ -1,5 +1,7 @@
 # Design Direction — Hailprint
 
+> `design.md` at the repo root is the locked design system and wins over this file. This file keeps the direction record of the shell build.
+
 ## Project
 - **Purpose line**: Weather researchers, insurers, and Harris County residents verify MRMS MESH hail swaths against SPC preliminary hail reports and county impact feeds in a public web workbench.
 - **Archetype**: `{ live: monitoring, storms: analytics, scorecard: analytics, try: analytics, method: editor, pipeline: monitoring }` (`app-ui-shell/references/archetypes.md`).

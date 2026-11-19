@@ -38,7 +38,7 @@ Site: https://hailprint.tomnguyen.me
 | Warnings | `hailprint warnings` | NWS severe thunderstorm, tornado, and flash flood warning polygons for each storm date |
 | EAGLE-I | `hailprint eaglei` | One Parquet per year of county power outages, from the ORNL EAGLE-I download |
 | Power | `hailprint power` | Customers out and share out per metro county and 15-minute step, for each storm date |
-| ODIN | `hailprint odin` | One 15-minute snapshot of the open ODIN incidents, added to the file of the UTC day |
+| ODIN | `hailprint odin` | One snapshot of the open ODIN incidents per run, keyed by its 15-minute slot and added to the file of the UTC day. The schedule runs hourly |
 | Internet | `hailprint internet` | Internet reachability per metro county and 15-minute step, from the IODA signal, for each storm date |
 | Publish | `hailprint publish` | Validated JSON under `site/data/`, each file with a receipt; `--with-internet` adds `internet.json` |
 | Cloud sync | `hailprint cloud` | Syncs state and public files with Supabase Storage and runs `nightly`, `odin`, `live`, or `backfill` |
