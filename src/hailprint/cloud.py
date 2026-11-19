@@ -663,13 +663,10 @@ def run_cloud(
         if task == "nightly"
         else backfill(runner, resolved_root, env)
     )
-    # a partial publish still uploads the dates it built, then returns its exit code
-    if rc not in (0, publish_run.PARTIAL_EXIT):
-        return rc
-
     # a long run outlives the session token, so a client of our own is built again for upload
     if client is None:
         s3 = s3_client(config)
+    # state uploads for every exit code: a failed publish keeps the swaths that ingest built
     sync_up(
         s3,
         config.state_bucket,
@@ -678,6 +675,9 @@ def run_cloud(
         state,
         exclude_prefixes=(ODIN_PREFIX,),
     )
+    # public files upload only on a clean or partial publish
+    if rc not in (0, publish_run.PARTIAL_EXIT):
+        return rc
     sync_up(
         s3,
         config.public_bucket,

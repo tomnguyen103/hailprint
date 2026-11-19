@@ -611,12 +611,10 @@ def test_run_cloud_odin_syncs_both_days_across_midnight(tmp_path: Path):
     assert s3.objects.get(("hailprint-state", day2_key)) == b"existing-day2+midnight"
 
 
-def test_run_cloud_nightly_skips_sync_up_when_cli_returns_nonzero_even_with_existing_storms_json(
-    tmp_path: Path,
-):
+def test_run_cloud_nightly_uploads_state_but_no_public_key_when_publish_fails(tmp_path: Path):
     s3 = FakeS3({("hailprint-public", "storms.json"): b'{"storms":[]}'})
 
-    def partial_cli(argv: list[str]) -> int:
+    def failing_publish_cli(argv: list[str]) -> int:
         if argv[:2] == ["candidates", "--missing"]:
             cand_dir = tmp_path / "data" / "derived" / "index"
             cand_dir.mkdir(parents=True, exist_ok=True)
@@ -624,6 +622,11 @@ def test_run_cloud_nightly_skips_sync_up_when_cli_returns_nonzero_even_with_exis
                 "storm_date,report_count,max_size_in,has_12z,report_source\n",
                 encoding="utf-8",
             )
+        if argv == ["score"]:
+            # stands for the swath file that ingest wrote before publish failed
+            swaths = tmp_path / "data" / "derived" / "swaths"
+            swaths.mkdir(parents=True, exist_ok=True)
+            (swaths / "swaths-2024-05-28.parquet").write_bytes(b"swath")
         if argv == ["publish"]:
             storm_dir = tmp_path / "site" / "data" / "storms" / "2024-05-28"
             storm_dir.mkdir(parents=True, exist_ok=True)
@@ -631,10 +634,12 @@ def test_run_cloud_nightly_skips_sync_up_when_cli_returns_nonzero_even_with_exis
             return 1
         return 0
 
-    rc = cloud.run_cloud("nightly", client=s3, root=tmp_path, env=VALID_ENV, run_cli=partial_cli)
+    rc = cloud.run_cloud(
+        "nightly", client=s3, root=tmp_path, env=VALID_ENV, run_cli=failing_publish_cli
+    )
     assert rc == 1
-    assert s3.puts == []
-    assert ("hailprint-public", "storms/2024-05-28/swath.geojson") not in s3.objects
+    assert ("hailprint-state", "derived/swaths/swaths-2024-05-28.parquet") in s3.objects
+    assert [key for bucket, key, _ in s3.puts if bucket == "hailprint-public"] == []
 
 
 def _publish_cli(tmp_path: Path, publish_rc: int, calls: list[list[str]]):
