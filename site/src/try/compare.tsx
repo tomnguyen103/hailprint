@@ -196,7 +196,7 @@ export function Compare({ index }: { index: StormsIndex }) {
             {delta.parcelsA !== null ? formatCount(delta.parcelsA) : "\u2014"} vs{" "}
             {delta.parcelsB !== null ? formatCount(delta.parcelsB) : "\u2014"}
           </strong>
-          <span class="mono">{`\u0394 ${formatSignedInt(delta.deltaParcels)}`}</span>
+          <span>{`\u0394 ${formatSignedInt(delta.deltaParcels)}`}</span>
         </div>
         <div class="metric-cell">
           <span>Swath area ({"\u2265"} 0.75 in)</span>
@@ -204,7 +204,7 @@ export function Compare({ index }: { index: StormsIndex }) {
             {delta.swathKm2A !== null ? `${delta.swathKm2A.toFixed(1)} km\u00b2` : "\u2014"} vs{" "}
             {delta.swathKm2B !== null ? `${delta.swathKm2B.toFixed(1)} km\u00b2` : "\u2014"}
           </strong>
-          <span class="mono">{`\u0394 ${formatSignedFloat(delta.deltaSwathKm2, 1, " km\u00b2")}`}</span>
+          <span>{`\u0394 ${formatSignedFloat(delta.deltaSwathKm2, 1, " km\u00b2")}`}</span>
         </div>
         <div class="metric-cell">
           <span>Max radar MESH</span>
@@ -212,21 +212,21 @@ export function Compare({ index }: { index: StormsIndex }) {
             {delta.maxMeshMmA !== null ? `${delta.maxMeshMmA.toFixed(1)} mm` : "\u2014"} vs{" "}
             {delta.maxMeshMmB !== null ? `${delta.maxMeshMmB.toFixed(1)} mm` : "\u2014"}
           </strong>
-          <span class="mono">{`\u0394 ${formatSignedFloat(delta.deltaMaxMeshMm, 1, " mm")}`}</span>
+          <span>{`\u0394 ${formatSignedFloat(delta.deltaMaxMeshMm, 1, " mm")}`}</span>
         </div>
         <div class="metric-cell">
           <span>SPC hail reports</span>
           <strong>
             {delta.reportsA ?? "\u2014"} vs {delta.reportsB ?? "\u2014"}
           </strong>
-          <span class="mono">{`\u0394 ${formatSignedInt(delta.deltaReports)}`}</span>
+          <span>{`\u0394 ${formatSignedInt(delta.deltaReports)}`}</span>
         </div>
         <div class="metric-cell">
           <span>Peak skill (HSS)</span>
           <strong>
             {formatMetric(delta.hssA)} vs {formatMetric(delta.hssB)}
           </strong>
-          <span class="mono">{`\u0394 ${formatSignedFloat(delta.deltaHss, 2)}`}</span>
+          <span>{`\u0394 ${formatSignedFloat(delta.deltaHss, 2)}`}</span>
         </div>
       </div>
       {dateA === dateB ? <p class="pane-note">Same storm date on both sides.</p> : null}
