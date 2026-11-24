@@ -93,6 +93,7 @@ Cool hues stay distinct from the hail ramp: green for power (`--out-1`..`--out-5
 - Depth: `1px` `--border` edges; zero resting card or docked-pane shadows. Overlay shadow `0 4px 12px rgb(16 24 40 / 0.08)` applies to menus, popovers, dialogs, and mobile drawers only.
 - Spacing: `4px` base, `8px` grid, `24px` comfortable page padding.
 - Focus: `2px` `--primary` outline with `2px` offset on `:focus-visible`.
+- Controls: `40px` tall on desktop, `44px` below `768px`.
 
 ## Do's and Don'ts
 
