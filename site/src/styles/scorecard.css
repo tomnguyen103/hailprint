@@ -161,8 +161,3 @@
     transition: none;
   }
 }
-
-/* Table view: shrink to content so a label sits near its numbers. */
-.view-body > .table-scroll > .table {
-  width: auto;
-}

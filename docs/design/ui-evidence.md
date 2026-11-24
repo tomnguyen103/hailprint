@@ -4,7 +4,7 @@ head: d530da318a0f8ab578a573a3d5934bd6bd320c06
 
 This file is the capture receipt for the shell standard (`docs/design/ui-update-plan.md`, T11).
 Each row names one render state at 375, 1280, and 1920 px and the `design.md` section that it is compared with.
-The captures sit under `docs/design/captures/batch-b/`. Batch A captures sit under `docs/design/captures/batch-a/`.
+The captures sit under `docs/design/captures/batch-b/`. Batch A captures sit under `docs/design/captures/batch-a/`. The known-gap fix captures sit under `docs/design/captures/gaps/`.
 Line 1 names the commit that the captures show.
 
 ## Method
@@ -60,6 +60,8 @@ Line 1 names the commit that the captures show.
 | Curve width cap | `.curve` and `.metric-row` stop at 960 px | at 1920 px: `/scorecard/curve` curve 960 px, `/try/tune` curve 960 px and metric row 960 px; at 1280 px: 960 px and 464 px |
 | Curve accessibility | the curve `<svg>` is `role="group"` with an aria-label, so the labelled marker hit circles are not presentational | `role="group"`; 7 labelled hit circles |
 | Table label gap | on `/scorecard/table`, the gap from the widest label text to the nearest first-column number text is 48 px or less (US-07.2) | 24 px at 1280 and 1920 px over 7 rows; the table is 384 px wide (`width: auto`) |
+| Compare map fill | each `.compare-map` on `/try/compare` computes `position: absolute` and fills the frame (fix G1: `.compare-frame > .compare-map` out-ranks `.maplibregl-map`) | map height 404, 558, and 638 px in frames of 406, 560, and 640 px at 375, 1280, and 1920 px; tiles and swath draw (`gaps/try-compare-1280.png`) |
+| Table fit | `.table-fit` (`width: auto`) on the `/scorecard/table` table, the two `/storms/<date>/score` tables, and the HSS matrix | at 1920 px: scorecard table 384 px, per-class table 278 px, report outcomes 568 px, matrix 1017 px; before: 1328 px and 1600 px (`gaps/storms-score-1920.png`, `gaps/scorecard-curve-1920.png`) |
 | Impeccable detector | exit 0 on `site/src` | exit 0 |
 
 Computed fonts at 1280x800 (`getComputedStyle`, first family):
@@ -78,6 +80,5 @@ Computed fonts at 1280x800 (`getComputedStyle`, first family):
 
 ## Known gaps
 
-- At 1920 px, the per-class score table on `/storms/<date>/score` spreads its 4 columns across the pane. The table keeps `width: 100%`. A column cap is a recorded follow-up.
 - At 375 px, the run log on `/pipeline/runs` scrolls sideways inside `.table-scroll`. The page itself does not scroll sideways.
-- The compare map on `/try/compare` draws no tiles and no swath in the capture: each MapLibre canvas stays 300 px tall inside the 640 px frame. Main d83bee6 shows the same result, so batch B did not cause it. It is a recorded follow-up.
+- At 1280 px and narrower, the HSS sensitivity matrix on `/scorecard/curve` (1017 px of content) scrolls sideways inside `.table-scroll`. The page itself does not scroll sideways.

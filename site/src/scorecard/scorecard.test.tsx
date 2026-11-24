@@ -485,10 +485,28 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(ruleBody(read("../styles/try.css"), ".metric-row")).toMatch(/max-width:\s*960px/);
   });
 
-  it("keeps the scorecard table at width auto so labels sit near their numbers (F3)", () => {
-    const scorecardCss = readFileSync(fileURLToPath(new URL("../styles/scorecard.css", import.meta.url)), "utf8");
-    const rule = /(?:^|\n)\.view-body > \.table-scroll > \.table\s*\{([^}]*)\}/.exec(scorecardCss)?.[1] ?? "";
+  it("sizes fit tables to their content through one .table-fit modifier (F3, G4)", () => {
+    const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+    const rule = /(?:^|\n)\.table-fit\s*\{([^}]*)\}/.exec(read("../styles/storms.css"))?.[1] ?? "";
     expect(rule).toMatch(/width:\s*auto/);
+    expect(read("../styles/scorecard.css")).not.toContain(".view-body > .table-scroll");
+  });
+
+  it("renders the scorecard table and the HSS matrix with the table-fit class (G4)", async () => {
+    const index = makeIndex(["wcm"]);
+    mockPairsState.status = "ready";
+    mockPairsState.data = [makePairs("2024-05-10")];
+
+    const hostTable = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index, view: "table" }), hostTable as unknown as HTMLElement));
+    const tableViewTable = findDomNodes(hostTable, (n) => n.tagName === "TABLE")[0]!;
+    expect(classOf(tableViewTable).split(/\s+/)).toContain("table-fit");
+
+    const hostCurve = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index, view: "curve" }), hostCurve as unknown as HTMLElement));
+    const matrix = findDomNodes(hostCurve, (n) => classOf(n).includes("sensitivity-section"))[0]!;
+    const matrixTable = findDomNodes(matrix, (n) => n.tagName === "TABLE")[0]!;
+    expect(classOf(matrixTable).split(/\s+/)).toContain("table-fit");
   });
 });
 

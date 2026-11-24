@@ -218,6 +218,24 @@ describe("ScorePane row PeekDrawer with ContingencyGrid (US-01.1, US-05.1)", () 
     expect(findDomNodes(host, (n) => hasClass(n, "peek-drawer"))).toHaveLength(0);
   });
 
+  it("renders the score-pane tables with the table-fit class (G4)", async () => {
+    const host = makeFakeElement("div");
+    await act(() =>
+      render(
+        h(ScorePane, {
+          storm,
+          reports: { status: "ready", data: reports },
+        }),
+        host as unknown as HTMLElement,
+      ),
+    );
+    await act(async () => void (await vi.advanceTimersByTimeAsync(10)));
+
+    const tables = findDomNodes(host, (n) => n.tagName === "TABLE");
+    expect(tables.length).toBeGreaterThanOrEqual(2);
+    for (const t of tables) expect(hasClass(t, "table-fit")).toBe(true);
+  });
+
   it("clamps shared radius above radius_km_max without throwing in ScorePane", async () => {
     const tightPairs: Pairs = {
       ...pairs,

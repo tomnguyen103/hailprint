@@ -29,7 +29,7 @@ export function TableView({
   return (
     <>
       <div class="table-scroll">
-        <table class="table">
+        <table class="table table-fit">
           <thead>
             <tr>
               <th scope="col">Size class</th>
