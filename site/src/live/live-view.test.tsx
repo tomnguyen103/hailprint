@@ -63,10 +63,9 @@ describe("formatAge", () => {
   it("keeps tabular numerals on the age badge after the font shorthand", () => {
     // Regression: the `font` shorthand resets font-variant-numeric, so the declaration must come after it.
     const liveCss = readFileSync(fileURLToPath(new URL("../styles/live.css", import.meta.url)), "utf8");
-    const block = /\.live-freshness\s*\{([^}]*)\}/.exec(liveCss);
-    expect(block).not.toBeNull();
-    const fontAt = block![1].search(/(^|\s)font:/);
-    const numericAt = block![1].indexOf("font-variant-numeric: tabular-nums");
+    const body = /\.live-freshness\s*\{([^}]*)\}/.exec(liveCss)?.[1] ?? "";
+    const fontAt = body.search(/(^|\s)font:/);
+    const numericAt = body.indexOf("font-variant-numeric: tabular-nums");
     expect(fontAt).toBeGreaterThanOrEqual(0);
     expect(numericAt).toBeGreaterThan(fontAt);
   });
