@@ -276,6 +276,7 @@
 
 .stat {
   font-size: 24px;
+  font-variant-numeric: tabular-nums;
 }
 
 .cgrid-label {
@@ -305,8 +306,9 @@
 
 .outcome-badge {
   display: inline-block;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .outcome-badge[data-outcome="hit"] {
@@ -433,6 +435,10 @@
   .file-list a,
   .data-county-bar select {
     min-height: 44px;
+  }
+
+  .class-pick {
+    min-width: 44px;
   }
 
   .stamp-bar {

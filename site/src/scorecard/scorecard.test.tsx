@@ -267,7 +267,7 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(domText(err[0]!)).toContain("no matching pairs for cohort");
   });
 
-  it("exposes one Tab stop across all 7 markers and a >= 20 unit transparent hit circle per marker", async () => {
+  it("makes the hit circle the one focus target: one Tab stop across 7 hit circles, r >= 12, visual marker aria-hidden", async () => {
     const rows = makeRows();
     const host = makeFakeElement("div");
     await act(() =>
@@ -278,17 +278,18 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(markers).toHaveLength(7);
     for (const m of markers) {
       expect(Number(m["r"])).toBe(4);
+      expect(m["aria-hidden"]).toBe("true");
+      expect(m["tabIndex"] ?? m["tabindex"]).toBeUndefined();
     }
     const tabIndexOf = (n: FakeDomNode) => Number(n["tabIndex"] ?? n["tabindex"]);
-    const tabStops = markers.filter((m) => tabIndexOf(m) === 0);
-    const rovingRest = markers.filter((m) => tabIndexOf(m) === -1);
-    expect(tabStops).toHaveLength(1);
-    expect(rovingRest).toHaveLength(6);
-
     const hitCircles = findDomNodes(host, (n) => n.tagName === "CIRCLE" && classOf(n) === "marker-hit");
     expect(hitCircles).toHaveLength(7);
+    expect(hitCircles.filter((m) => tabIndexOf(m) === 0)).toHaveLength(1);
+    expect(hitCircles.filter((m) => tabIndexOf(m) === -1)).toHaveLength(6);
     for (const hit of hitCircles) {
-      expect(Number(hit["r"])).toBeGreaterThanOrEqual(20);
+      // 22 units give the 44 px floor at scale 1.
+      expect(Number(hit["r"])).toBeGreaterThanOrEqual(22);
+      expect(String(hit["aria-label"])).toContain("HSS");
     }
   });
 
@@ -301,7 +302,7 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
 
     const svg = findDomNodes(host, (n) => n.tagName === "SVG")[0]!;
     const activeTabStopIdx = () => {
-      const markers = findDomNodes(host, (n) => n.tagName === "CIRCLE" && classOf(n) === "marker");
+      const markers = findDomNodes(host, (n) => n.tagName === "CIRCLE" && classOf(n) === "marker-hit");
       return markers.findIndex((m) => Number(m["tabIndex"] ?? m["tabindex"]) === 0);
     };
 
@@ -447,6 +448,15 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(stateMatch).not.toBeNull();
     expect(stateMatch![1]).toContain("justify-items: center");
     expect(stateMatch![1]).toContain("min-height: 220px");
+  });
+
+  it("stacks the tune panes below 1280 px so neighbouring curve hit circles stay apart", () => {
+    // Regression: at 1024 px with the sidebar open, a 480 px grid column left the curve 208 px wide and a marker click picked its neighbour.
+    const tryCss = readFileSync(fileURLToPath(new URL("../styles/try.css", import.meta.url)), "utf8");
+    const twoColumn = /@media\s*\(width\s*>=\s*(\d+)px\)\s*\{\s*\.pane-grid\.tune-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*480px\)/.exec(tryCss);
+    expect(twoColumn).not.toBeNull();
+    expect(Number(twoColumn![1])).toBeGreaterThanOrEqual(1280);
+    expect(tryCss).toMatch(/@media\s*\(width\s*>=\s*1024px\)\s*\{\s*\.pane-grid\.tune-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
   });
 });
 

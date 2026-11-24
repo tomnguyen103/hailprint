@@ -10,7 +10,7 @@ import { Link } from "../shell/link";
 import { ErrorState, LoadingState } from "../shell/states";
 import { type LiveData, useLive } from "../state/live";
 import { LiveMap } from "../storms/map/live-map";
-import { ageMinutes, freshness } from "./freshness";
+import { ageMinutes, formatAge, freshness } from "./freshness";
 
 const LIVE_FILE = "live/now.json";
 
@@ -19,14 +19,14 @@ export function statusSentence(now: LiveFile): string {
   if (now.mesh.class_count > 0) {
     const index = Math.min(now.mesh.class_count, RULER.length) - 1;
     const mark = RULER[index]!;
-    return `Radar-estimated hail at or above ${mark.threshold_in.toFixed(2)} in (${mark.object}) fell over Harris County in the last 24 h.`;
+    return `Radar-estimated hail size at or above ${mark.threshold_in.toFixed(2)} in (${mark.object}) fell over Harris County in the last 24 h.`;
   }
-  return "No radar-estimated hail at or above 0.75 in over Harris County in the last 24 h.";
+  return "No radar-estimated hail size at or above 0.75 in over Harris County in the last 24 h.";
 }
 
-function formatAge(iso: string, now: Date): string {
+function ageText(iso: string, now: Date): string {
   const age = ageMinutes(iso, now);
-  return age === null ? "unknown" : `${age} min ago`;
+  return age === null ? "unknown" : formatAge(age);
 }
 
 /** Render the 24-hour Harris County live monitoring view content. */
@@ -41,7 +41,7 @@ export function LiveViewContent({
 }) {
   const { now: live } = data;
   const state = freshness(live.run_time, now);
-  const runAge = formatAge(live.run_time, now);
+  const runAge = ageText(live.run_time, now);
   const isQuiet = live.mesh.class_count === 0 && live.reports.count === 0;
 
   const max24Value = live.mesh.max_mesh_mm !== null ? formatInches(live.mesh.max_mesh_mm / 25.4) : "0.00 in";
@@ -75,7 +75,7 @@ export function LiveViewContent({
           <span class="live-freshness" data-freshness={state}>
             <span class="dot" data-state={state === "fresh" ? "ok" : "missing"} aria-hidden="true" />
             <span class="live-freshness-state">{state}</span>
-            <span class="mono">{runAge}</span>
+            <span>{runAge}</span>
           </span>
         </div>
         <div class="live-status-row">
@@ -104,32 +104,32 @@ export function LiveViewContent({
         </ul>
       ) : null}
 
-      <section class="live-stats" aria-label="24-hour live summary">
+      <section class="live-stats" aria-label="24-hour live summary" data-primary-region>
         <div class="live-stat">
           <span class="section-label">Max 24 h</span>
-          <span class="live-stat-value mono">{max24Value}</span>
+          <span class="live-stat-value">{max24Value}</span>
           <span class="live-stat-note">{max24Note}</span>
         </div>
         <div class="live-stat">
           <span class="section-label">Max last hour</span>
-          <span class="live-stat-value mono">{lastHourValue}</span>
+          <span class="live-stat-value">{lastHourValue}</span>
           <span class="live-stat-note">{lastHourNote}</span>
         </div>
         <div class="live-stat">
           <span class="section-label">SPC reports</span>
-          <span class="live-stat-value mono">{formatCount(live.reports.count)}</span>
+          <span class="live-stat-value">{formatCount(live.reports.count)}</span>
           <span class="live-stat-note">{reportsNote}</span>
         </div>
         <div class="live-stat">
           <span class="section-label">HGX warnings</span>
-          <span class="live-stat-value mono">
+          <span class="live-stat-value">
             {`${formatCount(live.warnings.active)} / ${formatCount(live.warnings.count)}`}
           </span>
           <span class="live-stat-note">active / 24 h total</span>
         </div>
         <div class="live-stat">
           <span class="section-label">Customers out</span>
-          <span class="live-stat-value mono">{powerValue}</span>
+          <span class="live-stat-value">{powerValue}</span>
           <span class="live-stat-note">{powerNote}</span>
         </div>
       </section>
@@ -139,7 +139,7 @@ export function LiveViewContent({
           {live.power.counties.map((county) => (
             <div key={county.fips} class="live-county">
               <dt>{county.name}</dt>
-              <dd class="mono">{`${formatCount(county.customers_out)} (${(county.share_out * 100).toFixed(1)}%)`}</dd>
+              <dd>{`${formatCount(county.customers_out)} (${(county.share_out * 100).toFixed(1)}%)`}</dd>
             </div>
           ))}
         </dl>
@@ -172,7 +172,7 @@ export function LiveViewContent({
                   </th>
                   <td class="mono">{row.product}</td>
                   <td class="mono">{row.valid_time ?? "\u2014"}</td>
-                  <td class="num">{formatAge(row.fetched_at, now)}</td>
+                  <td class="num">{ageText(row.fetched_at, now)}</td>
                   <td>
                     <span class="live-source-status" data-ok={row.ok}>
                       <span class="dot" data-state={row.ok ? "ok" : "missing"} aria-hidden="true" />

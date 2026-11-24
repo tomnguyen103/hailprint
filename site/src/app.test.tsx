@@ -1,7 +1,11 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { h, render, type ComponentChildren, type Context, type VNode } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./app";
+import { setFetch } from "./data/fetch";
+import { match } from "./router";
 import { AreaBoundary } from "./shell/area-boundary";
 
 type Current = { path: string; route: object };
@@ -20,6 +24,10 @@ const stub = vi.hoisted(() => ({
   // The Layout stub provides it, the ErrorState stub reads it: true when the error state renders under the layout.
   layoutContext: undefined as unknown as Context<boolean>,
   armed: true,
+  // true: the area mocks render the real area components (the primary-region test only).
+  real: false,
+  live: null as unknown,
+  pipeline: null as unknown,
   current: { path: "/method/data", route: { kind: "method", page: "data" } } as Current,
 }));
 vi.mock("./router", async (importOriginal) => {
@@ -67,7 +75,7 @@ vi.mock("./state/index", () => ({
 vi.mock("./state/live", () => ({
   useLive: () => {
     stub.log.push("live");
-    return { status: "loading", showLoading: false, retry() {} };
+    return stub.live ?? { status: "loading", showLoading: false, retry() {} };
   },
 }));
 vi.mock("./storms/map/live-map", () => ({ LiveMap: () => null }));
@@ -81,24 +89,182 @@ vi.mock("./live/live-view", async (importOriginal) => {
     },
   };
 });
-vi.mock("./storms/workspace", () => ({ Workspace: () => null }));
-vi.mock("./method/method", () => ({
-  Method: () => {
-    stub.log.push("method");
-    if (stub.armed) throw new Error("boom");
-    return null;
-  },
-}));
-vi.mock("./pipeline/pipeline", () => ({
-  Pipeline: () => {
-    stub.log.push("pipeline");
-    return null;
-  },
-}));
-vi.mock("./scorecard/scorecard", () => ({ Scorecard: () => null }));
+vi.mock("./storms/workspace", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./storms/workspace")>();
+  return { ...actual, Workspace: (props: Parameters<typeof actual.Workspace>[0]) => (stub.real ? actual.Workspace(props) : null) };
+});
+vi.mock("./method/method", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./method/method")>();
+  return {
+    Method: (props: Parameters<typeof actual.Method>[0]) => {
+      stub.log.push("method");
+      if (stub.armed) throw new Error("boom");
+      return stub.real ? actual.Method(props) : null;
+    },
+  };
+});
+vi.mock("./state/pipeline", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./state/pipeline")>();
+  return { ...actual, usePipeline: () => stub.pipeline ?? { status: "loading", showLoading: false, retry() {} } };
+});
+vi.mock("./pipeline/pipeline", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./pipeline/pipeline")>();
+  return {
+    Pipeline: (props: Parameters<typeof actual.Pipeline>[0]) => {
+      stub.log.push("pipeline");
+      return stub.real ? actual.Pipeline(props) : null;
+    },
+  };
+});
+vi.mock("./scorecard/scorecard", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./scorecard/scorecard")>();
+  return { Scorecard: (props: Parameters<typeof actual.Scorecard>[0]) => (stub.real ? actual.Scorecard(props) : null) };
+});
 vi.mock("./try/try", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./try/try")>();
-  return { ...actual, TryIt: () => null };
+  return { ...actual, TryIt: (props: Parameters<typeof actual.TryIt>[0]) => (stub.real ? actual.TryIt(props) : null) };
+});
+
+interface FakeNode {
+  nodeType: number;
+  tagName: string;
+  data?: string;
+  childNodes: FakeNode[];
+  parentNode: FakeNode | null;
+  [key: string]: unknown;
+}
+
+function makeFakeNode(tag: string, text = ""): FakeNode {
+  const el: FakeNode = {
+    nodeType: tag === "#text" ? 3 : 1,
+    tagName: tag.toUpperCase(),
+    data: text,
+    childNodes: [],
+    parentNode: null,
+    namespaceURI: "http://www.w3.org/1999/xhtml",
+    style: {},
+    setAttribute(k: string, v: unknown) {
+      el[k] = v;
+    },
+    removeAttribute(k: string) {
+      delete el[k];
+    },
+    addEventListener(type: string, fn: (e?: unknown) => void) {
+      el[`on_${type}`] = fn.bind(el);
+    },
+    removeEventListener(type: string) {
+      delete el[`on_${type}`];
+    },
+    appendChild(child: FakeNode) {
+      el.childNodes.push(child);
+      child.parentNode = el;
+      return child;
+    },
+    insertBefore(child: FakeNode, ref: FakeNode | null) {
+      const at = ref ? el.childNodes.indexOf(ref) : -1;
+      if (at >= 0) el.childNodes.splice(at, 0, child);
+      else el.childNodes.push(child);
+      child.parentNode = el;
+      return child;
+    },
+    removeChild(child: FakeNode) {
+      const at = el.childNodes.indexOf(child);
+      if (at >= 0) el.childNodes.splice(at, 1);
+      child.parentNode = null;
+      return child;
+    },
+  };
+  return el;
+}
+
+// jsdom is not installed, so the count walks the fake tree instead of calling document.querySelectorAll.
+function countPrimaryRegions(node: FakeNode): number {
+  const own = node["data-primary-region"] !== undefined ? 1 : 0;
+  return own + node.childNodes.reduce((total, child) => total + countPrimaryRegions(child), 0);
+}
+
+const HAIL_NOW = JSON.parse(
+  readFileSync(fileURLToPath(new URL("./live/fixtures/hail/now.json", import.meta.url)), "utf8"),
+) as Record<string, unknown>;
+const STORM = {
+  storm_date: "2024-05-28",
+  report_count: 5,
+  max_size_in: 1.5,
+  report_source: "wcm",
+  max_mesh_mm: 40,
+  scored_reports: 5,
+  excluded_reports: 0,
+  table: [],
+  parcel_total: null,
+  files: { swath: "s", reports: "r", pairs: "p", zip_counts: null, warnings: null, power: null, internet: null },
+};
+const INDEX = {
+  storms: [STORM],
+  confidence: "radar-estimated hail size",
+  run_time: "2024-06-01T00:00:00Z",
+  package_version: "0.1.0",
+  radius_km_default: 5,
+  radius_km_max: 20,
+  sources: [],
+};
+
+describe("primary region (US-06.1)", () => {
+  const AREA_ROUTES = ["/live", "/storms/2024-05-28/score", "/scorecard/table", "/try/tune", "/method/data", "/pipeline/runs"];
+  let host: HTMLElement;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("document", {
+      createElement: (tag: string) => makeFakeNode(tag),
+      createElementNS: (_ns: string, tag: string) => makeFakeNode(tag),
+      createTextNode: (text: string) => makeFakeNode("#text", text),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    });
+    // The real useLoad and usePolledLoad hooks read window timers; fetch never settles, so every load stays pending.
+    vi.stubGlobal("window", { setTimeout, clearTimeout, setInterval, clearInterval, addEventListener() {}, removeEventListener() {} });
+    setFetch(() => new Promise<Response>(() => {}));
+    host = makeFakeNode("div") as unknown as HTMLElement;
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    stub.real = true;
+    stub.armed = false;
+    stub.storms = [STORM];
+    stub.index = { status: "ready", data: INDEX, showLoading: false, retry() {} };
+    stub.live = {
+      status: "ready",
+      data: { now: HAIL_NOW, swath: null, reports: null, warnings: null, notes: [], layerNotes: { swath: null, reports: null, warnings: null } },
+      showLoading: false,
+      retry() {},
+    };
+    stub.pipeline = {
+      status: "ready",
+      data: { confidence: "c", run_time: "2024-06-01T00:00:00Z", package_version: "0.1.0", runs: [], archive: null, sources: [] },
+      showLoading: false,
+      retry() {},
+    };
+  });
+  afterEach(async () => {
+    await act(() => render(null, host));
+    setFetch(null);
+    stub.real = false;
+    stub.armed = true;
+    stub.storms = [{ storm_date: "2024-05-28" }];
+    stub.index = null;
+    stub.live = null;
+    stub.pipeline = null;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it.each(AREA_ROUTES)("%s renders exactly one [data-primary-region] (US-06.1)", async (path) => {
+    stub.current = { path, route: match(path) };
+
+    await act(() => render(h(App, null), host));
+    await act(async () => {});
+
+    expect(countPrimaryRegions(host as unknown as FakeNode)).toBe(1);
+  });
 });
 
 describe("App", () => {

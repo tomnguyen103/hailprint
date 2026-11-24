@@ -52,7 +52,6 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  max-width: 640px;
   margin-bottom: 8px;
 }
 
@@ -64,6 +63,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (width < 480px) {
@@ -354,4 +354,25 @@
 
 .compare-legend {
   margin-top: 12px;
+}
+
+/* WCAG 2.5.8: the date links in the point results keep a 24 px tall target. */
+.point-results a.mono {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+
+/* The tune pane stacks below 1280 px, so the curve keeps room for distinct 44 px marker targets. */
+@media (width >= 1024px) {
+  .pane-grid.tune-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* From 1280 px, the contingency grid takes the first column up to 480 px and the curve takes the rest. */
+@media (width >= 1280px) {
+  .pane-grid.tune-grid {
+    grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
+  }
 }

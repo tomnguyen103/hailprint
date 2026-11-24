@@ -1039,6 +1039,20 @@
 
   .sub-tabs a {
     flex: none;
+    min-width: 44px;
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* 44 px floor for the shell and base controls (US-05.2); each area owns its own classes. Inline links in prose keep their line. */
+  .shell .site-main :is(a.mono:not(p *), .button) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .shell .site-main :is(a.mono:not(p *), .button-small) {
+    min-width: 44px;
   }
 
   .search-option {

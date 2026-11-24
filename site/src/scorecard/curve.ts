@@ -8,8 +8,8 @@ const X_MAX_IN = 2.5;
 export const LITERATURE_HSS = 0.38;
 
 /** Threshold in inches to the plot x: 0.75 in at the left plot edge, 2.50 in at the right. */
-export function xOf(thresholdIn: number): number {
-  const plot = WIDTH - MARGIN.left - MARGIN.right;
+export function xOf(thresholdIn: number, width = WIDTH): number {
+  const plot = width - MARGIN.left - MARGIN.right;
   return MARGIN.left + ((thresholdIn - X_MIN_IN) / (X_MAX_IN - X_MIN_IN)) * plot;
 }
 

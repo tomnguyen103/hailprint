@@ -131,8 +131,9 @@
   border-radius: var(--radius);
   background: var(--surface-muted);
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 12px;
+  font-variant-numeric: tabular-nums;
   text-align: center;
 }
 

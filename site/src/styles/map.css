@@ -160,7 +160,7 @@
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
-  font: 500 12px/1.4 var(--font-mono);
+  font: 500 12px/1.4 var(--font-sans);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
@@ -291,7 +291,8 @@
   border: 1px solid currentColor;
   border-radius: var(--radius);
   background: var(--surface);
-  font: 500 12px/1.4 var(--font-mono);
+  font: 500 12px/1.4 var(--font-sans);
+  font-variant-numeric: tabular-nums;
   pointer-events: none;
 }
 
@@ -664,4 +665,10 @@
   align-items: center;
   min-height: 40px;
   color: var(--primary);
+}
+
+@media (width < 768px) {
+  .inspector-try-link {
+    min-height: 44px;
+  }
 }
