@@ -1,4 +1,5 @@
 import { useMemo, useState } from "preact/hooks";
+import "../styles/storms.css";
 import "../styles/scorecard.css";
 import { DataError, type Storm, type StormsIndex } from "../data/types";
 import { formatInches, type MetricKey } from "../format";
@@ -177,7 +178,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
                     <th scope="col">Radius</th>
                     {RULER.map((m) => (
                       <th key={m.threshold_mm} scope="col" class="num">
-                        &ge; {formatInches(m.threshold_in)} ({m.threshold_mm} mm)
+                        &ge; {formatInches(m.threshold_in)}<br />({m.threshold_mm} mm)
                       </th>
                     ))}
                   </tr>

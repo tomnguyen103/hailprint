@@ -1,11 +1,11 @@
-head: bfb52c43aff343ca0927dbea48875105e0e0704c
+head: 56b79e2143679a094d38762618843fdf5247c089
 
 # UI evidence
 
 This file is the capture receipt for the shell standard (`docs/design/ui-update-plan.md`, T11).
 Each row names one render state at 375, 1280, and 1920 px and the `design.md` section that it is compared with.
-The captures sit under `docs/design/captures/batch-b/` and show commit d530da3. Batch A captures sit under `docs/design/captures/batch-a/`. The known-gap fix captures sit under `docs/design/captures/gaps/` and show commit bfb52c4 (the squash of fba838c on main).
-Line 1 names the last UI commit, which the known-gap fix captures show.
+The captures sit under `docs/design/captures/batch-b/` and show commit d530da3. Batch A captures sit under `docs/design/captures/batch-a/`. The known-gap fix captures sit under `docs/design/captures/gaps/` and show commit bfb52c4 (the squash of fba838c on main). The matrix-fit captures sit under `docs/design/captures/matrix/` (light) and `docs/design/captures/gaps-dark/` (dark).
+Line 1 names the last UI commit, which the matrix-fit captures show.
 
 ## Method
 
@@ -62,6 +62,9 @@ Line 1 names the last UI commit, which the known-gap fix captures show.
 | Table label gap | on `/scorecard/table`, the gap from the widest label text to the nearest first-column number text is 48 px or less (US-07.2) | 24 px at 1280 and 1920 px over 7 rows; the table is 384 px wide (`width: auto`) |
 | Compare map fill | each `.compare-map` on `/try/compare` computes `position: absolute` and fills the frame (fix G1: `.compare-frame > .compare-map` out-ranks `.maplibregl-map`) | map height 404, 558, and 638 px in frames of 406, 560, and 640 px at 375, 1280, and 1920 px; tiles and swath draw (`gaps/try-compare-1280.png`) |
 | Table fit | `.table-fit` (`width: auto`) on the `/scorecard/table` table, the two `/storms/<date>/score` tables, and the HSS matrix | at 1920 px: scorecard table 384 px, per-class table 278 px, report outcomes 568 px, matrix 1017 px; before: 1328 px and 1600 px (`gaps/storms-score-1920.png`, `gaps/scorecard-curve-1920.png`) |
+| Matrix fit | each HSS matrix column header puts the inch label on line 1 and the mm label on line 2, so the matrix fits its pane at 1280 px | table `getBoundingClientRect().width` 680 px; `.table-scroll` `clientWidth` 976 px at 1280 px and 1616 px at 1920 px; `scrollWidth <= clientWidth` at both; 654 px in a 343 px pane at 375 px; before: 1017 px (`matrix/scorecard-curve-1280.png`) |
+| Matrix header name | the line break keeps a space in the accessible name of each column header | Playwright `ariaSnapshot()` at 1280 px: `columnheader "≥ 0.75 in (19.05 mm)"` and 6 more in the same form |
+| Dark theme | the gap routes paint the dark tokens (`localStorage.theme = "dark"`) with no page scroll sideways | `getComputedStyle(document.body).backgroundColor` is `rgb(12, 17, 29)` and `documentElement.scrollWidth <= innerWidth` on `/scorecard/curve`, `/scorecard/table`, `/try/compare`, and `/storms/2024-05-28/score` at 375, 1280, and 1920 px (`gaps-dark/`) |
 | Impeccable detector | exit 0 on `site/src` | exit 0 |
 
 Computed fonts at 1280x800 (`getComputedStyle`, first family):
@@ -81,4 +84,4 @@ Computed fonts at 1280x800 (`getComputedStyle`, first family):
 ## Known gaps
 
 - At 375 px, the run log on `/pipeline/runs` scrolls sideways inside `.table-scroll`. The page itself does not scroll sideways.
-- At 1280 px and narrower, the HSS sensitivity matrix on `/scorecard/curve` (1017 px of content) scrolls sideways inside `.table-scroll`. The page itself does not scroll sideways.
+- At 375 px, the HSS sensitivity matrix on `/scorecard/curve` (654 px of content in a 343 px pane) scrolls sideways inside `.table-scroll`. Eight columns do not fit a phone pane. The page itself does not scroll sideways.
