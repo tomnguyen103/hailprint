@@ -35,9 +35,10 @@ uv run hailprint cloud odin                 # syncs today's ODIN day file down, 
 uv run hailprint cloud backfill             # syncs state/public down, runs warnings/eaglei/power/internet/publish, syncs state up on every exit and public up on publish exit 0 or 3
 uv run hailprint live                       # live files under site/data/live/ (rolling 24 h MESH, SPC, HGX warnings, ODIN), now.json last
 uv run hailprint cloud live                 # syncs public live/ down, runs `live`, syncs changed live/ keys up with now.json last
-make site                                   # cd site && npm ci && npm run check
+make site                                   # cd site && npm ci && npm run check && npm run test:e2e
 cd site && npm run dev                      # Vite dev server at http://localhost:5173
 cd site && npm run check                    # tsc --noEmit && vitest run && vite build
+cd site && npm run test:e2e                 # Playwright (Chromium) against a Vite dev server on port 4174 with the fixture under site/e2e/fixtures/
 ```
 
 Tests that need downloaded data self-skip: `needs_raw_mesh` (the 12Z GRIB2 under
