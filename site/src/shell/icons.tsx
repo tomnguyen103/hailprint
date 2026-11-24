@@ -144,14 +144,6 @@ export function MenuIcon(p: Props) {
   );
 }
 
-export function CodeIcon(p: Props) {
-  return (
-    <Svg {...p}>
-      <path d="m8.5 7.5-5 4.5 5 4.5M15.5 7.5l5 4.5-5 4.5M13.5 5l-3 14" />
-    </Svg>
-  );
-}
-
 /** The empty-state glyph: one hailstone outline with a dotted core. */
 export function GlyphIcon(p: Props) {
   return (

@@ -23,7 +23,7 @@ export function Layout({
   children,
 }: {
   active: Area | null;
-  routePath?: string;
+  routePath: string;
   storms?: readonly Storm[];
   children: ComponentChildren;
 }) {

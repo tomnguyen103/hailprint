@@ -1,13 +1,11 @@
 import type { Storm } from "../data/types";
-import type { Area } from "../router";
 import { Breadcrumb } from "./breadcrumb";
 import { GlobalSearch } from "./global-search";
 import { MenuIcon } from "./icons";
 import { ThemeToggle } from "./theme-toggle";
 
 interface Props {
-  active?: Area | null;
-  routePath?: string;
+  routePath: string;
   storms?: readonly Storm[];
   isDesktop?: boolean;
   navExpanded?: boolean;
@@ -32,7 +30,7 @@ export function TopBar({ routePath, storms, isDesktop = true, navExpanded = true
             <MenuIcon size={20} />
           </button>
         )}
-        {routePath === undefined ? null : <Breadcrumb routePath={routePath} />}
+        <Breadcrumb routePath={routePath} />
       </div>
       <div class="top-bar-center">
         <GlobalSearch storms={storms} />

@@ -661,7 +661,7 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(footerNodes.some((n) => typeof n.type === "function")).toBe(false);
     expect(footerNodes.some((n) => n.type === "fieldset" || n.type === "input")).toBe(false);
 
-    const topBarTree = TopBar({ active: "live" });
+    const topBarTree = TopBar({ routePath: "/live" });
     const topBarNodes = walk(topBarTree);
     expect(topBarNodes.filter((n) => n.type === ThemeToggle)).toHaveLength(1);
 
@@ -683,7 +683,7 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     try {
       await act(() =>
         render(
-          h(RealLayout, { active: "live", children: h("div", { id: "probe" }) }),
+          h(RealLayout, { active: "live", routePath: "/live", children: h("div", { id: "probe" }) }),
           layoutHost as unknown as HTMLElement,
         ),
       );

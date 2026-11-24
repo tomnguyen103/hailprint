@@ -185,7 +185,7 @@ describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)"
   it("renders all 6 area links, zero bottom-left collapse button, and toggles desktop rail via single top-bar hamburger and Ctrl+B", async () => {
     const host = makeFakeElement("div");
     await act(() =>
-      render(h(Layout, { active: "storms", children: h("div", null, "Body") }), host as unknown as HTMLElement),
+      render(h(Layout, { active: "storms", routePath: "/storms/2024-05-28/map", children: h("div", null, "Body") }), host as unknown as HTMLElement),
     );
 
     const aside = findDomNodes(host, (n) => n.tagName === "ASIDE")[0]!;
@@ -244,7 +244,7 @@ describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)"
     desktopMatches = false;
     const host = makeFakeElement("div");
     await act(() =>
-      render(h(Layout, { active: "live", children: h("div", null, "Body") }), host as unknown as HTMLElement),
+      render(h(Layout, { active: "live", routePath: "/live", children: h("div", null, "Body") }), host as unknown as HTMLElement),
     );
 
     const header = findDomNodes(host, (n) => n.tagName === "HEADER")[0]!;
@@ -325,7 +325,7 @@ describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)"
 
     const host = makeFakeElement("div");
     await act(() =>
-      render(h(Layout, { active: "storms", children: h("div", null, "Body") }), host as unknown as HTMLElement),
+      render(h(Layout, { active: "storms", routePath: "/storms/2024-05-28/map", children: h("div", null, "Body") }), host as unknown as HTMLElement),
     );
     const aside0 = findDomNodes(host, (n) => n.tagName === "ASIDE")[0]!;
     const hamburger = findDomNodes(aside0, (n) => n.tagName === "BUTTON" && n["aria-controls"] === "route-sidebar")[0]!;
@@ -337,7 +337,7 @@ describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)"
     // Remounting another Layout must keep collapsed in-memory state instead of clobbering it from blocked storage
     await act(() => render(null, host as unknown as HTMLElement));
     await act(() =>
-      render(h(Layout, { active: "live", children: h("div", null, "Body") }), host as unknown as HTMLElement),
+      render(h(Layout, { active: "live", routePath: "/live", children: h("div", null, "Body") }), host as unknown as HTMLElement),
     );
     expect(findDomNodes(host, (n) => n.tagName === "ASIDE")[0]!["data-collapsed"]).toBe(true);
 
