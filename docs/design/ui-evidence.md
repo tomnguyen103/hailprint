@@ -1,11 +1,11 @@
-head: d530da318a0f8ab578a573a3d5934bd6bd320c06
+head: fba838c48e0c5a3caf2f8fa6b9afe4d9e169679a
 
 # UI evidence
 
 This file is the capture receipt for the shell standard (`docs/design/ui-update-plan.md`, T11).
 Each row names one render state at 375, 1280, and 1920 px and the `design.md` section that it is compared with.
-The captures sit under `docs/design/captures/batch-b/`. Batch A captures sit under `docs/design/captures/batch-a/`. The known-gap fix captures sit under `docs/design/captures/gaps/` and show commit fba838c.
-Line 1 names the commit that the captures show.
+The captures sit under `docs/design/captures/batch-b/` and show commit d530da3. Batch A captures sit under `docs/design/captures/batch-a/`. The known-gap fix captures sit under `docs/design/captures/gaps/` and show commit fba838c.
+Line 1 names the last UI commit, which the known-gap fix captures show.
 
 ## Method
 
