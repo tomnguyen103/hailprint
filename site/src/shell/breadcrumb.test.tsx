@@ -44,6 +44,16 @@ describe("Breadcrumb (US-02.1, US-02.2)", () => {
     expect(got[2]).toMatchObject({ href: undefined, current: true });
   });
 
+  it("wraps each link text in a crumb-label span", () => {
+    const nav = Breadcrumb({ routePath: "/storms/2024-05-28/score" }) as VNode<{ children?: unknown }>;
+    const ol = nav.props.children as VNode<{ children?: unknown }>;
+    const lis = ([] as VNode<{ children?: unknown }>[]).concat(ol.props.children as never);
+    const link = lis[0]!.props.children as VNode<{ children?: unknown }>;
+    const label = link.props.children as VNode<{ class?: string }>;
+    expect(label.type).toBe("span");
+    expect(label.props.class).toBe("crumb-label");
+  });
+
   it("shows one current item on /live", () => {
     const got = items("/live")!;
     expect(got).toHaveLength(1);

@@ -49,7 +49,7 @@ export function Breadcrumb({ routePath }: { routePath: string }) {
               </span>
             ) : (
               <Link href={item.to} class={item.mono ? "mono" : undefined}>
-                {item.label}
+                <span class="crumb-label">{item.label}</span>
               </Link>
             )}
           </li>

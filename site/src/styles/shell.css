@@ -100,11 +100,19 @@
   list-style: none;
 }
 
+/* The li never clips: the ellipsis sits on the inner label so the link outline stays visible. */
 .breadcrumb li {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.breadcrumb .crumb-label,
+.breadcrumb [aria-current="page"] {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .breadcrumb li + li::before {
@@ -563,7 +571,8 @@
   background: var(--surface-muted);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  /* 3 x 1.5 s = 4.5 s: under the 5 s limit of WCAG 2.2.2; the block ends at full opacity. */
+  animation: skeleton-pulse 1.5s ease-in-out 3;
 }
 
 @keyframes skeleton-pulse {
@@ -951,6 +960,16 @@
   .icon-button,
   .chip {
     min-width: 44px;
+  }
+
+  /* Link crumbs keep a 44 px tap width; only the current crumb shrinks. */
+  .breadcrumb li:not(:last-child) {
+    flex-shrink: 0;
+  }
+
+  .breadcrumb a {
+    min-width: 44px;
+    justify-content: center;
   }
 
   .icon-button {
