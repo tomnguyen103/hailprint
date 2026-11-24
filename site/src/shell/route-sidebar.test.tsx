@@ -125,7 +125,7 @@ function domText(node: FakeDomNode): string {
   return node.childNodes.map(domText).join("");
 }
 
-describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)", () => {
+describe("RouteSidebar and sidebar-header hamburger (US-01.1, US-01.2, US-01.5)", () => {
   const storage = new Map<string, string>();
   const docListeners = new Map<string, Set<(e: unknown) => void>>();
   let desktopMatches = true;
@@ -182,7 +182,7 @@ describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)"
     vi.unstubAllGlobals();
   });
 
-  it("renders all 6 area links, zero bottom-left collapse button, and toggles desktop rail via single top-bar hamburger and Ctrl+B", async () => {
+  it("renders all 6 area links, zero bottom-left collapse button, and toggles desktop rail via the sidebar-header hamburger and Ctrl+B", async () => {
     const host = makeFakeElement("div");
     await act(() =>
       render(h(Layout, { active: "storms", routePath: "/storms/2024-05-28/map", children: h("div", null, "Body") }), host as unknown as HTMLElement),
@@ -207,7 +207,7 @@ describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)"
     expect(activeLinks).toHaveLength(1);
     expect(domText(activeLinks[0]!).trim()).toBe("Storms");
 
-    // Single hamburger in the aside header controls the desktop rail
+    // The hamburger in the aside header controls the desktop rail
     const hamburger = findDomNodes(aside, (n) => n.tagName === "BUTTON" && n["aria-controls"] === "route-sidebar")[0]!;
     expect(hamburger).toBeDefined();
     expect(hamburger["aria-label"]).toBe("Collapse sidebar");

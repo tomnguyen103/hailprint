@@ -680,7 +680,7 @@ describe("ReceiptChip & ScopeDrawer accessibility", () => {
     expect(footerNodes.some((n) => typeof n.type === "function")).toBe(false);
     expect(footerNodes.some((n) => n.type === "fieldset" || n.type === "input")).toBe(false);
 
-    const topBarTree = TopBar({ routePath: "/live" });
+    const topBarTree = TopBar({ routePath: "/live", isDesktop: true, navExpanded: false, onToggleNav: () => {} });
     const topBarNodes = walk(topBarTree);
     expect(topBarNodes.filter((n) => n.type === ThemeToggle)).toHaveLength(1);
 

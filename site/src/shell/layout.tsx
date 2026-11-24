@@ -27,7 +27,7 @@ export function Layout({
   storms?: readonly Storm[];
   children: ComponentChildren;
 }) {
-  const { expanded, toggle } = useSidebar();
+  const { expanded } = useSidebar();
   const [isDesktop, setIsDesktop] = useState<boolean>(readDesktopNav);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -48,11 +48,6 @@ export function Layout({
     setMobileNavOpen(false);
   }, [active, routePath]);
 
-  const onToggleNav = useCallback(() => {
-    if (isDesktop) toggle();
-    else setMobileNavOpen((prev) => !prev);
-  }, [isDesktop, toggle]);
-
   const onToggleMobile = useCallback(() => {
     setMobileNavOpen((prev) => !prev);
   }, []);
@@ -70,8 +65,8 @@ export function Layout({
         routePath={routePath}
         storms={storms}
         isDesktop={isDesktop}
-        navExpanded={isDesktop ? expanded : mobileNavOpen}
-        onToggleNav={onToggleNav}
+        navExpanded={mobileNavOpen}
+        onToggleNav={onToggleMobile}
       />
       <RouteSidebar
         active={active}

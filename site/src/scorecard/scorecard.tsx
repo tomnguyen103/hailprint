@@ -10,7 +10,7 @@ import {
   sensitivityMatrix,
   type CohortId,
 } from "../pool";
-import { SCORECARD_VIEWS, href, type ScorecardView } from "../router";
+import { SCORECARD_VIEWS, VIEW_LABELS, href, type ScorecardView } from "../router";
 import { RULER } from "../ruler";
 import { MetricText } from "../shell/metric-text";
 import { RadiusSlider } from "../shell/radius-slider";
@@ -22,12 +22,6 @@ import { DEFAULT_MAX_RADIUS_KM, clampRadiusKm, useRadiusKm } from "../state/radi
 import { GridView } from "./grid-view";
 import { TableView } from "./table-view";
 import { ThresholdCurve } from "./threshold-curve";
-
-export const VIEW_LABELS: Record<ScorecardView, string> = {
-  table: "Table",
-  grid: "Grid",
-  curve: "Curve",
-};
 
 const FILE = "pairs.json";
 const SENTENCE = "The scorecard pools the contingency table across every storm date.";

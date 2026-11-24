@@ -28,6 +28,8 @@ export const TAB_LABELS: Record<Tab, string> = { map: "Map", parcels: "Parcels",
 export const METHOD_LABELS: Record<MethodPage, string> = {
   data: "Data", "storm-date": "Storm date", "size-classes": "Size classes", scoring: "Scoring", limits: "Limits", impacts: "Impacts",
 };
+export const VIEW_LABELS: Record<ScorecardView, string> = { table: "Table", grid: "Grid", curve: "Curve" };
+export const TOOL_LABELS: Record<TryTool, string> = { tune: "Tune", point: "Point", compare: "Compare", run: "Run" };
 export const PIPELINE_LABELS: Record<PipelineView, string> = { runs: "Runs", archive: "Archive", sources: "Sources" };
 
 export type Route =

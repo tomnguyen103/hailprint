@@ -7,13 +7,13 @@ import { ThemeToggle } from "./theme-toggle";
 interface Props {
   routePath: string;
   storms?: readonly Storm[];
-  isDesktop?: boolean;
-  navExpanded?: boolean;
-  onToggleNav?: () => void;
+  isDesktop: boolean;
+  navExpanded: boolean;
+  onToggleNav: () => void;
 }
 
 /** 56 px sticky top bar: left breadcrumb (plus the hamburger below 768 px), center Ctrl+K search, right theme menu. */
-export function TopBar({ routePath, storms, isDesktop = true, navExpanded = true, onToggleNav }: Props) {
+export function TopBar({ routePath, storms, isDesktop, navExpanded, onToggleNav }: Props) {
   return (
     <header class="top-bar">
       <div class="top-bar-left">

@@ -1,6 +1,4 @@
-import { AREA_LABELS, METHOD_LABELS, PIPELINE_LABELS, TAB_LABELS, href, match, type Area } from "../router";
-import { VIEW_LABELS } from "../scorecard/scorecard";
-import { TOOL_LABELS } from "../try/try";
+import { AREA_LABELS, METHOD_LABELS, PIPELINE_LABELS, TAB_LABELS, TOOL_LABELS, VIEW_LABELS, href, match, type Area } from "../router";
 import { Link } from "./link";
 
 interface Crumb {

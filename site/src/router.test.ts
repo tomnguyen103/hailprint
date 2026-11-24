@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { AREA_LABELS, AREAS, href, match } from "./router";
+import { AREA_LABELS, AREAS, SCORECARD_VIEWS, TOOL_LABELS, TRY_TOOLS, VIEW_LABELS, href, match } from "./router";
 
 it("sends the root to the live view and bare /storms to the newest storm date", () => {
   expect(match("/")).toEqual({ kind: "redirect-live" });
@@ -18,6 +18,8 @@ it("puts Live first in the areas and labels every area", () => {
   expect(AREAS[0]).toBe("live");
   expect(AREA_LABELS.live).toBe("Live");
   expect(Object.keys(AREA_LABELS)).toEqual([...AREAS]);
+  expect(Object.keys(VIEW_LABELS)).toEqual([...SCORECARD_VIEWS]);
+  expect(Object.keys(TOOL_LABELS)).toEqual([...TRY_TOOLS]);
   expect(AREAS).toHaveLength(6);
 });
 

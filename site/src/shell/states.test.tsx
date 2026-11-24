@@ -18,11 +18,12 @@ const text = (node: unknown): string =>
   Array.isArray(node) ? node.map(text).join("") : typeof node === "string" || typeof node === "number" ? String(node) : "";
 
 describe("LoadingState (US-04.1, US-04.2)", () => {
-  const root = LoadingState({ file: "pairs.json" }) as VNode<Props>;
-  const all = walk(root);
+  const frag = LoadingState({ file: "pairs.json" }) as VNode<Props>;
+  const [status, root] = frag.props.children as VNode<Props>[];
+  const all = walk(root!);
 
   it("marks the region busy", () => {
-    expect(root.props["aria-busy"]).toBe("true");
+    expect(root!.props["aria-busy"]).toBe("true");
   });
 
   it("holds hidden skeleton blocks", () => {
@@ -31,20 +32,24 @@ describe("LoadingState (US-04.1, US-04.2)", () => {
     expect(blocks.every((b) => b.props["aria-hidden"] === "true")).toBe(true);
   });
 
-  it("names the file in visually hidden live text", () => {
-    const live = all.find((n) => n.props["aria-live"] === "polite");
-    expect(String(live?.props["class"])).toContain("visually-hidden");
-    expect(text(live?.props.children)).toBe("Load pairs.json…");
+  it("names the file in a visually hidden status outside the busy region", () => {
+    expect(status!.props["role"]).toBe("status");
+    expect(String(status!.props["class"])).toContain("visually-hidden");
+    expect(text(status!.props.children)).toBe("Load pairs.json…");
+    expect(walk(root!)).not.toContain(status);
   });
 });
 
 describe("LoadingState shape (US-04.2)", () => {
+  const busy = (props: { file: string; shape?: "table" | "stats" | "map" | "text" }) =>
+    ((LoadingState(props) as VNode<Props>).props.children as VNode<Props>[])[1]!;
+
   it("defaults to the table shape", () => {
-    expect((LoadingState({ file: "a.json" }) as VNode<Props>).props["class"]).toContain("skeleton-table");
+    expect(busy({ file: "a.json" }).props["class"]).toContain("skeleton-table");
   });
 
   it.each(["table", "stats", "map", "text"] as const)("marks the %s shape with its class", (shape) => {
-    const root = LoadingState({ file: "a.json", shape }) as VNode<Props>;
+    const root = busy({ file: "a.json", shape });
     expect(root.props["class"]).toContain(`skeleton-${shape}`);
     expect(root.props["aria-busy"]).toBe("true");
   });

@@ -37,17 +37,19 @@ export type LoadingShape = "table" | "stats" | "map" | "text";
 
 const BLOCKS: Record<LoadingShape, number> = { table: 6, stats: 4, map: 1, text: 4 };
 
-/** A busy region of skeleton blocks in the shape of the loaded region; the hidden live text names the file. */
+/** A busy region of skeleton blocks in the shape of the loaded region; a hidden status names the file outside the busy region. */
 export function LoadingState({ file, shape = "table" }: { file: string; shape?: LoadingShape }) {
   return (
-    <div class={`state state-loading skeleton-${shape}`} aria-busy="true">
-      <span class="visually-hidden" aria-live="polite">
+    <>
+      <span class="visually-hidden" role="status">
         Load {file}{"…"}
       </span>
-      {Array.from({ length: BLOCKS[shape] }, (_, i) => (
-        <span key={i} class="skeleton-block" aria-hidden="true" />
-      ))}
-    </div>
+      <div class={`state state-loading skeleton-${shape}`} aria-busy="true">
+        {Array.from({ length: BLOCKS[shape] }, (_, i) => (
+          <span key={i} class="skeleton-block" aria-hidden="true" />
+        ))}
+      </div>
+    </>
   );
 }
 
