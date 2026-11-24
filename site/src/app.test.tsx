@@ -12,6 +12,8 @@ const stub = vi.hoisted(() => ({
   log: [] as string[],
   replaced: [] as string[],
   shown: [] as { error: { message: string }; inLayout: boolean }[],
+  headers: [] as string[],
+  empties: [] as { sentence: string; link?: { href: string } }[],
   storms: [{ storm_date: "2024-05-28" }] as Record<string, unknown>[],
   index: null as Record<string, unknown> | null,
   liveProps: [] as { newest?: string | null }[],
@@ -47,7 +49,14 @@ vi.mock("./shell/states", async () => {
       stub.log.push("error");
       return null;
     },
-    EmptyState: () => null,
+    EmptyState: (props: { sentence: string; link?: { href: string } }) => {
+      stub.empties.push(props);
+      return null;
+    },
+    PageHeader: (props: { title: string }) => {
+      stub.headers.push(props.title);
+      return null;
+    },
     LoadingState: () => null,
   };
 });
@@ -106,6 +115,8 @@ describe("App", () => {
     stub.log.length = 0;
     stub.replaced.length = 0;
     stub.shown.length = 0;
+    stub.headers.length = 0;
+    stub.empties.length = 0;
     stub.storms = [{ storm_date: "2024-05-28" }];
     stub.index = null;
     stub.liveProps.length = 0;
@@ -125,6 +136,14 @@ describe("App", () => {
     const body = stub.layouts.at(-1)?.children as VNode<{ resetKey: string }>;
     expect(body.type).toBe(AreaBoundary);
     expect(body.props.resetKey).toBe("/method/data");
+  });
+
+  it("an unknown route renders the Page not found heading and a link to /live (US-04.3)", async () => {
+    stub.current = { path: "/nope", route: { kind: "not-found" } };
+    await mount();
+
+    expect(stub.headers).toEqual(["Page not found"]);
+    expect(stub.empties.at(-1)?.link?.href).toBe("/live");
   });
 
   it("a page that throws shows the error state under the layout", async () => {

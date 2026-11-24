@@ -33,11 +33,17 @@ export function ErrorState({ error, onRetry }: { error: DataError; onRetry: () =
   );
 }
 
+/** A busy region of skeleton rows; the hidden live text names the file. */
 export function LoadingState({ file }: { file: string }) {
   return (
-    <p class="state state-loading" aria-live="polite">
-      Load {file}{"\u2026"}
-    </p>
+    <div class="state state-loading" aria-busy="true">
+      <span class="visually-hidden" aria-live="polite">
+        Load {file}{"\u2026"}
+      </span>
+      <span class="skeleton-block" aria-hidden="true" />
+      <span class="skeleton-block" aria-hidden="true" />
+      <span class="skeleton-block" aria-hidden="true" />
+    </div>
   );
 }
 
