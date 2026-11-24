@@ -135,7 +135,7 @@ export function Run({ index }: { index: StormsIndex }) {
         <section>
           <h2>Score CSV export</h2>
           {pairs.status === "error" ? <ErrorState error={pairs.error} onRetry={pairs.retry} /> : null}
-          {pairs.status === "loading" && pairs.showLoading ? <LoadingState file={PAIRS_FILE} /> : null}
+          {pairs.status === "loading" && pairs.showLoading ? <LoadingState file={PAIRS_FILE} shape="text" /> : null}
           {pairsDoc ? (
             <p class="csv-row">
               <button type="button" class="button" onClick={() => downloadCsv(pairsDoc, activeRadius)}>

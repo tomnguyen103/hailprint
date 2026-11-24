@@ -143,7 +143,7 @@ export function Compare({ index }: { index: StormsIndex }) {
       </div>
     ) : side.loading ? (
       <div class="map-overlay compare-error" style={style}>
-        <LoadingState file={SWATH_FILE} />
+        <LoadingState file={SWATH_FILE} shape="map" />
       </div>
     ) : null;
 

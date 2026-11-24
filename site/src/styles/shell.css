@@ -1,4 +1,4 @@
-/* Corporate Standard v1 shell: 56px topbar, 256px/56px left route sidebar, Ctrl+K search, 3-state theme menu, underline sub-tabs. */
+/* Corporate Standard v1 shell: full-height 256px/56px left route sidebar with 56px header, 56px topbar, Ctrl+K search, 3-state theme menu, underline sub-tabs. */
 
 .shell {
   display: grid;
@@ -33,7 +33,7 @@
   width: auto;
   height: auto;
   min-height: 40px;
-  padding: 0 14px;
+  padding: 0 16px;
   border-radius: var(--radius);
   background: var(--primary);
   color: var(--on-primary);
@@ -46,7 +46,7 @@
 /* Top bar (56px sticky single row) */
 
 .top-bar {
-  grid-column: 1 / -1;
+  grid-column: 2;
   grid-row: 1;
   position: sticky;
   top: 0;
@@ -69,7 +69,7 @@
 .top-bar-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -85,13 +85,58 @@
   white-space: nowrap;
 }
 
-.top-bar-area {
-  padding: 2px 8px;
-  border-radius: var(--radius);
-  background: var(--surface-muted);
-  color: var(--text-muted);
-  font: 500 12px/1.4 var(--font-sans);
+.breadcrumb {
+  min-width: 0;
+  font: 500 14px/1.4 var(--font-sans);
+}
+
+.breadcrumb ol {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The li never clips: the ellipsis sits on the inner label so the link outline stays visible. */
+.breadcrumb li {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   white-space: nowrap;
+}
+
+.breadcrumb .crumb-label,
+.breadcrumb [aria-current="page"] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breadcrumb li + li::before {
+  content: "/" / "";
+  margin-right: 8px;
+  color: var(--text-muted);
+}
+
+.breadcrumb a {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 24px;
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.breadcrumb [aria-current="page"] {
+  color: var(--text);
 }
 
 .top-bar-center {
@@ -161,7 +206,7 @@
 }
 
 .search-kbd {
-  padding: 2px 6px;
+  padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-muted);
@@ -196,7 +241,7 @@
 .search-input-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   color: var(--text-muted);
@@ -219,9 +264,9 @@
 
 .search-results {
   overflow-y: auto;
-  padding: 6px;
+  padding: 8px;
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .search-group {
@@ -230,7 +275,7 @@
 }
 
 .search-group-heading {
-  padding: 6px 10px 4px;
+  padding: 8px 8px 4px;
   color: var(--text-muted);
   font: 600 12px/1.2 var(--font-sans);
 }
@@ -239,9 +284,9 @@
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 40px;
-  padding: 6px 10px;
+  padding: 8px;
   border-radius: var(--radius);
   color: var(--text);
   text-decoration: none;
@@ -275,7 +320,7 @@
 }
 
 .search-empty {
-  padding: 20px 12px;
+  padding: 16px 12px;
   color: var(--text-muted);
   text-align: center;
 }
@@ -338,7 +383,7 @@
   gap: 12px;
   width: 100%;
   min-height: 40px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 0;
   border-radius: var(--radius);
   background: transparent;
@@ -375,31 +420,41 @@
 
 .route-sidebar {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1 / -1;
   position: sticky;
-  top: var(--bar-height);
-  height: calc(100dvh - var(--bar-height));
+  top: 0;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 12px 8px;
+  padding: 0;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
   transition: background-color var(--motion), border-color var(--motion);
   overflow-y: auto;
 }
 
+.route-sidebar-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--bar-height);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+
 .route-nav {
   display: grid;
   gap: 4px;
+  padding: 12px 8px;
 }
 
 .route-link {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 40px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: var(--radius);
   color: var(--sidebar-text);
   font: 500 14px/1 var(--font-sans);
@@ -419,11 +474,14 @@
   box-shadow: inset 2px 0 0 0 var(--sidebar-active-edge);
 }
 
-.route-sidebar[data-collapsed="true"] .route-link {
-  justify-content: center;
-  padding: 0;
+@media (width >= 768px) {
+  .route-sidebar[data-collapsed="true"] .route-link {
+    justify-content: center;
+    padding: 0;
+  }
 }
 
+.route-sidebar[data-collapsed="true"] .wordmark,
 .route-sidebar[data-collapsed="true"] .route-link-text {
   display: none;
 }
@@ -439,7 +497,7 @@
   grid-row: 2;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
   min-width: 0;
   padding: 24px var(--gutter) 24px;
 }
@@ -499,11 +557,64 @@
 }
 
 .state-loading {
-  display: block;
-  min-height: auto;
+  display: grid;
+  place-content: stretch;
+  justify-items: stretch;
+  gap: 8px;
+  max-width: none;
   margin: 0;
   padding: 12px 0;
-  text-align: left;
+}
+
+.skeleton-block {
+  display: block;
+  height: 40px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  /* 3 x 1.5 s = 4.5 s: under the 5 s limit of WCAG 2.2.2; the block ends at full opacity. */
+  animation: skeleton-pulse 1.5s ease-in-out 3;
+}
+
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.skeleton-table {
+  min-height: 280px;
+}
+
+.skeleton-stats {
+  grid-template-columns: repeat(auto-fit, minmax(144px, 1fr));
+  align-content: start;
+  min-height: 160px;
+}
+
+.skeleton-stats .skeleton-block {
+  height: 80px;
+}
+
+.skeleton-map {
+  min-height: min(70dvh, 640px);
+}
+
+.skeleton-map .skeleton-block {
+  height: 100%;
+}
+
+.skeleton-text {
+  align-content: start;
+  min-height: 112px;
+}
+
+.skeleton-text .skeleton-block {
+  height: 16px;
+}
+
+.skeleton-text .skeleton-block:last-child {
+  width: 60%;
 }
 
 /* Buttons */
@@ -512,9 +623,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   min-height: 40px;
-  padding: 0 14px;
+  padding: 0 16px;
   border: 1px solid var(--border-input);
   border-radius: var(--radius);
   background: var(--surface);
@@ -624,11 +735,11 @@
   color: var(--text);
 }
 
-.sub-tabs a[aria-selected="true"] {
+.sub-tabs a[aria-current="page"] {
   color: var(--primary);
 }
 
-.sub-tabs a[aria-selected="true"]::after {
+.sub-tabs a[aria-current="page"]::after {
   content: "";
   position: absolute;
   left: 0;
@@ -653,6 +764,12 @@
   color: var(--text-muted);
 }
 
+.site-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
+
 .caveat {
   margin: 0;
   color: var(--text-muted);
@@ -661,7 +778,7 @@
 .receipt-list {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: 6px 16px;
+  gap: 8px 16px;
   margin: 0;
 }
 
@@ -687,7 +804,7 @@
   justify-content: center;
   min-width: 40px;
   min-height: 40px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -708,7 +825,7 @@
   width: min(360px, calc(100vw - 16px));
   max-height: calc(100dvh - 16px);
   overflow-y: auto;
-  padding: 12px 14px;
+  padding: 12px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
@@ -758,7 +875,7 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 20px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -775,8 +892,8 @@
 
 .peek-drawer-body {
   display: grid;
-  gap: 20px;
-  padding: 20px;
+  gap: 24px;
+  padding: 24px;
 }
 
 .peek-drawer-receipt {
@@ -788,7 +905,7 @@
   margin: 0 0 10px;
 }
 
-/* Tablet (768–1023px): keep top-bar hamburger + centered search + tools without overflow */
+/* Tablet (768–1023px): centered search + tools without overflow */
 
 @media (768px <= width < 1024px) {
   .top-bar {
@@ -806,13 +923,10 @@
   }
 
   .top-bar {
+    grid-column: 1;
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 8px;
     padding: 0 12px;
-  }
-
-  .top-bar-area {
-    display: none;
   }
 
   .global-search {
@@ -836,6 +950,9 @@
   .button,
   .button-small,
   .chip,
+  .wordmark,
+  .breadcrumb a,
+  .site-footer a,
   .sub-tabs a,
   .radius-slider input[type="range"] {
     min-height: 44px;
@@ -844,6 +961,16 @@
   .icon-button,
   .chip {
     min-width: 44px;
+  }
+
+  /* Link crumbs keep a 44 px tap width; only the current crumb shrinks. */
+  .breadcrumb li:not(:last-child) {
+    flex-shrink: 0;
+  }
+
+  .breadcrumb a {
+    min-width: 44px;
+    justify-content: center;
   }
 
   .icon-button {
@@ -865,6 +992,10 @@
     width: 288px;
     height: auto;
     box-shadow: var(--shadow);
+  }
+
+  .route-sidebar[data-mobile-open="true"] .wordmark {
+    display: inline-flex;
   }
 
   .route-sidebar[data-mobile-open="true"] .route-link {
@@ -926,7 +1057,7 @@
     border-left: 2px solid Highlight;
   }
 
-  .sub-tabs a[aria-selected="true"] {
+  .sub-tabs a[aria-current="page"] {
     border-bottom: 2px solid Highlight;
   }
 

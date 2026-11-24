@@ -7,7 +7,7 @@ import { href, replace, type Area } from "./router";
 import { Scorecard } from "./scorecard/scorecard";
 import { AreaBoundary } from "./shell/area-boundary";
 import { Layout } from "./shell/layout";
-import { EmptyState, ErrorState, LoadingState } from "./shell/states";
+import { EmptyState, ErrorState, LoadingState, PageHeader } from "./shell/states";
 import { useIndex } from "./state/index";
 import { useRoute } from "./state/route";
 import { landingStorm } from "./storms/select";
@@ -38,7 +38,12 @@ export function App() {
         : route.kind === "not-found" ? null : "storms";
   let body;
   if (route.kind === "not-found") {
-    body = <EmptyState sentence="No page at this address." link={{ href: "/storms", label: "Storms" }} />;
+    body = (
+      <>
+        <PageHeader title="Page not found" />
+        <EmptyState sentence="No page at this address." link={{ href: href({ area: "live" }), label: "Live" }} />
+      </>
+    );
   } else if (route.kind === "redirect-live") {
     body = null;
   } else if (route.kind === "live") {

@@ -146,7 +146,7 @@ export function Workspace({ index, storm, tab }: Props) {
           tabs={stormTabItems(storm.storm_date, step)}
           selected={tab}
         />
-        <section class="pane" role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
+        <section class="pane">
           <h2 class="visually-hidden">{TAB_LABELS[tab]}</h2>
           {pane}
         </section>

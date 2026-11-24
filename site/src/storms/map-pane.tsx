@@ -253,7 +253,7 @@ export function MapPane({ storm, runTime, reports, power, internet, step, onStep
           ) : null}
           {swath.status === "loading" && swath.showLoading ? (
             <div class="map-overlay">
-              <LoadingState file={SWATH_FILE} />
+              <LoadingState file={SWATH_FILE} shape="map" />
             </div>
           ) : null}
           <div class="map-controls">

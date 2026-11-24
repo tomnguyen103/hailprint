@@ -3,7 +3,7 @@ import "../styles/try.css";
 import { guardPairs } from "../data/guard";
 import type { Pairs, Storm, StormsIndex } from "../data/types";
 import { pooledReceipt, pooledRows } from "../pool";
-import { TRY_TOOLS, href, type TryTool } from "../router";
+import { TOOL_LABELS, TRY_TOOLS, href, type TryTool } from "../router";
 import { PageHeader } from "../shell/states";
 import { SubTabs } from "../shell/sub-tabs";
 import { useAllFiles } from "../state/pairs-all";
@@ -13,13 +13,6 @@ import { newestFirst } from "./compare-data";
 import { PointCheck } from "./point";
 import { Run } from "./run";
 import { Tune } from "./tune";
-
-export const TOOL_LABELS: Record<TryTool, string> = {
-  tune: "Tune",
-  point: "Point",
-  compare: "Compare",
-  run: "Run",
-};
 
 export const ALL_SCOPE = "all";
 
@@ -95,7 +88,7 @@ export function TryIt({ index, tool }: { index: StormsIndex; tool: TryTool }) {
           selected={tool}
         />
       </header>
-      <section class="pane view-body" role="tabpanel" id={`panel-${tool}`} aria-labelledby={`tab-${tool}`}>
+      <section class="pane view-body">
         <h2 class="visually-hidden">{TOOL_LABELS[tool]}</h2>
         {tool === "tune" ? <Tune index={index} /> : null}
         {tool === "point" ? <PointCheck index={index} /> : null}

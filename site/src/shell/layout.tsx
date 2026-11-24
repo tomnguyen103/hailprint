@@ -15,7 +15,7 @@ function readDesktopNav(): boolean {
     : true;
 }
 
-/** Corporate Standard v1 shell: skip link, 56px top bar with single hamburger toggle, collapsible route sidebar, main with footer inside. */
+/** Corporate Standard v1 shell: skip link, full-height collapsible route sidebar (header holds the hamburger and brand), 56px top bar, main with footer inside. */
 export function Layout({
   active,
   routePath,
@@ -23,11 +23,11 @@ export function Layout({
   children,
 }: {
   active: Area | null;
-  routePath?: string;
+  routePath: string;
   storms?: readonly Storm[];
   children: ComponentChildren;
 }) {
-  const { expanded, toggle } = useSidebar();
+  const { expanded } = useSidebar();
   const [isDesktop, setIsDesktop] = useState<boolean>(readDesktopNav);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -48,11 +48,6 @@ export function Layout({
     setMobileNavOpen(false);
   }, [active, routePath]);
 
-  const onToggleNav = useCallback(() => {
-    if (isDesktop) toggle();
-    else setMobileNavOpen((prev) => !prev);
-  }, [isDesktop, toggle]);
-
   const onToggleMobile = useCallback(() => {
     setMobileNavOpen((prev) => !prev);
   }, []);
@@ -67,11 +62,11 @@ export function Layout({
         Skip to content
       </a>
       <TopBar
-        active={active}
+        routePath={routePath}
         storms={storms}
         isDesktop={isDesktop}
-        navExpanded={isDesktop ? expanded : mobileNavOpen}
-        onToggleNav={onToggleNav}
+        navExpanded={mobileNavOpen}
+        onToggleNav={onToggleMobile}
       />
       <RouteSidebar
         active={active}

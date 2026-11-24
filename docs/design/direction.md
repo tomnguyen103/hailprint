@@ -34,7 +34,7 @@
 ## Avoid
 - Ban `Source Serif 4` and all decorative serifs (`IBM Plex Sans` + `IBM Plex Mono` only); ban font weights `>=700`.
 - Ban warm parchment/sepia chrome or custom OKLCH background overrides that depart from `#FFFFFF` / `#0C111D`.
-- Ban a second bottom-left sidebar collapse button; ONE top-left hamburger button in the top bar toggles desktop rail (`>=768px`) and mobile drawer (`<768px`).
+- Ban a second sidebar collapse button; ONE hamburger exists at a time. At `>=768px` it sits first in the sidebar header and toggles the rail. Below `768px` it sits in the top-bar left zone and toggles the drawer.
 - Ban eyebrows, numbered step pills (`01`/`02`), glow halos, `4px` left accent stripes on cards, resting shadows on cards/docked inspector panes, nested bordered boxes, and muted `<p>` subtitles right beneath headings.
 - Ban `<40px` interactive targets on desktop (`<44px` on `<768px`) including checkboxes, radios, chips, and icon buttons.
 - Ban buttons exceeding `3` words and headings exceeding `5` words.

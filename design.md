@@ -93,6 +93,14 @@ Cool hues stay distinct from the hail ramp: green for power (`--out-1`..`--out-5
 - Depth: `1px` `--border` edges; zero resting card or docked-pane shadows. Overlay shadow `0 4px 12px rgb(16 24 40 / 0.08)` applies to menus, popovers, dialogs, and mobile drawers only.
 - Spacing: `4px` base, `8px` grid, `24px` comfortable page padding.
 - Focus: `2px` `--primary` outline with `2px` offset on `:focus-visible`.
+- Controls: `40px` tall on desktop, `44px` below `768px`.
+
+## Sanctioned deviations
+
+- Light theme is the default. An unset theme resolves to light (PR #51).
+- The route sidebar reads a flat array of six areas. It has no nav config tree, because one level exists.
+- The search trigger is a button. It opens a modal dialog. The combobox lives inside the dialog.
+- The sidebar has no footer. The site has no accounts.
 
 ## Do's and Don'ts
 
@@ -109,10 +117,11 @@ Cool hues stay distinct from the hail ramp: green for power (`--out-1`..`--out-5
 
 ## Shell
 
-- Top bar (`56px`, `--bar-height`): far-left single hamburger toggle (`>=40px` desktop, `>=44px` `<768px`, toggles desktop sidebar <-> rail and `<768px` modal drawer; never a second bottom-left collapse button) + Hailprint mark + area title; center `360–480px` (`200–360px` at `768–1023px`) `Ctrl+K` / `/` global search trigger opening a `560–640px` modal search dialog (full-screen `<768px`) with focus trap, grouped results, and recent searches; right 3-state Light / Dark / System theme icon menu (`menuitemradio`, hover+focus `"Theme"` tooltip, 1-frame no-transition swap) + source link.
-- Left route sidebar (`256px` expanded / `56px` icon rail on `>=768px`, `Ctrl/Cmd+B` persisted in `localStorage["hailprint-sidebar"]`; `288px` off-canvas modal drawer below `768px`): lists Live, Storms, Scorecard, Try it, Method, and Pipeline.
+- Left route sidebar (`256px` expanded / `56px` icon rail on `>=768px`, `Ctrl/Cmd+B` persisted in `localStorage["hailprint-sidebar"]`; `288px` off-canvas modal drawer below `768px`): spans the full shell height. Its `56px` header (`--bar-height`, `1px` bottom border) holds the single hamburger (`>=40px`) first, then the Hailprint brand link (glyph + text). In the rail the brand hides and the hamburger stays the top icon. Labels: "Collapse sidebar" / "Expand sidebar". Below the header the sidebar lists Live, Storms, Scorecard, Try it, Method, and Pipeline.
+- Top bar (`56px`, `--bar-height`, column 2 only on `>=768px`, so its bottom line aligns with the sidebar header line): left breadcrumb (area link, storm date link in mono on storm routes, current page as text with `aria-current="page"`; at most three items; truncates with an ellipsis, never wraps); center `360–480px` (`200–360px` at `768–1023px`) `Ctrl+K` / `/` global search trigger opening a `560–640px` modal search dialog (full-screen `<768px`) with focus trap, grouped results, and recent searches; right 3-state Light / Dark / System theme icon menu (`menuitemradio`, hover+focus `"Theme"` tooltip, 1-frame no-transition swap). The header holds no link outside the breadcrumb.
+- Below `768px` the same single hamburger (`>=44px`) moves to the top-bar left zone with the labels "Open navigation" / "Close navigation". The drawer opens below the top bar and its header shows the brand link. Exactly one hamburger exists in the DOM at a time; never a second collapse button.
 - Sub-tabs: underline style only (`2px` `--primary` active bottom edge on a `1px` `--border` line).
-- Footer: renders inside `<main>` with the caveat line.
+- Footer: renders inside `<main>` with the caveat line and the "Source code" link (`rel="noopener"`).
 
 ## Signature elements
 
