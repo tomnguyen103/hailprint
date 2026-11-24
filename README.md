@@ -16,8 +16,9 @@ Site: https://hailprint.tomnguyen.me
 
 ## Features
 
-- **Live**: the rolling 24-hour Harris County monitoring view with current MESH swath, SPC hail reports, HGX warnings, ODIN power summary, and source clocks.
-- **Storms**: one workspace per storm date. The map draws seven nested size classes (0.75 to 2.50 in) and the SPC report points. A map click opens an inspector with the size class at that point and the nearest report.
+- **Live**: the rolling 24-hour Harris County view with the current MESH swath, SPC hail reports, HGX warnings, and ODIN power. Each source clock shows fresh, aging (20 min), or stale (60 min), and the page re-polls every 2 minutes.
+- **Storms**: one workspace per storm date, with case-study shortcuts. The map draws seven nested size classes (0.75 to 2.50 in) and the SPC report points on a bundled metro basemap. A map click opens an inspector with the size class at that point and the nearest report.
+- **Impact layers**: NWS warning polygons and a county fill of power out or internet reachability over the 8 metro counties. A time slider steps through the 48-hour impact window in 15-minute steps, and a storm timeline jumps to the first warning, first report, peak power out, and internet trough.
 - **Parcels**: the parcel count per size class and per ZIP code, from HCAD footprints with the owner fields dropped at load.
 - **Score**: the contingency table (hits, misses, false alarms, correct negatives) with POD, FAR, CSI, and HSS. A slider re-scores in the browser at any radius from 0 to 20 km.
 - **Scorecard**: the pooled table over every published storm date, as a table, a 2 by 2 grid, and a threshold curve with the literature HSS line.
@@ -25,6 +26,7 @@ Site: https://hailprint.tomnguyen.me
 - **Method**: six short pages on the data, the storm date, the size classes, the scoring, the limits, and the impacts.
 - **Pipeline**: the run log, the archive coverage per year, and the data sources.
 - **Receipts**: every number opens a chip with its source, product, file, run time, and confidence band.
+- **Shell**: a Ctrl+K search across storm dates, counties, tools, and method pages, a light and dark theme, and deep links for every view.
 
 ## How it works
 
@@ -52,7 +54,8 @@ Trigger.dev schedules run `hailprint cloud nightly` at 13:30 UTC, `hailprint clo
 - [Operations](docs/operations.md): Trigger.dev schedules, Supabase Storage buckets, and environment variables.
 - [Site](site/README.md): routes, data path, basemap, and dev harness.
 - [Glossary](GLOSSARY.md) and [decisions](docs/DECISIONS.md).
-- [Documentation index](docs/README.md): plans, research, and learn-loop entries.
+- [Roadmap](docs/plans/consolidated-roadmap.md): every phase with its plan, pull requests, and status.
+- [Documentation index](docs/README.md): plans, research, design records, audits, and learn-loop entries.
 
 Weekly reports: [01](docs/reports/week-01.md) · [02](docs/reports/week-02.md) · [03](docs/reports/week-03.md) · [04](docs/reports/week-04.md) · [05](docs/reports/week-05.md) · [06](docs/reports/week-06.md) · [07](docs/reports/week-07.md) · [08](docs/reports/week-08.md)
 

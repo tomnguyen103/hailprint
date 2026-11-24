@@ -41,11 +41,11 @@ One corrupt warnings file never stops `warnings --missing`.
 
 Current state:
 
-- `_publish_days` ([__main__.py:657](src/hailprint/__main__.py:657)) wraps each date in a try that catches only `ValueError` at line 718.
-- `main` ([__main__.py:206](src/hailprint/__main__.py:206)) catches `(RuntimeError, OSError, ValueError)`.
+- `_publish_days` (`__main__.py:657`) wraps each date in a try that catches only `ValueError` at line 718.
+- `main` (`__main__.py:206`) catches `(RuntimeError, OSError, ValueError)`.
 - A power or warnings file without a column raises `KeyError` in `publish.power_doc` or `publish.warnings_doc`. The run stops with a traceback.
 - An unreadable file raises `OSError`. The run stops with exit 1 after earlier dates were written and before `storms.json`.
-- Only the internet layer has a dry run, in `_internet_layer` ([__main__.py:603](src/hailprint/__main__.py:603)).
+- Only the internet layer has a dry run, in `_internet_layer` (`__main__.py:603`).
 
 Change:
 
@@ -72,7 +72,7 @@ Behavior change (flag in the spec and the PR body):
 
 - A bad power or warnings file no longer fails its date. The date publishes without that layer, and stderr names the file.
 - This follows the rule in `docs/solutions/tooling/gated-publish-must-clear-stale-files-of-every-date.md`: an optional layer read never fails a required file.
-- `test_publish_exits_1_and_names_the_file_for_a_power_file_without_metadata` ([test_cli.py:1517](tests/test_cli.py:1517)) asserts the old behavior. Replace it. Do not delete it silently.
+- `test_publish_exits_1_and_names_the_file_for_a_power_file_without_metadata` (`test_cli.py:1517`) asserts the old behavior. Replace it. Do not delete it silently.
 - A `KeyError` or `OSError` from a required file now fails one date with a message, not the whole run.
 
 The grill decides one question: does a skipped layer count as a failure for the exit code? Recommendation: no. Exit 0, stderr line only. The site already shows a missing layer as a note.
@@ -81,10 +81,10 @@ The grill decides one question: does a skipped layer count as a failure for the 
 
 Current state:
 
-- `_remove_internet_files()` runs at [__main__.py:741](src/hailprint/__main__.py:741), before `merge_entries` (742), validate (748-749), dumps (750-751), and the writes (752-755).
+- `_remove_internet_files()` runs at `__main__.py:741`, before `merge_entries` (742), validate (748-749), dumps (750-751), and the writes (752-755).
 - The four unlink blocks at 725-732 also run before the index write.
 - If validation fails, the old `storms.json` still lists the deleted files. The site gets 404s.
-- `publish.merge_entries` ([publish.py:463](src/hailprint/publish.py:463)) nulls an impact path when the file is gone from disk. So the order matters: a plain move of the unlink after the merge leaves a stale path in the index.
+- `publish.merge_entries` (`publish.py:463`) nulls an impact path when the file is gone from disk. So the order matters: a plain move of the unlink after the merge leaves a stale path in the index.
 
 Change:
 
@@ -99,7 +99,7 @@ No behavior change on success. On a failed validation, the old files stay in pla
 
 Current state:
 
-- `_warnings_settled` ([__main__.py:363](src/hailprint/__main__.py:363)) calls `pq.read_metadata(path).num_rows` with no guard. `ArrowInvalid` (a `ValueError` subclass) stops the whole `warnings --missing` run.
+- `_warnings_settled` (`__main__.py:363`) calls `pq.read_metadata(path).num_rows` with no guard. `ArrowInvalid` (a `ValueError` subclass) stops the whole `warnings --missing` run.
 - `_internet_settled` (520) catches `_UNREADABLE` and refetches.
 - `_needs_power` (485) catches only `(OSError, ValueError)`.
 
@@ -140,7 +140,7 @@ Learn-loop entry: update `docs/solutions/tooling/gated-publish-must-clear-stale-
 
 ### E1: `createMap` rejects only on a fatal error and cleans up
 
-Current state ([create-map.ts:136-139](site/src/storms/map/create-map.ts:136)):
+Current state (`create-map.ts:136-139`):
 
 ```ts
 await new Promise<void>((resolve, reject) => {
@@ -265,8 +265,8 @@ Moves (remove the old names, no re-export):
 
 | Old | New | Callers to update |
 |-----|-----|-------------------|
-| `sbw.window`, `sbw.WINDOW` ([sbw.py:36-43](src/hailprint/sbw.py:36)) | `impact.window`, `impact.WINDOW` | `__main__` 391, 443, 550; `internet` 130, 163; `publish` 236, 275; tests: `test_cli` 1093, 1151, 1212; `test_internet` 18; `test_publish` 1543; `test_sbw` 30, 225 |
-| `power.STEP`, `power.STEPS`, `power.METRO_FIPS` ([power.py:19](src/hailprint/power.py:19), 33-34) | `impact.*` | `internet.py:13`, `publish.py`, `test_power` 156 |
+| `sbw.window`, `sbw.WINDOW` (`sbw.py:36-43`) | `impact.window`, `impact.WINDOW` | `__main__` 391, 443, 550; `internet` 130, 163; `publish` 236, 275; tests: `test_cli` 1093, 1151, 1212; `test_internet` 18; `test_publish` 1543; `test_sbw` 30, 225 |
+| `power.STEP`, `power.STEPS`, `power.METRO_FIPS` (`power.py:19`, 33-34) | `impact.*` | `internet.py:13`, `publish.py`, `test_power` 156 |
 | `pd.date_range(...)` in `power.derive` (124), `power.derive_odin` (144), `internet.derive` (152), `publish.power_doc` (236), `publish.internet_doc` (275) | `impact.steps(storm_date)` | same functions |
 
 Run `codegraph_impact` on `window`, `STEP`, `STEPS`, and `METRO_FIPS` before the move to catch callers this table misses.
@@ -299,7 +299,7 @@ def _window_block(start: datetime) -> dict:
 
 - Keep the exact per-value conversion each doc uses today. If `power_doc` and `internet_doc` differ there, pass a converter.
 - The message prefix changes from a fixed `power:` to the layer name. Today `internet_doc` may also say `power:`; check the tests that match the text.
-- Delete the dead `**dict.fromkeys(IMPACT_KEYS)` at [publish.py:750](src/hailprint/publish.py:750) (M6).
+- Delete the dead `**dict.fromkeys(IMPACT_KEYS)` at `publish.py:750` (M6).
 
 ### Tests
 
@@ -406,20 +406,20 @@ Move the pure functions first, with their tests, then the components.
 
 Add `site/src/data/constants.ts` with `METRO_FIPS`, `HARRIS_FIPS`, the storm-date pattern `DATE`, and `STEPS`.
 `guard.ts`, `impact/power.ts`, `county.ts`, `router.ts`, and `time/step.ts` import from it.
-This also removes the second `HARRIS_FIPS` ([county.ts:18](site/src/county.ts:18), M8).
+This also removes the second `HARRIS_FIPS` (`county.ts:18`, M8).
 Move the geometry function that `state/county.ts` imports from `storms/map/geo` into a module without MapLibre imports, such as `site/src/geometry.ts`.
 
 ### A5: one counties request per page load
 
-- `fetchCounties` ([county.ts:25](site/src/county.ts:25)) keeps one module-level promise. A rejected promise clears the cache, so Retry fetches again.
+- `fetchCounties` (`county.ts:25`) keeps one module-level promise. A rejected promise clears the cache, so Retry fetches again.
 - `fetchCounty` (30-32) filters that same promise.
-- The `useLoad("county", ...)` and `useLoad("counties", ...)` calls in [map-pane.tsx:43-44](site/src/storms/map-pane.tsx:43) stay. Only the network request is shared.
+- The `useLoad("county", ...)` and `useLoad("counties", ...)` calls in `map-pane.tsx:43-44` stay. Only the network request is shared.
 
 Behavior change: none visible. One request instead of two per mount.
 
 ### M8 (rest)
 
-In [map-pane.tsx:151](site/src/storms/map-pane.tsx:151), rename `visible` to `hidden` so the name matches the value.
+In `map-pane.tsx:151`, rename `visible` to `hidden` so the name matches the value.
 
 ### Tests
 
@@ -434,7 +434,7 @@ In [map-pane.tsx:151](site/src/storms/map-pane.tsx:151), rename `visible` to `hi
 
 | Id | Item | Note |
 |----|------|------|
-| E5 | `mesh.download_many` ([mesh.py:62](src/hailprint/mesh.py:62)) drops `f.exception()` | Name the error class and text for each key. Extend `test_download_many_404_on_one_key_lands_the_others_then_raises` |
+| E5 | `mesh.download_many` (`mesh.py:62`) drops `f.exception()` | Name the error class and text for each key. Extend `test_download_many_404_on_one_key_lands_the_others_then_raises` |
 | E6 | `files.lock` has no pid liveness check | A stale lock stops the 15-minute `odin` cron, and ODIN snapshots are lost. Check the pid with `os.kill(pid, 0)` on POSIX and `OpenProcess` on Windows |
 | A3 | `files.write_atomic` merges the MRMS metadata into every Parquet | Behavior change to a persisted format. Needs a `docs/DECISIONS.md` row and a migration of existing files |
 | E8 | `guard.ts` gaps: index rows, `parcel_total`, date order, `unverifiable_km2` length, geometry type | Site-only fix PR |

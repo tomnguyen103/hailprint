@@ -1,6 +1,6 @@
 # Documentation
 
-Every document in the repo, grouped by purpose. The guides in this folder describe the current code. The plans, reports, and research are historical records and stay as written.
+Every document in the repo, grouped by purpose. The guides in this folder describe the current code. The plans, reports, and audits are historical records and stay as written.
 
 ## Guides
 
@@ -12,21 +12,28 @@ Every document in the repo, grouped by purpose. The guides in this folder descri
 | [../site/README.md](../site/README.md) | The site commands, routes, data path, basemap, Vercel fields, and dev harness |
 | [../GLOSSARY.md](../GLOSSARY.md) | The domain terms used in code, tests, commits, and chat |
 | [../design.md](../design.md) | The locked design system: tokens, archetypes, and layout rules |
-| [design/direction.md](design/direction.md) | The design direction record of the shell build; `design.md` wins |
 
-## Plans
-
-Newest first.
+## Design and audits
 
 | Document | Contents |
 |---|---|
+| [design/direction.md](design/direction.md) | The design direction record of the shell build and its recommendations; `design.md` wins |
+| [design/ui-evidence.md](design/ui-evidence.md) | The capture evidence of the UI work, with the captures under [design/captures/](design/captures/) |
+| [audits/ui-audit-2026-11-24.md](audits/ui-audit-2026-11-24.md) | The UI audit and update plan of 2026-11-24 |
+
+## Plans
+
+[plans/consolidated-roadmap.md](plans/consolidated-roadmap.md) is the one ledger of every phase. The other plans follow, newest first.
+
+| Document | Contents |
+|---|---|
+| [plans/consolidated-roadmap.md](plans/consolidated-roadmap.md) | Every phase with its plan, its pull requests, and its status, plus the open items |
 | [plans/live-data.md](plans/live-data.md) | Plan for the live data refresh on Trigger.dev and Supabase Storage (shipped) |
 | [plans/refactor-review.md](plans/refactor-review.md) | The refactor plan from the 2026-10-28 codebase review |
 | [plans/plan-v6.md](plans/plan-v6.md) | Plan for PRs I to N: warnings, power, and internet layers on one time-slider map (shipped) |
 | [plans/plan-v5.md](plans/plan-v5.md) | Plan of record for PRs A to H: audit findings, site architecture, viewer actions |
-| [plans/plan-v4.md](plans/plan-v4.md) | Approved week-1 plan: pitch, evidence, scope, scorecard design, licences, risks, budget |
-| [plans/plan-v4.html](plans/plan-v4.html) | The v4 plan as a standalone page |
-| [plans/kickoff.md](plans/kickoff.md) | The prompt that started week 1 |
+| [plans/plan-v4.md](plans/plan-v4.md) | Approved week-1 plan: pitch, evidence, scope, scorecard design, licences, risks, budget; the kickoff prompt is its appendix |
+| [plans/research.md](plans/research.md) | The research before plan v4: the scoring rubric and the receipts of lanes A, B, and C |
 
 ## Weekly reports
 
@@ -43,15 +50,6 @@ Screenshots and other evidence live under [reports/evidence/](reports/evidence/)
 | [reports/week-07.md](reports/week-07.md) | Week 7: Method and Pipeline (PR G) |
 | [reports/week-08.md](reports/week-08.md) | Week 8: ship preparation (PR H), the dry run, and the owner runbook |
 
-## Research
-
-| Document | Contents |
-|---|---|
-| [research/scoring.md](research/scoring.md) | The v4 scoring rubric for the three candidate lanes |
-| [research/lane-a-ercot.md](research/lane-a-ercot.md) | Lane A receipt: the ERCOT coincident-peak predictor |
-| [research/lane-b-hail.md](research/lane-b-hail.md) | Lane B receipt: the hail swath mapper, the lane that became Hailprint |
-| [research/lane-c-cartonization.md](research/lane-c-cartonization.md) | Lane C receipt: the cartonization engine |
-
 ## Solutions
 
 Learn-loop entries: one problem, its root cause, and the fix.
@@ -64,6 +62,7 @@ Learn-loop entries: one problem, its root cause, and the fix.
 | [solutions/data/spc-daily-county-case.md](solutions/data/spc-daily-county-case.md) | The SPC daily CSV spells some county names in upper case |
 | [solutions/geo/epsg-2278-survey-feet.md](solutions/geo/epsg-2278-survey-feet.md) | EPSG:2278 buffers are in US survey feet, not metres |
 | [solutions/geo/read-mask-changes-parcel-counts.md](solutions/geo/read-mask-changes-parcel-counts.md) | A change to the parcel read mask changes the parcel counts |
+| [solutions/site/maplibre-css-loads-late-and-wins-ties.md](solutions/site/maplibre-css-loads-late-and-wins-ties.md) | The MapLibre stylesheet loads late and wins ties of equal specificity |
 | [solutions/site/maplibre-error-event-fires-per-tile.md](solutions/site/maplibre-error-event-fires-per-tile.md) | MapLibre fires one error event per failed tile |
 | [solutions/site/maplibre-match-requires-integer-labels.md](solutions/site/maplibre-match-requires-integer-labels.md) | MapLibre match expressions require integer numeric labels |
 | [solutions/site/maplibre-paint-before-style-load.md](solutions/site/maplibre-paint-before-style-load.md) | MapLibre paint changes before the style loads |

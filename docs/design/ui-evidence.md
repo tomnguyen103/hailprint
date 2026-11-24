@@ -2,7 +2,7 @@ head: bfffdfe0a2b78f250da2468d892eb9214ecb8a0b
 
 # UI evidence
 
-This file is the capture receipt for the shell standard (`docs/design/ui-update-plan.md`, T11).
+This file is the capture receipt for the shell standard (`docs/audits/ui-audit-2026-11-24.md`, T11).
 Each row names one render state at 375, 1280, and 1920 px and the `design.md` section that it is compared with.
 The captures sit under `docs/design/captures/batch-b/` and show commit d530da3. Batch A captures sit under `docs/design/captures/batch-a/`. The known-gap fix captures sit under `docs/design/captures/gaps/` and show commit bfb52c4 (the squash of fba838c on main). The matrix-fit captures sit under `docs/design/captures/matrix/` (light) and `docs/design/captures/gaps-dark/` (dark).
 Line 1 names the last UI commit on main, which the matrix-fit captures show (bfffdfe, the squash of 5848d2b).

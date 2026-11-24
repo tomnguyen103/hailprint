@@ -6,7 +6,7 @@ This guide sets up the pipeline and the site on one machine and runs one storm d
 
 - Python 3.12 (`requires-python = ">=3.12,<3.13"` in `pyproject.toml`).
 - [uv](https://docs.astral.sh/uv/) for the Python environment.
-- Node.js and npm for the site under `site/`.
+- Node.js and npm for the site under `site/`. The repo pins no Node version; the site builds with Vite 8 and TypeScript 7.
 - `make` is optional. Each target in the `Makefile` is one command that you can run directly.
 
 ## Install
@@ -57,7 +57,7 @@ A first run for one storm date:
 2. Run `uv run hailprint candidates --top 20`.
 3. Run `uv run hailprint ingest 2024-05-28`.
 4. Run `uv run hailprint score`. This step is optional: `publish` does not read the score files.
-5. Run `uv run hailprint publish`.
+5. Run `uv run hailprint publish`. A storm date with no SPC daily CSV prints `no SPC daily CSV, skipped` and gets no site files.
 6. Run `cd site && npm run dev` and open http://localhost:5173.
 
 ## Checks
@@ -65,8 +65,10 @@ A first run for one storm date:
 ```bash
 make lint                                   # ruff check . && ruff format --check . && pyright
 make test                                   # uv run pytest -q
-make site                                   # cd site && npm ci && npm run check
+make site                                   # cd site && npm ci && npx playwright install chromium && npm run check && npm run test:e2e
 ```
+
+`npm run check` in `site/` runs the two type checks (`src` and `e2e`), the Vitest suite, and the production build. `npm run test:e2e` runs the Playwright browser tests in `site/e2e/` in Chromium. Playwright starts a Vite dev server on port 4174 with `VITE_DATA_BASE=/data/`, and the test serves the fixture files under `site/e2e/fixtures/`. Run `npx playwright install chromium` once before the first run.
 
 Tests that need downloaded data skip when the data is absent. The markers live in `tests/conftest.py`:
 

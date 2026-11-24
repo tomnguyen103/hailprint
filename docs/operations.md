@@ -6,38 +6,41 @@ This guide covers the Trigger.dev tasks, the Supabase Storage buckets, and the e
 
 `hailprint cloud` (`src/hailprint/cloud.py`) synchronizes state and public files with Supabase Storage over the S3 protocol and runs the CLI steps:
 
-- `hailprint cloud nightly` (`trigger/nightly.ts`, cron `30 13 * * *` UTC on `medium-1x`, queue concurrency 1):
+- `hailprint cloud nightly` (`trigger/nightly.ts`, cron `30 13 * * *` UTC on `medium-1x`, queue `pipeline` with concurrency 1):
   1. Downloads `raw/spc/` and `derived/` from `HAILPRINT_STATE_BUCKET` and all published files from `HAILPRINT_PUBLIC_BUCKET`.
-  2. Runs `index` and `candidates --missing --top $MAX_INGEST` (default `5`).
+  2. Runs `index` and `candidates --missing --top $MAX_INGEST` (default `5`). A failed `index` or `candidates` step stops the run at once: the task uploads the state files and returns that exit code, and it runs no `publish`.
   3. Runs `ingest` for each missing candidate day (and `parcels` when `data/raw/hcad/extracted/Parcels.gdb` exists). A failed ingest logs one line and skips to the next date.
   4. Runs `score`, `warnings --missing`, `power --missing`, and `internet --missing`. A failed score or layer step logs `<step> failed; publish goes on`. A failed ingest, parcels, score, or layer step makes the task return 3 when `publish` exits 0.
   5. Runs `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`, per `docs/DECISIONS.md` row 14). Per-date files whose content changes only in `receipt.run_time` keep their existing bytes on disk, so unchanged files are not re-uploaded. A `publish` that fails some dates and builds at least one exits 3 (`PartialPublish`); the task still runs step 6 and then returns 3. Any other non-zero `publish` exit wins over a failed step, uploads the state files, and uploads no public file.
   6. Mints a fresh S3 client, uploads changed state files for every exit code (excluding `derived/odin/`) to `HAILPRINT_STATE_BUCKET`, and then, on exit 0 or 3 only, uploads changed per-date files to `HAILPRINT_PUBLIC_BUCKET` before `storms.json` and `pipeline.json` with `Cache-Control: max-age=60` and deletes stale remote public objects last.
-- `hailprint cloud odin` (`trigger/odin.ts`, cron `0 * * * *` UTC on `small-1x`, queue concurrency 1):
-  1. Downloads today's UTC ODIN file `derived/odin/odin-<YYYY-MM-DD>.parquet` when present (plus the next UTC day file near midnight).
+- `hailprint cloud odin` (`trigger/odin.ts`, cron `0 * * * *` UTC on `small-1x`, queue `odin` with concurrency 1):
+  1. Downloads the ODIN file of today and of the next UTC day (`derived/odin/odin-<YYYY-MM-DD>.parquet`) when they are present. The command takes `odin.lock`, so two runs never write one day file together.
   2. Runs `odin` to add one snapshot to the file under its 15-minute slot. The cron runs hourly, so the file holds one slot per hour. An ODIN-sourced power file is null at the other three steps of each hour.
   3. Uploads only the slot, post-slot, and next-day ODIN keys. Because `nightly` never uploads `derived/odin/`, the two schedules never race.
-- `hailprint cloud backfill` (`trigger/backfill.ts`, on-demand task on `medium-1x`, queue concurrency 1):
+- `hailprint cloud backfill` (`trigger/backfill.ts`, on-demand task on `medium-1x`, queue `pipeline` with concurrency 1, so it never runs while `nightly` runs):
   1. Downloads state and public buckets.
   2. Runs `warnings --missing`, `eaglei` for any of `2020`, `2021`, `2022`, `2023`, `2024`, `2025` not yet in `derived/eaglei/`, `power --missing`, `internet --missing`, and `publish` (adding `--with-internet` only when `PUBLISH_INTERNET=1`). A failed `warnings`, `eaglei`, `power`, or `internet` step logs `<step> failed; publish goes on`. A failed step makes the task return 3 when `publish` exits 0.
   3. Mints a fresh S3 client and uploads changed state files for every exit code. It uploads changed public files only on `publish` exit 0 or 3.
 - `hailprint cloud live` (`trigger/live.ts`, cron `*/10 * * * *` UTC on `small-2x`, queue `live` with concurrency 1):
   1. Downloads only the `live/` keys from `HAILPRINT_PUBLIC_BUCKET`. It reads no state file.
-  2. Runs `live`. The command writes `site/data/live/swath.geojson`, `reports.geojson`, `warnings.geojson`, and then `now.json`.
+  2. Runs `live`. The command takes `data/derived/live.lock` and writes `site/data/live/swath.geojson`, `reports.geojson`, `warnings.geojson`, and then `now.json`.
   3. Uploads the changed `live/` keys with `Cache-Control: max-age=60`, and `live/now.json` last. A failed `live` run uploads nothing and returns 1, so the old public files stay and the site marks them stale.
+- The on-demand `hello` task (`trigger/hello.ts`, `small-1x`) checks the Python native extensions (boto3, eccodes, pyogrio, rasterio) and the Supabase S3 environment variables.
 - `nightly` and `backfill` exclude `live/` from the public download, the upload, and the mirror delete. The `live` task never touches `storms/`, `storms.json`, or `pipeline.json`. The tasks never delete or overwrite a key of the other.
 - Outbound HTTP requests in `hailprint.net` send `User-Agent: hailprint/<version> (+https://hailprint.tomnguyen.me)` and retry HTTP 408, 429 (honouring numeric `Retry-After` up to 30 s), and 5xx.
 
 ## Environment variables
 
-Configure these variables in the Trigger.dev environment (never commit values to the repository):
+Configure these variables in the Trigger.dev environment. Never commit a value to the repository. `trigger.config.ts` syncs every variable in this list except `HAILPRINT_ROOT` from the deploy environment; set `HAILPRINT_ROOT` in the Trigger.dev dashboard when a task needs it.
 
 - `SUPABASE_S3_ENDPOINT`: Supabase Storage S3 endpoint URL.
 - `SUPABASE_S3_REGION`: Supabase region string.
 - `SUPABASE_S3_ACCESS_KEY_ID`: S3 access key ID (or `project_ref:email:password` for user-token exchange).
 - `SUPABASE_S3_SECRET_ACCESS_KEY`: S3 secret access key (or the project `anon_key` when `SUPABASE_S3_ACCESS_KEY_ID` uses `project_ref:email:password`).
-- `HAILPRINT_STATE_BUCKET`: private state bucket name (`hailprint-state`).
-- `HAILPRINT_PUBLIC_BUCKET`: public-read bucket name (`hailprint-public`).
+- `HAILPRINT_STATE_BUCKET`: private state bucket name.
+- `HAILPRINT_PUBLIC_BUCKET`: public-read bucket name.
+
+> ⚠️ UNVERIFIED: the deployed bucket names are `hailprint-state` and `hailprint-public`. The code reads both names from the environment and holds no default; only `tests/test_cloud.py` uses these names.
 - `MAX_INGEST`: maximum missing candidate days per nightly run (default `5`).
 - `PUBLISH_INTERNET`: set to `1` to pass `--with-internet` during publish.
 - `HAILPRINT_ROOT`: optional working directory override for `data/`, `out/`, and `site/data/`.
