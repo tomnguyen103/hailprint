@@ -50,6 +50,7 @@
 
 .metric-row {
   display: grid;
+  max-width: 960px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 8px;

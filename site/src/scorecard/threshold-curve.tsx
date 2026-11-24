@@ -114,7 +114,7 @@ export function ThresholdCurve({
         ref={svgRef}
         class="curve"
         viewBox={`0 0 ${width} ${HEIGHT}`}
-        role="img"
+        role="group"
         aria-label={`${METRIC_LABELS[metric]} by threshold`}
         onKeyDown={onKeyDown}
       >
