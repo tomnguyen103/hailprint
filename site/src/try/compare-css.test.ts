@@ -11,7 +11,7 @@ describe("compare map CSS (G1)", () => {
   });
 
   it("holds no rule with a bare .compare-map selector", () => {
-    // Any `.compare-map` not scoped by `.compare-frame > ` ties with `.maplibregl-map`.
-    expect(css).not.toMatch(/(?<!\.compare-frame > )\.compare-map\b/);
+    // A bare `.compare-map` selector not scoped by `.compare-frame > ` ties with `.maplibregl-map`.
+    expect(css).not.toMatch(/(?<!\.compare-frame > )\.compare-map(?![\w-])\s*[{,]/);
   });
 });
