@@ -521,15 +521,19 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(columnHeaders).toHaveLength(RULER.length);
     for (const th of columnHeaders) {
       expect(findDomNodes(th, (n) => n.tagName === "BR")).toHaveLength(1);
-      expect(domText(th)).toContain(" in");
-      expect(domText(th)).toContain("mm");
+      const br = th.childNodes.findIndex((n) => n.tagName === "BR");
+      const before = th.childNodes.slice(0, br).map(domText).join("");
+      const after = th.childNodes.slice(br + 1).map(domText).join("");
+      expect(before).toMatch(/ in$/);
+      expect(after).toMatch(/^\(\d+(\.\d+)? mm\)$/);
     }
   });
 
   it("imports the storms stylesheet in the scorecard and try areas (M2)", () => {
     const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
-    expect(read("./scorecard.tsx")).toContain('import "../styles/storms.css";');
-    expect(read("../try/try.tsx")).toContain('import "../styles/storms.css";');
+    const line = /^import "\.\.\/styles\/storms\.css";\s*$/m;
+    expect(read("./scorecard.tsx")).toMatch(line);
+    expect(read("../try/try.tsx")).toMatch(line);
   });
 });
 
