@@ -220,7 +220,7 @@
   position: relative;
 }
 
-.compare-map {
+.compare-frame > .compare-map {
   position: absolute;
   inset: 0;
 }

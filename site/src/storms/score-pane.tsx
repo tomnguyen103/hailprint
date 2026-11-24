@@ -69,7 +69,7 @@ export function ScorePane({
           <ReceiptChip receipt={receipt} file={FILE} />
         </div>
         <div class="table-scroll">
-          <table class="table">
+          <table class="table table-fit">
             <thead>
               <tr>
                 <th scope="col">Size class</th>

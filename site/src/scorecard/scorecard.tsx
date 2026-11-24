@@ -171,7 +171,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
               </span>
             </div>
             <div class="table-scroll">
-              <table class="table">
+              <table class="table table-fit">
                 <thead>
                   <tr>
                     <th scope="col">Radius</th>
