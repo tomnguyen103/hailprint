@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { dirname, join, normalize } from "node:path";
+import { dirname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 
@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
     if (url.hostname !== "localhost") return route.abort();
     if (!url.pathname.startsWith("/data/")) return route.continue();
     const file = normalize(join(FIXTURES, url.pathname));
-    if (!file.startsWith(FIXTURES)) return route.fulfill({ status: 404 });
+    if (!file.startsWith(FIXTURES + sep)) return route.fulfill({ status: 404 });
     try {
       return await route.fulfill({ body: await readFile(file), contentType: "application/json" });
     } catch {
@@ -35,6 +35,12 @@ for (const [width, height] of [
       clientWidth: el.clientWidth,
     }));
     expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+    // A pane that grows to the matrix width would pass the check above and scroll the page.
+    const doc = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+    }));
+    expect(doc.scrollWidth).toBeLessThanOrEqual(doc.innerWidth);
 
     if (width === 1280) {
       await expect(

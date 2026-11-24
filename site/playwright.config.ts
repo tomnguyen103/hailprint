@@ -13,5 +13,7 @@ export default defineConfig({
     command: "npm run dev -- --port 4174 --strictPort",
     url: ORIGIN,
     reuseExistingServer: false,
+    // The fixture route serves /data/ only; a bucket URL in the shell or .env would bypass it.
+    env: { VITE_DATA_BASE: "/data/" },
   },
 });

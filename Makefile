@@ -13,7 +13,7 @@ ingest:
 	uv run hailprint ingest $(DATE)
 
 site:
-	cd site && npm ci && npm run check && npm run test:e2e
+	cd site && npm ci && npx playwright install chromium && npm run check && npm run test:e2e
 
 nightly:
 	uv run hailprint cloud nightly

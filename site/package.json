@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "check": "tsc --noEmit && vitest run && vite build",
+    "check": "tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json && vitest run && vite build",
     "test:e2e": "playwright test"
   },
   "dependencies": {
