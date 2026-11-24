@@ -666,3 +666,9 @@
   min-height: 40px;
   color: var(--primary);
 }
+
+@media (width < 768px) {
+  .inspector-try-link {
+    min-height: 44px;
+  }
+}

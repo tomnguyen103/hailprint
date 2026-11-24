@@ -19,7 +19,7 @@ export function ContingencyGrid({ row }: { row: TableRow }) {
         {cells.map((cell) => (
           <div key={cell.label} class="cgrid-cell">
             <span class="cgrid-fill" style={{ "--k": Math.sqrt(cell.count / max) }} />
-            <span class="stat mono">{formatCount(cell.count)}</span>
+            <span class="stat">{formatCount(cell.count)}</span>
             <span class="cgrid-label">{cell.label}</span>
           </div>
         ))}

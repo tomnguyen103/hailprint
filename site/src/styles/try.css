@@ -63,11 +63,6 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
-}
-
-/* Metric values are stats, not table cells: sans with tabular figures. Overrides the .mono class. */
-.metric-cell .stat {
-  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
 }
 
@@ -368,9 +363,9 @@
   min-height: 24px;
 }
 
-/* The contingency grid stops at 480 px, so its column does too and the curve takes the rest. */
+/* The tune pane holds the contingency grid in its first column; it stops at 480 px and the curve takes the rest. */
 @media (width >= 1024px) {
-  .pane-grid:has(> section > .cgrid) {
+  .pane-grid.tune-grid {
     grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
   }
 }

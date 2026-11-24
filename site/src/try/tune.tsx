@@ -36,7 +36,7 @@ export function Tune({ index }: { index: StormsIndex }) {
           <div class="metric-row" role="group" aria-label={`Metrics, ${mark.object}, ${inches}`}>
             {METRICS.map((m) => (
               <div key={m} class="metric-cell">
-                <span class="stat mono">
+                <span class="stat">
                   <MetricText value={row[m]} />
                 </span>
                 <span class="cgrid-label">{METRIC_LABELS[m]}</span>
@@ -46,7 +46,7 @@ export function Tune({ index }: { index: StormsIndex }) {
           <div class="pane-note">
             <ReceiptChip receipt={receipt} file={file} summary={summary} />
           </div>
-          <div class="pane-grid">
+          <div class="pane-grid tune-grid">
             <ContingencyGrid row={row} />
             <section>
               <h2>{METRIC_LABELS[metric]} by threshold</h2>

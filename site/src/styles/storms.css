@@ -276,6 +276,7 @@
 
 .stat {
   font-size: 24px;
+  font-variant-numeric: tabular-nums;
 }
 
 .cgrid-label {
@@ -434,6 +435,10 @@
   .file-list a,
   .data-county-bar select {
     min-height: 44px;
+  }
+
+  .class-pick {
+    min-width: 44px;
   }
 
   .stamp-bar {

@@ -1044,14 +1044,14 @@
     text-align: center;
   }
 
-  /* One 44 px floor for the content controls (US-05.2); the prefix outranks per-area rules. */
-  .shell .site-main :is(a.mono, .button, .row-pick, .class-pick, .inspector-try-link, .file-list a) {
+  /* 44 px floor for the shell and base controls (US-05.2); each area owns its own classes. Inline links in prose keep their line. */
+  .shell .site-main :is(a.mono:not(p *), .button) {
     display: inline-flex;
     align-items: center;
     min-height: 44px;
   }
 
-  .shell .site-main :is(a.mono, .class-pick, .button-small) {
+  .shell .site-main :is(a.mono:not(p *), .button-small) {
     min-width: 44px;
   }
 

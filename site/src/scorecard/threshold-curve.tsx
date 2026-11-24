@@ -5,7 +5,7 @@ import { objectName } from "../ruler";
 import { HEIGHT, LITERATURE_HSS, MARGIN, WIDTH, pathOf, xOf, yMinOf, yOf } from "./curve";
 
 const MARKER_R = 4;
-// The viewBox width equals the pixel width (scale 1), so 22 units give a 44 px target.
+// After the first ResizeObserver callback, the viewBox width equals the pixel width (scale 1), so 22 units give a 44 px target.
 // shortcut: at 375 px the closest points sit 40 px apart, so two neighbouring 44 px targets overlap by 4 px; a smaller radius would break the 44 px tap floor.
 const HIT_R = 22;
 const HIGHLIGHT_R = 6;
@@ -27,7 +27,7 @@ export function ThresholdCurve({
   const [hover, setHover] = useState<number | null>(null);
   const [focus, setFocus] = useState<number | null>(null);
   const [roving, setRoving] = useState(0);
-  const markers = useRef<(SVGCircleElement | null)[]>([]);
+  const hitTargets = useRef<(SVGCircleElement | null)[]>([]);
   const svgRef = useRef<SVGSVGElement>(null);
   const [width, setWidth] = useState(WIDTH);
   useEffect(() => {
@@ -54,7 +54,7 @@ export function ThresholdCurve({
 
   const focusMarker = (idx: number) => {
     setRoving(idx);
-    markers.current[idx]?.focus();
+    hitTargets.current[idx]?.focus();
   };
   const move = (dir: 1 | -1) => {
     const current = focus ?? activeRoving;
@@ -88,7 +88,7 @@ export function ThresholdCurve({
   if (tip && tip.y !== null && tip.value !== null) {
     const text = `${objectName(tip.row.threshold_mm)}, ${formatInches(tip.row.threshold_in)}, ${METRIC_LABELS[metric]} ${tip.value.toFixed(2)}`;
     const w = text.length * TIP_CHAR_W + 16;
-    const x = Math.min(Math.max(0, tip.x - w / 2), width - w);
+    const x = Math.max(0, Math.min(tip.x - w / 2, width - w));
     const above = tip.y - MARKER_R - 8 - TIP_H;
     const y = above >= 0 ? above : tip.y + MARKER_R + 8;
     tooltip = (
@@ -163,7 +163,7 @@ export function ThresholdCurve({
               <circle class="marker" cx={p.x} cy={p.y} r={MARKER_R} aria-hidden="true" />
               <circle
                 ref={(el) => {
-                  markers.current[i] = el;
+                  hitTargets.current[i] = el;
                 }}
                 class="marker-hit"
                 cx={p.x}

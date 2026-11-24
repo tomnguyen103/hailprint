@@ -287,7 +287,8 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(hitCircles.filter((m) => tabIndexOf(m) === 0)).toHaveLength(1);
     expect(hitCircles.filter((m) => tabIndexOf(m) === -1)).toHaveLength(6);
     for (const hit of hitCircles) {
-      expect(Number(hit["r"])).toBeGreaterThanOrEqual(12);
+      // 22 units give the 44 px floor at scale 1.
+      expect(Number(hit["r"])).toBeGreaterThanOrEqual(22);
       expect(String(hit["aria-label"])).toContain("HSS");
     }
   });
