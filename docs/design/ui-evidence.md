@@ -1,4 +1,4 @@
-head: 4e7aaf40272d28c442405b8b8ed1b78d385a79e2
+head: 56b79e2143679a094d38762618843fdf5247c089
 
 # UI evidence
 
@@ -62,8 +62,9 @@ Line 1 names the last UI commit, which the matrix-fit captures show.
 | Table label gap | on `/scorecard/table`, the gap from the widest label text to the nearest first-column number text is 48 px or less (US-07.2) | 24 px at 1280 and 1920 px over 7 rows; the table is 384 px wide (`width: auto`) |
 | Compare map fill | each `.compare-map` on `/try/compare` computes `position: absolute` and fills the frame (fix G1: `.compare-frame > .compare-map` out-ranks `.maplibregl-map`) | map height 404, 558, and 638 px in frames of 406, 560, and 640 px at 375, 1280, and 1920 px; tiles and swath draw (`gaps/try-compare-1280.png`) |
 | Table fit | `.table-fit` (`width: auto`) on the `/scorecard/table` table, the two `/storms/<date>/score` tables, and the HSS matrix | at 1920 px: scorecard table 384 px, per-class table 278 px, report outcomes 568 px, matrix 1017 px; before: 1328 px and 1600 px (`gaps/storms-score-1920.png`, `gaps/scorecard-curve-1920.png`) |
-| Matrix fit | each HSS matrix column header puts the inch label on line 1 and the mm label on line 2, so the matrix fits its pane at 1280 px | matrix 680 px in a 976 px pane at 1280 px and in a 1616 px pane at 1920 px, no scroll; before: 1017 px (`matrix/scorecard-curve-1280.png`) |
-| Dark theme | the gap routes paint the dark tokens (`localStorage.theme = "dark"`) with no page scroll sideways | body `rgb(12, 17, 29)` on `/scorecard/curve`, `/scorecard/table`, `/try/compare`, and `/storms/2024-05-28/score` at 375, 1280, and 1920 px (`gaps-dark/`) |
+| Matrix fit | each HSS matrix column header puts the inch label on line 1 and the mm label on line 2, so the matrix fits its pane at 1280 px | table `getBoundingClientRect().width` 680 px; `.table-scroll` `clientWidth` 976 px at 1280 px and 1616 px at 1920 px; `scrollWidth <= clientWidth` at both; 654 px in a 343 px pane at 375 px; before: 1017 px (`matrix/scorecard-curve-1280.png`) |
+| Matrix header name | the line break keeps a space in the accessible name of each column header | Playwright `ariaSnapshot()` at 1280 px: `columnheader "≥ 0.75 in (19.05 mm)"` and 6 more in the same form |
+| Dark theme | the gap routes paint the dark tokens (`localStorage.theme = "dark"`) with no page scroll sideways | `getComputedStyle(document.body).backgroundColor` is `rgb(12, 17, 29)` and `documentElement.scrollWidth <= innerWidth` on `/scorecard/curve`, `/scorecard/table`, `/try/compare`, and `/storms/2024-05-28/score` at 375, 1280, and 1920 px (`gaps-dark/`) |
 | Impeccable detector | exit 0 on `site/src` | exit 0 |
 
 Computed fonts at 1280x800 (`getComputedStyle`, first family):
