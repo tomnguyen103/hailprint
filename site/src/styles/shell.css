@@ -1039,6 +1039,20 @@
 
   .sub-tabs a {
     flex: none;
+    min-width: 44px;
+    justify-content: center;
+    text-align: center;
+  }
+
+  /* One 44 px floor for the content controls (US-05.2); the prefix outranks per-area rules. */
+  .shell .site-main :is(a.mono, .button, .row-pick, .class-pick, .inspector-try-link, .file-list a) {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+
+  .shell .site-main :is(a.mono, .class-pick, .button-small) {
+    min-width: 44px;
   }
 
   .search-option {

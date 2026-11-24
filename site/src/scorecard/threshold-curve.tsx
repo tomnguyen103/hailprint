@@ -5,7 +5,8 @@ import { objectName } from "../ruler";
 import { HEIGHT, LITERATURE_HSS, MARGIN, WIDTH, pathOf, xOf, yMinOf, yOf } from "./curve";
 
 const MARKER_R = 4;
-const HIT_R = 20;
+// 42 viewBox units give a 44 px target at a 375 px viewport (scale 0.53) and 12 px or more down to a 184 px plot.
+const HIT_R = 42;
 const HIGHLIGHT_R = 6;
 const TIP_H = 24;
 const TIP_CHAR_W = 7.2;
@@ -145,25 +146,18 @@ export function ThresholdCurve({
               {p.row.threshold_mm === highlightMm ? (
                 <circle class="highlight" cx={p.x} cy={p.y} r={HIGHLIGHT_R} />
               ) : null}
-              <circle
-                class="marker-hit"
-                cx={p.x}
-                cy={p.y}
-                r={HIT_R}
-                onClick={() => focusMarker(i)}
-                onMouseEnter={() => setHover(i)}
-                onMouseLeave={() => setHover(null)}
-              />
+              <circle class="marker" cx={p.x} cy={p.y} r={MARKER_R} aria-hidden="true" />
               <circle
                 ref={(el) => {
                   markers.current[i] = el;
                 }}
-                class="marker"
+                class="marker-hit"
                 cx={p.x}
                 cy={p.y}
-                r={MARKER_R}
+                r={HIT_R}
                 tabIndex={i === activeRoving ? 0 : -1}
                 aria-label={`${objectName(p.row.threshold_mm)}, ${formatInches(p.row.threshold_in)}, ${METRIC_LABELS[metric]} ${p.value.toFixed(2)}`}
+                onClick={() => focusMarker(i)}
                 onFocus={() => {
                   setRoving(i);
                   setFocus(i);

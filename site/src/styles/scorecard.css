@@ -116,20 +116,21 @@
   cursor: pointer;
 }
 
+.curve .marker-hit:focus-visible {
+  outline: none;
+  stroke: var(--primary);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+
 .curve .marker {
   fill: var(--primary);
   stroke: var(--surface);
   stroke-width: 2;
-  cursor: pointer;
+  pointer-events: none;
   transition:
     cx var(--motion),
     cy var(--motion);
-}
-
-.curve .marker:focus-visible {
-  outline: none;
-  stroke: var(--text);
-  stroke-width: 3;
 }
 
 .curve .highlight {

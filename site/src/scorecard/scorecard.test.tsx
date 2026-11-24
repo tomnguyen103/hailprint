@@ -267,7 +267,7 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(domText(err[0]!)).toContain("no matching pairs for cohort");
   });
 
-  it("exposes one Tab stop across all 7 markers and a >= 20 unit transparent hit circle per marker", async () => {
+  it("makes the hit circle the one focus target: one Tab stop across 7 hit circles, r >= 12, visual marker aria-hidden", async () => {
     const rows = makeRows();
     const host = makeFakeElement("div");
     await act(() =>
@@ -278,17 +278,17 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(markers).toHaveLength(7);
     for (const m of markers) {
       expect(Number(m["r"])).toBe(4);
+      expect(m["aria-hidden"]).toBe("true");
+      expect(m["tabIndex"] ?? m["tabindex"]).toBeUndefined();
     }
     const tabIndexOf = (n: FakeDomNode) => Number(n["tabIndex"] ?? n["tabindex"]);
-    const tabStops = markers.filter((m) => tabIndexOf(m) === 0);
-    const rovingRest = markers.filter((m) => tabIndexOf(m) === -1);
-    expect(tabStops).toHaveLength(1);
-    expect(rovingRest).toHaveLength(6);
-
     const hitCircles = findDomNodes(host, (n) => n.tagName === "CIRCLE" && classOf(n) === "marker-hit");
     expect(hitCircles).toHaveLength(7);
+    expect(hitCircles.filter((m) => tabIndexOf(m) === 0)).toHaveLength(1);
+    expect(hitCircles.filter((m) => tabIndexOf(m) === -1)).toHaveLength(6);
     for (const hit of hitCircles) {
-      expect(Number(hit["r"])).toBeGreaterThanOrEqual(20);
+      expect(Number(hit["r"])).toBeGreaterThanOrEqual(12);
+      expect(String(hit["aria-label"])).toContain("HSS");
     }
   });
 
@@ -301,7 +301,7 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
 
     const svg = findDomNodes(host, (n) => n.tagName === "SVG")[0]!;
     const activeTabStopIdx = () => {
-      const markers = findDomNodes(host, (n) => n.tagName === "CIRCLE" && classOf(n) === "marker");
+      const markers = findDomNodes(host, (n) => n.tagName === "CIRCLE" && classOf(n) === "marker-hit");
       return markers.findIndex((m) => Number(m["tabIndex"] ?? m["tabindex"]) === 0);
     };
 

@@ -361,3 +361,10 @@
 .compare-legend {
   margin-top: 12px;
 }
+
+/* WCAG 2.5.8: the date links in the point results keep a 24 px tall target. */
+.point-results a.mono {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+}
