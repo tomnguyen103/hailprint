@@ -8,7 +8,7 @@ description: End-to-end check of the Hailprint site. Start command, seed step, a
 ## Start
 
 - Start command: `cd site && npm run dev` (Vite at http://localhost:5173). `.claude/launch.json` names it `site`.
-- Seed step: the dev server reads `site/data/`. Run `uv run hailprint publish` when `site/data/storms.json` is absent.
+- Seed step: the dev server reads `site/data/`. When `site/data/storms.json` is absent, run `uv run hailprint ingest 2024-05-28`, then `uv run hailprint candidates --top 20`, then `uv run hailprint publish`. `candidates` needs `uv run hailprint index` first. See [docs/getting-started.md](../../../docs/getting-started.md).
 - Login step: none. The site has no accounts.
 
 ## Flows
