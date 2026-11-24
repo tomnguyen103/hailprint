@@ -9,6 +9,11 @@ describe("curve scales", () => {
     expect(xOf(2.5)).toBe(624);
   });
 
+  it("maps the threshold range to a custom width", () => {
+    expect(xOf(0.75, 300)).toBe(48);
+    expect(xOf(2.5, 300)).toBe(284);
+  });
+
   it("maps 0..1 to the plot height, bottom up", () => {
     expect(yOf(0)).toBe(HEIGHT - MARGIN.bottom);
     expect(yOf(0)).toBe(280);

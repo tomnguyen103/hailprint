@@ -1,12 +1,13 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import type { PooledRow } from "../pool";
 import { METRIC_LABELS, METRICS, formatInches, type MetricKey } from "../format";
 import { objectName } from "../ruler";
 import { HEIGHT, LITERATURE_HSS, MARGIN, WIDTH, pathOf, xOf, yMinOf, yOf } from "./curve";
 
 const MARKER_R = 4;
-// 42 viewBox units give a 44 px target at a 375 px viewport (scale 0.53) and 12 px or more down to a 184 px plot.
-const HIT_R = 42;
+// The viewBox width equals the pixel width (scale 1), so 22 units give a 44 px target.
+// shortcut: at 375 px the closest points sit 40 px apart, so two neighbouring 44 px targets overlap by 4 px; a smaller radius would break the 44 px tap floor.
+const HIT_R = 22;
 const HIGHLIGHT_R = 6;
 const TIP_H = 24;
 const TIP_CHAR_W = 7.2;
@@ -27,12 +28,24 @@ export function ThresholdCurve({
   const [focus, setFocus] = useState<number | null>(null);
   const [roving, setRoving] = useState(0);
   const markers = useRef<(SVGCircleElement | null)[]>([]);
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [width, setWidth] = useState(WIDTH);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => {
+      const w = Math.round(entry?.contentRect.width ?? 0);
+      if (w > 0) setWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const yMin = yMinOf(rows.map((row) => row[metric]));
   const yBottom = yOf(yMin, yMin);
   const yTicks = yMin < 0 ? [yMin, 0, 0.5, 1] : Y_TICKS;
   const points = rows.map((row) => {
     const value = row[metric];
-    return { row, value, x: xOf(row.threshold_in), y: value === null ? null : yOf(value, yMin) };
+    return { row, value, x: xOf(row.threshold_in, width), y: value === null ? null : yOf(value, yMin) };
   });
   const validIndices = points.flatMap((p, idx) => (p.y !== null && p.value !== null ? [idx] : []));
   const activeRoving = validIndices.includes(roving) ? roving : (validIndices[0] ?? 0);
@@ -75,7 +88,7 @@ export function ThresholdCurve({
   if (tip && tip.y !== null && tip.value !== null) {
     const text = `${objectName(tip.row.threshold_mm)}, ${formatInches(tip.row.threshold_in)}, ${METRIC_LABELS[metric]} ${tip.value.toFixed(2)}`;
     const w = text.length * TIP_CHAR_W + 16;
-    const x = Math.min(Math.max(0, tip.x - w / 2), WIDTH - w);
+    const x = Math.min(Math.max(0, tip.x - w / 2), width - w);
     const above = tip.y - MARKER_R - 8 - TIP_H;
     const y = above >= 0 ? above : tip.y + MARKER_R + 8;
     tooltip = (
@@ -98,16 +111,17 @@ export function ThresholdCurve({
         ))}
       </div>
       <svg
+        ref={svgRef}
         class="curve"
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        viewBox={`0 0 ${width} ${HEIGHT}`}
         role="img"
         aria-label={`${METRIC_LABELS[metric]} by threshold`}
         onKeyDown={onKeyDown}
       >
-        <line class="axis" x1={MARGIN.left} y1={yBottom} x2={WIDTH - MARGIN.right} y2={yBottom} />
+        <line class="axis" x1={MARGIN.left} y1={yBottom} x2={width - MARGIN.right} y2={yBottom} />
         <line class="axis" x1={MARGIN.left} y1={yOf(1, yMin)} x2={MARGIN.left} y2={yBottom} />
         {yMin < 0 ? (
-          <line class="literature" x1={MARGIN.left} y1={yOf(0, yMin)} x2={WIDTH - MARGIN.right} y2={yOf(0, yMin)} />
+          <line class="literature" x1={MARGIN.left} y1={yOf(0, yMin)} x2={width - MARGIN.right} y2={yOf(0, yMin)} />
         ) : null}
         {yTicks.map((t) => (
           <g key={t}>
@@ -122,7 +136,7 @@ export function ThresholdCurve({
             {p.row.threshold_in.toFixed(2)}
           </text>
         ))}
-        <text x={WIDTH - MARGIN.right} y={HEIGHT - 4} text-anchor="end">
+        <text x={width - MARGIN.right} y={HEIGHT - 4} text-anchor="end">
           threshold, in
         </text>
         {metric === "hss" ? (
@@ -131,10 +145,10 @@ export function ThresholdCurve({
               class="literature"
               x1={MARGIN.left}
               y1={yOf(LITERATURE_HSS, yMin)}
-              x2={WIDTH - MARGIN.right}
+              x2={width - MARGIN.right}
               y2={yOf(LITERATURE_HSS, yMin)}
             />
-            <text x={WIDTH - MARGIN.right} y={yOf(LITERATURE_HSS, yMin) - 6} text-anchor="end">
+            <text x={width - MARGIN.right} y={yOf(LITERATURE_HSS, yMin) - 6} text-anchor="end">
               Literature HSS {LITERATURE_HSS.toFixed(2)}
             </text>
           </g>
