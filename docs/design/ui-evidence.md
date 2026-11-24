@@ -1,4 +1,4 @@
-head: 510ef114115467de4013d4956e107ee9970b291d
+head: 363fc226abbdf62610850ae2e6fcd4cb052e3f63
 
 # UI evidence
 
@@ -57,6 +57,9 @@ Line 1 names the commit that the captures show.
 | Stale age copy | ages of 60 min and more in hours, 24 h and more in days | the badge reads "stale 21 d ago" |
 | Focus ring | 2 px solid primary outline, 2 px offset | `a` on `/scorecard/table`: 2px solid, offset 2px, rgb(30, 58, 138) |
 | Tune curve targets | each marker centre on `/try/tune` hits its own marker (`elementFromPoint`) at 1024, 1100, 1279, 1280, 1440, and 1920 px | 7 of 7 markers at all 6 widths; the panes stack below 1280 px (`batch-b/try-tune-1024.png`) |
+| Curve width cap | `.curve` and `.metric-row` stop at 960 px | at 1920 px: `/scorecard/curve` curve 960 px, `/try/tune` curve 960 px and metric row 960 px; at 1280 px: 960 px and 464 px |
+| Curve accessibility | the curve `<svg>` is `role="group"` with an aria-label, so the labelled marker hit circles are not presentational | `role="group"`; 7 labelled hit circles |
+| Table label gap | on `/scorecard/table`, the gap from the widest label text to the nearest first-column number text is 48 px or less (US-07.2) | 24 px at 1280 and 1920 px over 7 rows; the table is 384 px wide (`width: auto`) |
 | Impeccable detector | exit 0 on `site/src` | exit 0 |
 
 Computed fonts at 1280x800 (`getComputedStyle`, first family):
