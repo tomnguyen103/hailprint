@@ -175,3 +175,27 @@ Tickets run in this order: tokens and type first, then the shell, then the pages
 3. **Do controls stay at 40 px or drop to 36 px?** Comfortable density sets 36 px, but the review rule rates a 24–39 px target as MEDIUM. Recommended answer: keep 40 px on desktop and 44 px below 768 px, and record 40 px as the project control height in `design.md`. T1 then leaves the heights as they are.
 4. **Where does the source-code link go?** It is a header link outside a breadcrumb and it breaks the cluster order. Recommended answer: move it to the footer next to the caveat line, which removes it from the header cluster.
 5. **Does mono cover stat values and badge counts?** `design.md` allows mono for dates, IDs, coordinates, and numeric tables. Recommended answer: keep that scope, and move stat values, badge counts, and map tags to IBM Plex Sans with `tabular-nums` (T2).
+
+## Status
+
+Batch A (PR 53) and batch B (`feat/ui-shell-batch-b`) close the plan. `docs/design/ui-evidence.md` holds the capture receipt.
+
+| Finding | Status | Where |
+| --- | --- | --- |
+| F01, F02, F07, F09, F10, F32 | Closed | T8 tap targets |
+| F03 | Closed | T7 primary regions |
+| F04, F30 | Closed | T9 information budget |
+| F05, F06, F08, F15, F16, F19, F20 | Closed | T3 sidebar header and top bar |
+| F11, F17 | Closed | T4 route tabs and nav landmark |
+| F13, F22 | Closed | T6 loading skeletons |
+| F14 | Closed | T11 evidence receipt |
+| F23, F24 | Closed | T10 type roles |
+| F26, F27 | Closed | T1 |
+| F28, F29 | Closed | T2 |
+| F12 | Recorded | `design.md`: light stays the default theme |
+| F18 | Recorded | `design.md`: the flat area array stays |
+| F21 | Recorded | `design.md`: the dialog pattern |
+| F25 | Recorded | `design.md`: 40 px controls on desktop |
+| F33 | Recorded | `design.md`: no sidebar footer |
+| F31 | Recorded | Inline exemption, no change |
+| F34 | Recorded | The 16 px reading column is sanctioned |
