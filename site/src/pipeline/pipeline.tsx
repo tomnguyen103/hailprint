@@ -78,7 +78,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
           tabs={PIPELINE_VIEWS.map((v) => ({ id: v, label: PIPELINE_LABELS[v], href: href({ area: "pipeline", view: v }) }))}
           selected={view}
         />
-        <section class="pane" role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
+        <section class="pane">
           <h2 class="visually-hidden">{PIPELINE_LABELS[view]}</h2>
           {body}
         </section>

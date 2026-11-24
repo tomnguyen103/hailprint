@@ -197,7 +197,10 @@ describe("RouteSidebar and single top-bar hamburger (US-01.1, US-01.2, US-01.5)"
     // The one hamburger sits in the aside header; no second collapse button
     expect(findDomNodes(aside, (n) => n.tagName === "BUTTON")).toHaveLength(1);
 
-    const areaNav = findDomNodes(aside, (n) => n.tagName === "NAV" && n["aria-label"] === "Workspace areas")[0]!;
+    const areaNav = findDomNodes(aside, (n) => n.tagName === "NAV" && n["aria-label"] === "Primary")[0]!;
+    const navs = findDomNodes(aside, (n) => n.tagName === "NAV");
+    expect(navs).toHaveLength(1);
+    expect(aside["aria-label"]).toBeUndefined();
     const links = findDomNodes(areaNav, (n) => n.tagName === "A");
     expect(links.map((a) => domText(a).trim())).toEqual(AREAS.map((a) => AREA_LABELS[a]));
     const activeLinks = links.filter((a) => a["aria-current"] === "page");

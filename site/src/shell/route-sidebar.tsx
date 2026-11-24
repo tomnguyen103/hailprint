@@ -60,7 +60,7 @@ export function RouteSidebar({ active, isDesktop, mobileOpen, onToggleMobile, on
         class="route-sidebar"
         role={isMobileModal ? "dialog" : undefined}
         aria-modal={isMobileModal ? "true" : undefined}
-        aria-label="Primary navigation"
+        aria-label={isMobileModal ? "Site menu" : undefined}
         tabIndex={isMobileModal ? -1 : undefined}
         data-collapsed={!expanded}
         data-mobile-open={isMobileModal}
@@ -84,7 +84,7 @@ export function RouteSidebar({ active, isDesktop, mobileOpen, onToggleMobile, on
             <span>Hailprint</span>
           </Link>
         </div>
-        <nav class="route-nav" aria-label="Workspace areas">
+        <nav class="route-nav" aria-label="Primary">
           {AREAS.map((area) => {
             const Icon = AREA_ICONS[area];
             const label = AREA_LABELS[area];

@@ -165,7 +165,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
           selected={view}
         />
       </header>
-      <section class="pane view-body" role="tabpanel" id={`panel-${view}`} aria-labelledby={`tab-${view}`}>
+      <section class="pane view-body">
         <h2 class="visually-hidden">{VIEW_LABELS[view]}</h2>
         {body}
         {view === "curve" && matrix.length > 0 && receipt !== null ? (

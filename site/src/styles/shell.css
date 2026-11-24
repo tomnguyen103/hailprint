@@ -668,11 +668,11 @@
   color: var(--text);
 }
 
-.sub-tabs a[aria-selected="true"] {
+.sub-tabs a[aria-current="page"] {
   color: var(--primary);
 }
 
-.sub-tabs a[aria-selected="true"]::after {
+.sub-tabs a[aria-current="page"]::after {
   content: "";
   position: absolute;
   left: 0;
@@ -971,7 +971,7 @@
     border-left: 2px solid Highlight;
   }
 
-  .sub-tabs a[aria-selected="true"] {
+  .sub-tabs a[aria-current="page"] {
     border-bottom: 2px solid Highlight;
   }
 
