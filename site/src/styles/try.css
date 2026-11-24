@@ -363,8 +363,15 @@
   min-height: 24px;
 }
 
-/* The tune pane holds the contingency grid in its first column; it stops at 480 px and the curve takes the rest. */
+/* The tune pane stacks below 1280 px, so the curve keeps room for distinct 44 px marker targets. */
 @media (width >= 1024px) {
+  .pane-grid.tune-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* From 1280 px, the contingency grid takes the first column up to 480 px and the curve takes the rest. */
+@media (width >= 1280px) {
   .pane-grid.tune-grid {
     grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
   }

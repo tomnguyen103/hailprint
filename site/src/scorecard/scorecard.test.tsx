@@ -449,5 +449,14 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(stateMatch![1]).toContain("justify-items: center");
     expect(stateMatch![1]).toContain("min-height: 220px");
   });
+
+  it("stacks the tune panes below 1280 px so neighbouring curve hit circles stay apart", () => {
+    // Regression: at 1024 px with the sidebar open, a 480 px grid column left the curve 208 px wide and a marker click picked its neighbour.
+    const tryCss = readFileSync(fileURLToPath(new URL("../styles/try.css", import.meta.url)), "utf8");
+    const twoColumn = /@media\s*\(width\s*>=\s*(\d+)px\)\s*\{\s*\.pane-grid\.tune-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*480px\)/.exec(tryCss);
+    expect(twoColumn).not.toBeNull();
+    expect(Number(twoColumn![1])).toBeGreaterThanOrEqual(1280);
+    expect(tryCss).toMatch(/@media\s*\(width\s*>=\s*1024px\)\s*\{\s*\.pane-grid\.tune-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
+  });
 });
 
