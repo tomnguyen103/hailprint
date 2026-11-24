@@ -95,6 +95,13 @@ Cool hues stay distinct from the hail ramp: green for power (`--out-1`..`--out-5
 - Focus: `2px` `--primary` outline with `2px` offset on `:focus-visible`.
 - Controls: `40px` tall on desktop, `44px` below `768px`.
 
+## Sanctioned deviations
+
+- Light theme is the default. An unset theme resolves to light (PR #51).
+- The route sidebar reads a flat array of six areas. It has no nav config tree, because one level exists.
+- The search trigger is a button. It opens a modal dialog. The combobox lives inside the dialog.
+- The sidebar has no footer. The site has no accounts.
+
 ## Do's and Don'ts
 
 - Do use `--radius` (`4px`) on buttons, inputs, cards, panes, menus, and dialogs.
