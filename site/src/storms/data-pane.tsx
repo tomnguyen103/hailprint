@@ -113,7 +113,7 @@ export function DataPane({ storm, runTime, reports: reportsProp, power, internet
       <section>
         <h2>Receipt</h2>
         {pairs.status === "error" ? <ErrorState error={pairs.error} onRetry={pairs.retry} /> : null}
-        {pairs.status === "loading" && pairs.showLoading ? <LoadingState file={FILE} /> : null}
+        {pairs.status === "loading" && pairs.showLoading ? <LoadingState file={FILE} shape="text" /> : null}
         {pairs.status === "ready" ? (
           <ReceiptList
             receipt={pairs.data.receipt}

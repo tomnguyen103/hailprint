@@ -566,10 +566,43 @@
   }
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .skeleton-block {
-    animation: skeleton-pulse 1.5s ease-in-out infinite;
-  }
+.skeleton-block {
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-table {
+  min-height: 280px;
+}
+
+.skeleton-stats {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  align-content: start;
+  min-height: 160px;
+}
+
+.skeleton-stats .skeleton-block {
+  height: 80px;
+}
+
+.skeleton-map {
+  min-height: min(70dvh, 640px);
+}
+
+.skeleton-map .skeleton-block {
+  height: 100%;
+}
+
+.skeleton-text {
+  align-content: start;
+  min-height: 112px;
+}
+
+.skeleton-text .skeleton-block {
+  height: 16px;
+}
+
+.skeleton-text .skeleton-block:last-child {
+  width: 60%;
 }
 
 /* Buttons */

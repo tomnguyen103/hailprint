@@ -33,16 +33,20 @@ export function ErrorState({ error, onRetry }: { error: DataError; onRetry: () =
   );
 }
 
-/** A busy region of skeleton rows; the hidden live text names the file. */
-export function LoadingState({ file }: { file: string }) {
+export type LoadingShape = "table" | "stats" | "map" | "text";
+
+const BLOCKS: Record<LoadingShape, number> = { table: 6, stats: 4, map: 1, text: 4 };
+
+/** A busy region of skeleton blocks in the shape of the loaded region; the hidden live text names the file. */
+export function LoadingState({ file, shape = "table" }: { file: string; shape?: LoadingShape }) {
   return (
-    <div class="state state-loading" aria-busy="true">
+    <div class={`state state-loading skeleton-${shape}`} aria-busy="true">
       <span class="visually-hidden" aria-live="polite">
-        Load {file}{"\u2026"}
+        Load {file}{"…"}
       </span>
-      <span class="skeleton-block" aria-hidden="true" />
-      <span class="skeleton-block" aria-hidden="true" />
-      <span class="skeleton-block" aria-hidden="true" />
+      {Array.from({ length: BLOCKS[shape] }, (_, i) => (
+        <span key={i} class="skeleton-block" aria-hidden="true" />
+      ))}
     </div>
   );
 }

@@ -25,7 +25,7 @@ function GuessResult({ index, guess, classMm }: { index: StormsIndex; guess: num
   const receipt = useMemo(() => (data === null ? null : pooledReceipt(data, index)), [data, index]);
 
   if (pairs.status === "error") return <ErrorState error={pairs.error} onRetry={pairs.retry} />;
-  if (pairs.status === "loading" || table === null) return pairs.showLoading ? <LoadingState file={FILE} /> : null;
+  if (pairs.status === "loading" || table === null) return pairs.showLoading ? <LoadingState file={FILE} shape="text" /> : null;
   if ("error" in table) return <ErrorState error={table.error} onRetry={pairs.retry} />;
 
   const actual = table.rows.find((r) => r.threshold_mm === classMm)?.hss ?? null;

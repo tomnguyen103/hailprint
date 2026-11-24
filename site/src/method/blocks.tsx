@@ -66,7 +66,7 @@ function figure(id: FigureId, index: Index) {
   if (id === "ruler") return <Ruler />;
   if (id === "bins") return <Bins />;
   if (index.status === "error") return <ErrorState error={index.error} onRetry={index.retry} />;
-  if (index.status === "loading") return index.showLoading ? <LoadingState file={INDEX_FILE} /> : null;
+  if (index.status === "loading") return index.showLoading ? <LoadingState file={INDEX_FILE} shape="text" /> : null;
   if (index.data.storms.length === 0) return <EmptyState sentence={NO_INDEX} />;
   if (id === "receipt") return <Receipt index={index.data} />;
   if (id === "stamp") return <StampFigure index={index.data} />;
@@ -79,7 +79,7 @@ function Receipt({ index }: { index: StormsIndex }) {
   // the pairs cache: the Scoring figures read the same file, so one fetch serves both
   const pairs = useAllFiles([storm.files.pairs], guardPairs, index.run_time);
   if (pairs.status === "error") return <ErrorState error={pairs.error} onRetry={pairs.retry} />;
-  if (pairs.status === "loading") return pairs.showLoading ? <LoadingState file="pairs.json" /> : null;
+  if (pairs.status === "loading") return pairs.showLoading ? <LoadingState file="pairs.json" shape="text" /> : null;
   return (
     <p>
       Newest storm receipt (<span class="mono">{storm.storm_date}</span>):{" "}
@@ -94,7 +94,7 @@ function StampFigure({ index }: { index: StormsIndex }) {
     fetchJson(storm.files.reports, guardReports),
   );
   if (reports.status === "error") return <ErrorState error={reports.error} onRetry={reports.retry} />;
-  if (reports.status === "loading") return reports.showLoading ? <LoadingState file="reports.geojson" /> : null;
+  if (reports.status === "loading") return reports.showLoading ? <LoadingState file="reports.geojson" shape="text" /> : null;
   const filled = cells(reports.data.features.map((f) => f.properties.time));
   const count = filled.filter(Boolean).length;
   return (
@@ -145,7 +145,7 @@ function Ruler() {
 function GridFigure({ index }: { index: StormsIndex }) {
   const pairs = usePairsAll(index);
   if (pairs.status === "error") return <ErrorState error={pairs.error} onRetry={pairs.retry} />;
-  if (pairs.status === "loading") return pairs.showLoading ? <LoadingState file="pairs.json" /> : null;
+  if (pairs.status === "loading") return pairs.showLoading ? <LoadingState file="pairs.json" shape="text" /> : null;
   const pooled = pooledRows(pairs.data, index.radius_km_default);
   if ("error" in pooled) return <ErrorState error={pooled.error} onRetry={pairs.retry} />;
   const row = pooled.rows[0];

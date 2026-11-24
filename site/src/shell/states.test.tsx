@@ -37,3 +37,15 @@ describe("LoadingState (US-04.1, US-04.2)", () => {
     expect(text(live?.props.children)).toBe("Load pairs.json…");
   });
 });
+
+describe("LoadingState shape (US-04.2)", () => {
+  it("defaults to the table shape", () => {
+    expect((LoadingState({ file: "a.json" }) as VNode<Props>).props["class"]).toContain("skeleton-table");
+  });
+
+  it.each(["table", "stats", "map", "text"] as const)("marks the %s shape with its class", (shape) => {
+    const root = LoadingState({ file: "a.json", shape }) as VNode<Props>;
+    expect(root.props["class"]).toContain(`skeleton-${shape}`);
+    expect(root.props["aria-busy"]).toBe("true");
+  });
+});

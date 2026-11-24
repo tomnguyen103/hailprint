@@ -285,7 +285,7 @@ export function PointCheck({ index }: { index: StormsIndex }) {
           {countyError !== null ? (
             <ErrorState error={countyError.error} onRetry={countyError.retry} />
           ) : impactLoading ? (
-            <LoadingState file="reports.geojson, warnings.geojson, power.json, internet.json" />
+            <LoadingState file="reports.geojson, warnings.geojson, power.json, internet.json" shape="stats" />
           ) : (
             <>
               <div class="stamp point-stamp">

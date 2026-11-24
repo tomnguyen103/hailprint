@@ -193,7 +193,7 @@ export function LiveViewContent({
 export function LiveView({ newest = null }: { newest?: string | null }) {
   const live = useLive();
   if (live.status === "error") return <ErrorState error={live.error} onRetry={live.retry} />;
-  if (live.status === "loading") return live.showLoading ? <LoadingState file={LIVE_FILE} /> : null;
+  if (live.status === "loading") return live.showLoading ? <LoadingState file={LIVE_FILE} shape="stats" /> : null;
   return <LiveViewContent data={live.data} newest={newest} now={live.now} />;
 }
 
