@@ -66,6 +66,12 @@
   background: var(--surface);
 }
 
+/* Metric values are stats, not table cells: sans with tabular figures. Overrides the .mono class. */
+.metric-cell .stat {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
 @media (width < 480px) {
   .metric-row {
     grid-template-columns: repeat(2, minmax(0, 1fr));

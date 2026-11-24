@@ -125,7 +125,7 @@
 }
 
 .live-stat-value {
-  font: 500 24px/1.2 var(--font-mono);
+  font: 500 24px/1.2 var(--font-sans);
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }

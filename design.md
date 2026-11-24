@@ -26,6 +26,7 @@ Hailprint follows Corporate Standard v1 (`app-ui-shell/references/default-theme.
 - Weights: `400` body, `500` labels and controls, `600` headings and `strong`. No `700` or above. No serif faces.
 - Scale: `12px` section labels and metadata, `13px` dense table cells, `14px` app body and controls (`16px` body on `/method/*` reading pages), `16px` pane and section titles, `20px` page headings, `24px` stat values.
 - Numbers in tables and stats use `tabular-nums`. Numeric columns align right.
+- Mono scope: `IBM Plex Mono` stays on dates, IDs, coordinates, and numeric table cells only. Stat values, scope badges, map tags, and outcome badges use `IBM Plex Sans` with `tabular-nums`.
 
 ## Corporate Standard v1 palette
 

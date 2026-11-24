@@ -107,29 +107,29 @@ export function LiveViewContent({
       <section class="live-stats" aria-label="24-hour live summary">
         <div class="live-stat">
           <span class="section-label">Max 24 h</span>
-          <span class="live-stat-value mono">{max24Value}</span>
+          <span class="live-stat-value">{max24Value}</span>
           <span class="live-stat-note">{max24Note}</span>
         </div>
         <div class="live-stat">
           <span class="section-label">Max last hour</span>
-          <span class="live-stat-value mono">{lastHourValue}</span>
+          <span class="live-stat-value">{lastHourValue}</span>
           <span class="live-stat-note">{lastHourNote}</span>
         </div>
         <div class="live-stat">
           <span class="section-label">SPC reports</span>
-          <span class="live-stat-value mono">{formatCount(live.reports.count)}</span>
+          <span class="live-stat-value">{formatCount(live.reports.count)}</span>
           <span class="live-stat-note">{reportsNote}</span>
         </div>
         <div class="live-stat">
           <span class="section-label">HGX warnings</span>
-          <span class="live-stat-value mono">
+          <span class="live-stat-value">
             {`${formatCount(live.warnings.active)} / ${formatCount(live.warnings.count)}`}
           </span>
           <span class="live-stat-note">active / 24 h total</span>
         </div>
         <div class="live-stat">
           <span class="section-label">Customers out</span>
-          <span class="live-stat-value mono">{powerValue}</span>
+          <span class="live-stat-value">{powerValue}</span>
           <span class="live-stat-note">{powerNote}</span>
         </div>
       </section>
