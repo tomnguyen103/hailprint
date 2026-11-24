@@ -104,7 +104,7 @@ export function LiveViewContent({
         </ul>
       ) : null}
 
-      <section class="live-stats" aria-label="24-hour live summary">
+      <section class="live-stats" aria-label="24-hour live summary" data-primary-region>
         <div class="live-stat">
           <span class="section-label">Max 24 h</span>
           <span class="live-stat-value">{max24Value}</span>

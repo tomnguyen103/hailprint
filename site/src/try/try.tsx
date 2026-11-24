@@ -88,7 +88,7 @@ export function TryIt({ index, tool }: { index: StormsIndex; tool: TryTool }) {
           selected={tool}
         />
       </header>
-      <section class="pane view-body">
+      <section class="pane view-body" data-primary-region>
         <h2 class="visually-hidden">{TOOL_LABELS[tool]}</h2>
         {tool === "tune" ? <Tune index={index} /> : null}
         {tool === "point" ? <PointCheck index={index} /> : null}

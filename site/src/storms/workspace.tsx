@@ -146,7 +146,7 @@ export function Workspace({ index, storm, tab }: Props) {
           tabs={stormTabItems(storm.storm_date, step)}
           selected={tab}
         />
-        <section class="pane">
+        <section class="pane" data-primary-region>
           <h2 class="visually-hidden">{TAB_LABELS[tab]}</h2>
           {pane}
         </section>

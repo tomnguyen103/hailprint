@@ -78,7 +78,7 @@ export function Pipeline({ view }: { view: PipelineView }) {
           tabs={PIPELINE_VIEWS.map((v) => ({ id: v, label: PIPELINE_LABELS[v], href: href({ area: "pipeline", view: v }) }))}
           selected={view}
         />
-        <section class="pane">
+        <section class="pane" data-primary-region>
           <h2 class="visually-hidden">{PIPELINE_LABELS[view]}</h2>
           {body}
         </section>

@@ -159,7 +159,7 @@ export function Scorecard({ index, view }: { index: StormsIndex; view: Scorecard
           selected={view}
         />
       </header>
-      <section class="pane view-body">
+      <section class="pane view-body" data-primary-region>
         <h2 class="visually-hidden">{VIEW_LABELS[view]}</h2>
         {body}
         {view === "curve" && matrix.length > 0 && receipt !== null ? (
