@@ -29,13 +29,13 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-variant-numeric: tabular-nums;
   padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text);
   font: 500 13px/1.2 var(--font-sans);
+  font-variant-numeric: tabular-nums;
 }
 
 .live-freshness[data-freshness="aging"] {
