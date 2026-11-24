@@ -1,4 +1,4 @@
-head: 3bf213743db5aea3fca791ae72c79c55c98e8624
+head: ee06df478d8f3601f90b6f06a8b04a5655ba533c
 
 # UI evidence
 
@@ -56,6 +56,7 @@ Line 1 names the commit that the captures show.
 | Information budget | under 120 words above the fold on `/live` at 1280x800 | 119 words; the "radar-estimated hail size" wording is present |
 | Stale age copy | ages of 60 min and more in hours, 24 h and more in days | the badge reads "stale 21 d ago" |
 | Focus ring | 2 px solid primary outline, 2 px offset | `a` on `/scorecard/table`: 2px solid, offset 2px, rgb(30, 58, 138) |
+| Tune curve targets | each marker centre on `/try/tune` hits its own marker (`elementFromPoint`) at 1024, 1100, 1279, 1280, 1440, and 1920 px | 7 of 7 markers at all 6 widths; the panes stack below 1280 px (`batch-b/try-tune-1024.png`) |
 | Impeccable detector | exit 0 on `site/src` | exit 0 |
 
 Computed fonts at 1280x800 (`getComputedStyle`, first family):
