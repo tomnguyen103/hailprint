@@ -15,7 +15,7 @@ function readDesktopNav(): boolean {
     : true;
 }
 
-/** Corporate Standard v1 shell: skip link, 56px top bar with single hamburger toggle, collapsible route sidebar, main with footer inside. */
+/** Corporate Standard v1 shell: skip link, full-height collapsible route sidebar (header holds the hamburger and brand), 56px top bar, main with footer inside. */
 export function Layout({
   active,
   routePath,
@@ -67,7 +67,7 @@ export function Layout({
         Skip to content
       </a>
       <TopBar
-        active={active}
+        routePath={routePath}
         storms={storms}
         isDesktop={isDesktop}
         navExpanded={isDesktop ? expanded : mobileNavOpen}

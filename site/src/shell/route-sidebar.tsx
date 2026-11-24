@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "preact/hooks";
 import { AREAS, AREA_LABELS, type Area, href } from "../router";
 import { useSidebar } from "../state/sidebar";
-import { AREA_ICONS } from "./icons";
+import { AREA_ICONS, GlyphIcon, MenuIcon } from "./icons";
 import { Link } from "./link";
 import { useModalFocusTrap } from "./modal-focus";
 
@@ -17,7 +17,7 @@ interface Props {
   onCloseMobile: () => void;
 }
 
-/** Persistent collapsible left route sidebar (256px / 56px desktop, 288px modal drawer below 768px). */
+/** Persistent collapsible left route sidebar (256px / 56px desktop, 288px modal drawer below 768px). Its 56px header holds the desktop hamburger and the brand link. */
 export function RouteSidebar({ active, isDesktop, mobileOpen, onToggleMobile, onCloseMobile }: Props) {
   const { expanded, toggle } = useSidebar();
   const asideRef = useRef<HTMLElement>(null);
@@ -65,6 +65,25 @@ export function RouteSidebar({ active, isDesktop, mobileOpen, onToggleMobile, on
         data-collapsed={!expanded}
         data-mobile-open={isMobileModal}
       >
+        <div class="route-sidebar-header">
+          {desktop ? (
+            <button
+              type="button"
+              class="icon-button sidebar-toggle"
+              aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
+              aria-expanded={expanded}
+              aria-controls="route-sidebar"
+              title="Toggle navigation (Ctrl+B)"
+              onClick={toggle}
+            >
+              <MenuIcon size={20} />
+            </button>
+          ) : null}
+          <Link href="/" class="wordmark" onClick={isMobileModal ? onCloseMobile : undefined}>
+            <GlyphIcon size={20} />
+            <span>Hailprint</span>
+          </Link>
+        </div>
         <nav class="route-nav" aria-label="Workspace areas">
           {AREAS.map((area) => {
             const Icon = AREA_ICONS[area];

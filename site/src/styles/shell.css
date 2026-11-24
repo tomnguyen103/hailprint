@@ -1,4 +1,4 @@
-/* Corporate Standard v1 shell: 56px topbar, 256px/56px left route sidebar, Ctrl+K search, 3-state theme menu, underline sub-tabs. */
+/* Corporate Standard v1 shell: full-height 256px/56px left route sidebar with 56px header, 56px topbar, Ctrl+K search, 3-state theme menu, underline sub-tabs. */
 
 .shell {
   display: grid;
@@ -46,7 +46,7 @@
 /* Top bar (56px sticky single row) */
 
 .top-bar {
-  grid-column: 1 / -1;
+  grid-column: 2;
   grid-row: 1;
   position: sticky;
   top: 0;
@@ -85,13 +85,46 @@
   white-space: nowrap;
 }
 
-.top-bar-area {
-  padding: 2px 8px;
-  border-radius: var(--radius);
-  background: var(--surface-muted);
-  color: var(--text-muted);
-  font: 500 12px/1.4 var(--font-sans);
+.breadcrumb {
+  min-width: 0;
+  font: 500 14px/1.4 var(--font-sans);
+}
+
+.breadcrumb ol {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breadcrumb li {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.breadcrumb li + li::before {
+  content: "/" / "";
+  margin-right: 8px;
+  color: var(--text-muted);
+}
+
+.breadcrumb a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.breadcrumb [aria-current="page"] {
+  color: var(--text);
 }
 
 .top-bar-center {
@@ -375,23 +408,33 @@
 
 .route-sidebar {
   grid-column: 1;
-  grid-row: 2;
+  grid-row: 1 / -1;
   position: sticky;
-  top: var(--bar-height);
-  height: calc(100dvh - var(--bar-height));
+  top: 0;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 12px 8px;
+  padding: 0;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border);
   transition: background-color var(--motion), border-color var(--motion);
   overflow-y: auto;
 }
 
+.route-sidebar-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--bar-height);
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+}
+
 .route-nav {
   display: grid;
   gap: 4px;
+  padding: 12px 8px;
 }
 
 .route-link {
@@ -424,6 +467,7 @@
   padding: 0;
 }
 
+.route-sidebar[data-collapsed="true"] .wordmark,
 .route-sidebar[data-collapsed="true"] .route-link-text {
   display: none;
 }
@@ -806,13 +850,10 @@
   }
 
   .top-bar {
+    grid-column: 1;
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 8px;
     padding: 0 12px;
-  }
-
-  .top-bar-area {
-    display: none;
   }
 
   .global-search {
@@ -865,6 +906,10 @@
     width: 288px;
     height: auto;
     box-shadow: var(--shadow);
+  }
+
+  .route-sidebar[data-mobile-open="true"] .wordmark {
+    display: inline-flex;
   }
 
   .route-sidebar[data-mobile-open="true"] .route-link {
