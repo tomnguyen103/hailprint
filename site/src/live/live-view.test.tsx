@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { guardLive, guardReports, guardSwath, guardWarnings } from "../data/guard";
 import { FORBIDDEN_WORD } from "../method/prose";
 import type { LiveData } from "../state/live";
+import { formatAge } from "./freshness";
 import { LiveViewContent, statusSentence } from "./live-view";
 
 type Node = VNode<Record<string, unknown>>;
@@ -48,6 +49,18 @@ function loadFixture(kind: "hail" | "quiet"): LiveData {
   };
 }
 
+describe("formatAge", () => {
+  it.each([
+    [59, "59 min ago"],
+    [60, "1 h ago"],
+    [1439, "23 h ago"],
+    [1440, "1 d ago"],
+    [30187, "20 d ago"],
+  ])("renders %i minutes as %s (US-06.2)", (minutes, text) => {
+    expect(formatAge(minutes)).toBe(text);
+  });
+});
+
 describe("LiveViewContent", () => {
   it("renders title, fresh chip, hail status sentence, five stats, map props, and five source rows (US-03.1)", () => {
     const data = loadFixture("hail");
@@ -64,10 +77,10 @@ describe("LiveViewContent", () => {
     expect(textOf(chip)).toContain("6 min ago");
 
     expect(statusSentence(data.now)).toBe(
-      "Radar-estimated hail at or above 2.00 in (hen egg) fell over Harris County in the last 24 h.",
+      "Radar-estimated hail size at or above 2.00 in (hen egg) fell over Harris County in the last 24 h.",
     );
     expect(text).toContain(
-      "Radar-estimated hail at or above 2.00 in (hen egg) fell over Harris County in the last 24 h.",
+      "Radar-estimated hail size at or above 2.00 in (hen egg) fell over Harris County in the last 24 h.",
     );
 
     expect(text).toContain("2.08 in");
@@ -109,9 +122,9 @@ describe("LiveViewContent", () => {
     const text = textOf(tree);
 
     expect(statusSentence(data.now)).toBe(
-      "No radar-estimated hail at or above 0.75 in over Harris County in the last 24 h.",
+      "No radar-estimated hail size at or above 0.75 in over Harris County in the last 24 h.",
     );
-    expect(text).toContain("No radar-estimated hail at or above 0.75 in over Harris County in the last 24 h.");
+    expect(text).toContain("No radar-estimated hail size at or above 0.75 in over Harris County in the last 24 h.");
 
     const stormLinks = findAll(tree, (v) => v.type === "a" && v.props["href"] === "/storms/2026-08-28/map");
     expect(stormLinks).toHaveLength(1);
@@ -172,7 +185,7 @@ describe("LiveViewContent", () => {
     const staleChip = findAll(staleTree, (v) => v.props["data-freshness"] !== undefined)[0]!;
     expect(staleChip.props["data-freshness"]).toBe("stale");
     expect(textOf(staleChip)).toContain("stale");
-    expect(textOf(staleChip)).toContain("90 min ago");
+    expect(textOf(staleChip)).toContain("1 h ago");
     expect(textOf(staleTree)).toContain("1,572");
   });
 
