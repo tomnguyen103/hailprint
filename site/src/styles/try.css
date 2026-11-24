@@ -367,3 +367,10 @@
   align-items: center;
   min-height: 24px;
 }
+
+/* The contingency grid stops at 480 px, so its column does too and the curve takes the rest. */
+@media (width >= 1024px) {
+  .pane-grid:has(> section > .cgrid) {
+    grid-template-columns: minmax(0, 480px) minmax(0, 1fr);
+  }
+}
