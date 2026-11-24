@@ -37,7 +37,7 @@ uv run hailprint live                       # live files under site/data/live/ (
 uv run hailprint cloud live                 # syncs public live/ down, runs `live`, syncs changed live/ keys up with now.json last
 make site                                   # cd site && npm ci && npx playwright install chromium && npm run check && npm run test:e2e
 cd site && npm run dev                      # Vite dev server at http://localhost:5173
-cd site && npm run check                    # tsc --noEmit && vitest run && vite build
+cd site && npm run check                    # tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json && vitest run && vite build
 cd site && npm run test:e2e                 # Playwright (Chromium) against a Vite dev server on port 4174 with the fixture under site/e2e/fixtures/; run `npx playwright install chromium` once first
 ```
 

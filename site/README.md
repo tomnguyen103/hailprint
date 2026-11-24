@@ -7,7 +7,7 @@ Static Preact site that reads the published files from `VITE_DATA_BASE` (or `/da
 ```bash
 npm ci           # install from the lockfile
 npm run dev      # Vite dev server at http://localhost:5173
-npm run check    # tsc --noEmit && vitest run && vite build
+npm run check    # tsc --noEmit && tsc --noEmit -p tsconfig.e2e.json && vitest run && vite build
 npm run test:e2e # Playwright browser tests in e2e/ (Chromium, fixture data under e2e/fixtures/; run `npx playwright install chromium` once first)
 ```
 

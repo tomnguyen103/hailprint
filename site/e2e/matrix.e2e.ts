@@ -38,9 +38,9 @@ for (const [width, height] of [
     // A pane that grows to the matrix width would pass the check above and scroll the page.
     const doc = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,
-      innerWidth: window.innerWidth,
+      clientWidth: document.documentElement.clientWidth,
     }));
-    expect(doc.scrollWidth).toBeLessThanOrEqual(doc.innerWidth);
+    expect(doc.scrollWidth).toBeLessThanOrEqual(doc.clientWidth);
 
     if (width === 1280) {
       await expect(
