@@ -34,6 +34,13 @@
   border-radius: var(--radius);
 }
 
+.map-overlay > .skeleton-map {
+  place-self: stretch;
+  min-height: 0;
+  max-width: none;
+  padding: 16px;
+}
+
 .map-note {
   position: absolute;
   bottom: 12px;
