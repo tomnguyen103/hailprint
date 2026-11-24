@@ -467,11 +467,11 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
 
     const svg = findDomNodes(host, (n) => n.tagName === "SVG")[0]!;
     expect(svg["role"]).toBe("group");
-    expect(String(svg["aria-label"]).length).toBeGreaterThan(0);
+    expect(svg["aria-label"]).toMatch(/ by threshold$/);
     const hitCircles = findDomNodes(host, (n) => n.tagName === "CIRCLE" && classOf(n) === "marker-hit");
     expect(hitCircles).toHaveLength(7);
     for (const hit of hitCircles) {
-      expect(String(hit["aria-label"]).length).toBeGreaterThan(0);
+      expect(hit["aria-label"]).toMatch(/ in, HSS -?\d\.\d{2}$/);
     }
   });
 
