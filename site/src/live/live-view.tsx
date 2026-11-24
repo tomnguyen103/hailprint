@@ -75,7 +75,7 @@ export function LiveViewContent({
           <span class="live-freshness" data-freshness={state}>
             <span class="dot" data-state={state === "fresh" ? "ok" : "missing"} aria-hidden="true" />
             <span class="live-freshness-state">{state}</span>
-            <span class="mono">{runAge}</span>
+            <span>{runAge}</span>
           </span>
         </div>
         <div class="live-status-row">
@@ -139,7 +139,7 @@ export function LiveViewContent({
           {live.power.counties.map((county) => (
             <div key={county.fips} class="live-county">
               <dt>{county.name}</dt>
-              <dd class="mono">{`${formatCount(county.customers_out)} (${(county.share_out * 100).toFixed(1)}%)`}</dd>
+              <dd>{`${formatCount(county.customers_out)} (${(county.share_out * 100).toFixed(1)}%)`}</dd>
             </div>
           ))}
         </dl>
