@@ -508,5 +508,28 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     const matrixTable = findDomNodes(matrix, (n) => n.tagName === "TABLE")[0]!;
     expect(classOf(matrixTable).split(/\s+/)).toContain("table-fit");
   });
+
+  it("puts the inch label on line 1 and the mm label on line 2 of each HSS matrix column header (M1)", async () => {
+    const index = makeIndex(["wcm"]);
+    mockPairsState.status = "ready";
+    mockPairsState.data = [makePairs("2024-05-10")];
+
+    const host = makeFakeElement("div");
+    await act(() => render(h(Scorecard, { index, view: "curve" }), host as unknown as HTMLElement));
+    const matrix = findDomNodes(host, (n) => classOf(n).includes("sensitivity-section"))[0]!;
+    const columnHeaders = findDomNodes(matrix, (n) => n.tagName === "TH" && classOf(n).split(/\s+/).includes("num"));
+    expect(columnHeaders).toHaveLength(RULER.length);
+    for (const th of columnHeaders) {
+      expect(findDomNodes(th, (n) => n.tagName === "BR")).toHaveLength(1);
+      expect(domText(th)).toContain(" in");
+      expect(domText(th)).toContain("mm");
+    }
+  });
+
+  it("imports the storms stylesheet in the scorecard and try areas (M2)", () => {
+    const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+    expect(read("./scorecard.tsx")).toContain('import "../styles/storms.css";');
+    expect(read("../try/try.tsx")).toContain('import "../styles/storms.css";');
+  });
 });
 

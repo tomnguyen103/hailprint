@@ -1,4 +1,5 @@
 import { useId, useMemo } from "preact/hooks";
+import "../styles/storms.css";
 import "../styles/try.css";
 import { guardPairs } from "../data/guard";
 import type { Pairs, Storm, StormsIndex } from "../data/types";
