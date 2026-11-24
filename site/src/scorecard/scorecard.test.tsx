@@ -458,5 +458,37 @@ describe("Scorecard empty cohort and ThresholdCurve roving Tab stop (US-12.1, US
     expect(Number(twoColumn![1])).toBeGreaterThanOrEqual(1280);
     expect(tryCss).toMatch(/@media\s*\(width\s*>=\s*1024px\)\s*\{\s*\.pane-grid\.tune-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*1fr\);/);
   });
+
+  it("exposes the threshold curve as a group with a label, and each marker hit circle with its own label (F1)", async () => {
+    const host = makeFakeElement("div");
+    await act(() =>
+      render(h(ThresholdCurve, { rows: makeRows(), metric: "hss", onMetric: () => {} }), host as unknown as HTMLElement),
+    );
+
+    const svg = findDomNodes(host, (n) => n.tagName === "SVG")[0]!;
+    expect(svg["role"]).toBe("group");
+    expect(String(svg["aria-label"]).length).toBeGreaterThan(0);
+    const hitCircles = findDomNodes(host, (n) => n.tagName === "CIRCLE" && classOf(n) === "marker-hit");
+    expect(hitCircles).toHaveLength(7);
+    for (const hit of hitCircles) {
+      expect(String(hit["aria-label"]).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("caps the curve and the tune metric row at 960 px wide (F2)", () => {
+    const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+    const ruleBody = (css: string, selector: string) => {
+      const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? "";
+    };
+    expect(ruleBody(read("../styles/scorecard.css"), ".curve")).toMatch(/max-width:\s*960px/);
+    expect(ruleBody(read("../styles/try.css"), ".metric-row")).toMatch(/max-width:\s*960px/);
+  });
+
+  it("keeps the scorecard table at width auto so labels sit near their numbers (F3)", () => {
+    const scorecardCss = readFileSync(fileURLToPath(new URL("../styles/scorecard.css", import.meta.url)), "utf8");
+    const rule = /(?:^|\n)\.view-body > \.table-scroll > \.table\s*\{([^}]*)\}/.exec(scorecardCss)?.[1] ?? "";
+    expect(rule).toMatch(/width:\s*auto/);
+  });
 });
 
