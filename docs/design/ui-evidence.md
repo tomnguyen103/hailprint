@@ -1,4 +1,4 @@
-head: ee06df478d8f3601f90b6f06a8b04a5655ba533c
+head: 510ef114115467de4013d4956e107ee9970b291d
 
 # UI evidence
 
@@ -64,6 +64,7 @@ Computed fonts at 1280x800 (`getComputedStyle`, first family):
 | Route | Selector | Count | Font | Numeric |
 | --- | --- | --- | --- | --- |
 | `/live` | `.live-stat-value` | 5 | IBM Plex Sans | tabular-nums |
+| `/live` | `.live-freshness` | 1 | IBM Plex Sans | tabular-nums |
 | `/try/tune` | `.stat` | 8 | IBM Plex Sans | tabular-nums |
 | `/try/compare` | `.metric-cell strong` | 5 | IBM Plex Sans | tabular-nums |
 | `/storms/2024-05-28/score` | `.outcome-badge` | 10 | IBM Plex Sans | tabular-nums |
