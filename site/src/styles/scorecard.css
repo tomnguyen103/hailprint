@@ -83,7 +83,6 @@
 .curve {
   display: block;
   width: 100%;
-  max-width: 640px;
   height: auto;
   overflow: visible;
 }
@@ -160,4 +159,17 @@
   .curve .highlight {
     transition: none;
   }
+}
+
+/* Table view: shrink to content so a label sits near its numbers. */
+.view-body > .table-scroll > .table {
+  width: auto;
+}
+
+.view-body > .table-scroll > .table .num {
+  padding-left: 0;
+}
+
+.view-body > .table-scroll > .table td:first-child {
+  padding-right: 0;
 }

@@ -52,7 +52,6 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  max-width: 640px;
   margin-bottom: 8px;
 }
 
