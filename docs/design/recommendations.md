@@ -1,9 +1,11 @@
-# Design recommendations that wait on approval
+# Design recommendations
 
 Each entry needs a change to the locked base (Corporate Standard v1 or the shell zones).
-The run records the entry and does not apply it. The owner approves or rejects each entry.
+The owner approved the entries in `docs/design/ui-update-plan.md`. Each entry states its outcome.
 
 ## R1. IBM Plex Mono only for code and IDs inside tables
+
+- **Outcome:** Approved in part. Mono stays for dates, IDs, and table cells. Stats, badges, and tags use Plex Sans with tabular figures.
 
 - **Gate:** `default-theme.md` § Type. Mono is for code and IDs inside tables.
 - **Evidence:** `design.md` § Type widens Mono to dates, IDs, coordinates, and numeric tables.
@@ -16,6 +18,8 @@ The run records the entry and does not apply it. The owner approves or rejects e
   change is visual only and needs a decision.
 
 ## R2. Move the navigation toggle into the sidebar header
+
+- **Outcome:** Approved. The sidebar header holds the hamburger and the brand.
 
 - **Gate:** `app-ui-shell` SKILL § Sidebar. One hamburger sits in the sidebar header.
 - **Evidence:** `site/src/shell/top-bar.tsx:31-41` puts the toggle in the top bar. The sidebar starts under
